@@ -2,6 +2,10 @@ package uz.horecaos.platform.courier.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -9,9 +13,13 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.courier.api.CourierSelfAuthorized;
+import uz.horecaos.platform.courier.application.CourierNoticeService;
 import uz.horecaos.platform.courier.application.CourierSelfQueryService;
 import uz.horecaos.platform.courier.application.CourierSelfQueryService.SelfView;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore.ShiftRow;
@@ -20,6 +28,7 @@ import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
+import uz.horecaos.platform.web.idempotency.Idempotent;
 
 /**
  * The courier's own record (ADR 0179).
@@ -33,6 +42,10 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * <p>The courier is the caller's own token subject, within the tenant in the path, and never a
  * parameter (see {@link CallingCourier}). The answer is {@code Cache-Control: no-store}: it is one
  * person's working state and must not sit in a shared cache.
+ *
+ * <p>The same tenant-level path takes the courier's acknowledgement of the telemetry transparency
+ * notice, which ADR 0045 makes the precondition for collecting a position: it is an audit fact and
+ * nothing else ({@link CourierNoticeService}).
  */
 @RestController
 @RequestMapping("/api/v1/courier/tenants/{tenantId}")
@@ -40,10 +53,12 @@ import uz.horecaos.platform.web.api.ErrorCode;
 public class CourierSelfController {
 
     private final CourierSelfQueryService self;
+    private final CourierNoticeService notices;
     private final CallingCourier caller;
 
-    public CourierSelfController(CourierSelfQueryService self, CallingCourier caller) {
+    public CourierSelfController(CourierSelfQueryService self, CourierNoticeService notices, CallingCourier caller) {
         this.self = self;
+        this.notices = notices;
         this.caller = caller;
     }
 
@@ -62,6 +77,34 @@ public class CourierSelfController {
                         new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "The caller is not a courier of this tenant"));
         return ResponseEntity.ok().header("Cache-Control", "no-store").body(CourierSelfResponse.of(view));
     }
+
+    @PostMapping("/telemetry-notice-acknowledgements")
+    @CourierSelfAuthorized(Capability.COURIER_TELEMETRY)
+    @Idempotent
+    @Operation(
+            operationId = "courierAcknowledgeTelemetryNotice",
+            summary = "Record that I was shown this version of the location transparency notice",
+            description = "ADR 0045 makes the notice the precondition for collecting a courier's position. "
+                    + "The app shows it, and on acceptance posts the version it showed; the platform "
+                    + "writes an audit fact naming the courier, the version and the time. A new version "
+                    + "is a new acknowledgement. Answers 404 for an account that is not a courier of "
+                    + "this tenant. The version is a short identifier, never free text.")
+    public ResponseEntity<NoticeAcknowledgementResponse> acknowledgeNotice(
+            @PathVariable UUID tenantId, @Valid @RequestBody AcknowledgeNoticeRequest body) {
+        CourierNoticeService.Acknowledgement recorded = notices.acknowledge(
+                tenantId, caller.idIn(tenantId), body.version(), ActorRef.user(caller.subject(), null));
+        return ResponseEntity.ok(new NoticeAcknowledgementResponse(recorded.version(), recorded.acknowledgedAt()));
+    }
+
+    /**
+     * @param version the notice version the app showed ({@code 2026-10-draft-1}): letters, digits, dot,
+     *                underscore and hyphen, so the field cannot carry a name, a number or a sentence
+     */
+    record AcknowledgeNoticeRequest(
+            @NotBlank @Size(max = 64) @Pattern(regexp = "^[A-Za-z0-9._-]+$")
+            String version) {}
+
+    record NoticeAcknowledgementResponse(String version, Instant acknowledgedAt) {}
 
     /**
      * @param displayReference the tenant's own label for this courier, not a name

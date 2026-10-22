@@ -85,6 +85,8 @@ class CourierSelfEndpointTests {
 
     private static final String ME = "/api/v1/courier/tenants/" + TENANT + "/me";
 
+    private static final String NOTICE = "/api/v1/courier/tenants/" + TENANT + "/telemetry-notice-acknowledgements";
+
     @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
 
@@ -786,6 +788,110 @@ class CourierSelfEndpointTests {
         assertThat(trackWindowCount()).isZero();
     }
 
+    // ------------------------------------------------- the transparency notice
+
+    @Test
+    @DisplayName(
+            "a courier's acknowledgement of the telemetry notice is recorded: which version, by whom, under which capability")
+    void acknowledgingTheNoticeIsRecorded() throws Exception {
+        Courier alisher = courier("keycloak-alisher");
+
+        MvcResult recorded = acknowledge(alisher.subject, "{\"version\":\"2026-10-draft-1\"}", nextKey());
+
+        assertThat(recorded.getResponse().getStatus()).isEqualTo(200);
+        JsonNode answer = json(recorded);
+        assertThat(answer.path("version").asText()).isEqualTo("2026-10-draft-1");
+        assertThat(Instant.parse(answer.path("acknowledgedAt").asText()))
+                .isBefore(Instant.now().plusSeconds(5));
+
+        JsonNode audit = auditEvent("courier.telemetry_notice.acknowledged");
+        assertThat(audit.path("actor_subject").asText()).isEqualTo(alisher.subject);
+        assertThat(audit.path("capability_used").asText()).isEqualTo("courier.telemetry");
+        assertThat(audit.path("audit_class").asText()).isEqualTo("SECURITY");
+        assertThat(audit.path("target_type").asText()).isEqualTo("courier");
+        assertThat(audit.path("target_id").asText()).isEqualTo(alisher.id.toString());
+        assertThat(audit.path("change_document").toString()).contains("2026-10-draft-1");
+    }
+
+    @Test
+    @DisplayName("acknowledging the notice carries an Idempotency-Key, and replaying the same one records it once")
+    void theAcknowledgementIsIdempotent() throws Exception {
+        Courier alisher = courier("keycloak-alisher");
+
+        MvcResult withoutKey = mvc.perform(post(NOTICE)
+                        .with(token(alisher.subject))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":\"v1\"}"))
+                .andReturn();
+        assertThat(withoutKey.getResponse().getStatus()).isEqualTo(400);
+        assertThat(json(withoutKey).path("code").asText()).isEqualTo("IDEMPOTENCY_KEY_REQUIRED");
+        assertThat(auditCount("courier.telemetry_notice.acknowledged")).isZero();
+
+        String key = nextKey();
+        assertThat(acknowledge(alisher.subject, "{\"version\":\"v1\"}", key)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+        assertThat(acknowledge(alisher.subject, "{\"version\":\"v1\"}", key)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+
+        assertThat(auditCount("courier.telemetry_notice.acknowledged")).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a new version is a new acknowledgement: the record keeps each version a courier saw")
+    void eachVersionIsItsOwnRecord() throws Exception {
+        Courier alisher = courier("keycloak-alisher");
+
+        acknowledge(alisher.subject, "{\"version\":\"v1\"}", nextKey());
+        acknowledge(alisher.subject, "{\"version\":\"v2\"}", nextKey());
+
+        assertThat(auditCount("courier.telemetry_notice.acknowledged")).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName(
+            "a version that is free text is refused and records nothing: the field cannot carry a name or a number")
+    void aVersionIsAnIdentifierNotAMessage() throws Exception {
+        Courier alisher = courier("keycloak-alisher");
+
+        for (String body : List.of(
+                "{}",
+                "{\"version\":\"\"}",
+                "{\"version\":\"   \"}",
+                "{\"version\":\"Alisher Karimov +998 90 123 45 67\"}",
+                "{\"version\":\"" + "v".repeat(65) + "\"}")) {
+            MvcResult refused = acknowledge(alisher.subject, body, nextKey());
+            assertThat(refused.getResponse().getStatus()).as(body).isEqualTo(400);
+            assertThat(json(refused).path("code").asText()).as(body).isEqualTo("VALIDATION_FAILED");
+        }
+        assertThat(auditCount("courier.telemetry_notice.acknowledged")).isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "neither a tenant administrator, a courier of another tenant nor an account that is nobody's courier can acknowledge")
+    void onlyTheTenantsOwnCourierAcknowledges() throws Exception {
+        Courier elsewhere = courierIn(OTHER_TENANT, OTHER_BRAND, OTHER_LOCATION, OTHER_COURIER_TYPE, ELSEWHERE);
+
+        for (String subject : List.of(MANAGER, elsewhere.subject, NOT_A_COURIER)) {
+            MvcResult refused = acknowledge(subject, "{\"version\":\"v1\"}", nextKey());
+            assertThat(refused.getResponse().getStatus()).as(subject).isEqualTo(404);
+        }
+        assertThat(auditCount("courier.telemetry_notice.acknowledged")).isZero();
+        assertThat(mvc.perform(post(NOTICE)
+                                .header("Idempotency-Key", nextKey())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"version\":\"v1\"}"))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .as("no token")
+                .isEqualTo(401);
+    }
+
     // ----------------------------------------------------------------- helpers
 
     private record Courier(UUID id, String subject, String reference) {}
@@ -852,6 +958,15 @@ class CourierSelfEndpointTests {
                         .header("Idempotency-Key", nextKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"deviceId\":\"" + deviceId + "\"}"))
+                .andReturn();
+    }
+
+    private MvcResult acknowledge(String subject, String body, String key) throws Exception {
+        return mvc.perform(post(NOTICE)
+                        .with(token(subject))
+                        .header("Idempotency-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
                 .andReturn();
     }
 

@@ -1,6 +1,18 @@
 {
   "components" : {
     "schemas" : {
+      "AcknowledgeNoticeRequest" : {
+        "properties" : {
+          "version" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "pattern" : "^[A-Za-z0-9._-]+$",
+            "type" : "string"
+          }
+        },
+        "required" : [ "version" ],
+        "type" : "object"
+      },
       "CashDeclarationRequest" : {
         "properties" : {
           "declaredMinor" : {
@@ -591,6 +603,18 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "NoticeAcknowledgementResponse" : {
+        "properties" : {
+          "acknowledgedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -1615,6 +1639,45 @@
           }
         },
         "summary" : "Who the platform says I am: my branches, my open shift, my duty state",
+        "tags" : [ "Courier self" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/telemetry-notice-acknowledgements" : {
+      "post" : {
+        "description" : "ADR 0045 makes the notice the precondition for collecting a courier's position. The app shows it, and on acceptance posts the version it showed; the platform writes an audit fact naming the courier, the version and the time. A new version is a new acknowledgement. Answers 404 for an account that is not a courier of this tenant. The version is a short identifier, never free text.",
+        "operationId" : "courierAcknowledgeTelemetryNotice",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AcknowledgeNoticeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/NoticeAcknowledgementResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record that I was shown this version of the location transparency notice",
         "tags" : [ "Courier self" ]
       }
     }

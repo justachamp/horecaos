@@ -1912,7 +1912,8 @@ public enum Capability {
 
     /**
      * ADR 0045 and ADR 0179: a courier opening and closing their own duty session and sending
-     * their own observations from their own handset.
+     * their own observations from their own handset, and recording that they were shown the
+     * transparency notice that must precede both.
      *
      * <p>Not {@link #COURIER_DUTY_MANAGE}, which is the staff capability to open or close a
      * session on a courier's behalf at a location scope. ADR 0045 said that when the courier

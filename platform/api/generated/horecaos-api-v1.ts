@@ -101,6 +101,10 @@ export interface AccrualRuleResponse {
   version?: number;
 }
 
+export interface AcknowledgeNoticeRequest {
+  version: string;
+}
+
 export interface AcquisitionResponse {
   attributesCustomerToLink?: boolean;
   clicksByLink?: Array<LinkClicksResponse>;
@@ -6886,6 +6890,11 @@ export interface NoteRequest {
 export interface NoteResponse {
   lineId?: string;
   note?: string;
+}
+
+export interface NoticeAcknowledgementResponse {
+  acknowledgedAt?: string;
+  version?: string;
 }
 
 export interface NotificationProviders {
@@ -14474,6 +14483,7 @@ export interface Operations {
   "close_4": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/close"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } }; body: CloseShiftRequest }; responses: { "200": CloseResponse } };
   "courierPostObservations": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/telemetry/observations"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: CourierObservationBatchRequest }; responses: { "200": CourierObservationsResponse } };
   "courierGetMe": { method: "GET"; path: "/api/v1/courier/tenants/{tenantId}/me"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CourierSelfResponse } };
+  "courierAcknowledgeTelemetryNotice": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/telemetry-notice-acknowledgements"; request: { parameters: { path: { tenantId: string } }; body: AcknowledgeNoticeRequest }; responses: { "200": NoticeAcknowledgementResponse } };
   "me_1": { method: "GET"; path: "/api/v1/devices/me"; request: { parameters: Record<string, never> }; responses: { "200": DeviceSelfResponse } };
   "ownOperations": { method: "GET"; path: "/api/v1/operations/auth/mfa/authenticators"; request: { parameters: Record<string, never> }; responses: { "200": OwnMfaResponse } };
   "removeOperations": { method: "DELETE"; path: "/api/v1/operations/auth/mfa/authenticators/{authenticatorId}"; request: { parameters: { path: { authenticatorId: string } }; body: RemoveAuthenticatorRequest }; responses: { "200": unknown } };
