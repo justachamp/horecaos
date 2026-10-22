@@ -17,6 +17,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -127,11 +128,14 @@ class PageLoadCountHttpTests {
      * refill, which is a few seconds on a quiet machine and nothing at all on a loaded one. Each test is therefore a
      * different visitor, the way a different person opening the shop is.
      */
+    private static final AtomicInteger VISITORS = new AtomicInteger();
+
     private int visitor;
 
     @BeforeEach
     void reset() {
-        visitor++;
+        // JUnit makes a new instance per test method, so the count must live on the class.
+        visitor = VISITORS.incrementAndGet();
         // The limiter is a token bucket that refills with time, so a loop of pings that takes a minute on a loaded
         // machine is
         // allowed more than its budget. The context's clock is held still for the test, as the content tests hold
