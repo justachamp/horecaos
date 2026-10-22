@@ -39,7 +39,7 @@
   historical reason of rows blocked before the builder existed. The policy
   `fiscal.synthetic_lines_allowed`, `SyntheticLineGate` and the 409 `FISCAL_LINES_NOT_BUILT` are gone;
   `fiscal.evidence_retention_years` (seven years, provisional) is declared in `FiscalEvidencePolicies`.
-  V0685 snapshots the `tender_id` and `business_date` on the document at opening.
+  V0685 snapshots the `tender_id` and `business_date` on the document at opening, and the evidence read returns both (the card draws the day).
   `FiscalNodeFacts.requiresMarkingCapablePayment` is called from `CartPaymentOptions` and
   `CheckoutEligibilityGuard` (while `feature.marked_goods` is on for the tenant), so Payme is neither
   offered nor accepted for a basket holding a marked node, and `OrderAmendmentService` refuses
