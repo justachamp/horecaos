@@ -66,6 +66,28 @@ public class JdbcDeliveryReceiptStore {
                 .optional();
     }
 
+    /**
+     * The latest attempt of one notification, locked (ADR 0182): how a push click finds the message it
+     * is about, since the platform's own push has no binding for {@link #lockAttempt} to filter on.
+     */
+    public Optional<ReceiptAttempt> lockLatestAttempt(UUID tenantId, UUID notificationId) {
+        return jdbc.sql("""
+                SELECT a.id, a.notification_id, a.status, a.provider_binding_id,
+                       a.requested_at, n.recipient_account_id, n.brand_id
+                  FROM notifications.delivery_attempts a
+                  JOIN notifications.notifications n
+                    ON n.id = a.notification_id AND n.tenant_id = a.tenant_id
+                 WHERE a.tenant_id = :tenantId AND a.notification_id = :notificationId
+                 ORDER BY a.attempt_number DESC
+                 LIMIT 1
+                 FOR UPDATE OF a
+                """)
+                .param("tenantId", tenantId)
+                .param("notificationId", notificationId)
+                .query(JdbcDeliveryReceiptStore::attempt)
+                .optional();
+    }
+
     /** Moves an attempt to the terminal state a receipt reported, and clears any "no receipt" mark. */
     public void advance(
             UUID tenantId,
@@ -297,7 +319,7 @@ public class JdbcDeliveryReceiptStore {
             UUID id,
             UUID notificationId,
             String status,
-            UUID providerBindingId,
+            @Nullable UUID providerBindingId,
             Instant requestedAt,
             @Nullable UUID recipientAccountId,
             @Nullable UUID brandId) {}

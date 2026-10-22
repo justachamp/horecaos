@@ -170,7 +170,8 @@ public class JdbcTemplateStore {
                 SELECT id, tenant_id, template_id, version_number, locale, subject_template,
                        body_template, variables_schema::text AS variables_schema, content_hash,
                        status, approved_by, activated_at, provider_review,
-                       provider_review_reference, provider_review_note, provider_review_updated_at
+                       provider_review_reference, provider_review_note, provider_review_updated_at,
+                       cover_asset_id, target_path
                 FROM notifications.template_versions
                 WHERE tenant_id = :tenantId AND template_id = :templateId
                   AND version_number = :versionNumber AND locale = :locale
@@ -188,7 +189,8 @@ public class JdbcTemplateStore {
                 SELECT id, tenant_id, template_id, version_number, locale, subject_template,
                        body_template, variables_schema::text AS variables_schema, content_hash,
                        status, approved_by, activated_at, provider_review,
-                       provider_review_reference, provider_review_note, provider_review_updated_at
+                       provider_review_reference, provider_review_note, provider_review_updated_at,
+                       cover_asset_id, target_path
                 FROM notifications.template_versions
                 WHERE tenant_id = :tenantId AND template_id = :templateId
                   AND version_number = :versionNumber
@@ -212,7 +214,8 @@ public class JdbcTemplateStore {
                 SELECT id, tenant_id, template_id, version_number, locale, subject_template,
                        body_template, variables_schema::text AS variables_schema, content_hash,
                        status, approved_by, activated_at, provider_review,
-                       provider_review_reference, provider_review_note, provider_review_updated_at
+                       provider_review_reference, provider_review_note, provider_review_updated_at,
+                       cover_asset_id, target_path
                 FROM notifications.template_versions
                 WHERE tenant_id = :tenantId AND template_id = :templateId
                 ORDER BY version_number DESC, locale
@@ -320,6 +323,40 @@ public class JdbcTemplateStore {
             String contentHash,
             boolean awaitsGateway,
             Instant now) {
+        insertVersion(
+                id,
+                tenantId,
+                templateId,
+                versionNumber,
+                locale,
+                subjectTemplate,
+                bodyTemplate,
+                variablesSchemaJson,
+                contentHash,
+                awaitsGateway,
+                null,
+                null,
+                now);
+    }
+
+    /**
+     * Inserts one draft locale of a version, with what a push wording adds to it (ADR 0182): a cover
+     * (an ADR 0010 media asset id, already checked) and the storefront path a tap opens.
+     */
+    public void insertVersion(
+            UUID id,
+            UUID tenantId,
+            UUID templateId,
+            int versionNumber,
+            String locale,
+            @Nullable String subjectTemplate,
+            String bodyTemplate,
+            String variablesSchemaJson,
+            String contentHash,
+            boolean awaitsGateway,
+            @Nullable UUID coverAssetId,
+            @Nullable String targetPath,
+            Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", id);
         parameters.put("tenantId", tenantId);
@@ -331,6 +368,8 @@ public class JdbcTemplateStore {
         parameters.put("schema", variablesSchemaJson);
         parameters.put("hash", contentHash);
         parameters.put("now", utc(now));
+        parameters.put("cover", coverAssetId);
+        parameters.put("targetPath", targetPath);
         parameters.put("review", awaitsGateway ? "PENDING" : "NOT_REQUIRED");
         parameters.put("reviewedBy", awaitsGateway ? GATEWAY_MODERATION : null);
         parameters.put("reviewedAt", awaitsGateway ? utc(now) : null);
@@ -342,10 +381,10 @@ public class JdbcTemplateStore {
                     id, tenant_id, template_id, version_number, locale, subject_template,
                     body_template, variables_schema, content_hash, status, created_at, updated_at,
                     provider_review, provider_review_updated_by, provider_review_updated_at,
-                    provider_review_note)
+                    provider_review_note, cover_asset_id, target_path)
                 VALUES (:id, :tenantId, :templateId, :versionNumber, :locale, :subject,
                     :body, CAST(:schema AS jsonb), :hash, 'DRAFT', :now, :now,
-                    :review, :reviewedBy, :reviewedAt, :reviewNote)
+                    :review, :reviewedBy, :reviewedAt, :reviewNote, :cover, :targetPath)
                 """).params(parameters).update();
     }
 
@@ -489,7 +528,9 @@ public class JdbcTemplateStore {
                 row.getString("provider_review"),
                 row.getString("provider_review_reference"),
                 row.getString("provider_review_note"),
-                providerReviewUpdatedAt == null ? null : providerReviewUpdatedAt.toInstant());
+                providerReviewUpdatedAt == null ? null : providerReviewUpdatedAt.toInstant(),
+                row.getObject("cover_asset_id", UUID.class),
+                row.getString("target_path"));
     }
 
     private static OffsetDateTime utc(Instant instant) {
@@ -555,5 +596,7 @@ public class JdbcTemplateStore {
             String providerReview,
             @Nullable String providerReviewReference,
             @Nullable String providerReviewNote,
-            @Nullable Instant providerReviewUpdatedAt) {}
+            @Nullable Instant providerReviewUpdatedAt,
+            @Nullable UUID coverAssetId,
+            @Nullable String targetPath) {}
 }

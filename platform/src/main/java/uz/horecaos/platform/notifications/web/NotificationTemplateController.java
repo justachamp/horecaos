@@ -159,7 +159,9 @@ public class NotificationTemplateController {
             MessageLocale locale = MessageLocale.parse(tag)
                     .orElseThrow(() -> new ApiException(
                             ErrorCode.VALIDATION_FAILED, "%s is not a supported locale".formatted(tag)));
-            wordings.put(locale, new Wording(wording.subject(), wording.body()));
+            wordings.put(
+                    locale,
+                    new Wording(wording.subject(), wording.body(), wording.coverAssetId(), wording.targetPath()));
         });
 
         try {
@@ -287,7 +289,9 @@ public class NotificationTemplateController {
                 row.providerReviewNote(),
                 row.providerReviewUpdatedAt() == null
                         ? null
-                        : row.providerReviewUpdatedAt().toString());
+                        : row.providerReviewUpdatedAt().toString(),
+                row.coverAssetId(),
+                row.targetPath());
     }
 
     /**
@@ -316,9 +320,22 @@ public class NotificationTemplateController {
             @NotEmpty Map<String, WordingRequest> wordings,
             @NotNull Map<String, String> variablesSchema) {}
 
+    /**
+     * @param coverAssetId a push wording's 3:1 cover, an ADR 0010 media asset the tenant owns and has made
+     *                     public (ADR 0182, D14). Refused on any other channel
+     * @param targetPath the storefront path a tap on a push notification opens: a single leading slash,
+     *                   never an absolute URL. Refused on any other channel
+     */
     public record WordingRequest(
             @Nullable @Size(max = 200) String subject,
-            @NotBlank @Size(max = 4000) String body) {}
+            @NotBlank @Size(max = 4000) String body,
+            @Nullable UUID coverAssetId,
+            @Nullable @Size(max = 199) String targetPath) {
+
+        public WordingRequest(@Nullable String subject, String body) {
+            this(subject, body, null, null);
+        }
+    }
 
     public record IdResponse(UUID id) {}
 
@@ -356,7 +373,9 @@ public class NotificationTemplateController {
             String providerReview,
             @Nullable String providerReviewReference,
             @Nullable String providerReviewNote,
-            @Nullable String providerReviewUpdatedAt) {}
+            @Nullable String providerReviewUpdatedAt,
+            @Nullable UUID coverAssetId,
+            @Nullable String targetPath) {}
 
     /**
      * @param fulfillmentMode gap-map row 10.9a: null when this row resolves for

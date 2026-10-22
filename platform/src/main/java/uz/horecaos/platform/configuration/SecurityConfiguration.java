@@ -420,6 +420,13 @@ public class SecurityConfiguration {
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/providers/mail/unsubscribe/*")
                         .permitAll()
+                        // ADR 0182, D14: a customer's tap on a promotional push notification, reported by the
+                        // storefront's service worker, which holds no session. Authorised inside
+                        // PushClickController by possession of an opaque token that only the browser that
+                        // received the notification can know. Without this line the worker's report would meet
+                        // a bodyless 401 and a tap would never be counted as a read.
+                        .requestMatchers(HttpMethod.POST, "/providers/push/clicks/*")
+                        .permitAll()
                         // ADR 0062: staff sign in on a first-party page instead of a
                         // Keycloak redirect, and the backend takes the credentials to
                         // Keycloak on the caller's behalf. Sign-in is unavoidably

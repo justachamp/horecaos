@@ -38,6 +38,9 @@ import org.jspecify.annotations.Nullable;
  *                template key
  * @param email what an email adds to a message and no other channel has (ADR 0182): the
  *              name it is sent in and its way out. Null on every other channel
+ * @param push what a Web Push adds to a message and no other channel has (ADR 0182, D14): the
+ *             browser's keys, the click link, the cover and the path a tap opens. For a push the
+ *             {@code recipientValue} is the push service URL. Null on every other channel
  */
 public record NotificationDispatch(
         UUID notificationId,
@@ -55,7 +58,8 @@ public record NotificationDispatch(
         UUID subjectId,
         String templateKey,
         String purpose,
-        @Nullable EmailEnvelope email) {
+        @Nullable EmailEnvelope email,
+        @Nullable PushEnvelope push) {
 
     /** An order message, a code, a receipt: anything the customer did not opt into receiving. */
     public static final String PURPOSE_TRANSACTIONAL = "TRANSACTIONAL";
@@ -82,6 +86,75 @@ public record NotificationDispatch(
         public String toString() {
             return "EmailEnvelope[<redacted>]";
         }
+    }
+
+    /**
+     * What a Web Push needs beside the push service URL (ADR 0182, D14).
+     *
+     * @param p256dh the browser's public key, base64url: the key the payload is encrypted to
+     * @param auth the browser's auth secret, base64url
+     * @param clickUrl the absolute URL the service worker posts to when the customer taps the
+     *                 notification. Carries an opaque token; that tap is the read
+     * @param imageUrl the cover, an absolute URL, or null for a push without one
+     * @param path the storefront path a tap opens, relative to the storefront's origin
+     * @param topic the push service's replacement key (RFC 8030): a retry of the same message
+     *              replaces the one still waiting instead of showing twice. Opaque, 22 characters
+     * @param ttlSeconds how long the push service may hold the message for a device that is off
+     */
+    public record PushEnvelope(
+            String p256dh,
+            String auth,
+            String clickUrl,
+            @Nullable String imageUrl,
+            String path,
+            String topic,
+            long ttlSeconds) {
+
+        /** The keys are the subscription's and the URL carries a token that marks a message read. */
+        @Override
+        public String toString() {
+            return "PushEnvelope[<redacted>]";
+        }
+    }
+
+    /**
+     * The shape every caller used before the push: a message with an email envelope or none.
+     */
+    public NotificationDispatch(
+            UUID notificationId,
+            UUID attemptId,
+            UUID tenantId,
+            UUID brandId,
+            @Nullable UUID locationId,
+            String channel,
+            String recipientValue,
+            @Nullable String subject,
+            String body,
+            String providerIdempotencyKey,
+            String correlationId,
+            String subjectType,
+            UUID subjectId,
+            String templateKey,
+            String purpose,
+            @Nullable EmailEnvelope email) {
+        this(
+                notificationId,
+                attemptId,
+                tenantId,
+                brandId,
+                locationId,
+                channel,
+                recipientValue,
+                subject,
+                body,
+                providerIdempotencyKey,
+                correlationId,
+                subjectType,
+                subjectId,
+                templateKey,
+                purpose,
+                email,
+                null);
     }
 
     /**

@@ -477,8 +477,8 @@ public class JdbcNotificationStore {
     public Optional<EndpointRow> endpoint(UUID tenantId, UUID endpointId) {
         return jdbc.sql("""
                 SELECT id, customer_account_id, endpoint_type, contact_point_id,
-                       operations_endpoint_reference, provider_binding_id, courier_id, normalized_hash,
-                       verification_status, status
+                       operations_endpoint_reference, provider_binding_id, courier_id, push_subscription_id,
+                       normalized_hash, verification_status, status
                 FROM notifications.recipient_endpoints
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
@@ -542,6 +542,68 @@ public class JdbcNotificationStore {
     }
 
     /**
+     * The endpoint standing for one Web Push subscription, created when the customer subscribes
+     * (ADR 0182, D14). The id is the subscription's and nothing else: the push service URL and the keys
+     * stay in the registry, encrypted, and are read for the length of one send.
+     */
+    public UUID ensurePushEndpoint(UUID tenantId, UUID customerAccountId, UUID pushSubscriptionId, Instant now) {
+        return jdbc.sql("""
+                INSERT INTO notifications.recipient_endpoints (
+                    id, tenant_id, customer_account_id, endpoint_type, push_subscription_id,
+                    verification_status, last_verified_at, status, created_at, updated_at)
+                VALUES (:id, :tenantId, :accountId, 'PUSH_TOKEN', :subscriptionId,
+                        'VERIFIED', :now, 'ACTIVE', :now, :now)
+                ON CONFLICT (tenant_id, push_subscription_id) WHERE push_subscription_id IS NOT NULL
+                DO UPDATE SET updated_at = excluded.updated_at
+                RETURNING id
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("accountId", customerAccountId)
+                .param("subscriptionId", pushSubscriptionId)
+                .param("now", utc(now))
+                .query(UUID.class)
+                .single();
+    }
+
+    /**
+     * The customer's live push endpoint at one brand, if any: what eligibility resolves a PUSH message's
+     * recipient from. Joined to the registry so that a subscription that ended, or whose browser-given
+     * expiry has passed, is not found even if its endpoint row has not been retired yet.
+     */
+    public Optional<UUID> activeCustomerPushEndpointId(
+            UUID tenantId, UUID brandId, UUID customerAccountId, Instant now) {
+        return jdbc.sql("""
+                SELECT e.id
+                  FROM notifications.recipient_endpoints e
+                  JOIN notifications.push_subscriptions s
+                    ON s.id = e.push_subscription_id AND s.tenant_id = e.tenant_id
+                 WHERE e.tenant_id = :tenantId AND e.customer_account_id = :accountId
+                   AND e.status = 'ACTIVE' AND s.status = 'ACTIVE' AND s.brand_id = :brandId
+                   AND (s.expires_at IS NULL OR s.expires_at > :now)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("accountId", customerAccountId)
+                .param("now", utc(now))
+                .query(UUID.class)
+                .optional();
+    }
+
+    /** Retires the endpoint a subscription stood for, so a fresh lookup stops finding it. Idempotent. */
+    public void retirePushEndpoint(UUID tenantId, UUID pushSubscriptionId, Instant now) {
+        jdbc.sql("""
+                UPDATE notifications.recipient_endpoints
+                SET status = 'RETIRED', version = version + 1, updated_at = :now
+                WHERE tenant_id = :tenantId AND push_subscription_id = :subscriptionId AND status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("subscriptionId", pushSubscriptionId)
+                .param("now", utc(now))
+                .update();
+    }
+
+    /**
      * {@link #ensureProviderBindingEndpoint}'s customer-owned twin (ADR 0058
      * stage 2, V0107): the endpoint standing for a customer's own linked 1:1
      * chat, with {@code customer_account_id} set — the one shape {@code
@@ -581,8 +643,8 @@ public class JdbcNotificationStore {
     public Optional<EndpointRow> findByProviderBinding(UUID tenantId, UUID providerBindingId) {
         return jdbc.sql("""
                 SELECT id, customer_account_id, endpoint_type, contact_point_id,
-                       operations_endpoint_reference, provider_binding_id, courier_id, normalized_hash,
-                       verification_status, status
+                       operations_endpoint_reference, provider_binding_id, courier_id, push_subscription_id,
+                       normalized_hash, verification_status, status
                 FROM notifications.recipient_endpoints
                 WHERE tenant_id = :tenantId AND provider_binding_id = :bindingId
                 """)
@@ -1272,6 +1334,7 @@ public class JdbcNotificationStore {
             @Nullable String operationsEndpointReference,
             @Nullable UUID providerBindingId,
             @Nullable UUID courierId,
+            @Nullable UUID pushSubscriptionId,
             String normalizedHash,
             String verificationStatus,
             String status) {}
@@ -1285,6 +1348,7 @@ public class JdbcNotificationStore {
                 row.getString("operations_endpoint_reference"),
                 row.getObject("provider_binding_id", UUID.class),
                 row.getObject("courier_id", UUID.class),
+                row.getObject("push_subscription_id", UUID.class),
                 row.getString("normalized_hash"),
                 row.getString("verification_status"),
                 row.getString("status"));

@@ -24,6 +24,7 @@ import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.marketing.api.CampaignMessagePort;
+import uz.horecaos.platform.media.api.TenantImageCheck;
 import uz.horecaos.platform.notifications.domain.ContentHashes;
 import uz.horecaos.platform.notifications.domain.MessageLocale;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
@@ -71,6 +72,7 @@ public class NotificationTemplateService {
     private final AuditRecorder audit;
     private final CurrentActor currentActor;
     private final BrandLocaleLookup brandLocales;
+    private final TenantImageCheck images;
 
     /** A service with no tenancy to ask: every brand counts the platform's content tier (tests, tools). */
     public NotificationTemplateService(
@@ -82,7 +84,7 @@ public class NotificationTemplateService {
         this(templates, objectMapper, clock, audit, currentActor, BrandLocaleLookup.platformFallback());
     }
 
-    @Autowired
+    /** A service that cannot vouch for a cover image: a push wording with one is refused (tests, tools). */
     public NotificationTemplateService(
             JdbcTemplateStore templates,
             ObjectMapper objectMapper,
@@ -90,12 +92,32 @@ public class NotificationTemplateService {
             AuditRecorder audit,
             CurrentActor currentActor,
             BrandLocaleLookup brandLocales) {
+        this(
+                templates,
+                objectMapper,
+                clock,
+                audit,
+                currentActor,
+                brandLocales,
+                (tenantId, assetId, ratioWidth, ratioHeight, maximumBytes) -> TenantImageCheck.Verdict.UNKNOWN_ASSET);
+    }
+
+    @Autowired
+    public NotificationTemplateService(
+            JdbcTemplateStore templates,
+            ObjectMapper objectMapper,
+            Clock clock,
+            AuditRecorder audit,
+            CurrentActor currentActor,
+            BrandLocaleLookup brandLocales,
+            TenantImageCheck images) {
         this.templates = templates;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.audit = audit;
         this.currentActor = currentActor;
         this.brandLocales = brandLocales;
+        this.images = images;
     }
 
     /**
@@ -174,6 +196,12 @@ public class NotificationTemplateService {
             // the template is authored, so a tenant is not told only when a customer is waiting.
             throw new IllegalArgumentException(
                     "An EMAIL template is a MARKETING template: the platform sends campaign email only, " + "and not "
+                            + notificationClass);
+        }
+        if (channel == NotificationChannel.PUSH && notificationClass != NotificationClass.MARKETING) {
+            // ADR 0182, D14: Web Push carries campaigns and nothing else, for the reason email does.
+            throw new IllegalArgumentException(
+                    "A PUSH template is a MARKETING template: the platform sends campaign push only, " + "and not "
                             + notificationClass);
         }
         if (notificationClass.requiresConsent() && (consentPurpose == null || consentPurpose.isBlank())) {
@@ -258,17 +286,22 @@ public class NotificationTemplateService {
                     "A version needs every locale this brand serves before it can be saved; missing " + missing);
         }
 
-        if (NotificationChannel.EMAIL.name().equals(owned.channel())) {
+        if (NotificationChannel.EMAIL.name().equals(owned.channel())
+                || NotificationChannel.PUSH.name().equals(owned.channel())) {
             // An email without a subject is a message every inbox files under «no subject»; its
             // absence is as much a missing translation as a missing body.
             for (Map.Entry<MessageLocale, Wording> entry : wordings.entrySet()) {
                 String subject = entry.getValue().subject();
                 if (subject == null || subject.isBlank()) {
-                    throw new IllegalArgumentException(
-                            "An EMAIL wording needs a subject in every language; missing for "
-                                    + entry.getKey().tag());
+                    throw new IllegalArgumentException("An %s wording needs a subject in every language; missing for %s"
+                            .formatted(owned.channel(), entry.getKey().tag()));
                 }
             }
+        }
+
+        boolean push = NotificationChannel.PUSH.name().equals(owned.channel());
+        for (Map.Entry<MessageLocale, Wording> entry : wordings.entrySet()) {
+            checkPushFields(tenantId, push, entry.getKey(), entry.getValue());
         }
 
         Set<String> declared = variablesSchema.keySet();
@@ -298,6 +331,8 @@ public class NotificationTemplateService {
                     schemaJson,
                     contentHashOf(locale, wording),
                     awaitsGateway,
+                    wording.coverAssetId(),
+                    wording.targetPath(),
                     now);
         }
 
@@ -413,6 +448,62 @@ public class NotificationTemplateService {
         snapshot.put("channel", template.channel());
         snapshot.put("activeVersion", activeVersion);
         return snapshot;
+    }
+
+    /** The most a push notification's title and body may hold before a browser cuts them off anyway. */
+    static final int PUSH_TITLE_LIMIT = 100;
+
+    static final int PUSH_BODY_LIMIT = 400;
+
+    /** The cover is a 3:1 picture, and a notification is not the place for a large one. */
+    static final int PUSH_COVER_BYTES = 2 * 1024 * 1024;
+
+    /**
+     * A path on the storefront's own origin: one leading slash and not two (that would be a link to
+     * somebody else's site), printable ASCII, no spaces, no backslash. Query and fragment are allowed,
+     * because a promotion that opens a category with a code is a link like any other.
+     */
+    private static final java.util.regex.Pattern TARGET_PATH =
+            java.util.regex.Pattern.compile("/(?!/)[\\x21-\\x5B\\x5D-\\x7E]{0,198}|/");
+
+    /**
+     * What a push wording adds to the text (ADR 0182, D14), checked when it is authored so a marketer
+     * hears it from the editor and not from a customer: a title and a body a notification can hold, a
+     * cover that is this tenant's own public picture in the 3:1 shape, and a path that stays on the
+     * storefront. Any of the last two on another channel is refused, because nothing would show them.
+     */
+    private void checkPushFields(UUID tenantId, boolean push, MessageLocale locale, Wording wording) {
+        if (!push) {
+            if (wording.coverAssetId() != null || wording.targetPath() != null) {
+                throw new IllegalArgumentException("A cover and a target path belong to a PUSH wording only");
+            }
+            return;
+        }
+        String tag = locale.tag();
+        if (wording.subject() != null && wording.subject().length() > PUSH_TITLE_LIMIT) {
+            throw new IllegalArgumentException(
+                    "A push title is at most %d characters; too long for %s".formatted(PUSH_TITLE_LIMIT, tag));
+        }
+        if (wording.body().length() > PUSH_BODY_LIMIT) {
+            throw new IllegalArgumentException(
+                    "A push body is at most %d characters; too long for %s".formatted(PUSH_BODY_LIMIT, tag));
+        }
+        if (wording.targetPath() != null
+                && !TARGET_PATH.matcher(wording.targetPath()).matches()) {
+            throw new IllegalArgumentException(
+                    "A push target is a path on the storefront, starting with a single slash; not valid for " + tag);
+        }
+        if (wording.coverAssetId() != null) {
+            TenantImageCheck.Verdict verdict = images.check(tenantId, wording.coverAssetId(), 3, 1, PUSH_COVER_BYTES);
+            if (verdict != TenantImageCheck.Verdict.ACCEPTED) {
+                throw new IllegalArgumentException("The push cover for %s cannot be used: %s"
+                        .formatted(
+                                tag,
+                                verdict.name()
+                                        .toLowerCase(java.util.Locale.ROOT)
+                                        .replace('_', ' ')));
+            }
+        }
     }
 
     // ---------------------------------------------------- the wordings a dispatcher may broadcast
@@ -636,6 +727,12 @@ public class NotificationTemplateService {
         parts.put("locale", locale.tag());
         parts.put("subject", wording.subject() == null ? "" : wording.subject());
         parts.put("body", wording.body());
+        if (wording.coverAssetId() != null) {
+            parts.put("cover", wording.coverAssetId().toString());
+        }
+        if (wording.targetPath() != null) {
+            parts.put("path", wording.targetPath());
+        }
         return ContentHashes.ofVariables(parts);
     }
 
@@ -646,12 +743,21 @@ public class NotificationTemplateService {
      *                Null rather than blank so "this channel has no subject" and
      *                "the author left it empty" stay distinguishable
      */
-    public record Wording(@Nullable String subject, String body) {
+    public record Wording(
+            @Nullable String subject,
+            String body,
+            @Nullable UUID coverAssetId,
+            @Nullable String targetPath) {
 
         public Wording {
             if (body == null || body.isBlank()) {
                 throw new IllegalArgumentException("A template version needs a body");
             }
+        }
+
+        /** A wording with no push fields: every channel but push. */
+        public Wording(@Nullable String subject, String body) {
+            this(subject, body, null, null);
         }
     }
 

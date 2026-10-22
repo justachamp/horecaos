@@ -461,12 +461,17 @@ public class NotificationGateway {
         return switch (channel) {
             case "SMS" -> "SMS_ACCOUNT_MISCONFIGURED";
             case "EMAIL" -> "EMAIL_NOT_CONFIGURED";
+            case "PUSH" -> "PUSH_NOT_CONFIGURED";
             default -> "ACCOUNT_MISCONFIGURED";
         };
     }
 
     private static String purposeCode(String channel) {
-        return "EMAIL".equals(channel) ? "EMAIL_PURPOSE_NOT_PERMITTED" : SmsPurposes.REFUSAL_CODE;
+        return switch (channel) {
+            case "EMAIL" -> "EMAIL_PURPOSE_NOT_PERMITTED";
+            case "PUSH" -> "PUSH_PURPOSE_NOT_PERMITTED";
+            default -> SmsPurposes.REFUSAL_CODE;
+        };
     }
 
     /** One call to one adapter, with everything it needs for the length of that call. */

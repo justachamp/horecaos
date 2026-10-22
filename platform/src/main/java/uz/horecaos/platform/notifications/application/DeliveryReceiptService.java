@@ -102,17 +102,53 @@ public class DeliveryReceiptService implements DeliveryReceiptPort {
                 hardBounce));
     }
 
+    /**
+     * A customer tapped a push notification (ADR 0182, D14): the one read signal Web Push offers.
+     *
+     * <p>Applied to the notification's latest attempt through the same ladder a gateway's receipt is,
+     * because a click is evidence about an attempt of ours and obeys the same rule: it can only advance
+     * it. A tap proves the message reached the browser, so an attempt still {@code ACCEPTED} becomes
+     * {@code DELIVERED}, and the status event is {@code READ}. A second tap, or a tap on a message the
+     * platform marked failed, changes nothing. The platform's own push has no ADR 0026 binding, which is
+     * why this does not go through {@link #apply}, whose lookup is by provider message id under a binding.
+     */
+    @Transactional
+    public ReceiptDisposition applyRead(UUID tenantId, UUID notificationId) {
+        Optional<ReceiptAttempt> found = receipts.lockLatestAttempt(tenantId, notificationId);
+        if (found.isEmpty()) {
+            return ReceiptDisposition.UNKNOWN_MESSAGE;
+        }
+        return applyToAttempt(tenantId, found.get(), found.get().id().toString(), "READ", "PUSH_CLICKED", null, false);
+    }
+
     private ReceiptDisposition applyTo(ReceiptCommand receipt) {
         Optional<ReceiptAttempt> found =
                 receipts.lockAttempt(receipt.tenantId(), receipt.bindingIds(), receipt.providerMessageId());
         if (found.isEmpty()) {
             return ReceiptDisposition.UNKNOWN_MESSAGE;
         }
-        ReceiptAttempt attempt = found.get();
+        return applyToAttempt(
+                receipt.tenantId(),
+                found.get(),
+                receipt.providerMessageId(),
+                receipt.normalizedStatus(),
+                receipt.providerStatus(),
+                receipt.occurredAt(),
+                receipt.hardBounce());
+    }
+
+    private ReceiptDisposition applyToAttempt(
+            UUID tenantId,
+            ReceiptAttempt attempt,
+            String eventMessageId,
+            String normalizedStatus,
+            @Nullable String providerStatus,
+            @Nullable Instant occurredAt,
+            boolean hardBounce) {
         Instant now = clock.instant();
 
-        String eventId = receipt.providerMessageId() + ":" + receipt.normalizedStatus();
-        List<StatusEventRow> events = notifications.statusEvents(receipt.tenantId(), attempt.id());
+        String eventId = eventMessageId + ":" + normalizedStatus;
+        List<StatusEventRow> events = notifications.statusEvents(tenantId, attempt.id());
         if (events.stream().anyMatch(event -> event.providerEventId().equals(eventId))) {
             // The same fact twice. The unique key would absorb the insert; saying so
             // here is what lets the caller count it as a duplicate rather than as an
@@ -120,29 +156,23 @@ public class DeliveryReceiptService implements DeliveryReceiptPort {
             return ReceiptDisposition.DUPLICATE;
         }
 
-        int incoming = rank(receipt.normalizedStatus());
+        int incoming = rank(normalizedStatus);
         if (incoming <= currentRank(attempt, events)) {
             return ReceiptDisposition.REGRESSED;
         }
 
         notifications.recordStatusEvent(
-                receipt.tenantId(),
+                tenantId,
                 attempt.id(),
                 eventId,
-                receipt.normalizedStatus(),
-                receipt.providerStatus(),
-                receipt.occurredAt() == null ? now : receipt.occurredAt(),
+                normalizedStatus,
+                providerStatus,
+                occurredAt == null ? now : occurredAt,
                 now);
 
-        switch (receipt.normalizedStatus()) {
+        switch (normalizedStatus) {
             case "DELIVERED" ->
-                receipts.advance(
-                        receipt.tenantId(),
-                        attempt.id(),
-                        "DELIVERED",
-                        null,
-                        receipt.occurredAt() == null ? now : receipt.occurredAt(),
-                        now);
+                receipts.advance(tenantId, attempt.id(), "DELIVERED", null, occurredAt == null ? now : occurredAt, now);
             case "READ" -> {
                 // A read is a delivery that was also seen. The attempt's own status stays DELIVERED
                 // (V0026 has no READ attempt status, and the ladder's evidence is the status event just
@@ -150,32 +180,27 @@ public class DeliveryReceiptService implements DeliveryReceiptPort {
                 // delivered at. A read with no delivery before it is a delivery as well.
                 if (!"DELIVERED".equals(attempt.status())) {
                     receipts.advance(
-                            receipt.tenantId(),
-                            attempt.id(),
-                            "DELIVERED",
-                            null,
-                            receipt.occurredAt() == null ? now : receipt.occurredAt(),
-                            now);
+                            tenantId, attempt.id(), "DELIVERED", null, occurredAt == null ? now : occurredAt, now);
                 }
             }
             case "FAILED" ->
                 receipts.advance(
-                        receipt.tenantId(),
+                        tenantId,
                         attempt.id(),
                         "FAILED",
-                        receipt.hardBounce() ? FAILURE_UNREACHABLE : FAILURE_REPORTED,
+                        hardBounce ? FAILURE_UNREACHABLE : FAILURE_REPORTED,
                         null,
                         now);
             default ->
                 // Accepted, handed to the operator, or unresolved: still the same
                 // attempt in the same state, but somebody is evidently listening, so
                 // a "no receipt" mark that raced this one no longer holds.
-                receipts.clearNoReceipt(receipt.tenantId(), attempt.id(), now);
+                receipts.clearNoReceipt(tenantId, attempt.id(), now);
         }
 
-        if (receipt.hardBounce() && attempt.recipientAccountId() != null && attempt.brandId() != null) {
+        if (hardBounce && attempt.recipientAccountId() != null && attempt.brandId() != null) {
             boolean written = feedback.recordHardBounce(
-                    receipt.tenantId(),
+                    tenantId,
                     attempt.brandId(),
                     attempt.recipientAccountId(),
                     "SMS",

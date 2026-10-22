@@ -165,10 +165,12 @@ public class NotificationEligibilityService {
             // watching messages be created, resolved, rendered, and then fail.
             return suppress(row, SuppressionReason.CHANNEL_NOT_AVAILABLE, now);
         }
-        if (channel == NotificationChannel.EMAIL && notificationClass != NotificationClass.MARKETING) {
-            // ADR 0182, D13: the platform's email relay is wired for campaign email and for nothing
-            // else. A receipt or a code by email is a later decision with its own footing, and the
-            // unsubscribe, the cap and the consent rules here were decided for promotions.
+        if ((channel == NotificationChannel.EMAIL || channel == NotificationChannel.PUSH)
+                && notificationClass != NotificationClass.MARKETING) {
+            // ADR 0182, D13 and D14: the platform's email relay and its Web Push are wired for campaigns
+            // and for nothing else. A receipt or a code by email, or an order status by push, is a later
+            // decision with its own footing, and the unsubscribe, the cap and the consent rules here were
+            // decided for promotions.
             return suppress(row, SuppressionReason.CHANNEL_NOT_AVAILABLE, now);
         }
 
@@ -399,6 +401,21 @@ public class NotificationEligibilityService {
                 throw new IllegalStateException(
                         "Operations alert %s was created without a resolved endpoint".formatted(row.id()));
             }
+        } else if (channel == NotificationChannel.PUSH) {
+            // ADR 0182, D14: the customer's own browser subscription at this brand, the way a Telegram
+            // customer's link is resolved above. Empty is the honest «the subscription ended between the
+            // campaign being cut and now» (the push service said it is gone, the customer turned it off,
+            // or the browser's own expiry passed).
+            UUID customerAccount = Objects.requireNonNull(
+                    accountId, "customer-audience message reached endpoint resolution without an account");
+            UUID pushBrand = row.brandId();
+            Optional<UUID> endpoint = pushBrand == null
+                    ? Optional.empty()
+                    : notifications.activeCustomerPushEndpointId(row.tenantId(), pushBrand, customerAccount, now);
+            if (endpoint.isEmpty()) {
+                return suppress(row, SuppressionReason.NO_RECIPIENT_ENDPOINT, now);
+            }
+            endpointId = endpoint.get();
         } else if (channel == NotificationChannel.TELEGRAM) {
             // ADR 0058 stage 2: a customer's own binding, not an ADR 0015
             // contact point — resolved from the endpoint

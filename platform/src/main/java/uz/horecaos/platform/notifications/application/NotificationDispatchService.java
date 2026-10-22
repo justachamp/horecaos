@@ -79,6 +79,7 @@ public class NotificationDispatchService {
     private final MeterRegistry meters;
     private final EmailEnvelopes emailEnvelopes;
     private final CourierContactSource couriers;
+    private final PushDispatches pushes;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final int maximumAttempts;
@@ -176,7 +177,10 @@ public class NotificationDispatchService {
                 retryBackoff);
     }
 
-    @Autowired
+    /**
+     * Email and couriers, and no push: the shape a caller that predates the Web Push channel uses
+     * (ADR 0182).
+     */
     public NotificationDispatchService(
             JdbcNotificationStore notifications,
             JdbcTemplateStore templates,
@@ -189,8 +193,42 @@ public class NotificationDispatchService {
             CourierContactSource couriers,
             ObjectMapper objectMapper,
             Clock clock,
+            int maximumAttempts,
+            Duration retryBackoff) {
+        this(
+                notifications,
+                templates,
+                contacts,
+                transport,
+                campaignBlockRate,
+                deliverability,
+                meters,
+                emailEnvelopes,
+                couriers,
+                PushDispatches.NONE,
+                objectMapper,
+                clock,
+                maximumAttempts,
+                retryBackoff);
+    }
+
+    @Autowired
+    public NotificationDispatchService(
+            JdbcNotificationStore notifications,
+            JdbcTemplateStore templates,
+            RecipientContactDirectory contacts,
+            NotificationTransport transport,
+            CampaignBlockRateMonitor campaignBlockRate,
+            DeliverabilityFeedbackPort deliverability,
+            MeterRegistry meters,
+            EmailEnvelopes emailEnvelopes,
+            CourierContactSource couriers,
+            PushDispatches pushes,
+            ObjectMapper objectMapper,
+            Clock clock,
             @Value("${horecaos.notifications.max-attempts:8}") int maximumAttempts,
             @Value("${horecaos.notifications.retry-backoff:PT30S}") Duration retryBackoff) {
+        this.pushes = pushes;
         this.notifications = notifications;
         this.templates = templates;
         this.contacts = contacts;
@@ -270,8 +308,18 @@ public class NotificationDispatchService {
         Rendered rendered = render(row);
 
         String recipientValue;
+        NotificationDispatch.PushEnvelope pushEnvelope = null;
         try {
-            recipientValue = resolveRecipientValue(row);
+            if (NotificationChannel.PUSH.name().equals(row.channel())) {
+                // ADR 0182, D14: the recipient is the browser's push service URL, revealed with the keys
+                // and the click link in one step, for the length of this call and kept nowhere.
+                Optional<PushDispatches.Resolved> resolved =
+                        pushes.resolve(row, rendered.coverAssetId(), rendered.targetPath());
+                recipientValue = resolved.map(PushDispatches.Resolved::endpoint).orElse(null);
+                pushEnvelope = resolved.map(PushDispatches.Resolved::envelope).orElse(null);
+            } else {
+                recipientValue = resolveRecipientValue(row);
+            }
         } catch (CourierContactSource.UnavailableException unavailable) {
             // The identity provider could not be asked for a courier's number (ADR 0182). Nothing was
             // sent and nothing is known about the courier, so this is a fault to retry later, never
@@ -330,9 +378,13 @@ public class NotificationDispatchService {
                 row.subjectId(),
                 row.templateKey(),
                 purposeOf(row),
-                email));
+                email,
+                pushEnvelope));
 
         record(row, attempt, outcome, clock.instant());
+        // After the outcome is recorded, so a push service's «gone» is on the attempt before the
+        // subscription it names is ended.
+        pushes.settled(row, outcome);
         compareSegments(row, outcome, rendered.body());
     }
 
@@ -679,7 +731,11 @@ public class NotificationDispatchService {
         // without one), so its rendering is asserted non-null even though
         // TemplateRenderer.render's return type is nullable for the subject case.
         String body = Objects.requireNonNull(TemplateRenderer.render(version.bodyTemplate(), variables));
-        return new Rendered(TemplateRenderer.render(version.subjectTemplate(), variables), body);
+        return new Rendered(
+                TemplateRenderer.render(version.subjectTemplate(), variables),
+                body,
+                version.coverAssetId(),
+                version.targetPath());
     }
 
     /**
@@ -717,8 +773,14 @@ public class NotificationDispatchService {
             return couriers.number(row.tenantId(), endpoint.courierId(), COURIER_REVEAL_PURPOSE)
                     .orElse(null);
         }
-        // ck_endpoint_destination (V0100) requires exactly one of the three
-        // columns to be set; neither of the other two is, so this one is.
+        if (endpoint.pushSubscriptionId() != null) {
+            // ADR 0182, D14: a push address is a capability that names a device, and is revealed with
+            // its keys by PushDispatches for the length of a send. No other caller of this method
+            // (a reconciliation, a status pull) has any use for one.
+            return null;
+        }
+        // ck_endpoint_destination requires exactly one destination column to be set; none of the
+        // others is, so this one is.
         UUID contactPointId = Objects.requireNonNull(endpoint.contactPointId());
         return contacts.resolveValue(row.tenantId(), contactPointId, REVEAL_PURPOSE)
                 .orElse(null);
@@ -797,5 +859,9 @@ public class NotificationDispatchService {
     }
 
     /** Exists for the length of one call and is never persisted or logged. */
-    private record Rendered(@Nullable String subject, String body) {}
+    private record Rendered(
+            @Nullable String subject,
+            String body,
+            @Nullable UUID coverAssetId,
+            @Nullable String targetPath) {}
 }
