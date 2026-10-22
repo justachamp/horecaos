@@ -91,7 +91,7 @@ export function formatMoney(minor: number, currency: string, locale: LocaleCode)
  */
 export function parseMinorUnits(text: string, currency: string): number | null {
   const exponent = minorUnitsOf(currency);
-  const cleaned = text.replace(/[\s  ]/g, '').replace(',', '.');
+  const cleaned = text.replace(/[\s\u00a0\u202f]/g, '').replace(',', '.');
   const match = /^(\d+)(?:\.(\d+))?$/.exec(cleaned);
   if (match === null) {
     return null;
