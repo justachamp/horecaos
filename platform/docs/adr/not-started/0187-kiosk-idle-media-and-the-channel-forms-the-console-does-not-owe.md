@@ -127,9 +127,10 @@ app, with an honest locked state in the hub until then.**
    `ReviewsOperationsAlertTrigger` listens to the in-process `ReviewSubmitted` and fans out through `OperationsAlertPort`;
    the message carries the review's id and its rating and nothing else (ADR 0029: no customer, no comment, no tag). A
    chat hears it only if it subscribed (no default set includes the new classes; a subscription is the opt-in, unlike the
-   recovery alerts, which also need a policy switch because they start clocks). It runs after the review commits and a fault in telling
-   a chat is logged by identifier, never raised: a customer's review is not failed by a chat, where a recovery alert commits with its case
-   because it starts clocks.
+   recovery alerts, which also need a policy switch because they start clocks). It runs after the review commits, in a transaction of its own
+   (`AfterCommitAlertTransaction`: an `AFTER_COMMIT` listener that wrote through the finished transaction would write nothing), and a fault in
+   telling a chat is logged by identifier, never raised: a customer's review is not failed by a chat, where a recovery alert commits with its
+   case because it starts clocks. A review that rolled back tells nobody. The till-difference alert (row `6.3b`) is told the same way.
 6. **Hub completeness.** For `AGGREGATOR` the hub links to Integrations (read-only here: an aggregator is an installation
    with mappings, not a storefront); for `CALL_CENTRE` it shows a read-only summary of order policy card 5; a channel whose
    installation last failed shows a banner at the top of the form for every type that has an installation; every type
@@ -275,7 +276,10 @@ between two ways to meet the record:
 - The kiosk's configuration lists the pictures in the chosen order and its token still reads nothing else.
 - `MediaAssetReferenceCatalogTests` lists the new column and `TenancyMediaUsageProbe` reports an attached asset as in use.
 - Review routing: a 5-star review reaches a chat subscribed to `REVIEW_POSITIVE` only, a 2-star one `REVIEW_NEGATIVE` only, the
-  variables are exactly `reviewId` and `rating`, a replay is deduplicated, and the enum and the CHECK admit the same set.
+  variables are exactly `reviewId` and `rating`, a replay is deduplicated, and the enum and the CHECK admit the same set. End to end
+  (`TelegramRoutingControllerEndpointTests`, a real transaction manager and database): a chat subscribed through the routing endpoint
+  finds a durable alert row once the review's transaction has committed, finds none when it rolled back, and a held credit reaches a
+  chat subscribed to `LOYALTY_SYNC_DISCREPANCY` the same way while an ordinary difference tells nobody.
 
 ## Rollout and rollback
 

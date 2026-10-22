@@ -434,13 +434,11 @@ describe('PosSyncPanel', () => {
       expect(options.map((option) => option.disabled)).toEqual([false, false, false]);
 
       await render({
-        overview: vi
-          .fn()
-          .mockResolvedValue(
-            overview({
-              bindings: [binding({ mode: 'REPORT_ONLY', syncing: false, enabled: false })],
-            }),
-          ),
+        overview: vi.fn().mockResolvedValue(
+          overview({
+            bindings: [binding({ mode: 'REPORT_ONLY', syncing: false, enabled: false })],
+          }),
+        ),
       });
       options = Array.from((byId('pos-sync-stage-select') as HTMLSelectElement).options);
       expect(options.map((option) => option.disabled)).toEqual([false, true, true]);
