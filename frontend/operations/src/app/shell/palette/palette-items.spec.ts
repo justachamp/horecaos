@@ -44,7 +44,12 @@ describe('paletteItems', () => {
   });
 
   it('finds the places whose name holds what was typed, those that start with it first', () => {
-    expect(items('or').map((item) => item.label)).toEqual(['Orders', 'Order policy']);
+    // «or» starts «Orders» and «Order policy» and is only inside «Cart reports», which therefore comes last.
+    expect(items('or').map((item) => item.label)).toEqual([
+      'Orders',
+      'Order policy',
+      'Cart reports',
+    ]);
     expect(items('art').map((item) => item.label)).toEqual(['Cart reports']);
     expect(items('d').map((item) => item.label)).toEqual(['Delivery', 'Orders', 'Order policy']);
   });

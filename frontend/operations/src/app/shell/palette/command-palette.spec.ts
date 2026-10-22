@@ -118,8 +118,12 @@ describe('CommandPalette', () => {
     type('o');
     expect(labels()).toContain('Orders');
 
+    // The rail hides «Kitchen» from this operator; two Settings screens that merely mention a kitchen stay.
     type('kitchen');
     expect(labels()).not.toContain('Kitchen');
+
+    type('zzzz');
+    expect(labels()).toEqual([]);
     expect(host().querySelector('[data-testid="command-palette-empty"]')).not.toBeNull();
   });
 

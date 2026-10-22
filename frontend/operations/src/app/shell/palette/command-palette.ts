@@ -112,6 +112,10 @@ export class CommandPalette implements OnInit {
   protected readonly activeId = computed(() => this.items()[this.activeIndex()]?.id ?? null);
 
   ngOnInit(): void {
+    // The Settings screens are named in the Settings and Staff catalogues, which the screen behind the
+    // palette may not have asked for. They are fetched when the palette opens, not with the shell, so the
+    // first paint is unchanged; the list redraws as they arrive (areas.mjs reads this call as the declaration).
+    void this.i18n.require(['settings', 'staff']);
     void this.loadSettings();
   }
 

@@ -21,6 +21,12 @@
  *
  * Code that runs before any route (everything reachable from `main.ts` by static imports) may only need `core`.
  *
+ * A file that is not a route's screen may load areas itself: a call `x.require(['settings', 'staff'])` with a
+ * literal array of areas says that this file asks for those areas before it draws, so neither it nor anything
+ * it imports is held to a route guard for them. The command palette is the case: the shell opens it on a key
+ * press, over any screen, and it names Settings screens whichever route is behind it. The exemption is by
+ * path -- a file reached some other way is still held to the route -- and it covers only the areas the call lists.
+ *
  * The analysis errs on the side of needing more: an import of a module for one constant counts all of the
  * module's keys. That is the right side to err on, and when it overstates, the remedy is to move the
  * shared words into `core` (an `AREA_BY_PREFIX` line) or to split the module.
@@ -95,6 +101,7 @@ function fileFacts(file, state) {
     }
   }
   const imports = { static: [], dynamic: [] };
+  const loads = new Set();
   const visit = (node) => {
     if (
       (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
@@ -110,6 +117,18 @@ function fileFacts(file, state) {
       ts.isStringLiteral(node.arguments[0])
     ) {
       imports.dynamic.push(node.arguments[0].text);
+    } else if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'require' &&
+      node.arguments[0] &&
+      ts.isArrayLiteralExpression(node.arguments[0]) &&
+      node.arguments[0].elements.length > 0 &&
+      node.arguments[0].elements.every((element) => ts.isStringLiteral(element))
+    ) {
+      for (const element of node.arguments[0].elements) {
+        loads.add(element.text);
+      }
     }
     ts.forEachChild(node, visit);
   };
@@ -125,7 +144,7 @@ function fileFacts(file, state) {
   }
   const resolve = (specifiers) =>
     specifiers.map((s) => resolveImport(file, s)).filter((f) => f && !state.ignored.has(f));
-  const facts = { static: resolve(imports.static), dynamic: resolve(imports.dynamic), areas };
+  const facts = { static: resolve(imports.static), dynamic: resolve(imports.dynamic), areas, loads };
   state.facts.set(file, facts);
   return facts;
 }
@@ -135,25 +154,32 @@ function fileFacts(file, state) {
  * file and key (`area -> { file, key }`), with the chain of files that led there for the report.
  */
 function needsOf(entry, state, { followDynamic }) {
-  const parent = new Map([[entry, null]]);
-  const queue = [entry];
+  // A walk position is a file and the areas some file on the way has said it loads itself (see the header),
+  // so one file reached by two ways, one of which loads, is seen twice and judged by each.
+  const positionOf = (file, covered) => `${file}|${[...covered].sort().join(',')}`;
+  const none = new Set();
+  const parent = new Map([[positionOf(entry, none), null]]);
+  const queue = [{ file: entry, covered: none }];
   const needs = new Map();
   while (queue.length > 0) {
-    const file = queue.shift();
+    const { file, covered } = queue.shift();
+    const here = positionOf(file, covered);
     const facts = fileFacts(file, state);
     for (const [area, key] of facts.areas) {
-      if (!needs.has(area)) {
+      if (!needs.has(area) && !covered.has(area) && !facts.loads.has(area)) {
         const chain = [];
-        for (let at = file; at; at = parent.get(at)) {
-          chain.unshift(path.relative(state.appDir, at));
+        for (let at = here; at; at = parent.get(at)?.from ?? null) {
+          chain.unshift(path.relative(state.appDir, at.slice(0, at.lastIndexOf('|'))));
         }
         needs.set(area, { key, chain });
       }
     }
+    const below = facts.loads.size === 0 ? covered : new Set([...covered, ...facts.loads]);
     for (const next of followDynamic ? [...facts.static, ...facts.dynamic] : facts.static) {
-      if (!parent.has(next)) {
-        parent.set(next, file);
-        queue.push(next);
+      const position = positionOf(next, below);
+      if (!parent.has(position)) {
+        parent.set(position, { from: here });
+        queue.push({ file: next, covered: below });
       }
     }
   }
