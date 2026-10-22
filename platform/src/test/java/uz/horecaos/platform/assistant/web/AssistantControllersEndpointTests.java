@@ -35,6 +35,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.assistant.domain.ReplyLocale;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
@@ -309,6 +310,42 @@ class AssistantControllersEndpointTests {
                         .query(Long.class)
                         .single())
                 .isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "the languages the assistant answers in are served from the detector's vocabulary to any signed-in principal, a brand manager and a role with no assistant capability included")
+    void theAssistantsLanguagesAreServedFromTheDetector() throws Exception {
+        String path = "/api/v1/operations/assistant/languages";
+
+        MvcResult served = mvc.perform(get(path).with(tokenFor(BRAND_MANAGER))).andReturn();
+        assertThat(served.getResponse().getStatus())
+                .as("a brand manager's grant stops at the brand; the list must not need a tenant-wide one")
+                .isEqualTo(200);
+        JsonNode languages = body(served).path("languages");
+        assertThat(languages).hasSize(ReplyLocale.SUPPORTED.size());
+        for (int i = 0; i < languages.size(); i++) {
+            String code = ReplyLocale.SUPPORTED.get(i);
+            assertThat(languages.get(i).path("code").asText())
+                    .as("the order and the codes are the detector's own")
+                    .isEqualTo(code);
+            assertThat(languages.get(i).path("disclosureKey").asText())
+                    .as("the key that holds the disclosure in %s", code)
+                    .isEqualTo("assistant.disclosure_text_" + code);
+        }
+        JsonNode uzbek = languages.get(ReplyLocale.SUPPORTED.indexOf("uz"));
+        assertThat(uzbek.path("locale").asText())
+                .as("the assistant's bare uz is the registry's uz-Latn to a picker, and is still stored as uz")
+                .isEqualTo("uz-Latn");
+
+        // Nothing tenant-owned is in it, so a role with no assistant capability reads it too; an
+        // anonymous caller does not (the operations surface sits behind a session).
+        assertThat(mvc.perform(get(path).with(tokenFor(FINANCE)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+        assertThat(mvc.perform(get(path)).andReturn().getResponse().getStatus()).isEqualTo(401);
     }
 
     @Test

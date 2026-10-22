@@ -18,12 +18,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.ordering.application.OrderOutcomeReasonService;
 import uz.horecaos.platform.ordering.domain.OutcomeReasonKind;
 import uz.horecaos.platform.ordering.web.OrderOutcomeReasonController.IdResponse;
 import uz.horecaos.platform.ordering.web.OrderOutcomeReasonController.ReasonRequest;
 import uz.horecaos.platform.ordering.web.OrderOutcomeReasonController.ReasonResponse;
 import uz.horecaos.platform.ordering.web.OrderOutcomeReasonController.ReorderRequest;
 import uz.horecaos.platform.ordering.web.OrderOutcomeReasonController.VersionResponse;
+import uz.horecaos.platform.tenancy.api.TenantLocaleSet;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
@@ -59,9 +61,27 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class OperationsOrderOutcomeReasonController {
 
     private final OrderOutcomeReasonController delegate;
+    private final OrderOutcomeReasonService reasons;
 
-    public OperationsOrderOutcomeReasonController(OrderOutcomeReasonController delegate) {
+    public OperationsOrderOutcomeReasonController(
+            OrderOutcomeReasonController delegate, OrderOutcomeReasonService reasons) {
         this.delegate = delegate;
+        this.reasons = reasons;
+    }
+
+    @GetMapping("/locale-set")
+    @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "The languages a reason's customer wording is authored in",
+            description = "Row 10.12 (ADR 0149, Decisions 4 and 5). A reason belongs to the tenant, so its "
+                    + "customer wording is written in the union of the tenant's brands' supported languages, "
+                    + "default first, the default being the tenant's first brand's. A brand that has chosen "
+                    + "no set contributes the registry's content languages. This is exactly the set a create "
+                    + "or an update refuses to leave a wording out of, so a form built on it can never send "
+                    + "a body the service answers with a 400. Needs only order.read, like the list the "
+                    + "cancel dialog reads.")
+    public LocaleSetResponse localeSet(@PathVariable UUID tenantId) {
+        return LocaleSetResponse.of(reasons.localeSet(tenantId));
     }
 
     @GetMapping
@@ -118,5 +138,13 @@ public class OperationsOrderOutcomeReasonController {
     public ResponseEntity<List<ReasonResponse>> reorder(
             @PathVariable UUID tenantId, @Valid @RequestBody ReorderRequest body, HttpServletRequest request) {
         return delegate.reorder(tenantId, body, request);
+    }
+
+    /** @param locales default first; see {@link TenantLocaleSet} */
+    public record LocaleSetResponse(List<String> locales, String defaultLocale, boolean configured) {
+
+        static LocaleSetResponse of(TenantLocaleSet set) {
+            return new LocaleSetResponse(set.locales(), set.defaultLocale(), set.configured());
+        }
     }
 }

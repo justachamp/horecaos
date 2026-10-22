@@ -1834,6 +1834,31 @@
         },
         "type" : "object"
       },
+      "AssistantLanguageResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "disclosureKey" : {
+            "type" : "string"
+          },
+          "locale" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "AssistantLanguagesResponse" : {
+        "properties" : {
+          "languages" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AssistantLanguageResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "AssistantUsageControllerUsageResponse" : {
         "properties" : {
           "answered" : {
@@ -4140,6 +4165,23 @@
           },
           "locale" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "BrandLocalesResponse" : {
+        "properties" : {
+          "configured" : {
+            "type" : "boolean"
+          },
+          "defaultLocale" : {
+            "type" : "string"
+          },
+          "locales" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -22820,6 +22862,23 @@
           }
         },
         "required" : [ "reasonCode", "targetStatus" ],
+        "type" : "object"
+      },
+      "OperationsOrderOutcomeReasonControllerLocaleSetResponse" : {
+        "properties" : {
+          "configured" : {
+            "type" : "boolean"
+          },
+          "defaultLocale" : {
+            "type" : "string"
+          },
+          "locales" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
         "type" : "object"
       },
       "OperationsPaymentControllerPaymentSessionResponse" : {
@@ -54952,7 +55011,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/comment-presets/locale-set" : {
       "get" : {
         "description" : "Row 10.12. A preset is a tenant-level object shared by every brand, so it is edited in the union of the tenant's brands' supported languages, default first; the default is the tenant's first brand's. A brand that has chosen no set contributes the platform triple (ru, uz-Latn, en). The set is a menu, not a constraint: a language outside it that a preset already carries is kept, never deleted, by an edit.",
-        "operationId" : "localeSet_2",
+        "operationId" : "localeSet_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -61035,6 +61094,26 @@
         },
         "summary" : "The calling device's own record",
         "tags" : [ "Kitchen device self" ]
+      }
+    },
+    "/api/v1/operations/assistant/languages" : {
+      "get" : {
+        "description" : "The languages the assistant's detector has a vocabulary for, each with the platform language it is and the configuration key that holds the disclosure wording in it. A note and a disclosure can be written in exactly these. A read of code, so the console offers what the detector knows and not a list of its own.",
+        "operationId" : "languages",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AssistantLanguagesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The languages the assistant answers in",
+        "tags" : [ "Assistant languages" ]
       }
     },
     "/api/v1/operations/auth/mfa/authenticators" : {
@@ -77058,6 +77137,35 @@
         "tags" : [ "Order outcome reasons" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/locale-set" : {
+      "get" : {
+        "description" : "Row 10.12 (ADR 0149, Decisions 4 and 5). A reason belongs to the tenant, so its customer wording is written in the union of the tenant's brands' supported languages, default first, the default being the tenant's first brand's. A brand that has chosen no set contributes the registry's content languages. This is exactly the set a create or an update refuses to leave a wording out of, so a form built on it can never send a body the service answers with a 400. Needs only order.read, like the list the cancel dialog reads.",
+        "operationId" : "localeSet_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OperationsOrderOutcomeReasonControllerLocaleSetResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The languages a reason's customer wording is authored in",
+        "tags" : [ "Order outcome reasons" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/reorder" : {
       "put" : {
         "operationId" : "reorder_1",
@@ -85182,6 +85290,43 @@
         },
         "summary" : "Submit a code",
         "tags" : [ "Customer identity" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locales" : {
+      "get" : {
+        "description" : "The brand's supported set (tenant.brand_locales), its own default first, then the platform's order. A brand that has chosen none answers with every language live in the registry's content tier, and says so (configured=false). A language the registry no longer has live is left out. Cacheable: it changes only when an operator edits the brand's languages.",
+        "operationId" : "brandLocales",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BrandLocalesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The languages this brand serves, default first",
+        "tags" : [ "Storefront languages" ]
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/delivery-fee" : {
@@ -108909,6 +109054,9 @@
     "description" : "ADR 0091: SMS wordings waiting on their gateway's approval",
     "name" : "Template moderation"
   }, {
+    "description" : "The languages the grounded assistant answers in",
+    "name" : "Assistant languages"
+  }, {
     "description" : "POS, payment, delivery, and notification accounts",
     "name" : "Provider integrations"
   }, {
@@ -108953,6 +109101,9 @@
   }, {
     "description" : "ADR 0092: how the platform treats personal data",
     "name" : "Data protection"
+  }, {
+    "description" : "The languages one brand serves, readable before sign-in",
+    "name" : "Storefront languages"
   }, {
     "description" : "Conversation list, history, and takeover/return/close actions",
     "name" : "Operator inbox"

@@ -584,6 +584,16 @@ export interface AssistantKnowledgeControllerVersionResponse {
   version?: number;
 }
 
+export interface AssistantLanguageResponse {
+  code?: string;
+  disclosureKey?: string;
+  locale?: string;
+}
+
+export interface AssistantLanguagesResponse {
+  languages?: Array<AssistantLanguageResponse>;
+}
+
 export interface AssistantUsageControllerUsageResponse {
   answered?: number;
   ceilingReached?: boolean;
@@ -1293,6 +1303,12 @@ export interface BrandLocaleView {
   description?: string;
   isDefault?: boolean;
   locale?: string;
+}
+
+export interface BrandLocalesResponse {
+  configured?: boolean;
+  defaultLocale?: string;
+  locales?: Array<string>;
 }
 
 export interface BrandOrderCountsResponse {
@@ -7227,6 +7243,12 @@ export interface OperationsOrderControllerOrderSummaryResponse {
 export interface OperationsOrderControllerStateActionRequest {
   reasonCode: string;
   targetStatus: "RECEIVED" | "PAYMENT_AUTHORIZING" | "AWAITING_APPROVAL" | "PAYMENT_FAILED" | "CONFIRMED" | "REJECTED" | "EXPIRED" | "PREPARING" | "READY" | "FULFILLING" | "COMPLETED" | "CANCELLED";
+}
+
+export interface OperationsOrderOutcomeReasonControllerLocaleSetResponse {
+  configured?: boolean;
+  defaultLocale?: string;
+  locales?: Array<string>;
 }
 
 export interface OperationsPaymentControllerPaymentSessionResponse {
@@ -14274,7 +14296,7 @@ export interface Operations {
   "setBusinessType": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/business-type"; request: { parameters: { path: { tenantId: string } }; body: BusinessTypeRequest }; responses: { "200": unknown } };
   "list_37": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<PresetResponse> } };
   "create_19": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets"; request: { parameters: { path: { tenantId: string } }; body: NewPresetRequest }; responses: { "200": PresetResponse } };
-  "localeSet_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets/locale-set"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CommentPresetControllerLocaleSetResponse } };
+  "localeSet_3": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets/locale-set"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CommentPresetControllerLocaleSetResponse } };
   "update_13": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets/{presetId}"; request: { parameters: { path: { presetId: string; tenantId: string } }; body: UpdatePresetRequest }; responses: { "200": PresetResponse } };
   "changeCountry": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/country-change"; request: { parameters: { path: { tenantId: string } }; body: CountryChangeRequest }; responses: { "200": CountryChangeView } };
   "due": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/credentials-due"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CredentialsDue } };
@@ -14419,6 +14441,7 @@ export interface Operations {
   "endBreak": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/breaks/end"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } } }; responses: { "200": unknown } };
   "close_4": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/close"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } }; body: CloseShiftRequest }; responses: { "200": CloseResponse } };
   "me_1": { method: "GET"; path: "/api/v1/devices/me"; request: { parameters: Record<string, never> }; responses: { "200": DeviceSelfResponse } };
+  "languages": { method: "GET"; path: "/api/v1/operations/assistant/languages"; request: { parameters: Record<string, never> }; responses: { "200": AssistantLanguagesResponse } };
   "ownOperations": { method: "GET"; path: "/api/v1/operations/auth/mfa/authenticators"; request: { parameters: Record<string, never> }; responses: { "200": OwnMfaResponse } };
   "removeOperations": { method: "DELETE"; path: "/api/v1/operations/auth/mfa/authenticators/{authenticatorId}"; request: { parameters: { path: { authenticatorId: string } }; body: RemoveAuthenticatorRequest }; responses: { "200": unknown } };
   "beginOperations": { method: "POST"; path: "/api/v1/operations/auth/mfa/enrolments"; request: { parameters: Record<string, never>; body: BeginEnrolmentRequest }; responses: { "200": Enrolment } };
@@ -14761,6 +14784,7 @@ export interface Operations {
   "list_17": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string }; query: { activeOnly?: boolean; kind: "CANCELLATION" | "COMPLETION" | "LINE_REMOVAL" } } }; responses: { "200": Array<ReasonResponse> } };
   "create_9": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerIdResponse } };
   "categories_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/categories"; request: { parameters: { path: { tenantId: string }; query: { kind: "CANCELLATION" | "COMPLETION" | "LINE_REMOVAL" } } }; responses: { "200": Array<string> } };
+  "localeSet_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/locale-set"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OperationsOrderOutcomeReasonControllerLocaleSetResponse } };
   "reorder_1": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/reorder"; request: { parameters: { path: { tenantId: string } }; body: OrderOutcomeReasonControllerReorderRequest }; responses: { "200": Array<ReasonResponse> } };
   "archive": { method: "DELETE"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } } }; responses: { "200": unknown } };
   "update_4": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerVersionResponse } };
@@ -14956,6 +14980,7 @@ export interface Operations {
   "signOut": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/sessions/current"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": unknown } };
   "requestCode": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/verification-challenges"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RequestCodeRequest }; responses: { "200": ChallengeResponse } };
   "submitCode": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/verification-challenges/{challengeId}/attempts"; request: { parameters: { path: { brandId: string; challengeId: string; tenantId: string } }; body: SubmitCodeRequest }; responses: { "200": GrantResponse } };
+  "brandLocales": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locales"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": BrandLocalesResponse } };
   "quote_1": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/delivery-fee"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: DeliveryFeeQuoteRequest }; responses: { "200": DeliveryFeeView } };
   "fulfillmentModes": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/fulfillment-modes"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channel: string } } }; responses: { "200": FulfillmentModesResponse } };
   "menu": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/menu"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channel: string; locale?: string } } }; responses: { "200": StorefrontMenu } };

@@ -328,6 +328,23 @@
         },
         "type" : "object"
       },
+      "BrandLocalesResponse" : {
+        "properties" : {
+          "configured" : {
+            "type" : "boolean"
+          },
+          "defaultLocale" : {
+            "type" : "string"
+          },
+          "locales" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "CallbackRequestResponse" : {
         "properties" : {
           "leadId" : {
@@ -5582,6 +5599,44 @@
         "x-horecaos-surface" : "published"
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locales" : {
+      "get" : {
+        "description" : "The brand's supported set (tenant.brand_locales), its own default first, then the platform's order. A brand that has chosen none answers with every language live in the registry's content tier, and says so (configured=false). A language the registry no longer has live is left out. Cacheable: it changes only when an operator edits the brand's languages.",
+        "operationId" : "brandLocales",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BrandLocalesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The languages this brand serves, default first",
+        "tags" : [ "Storefront languages" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/delivery-fee" : {
       "post" : {
         "description" : "Returns one fee, or one stable refusal code and no fee. An address outside every zone of this branch is refused here and never re-homed to a branch that does cover it: substituting one changes the menu, the prices, the preparation time and eventually the legal entity on the receipt.",
@@ -7921,6 +7976,9 @@
   }, {
     "description" : "Availability and remaining quantity a customer can see",
     "name" : "Storefront inventory"
+  }, {
+    "description" : "The languages one brand serves, readable before sign-in",
+    "name" : "Storefront languages"
   }, {
     "description" : "A customer's own rating of their own completed order",
     "name" : "Reviews"

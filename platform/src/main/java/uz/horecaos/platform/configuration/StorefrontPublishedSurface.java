@@ -44,6 +44,9 @@ final class StorefrontPublishedSurface {
             ROOT + "/channel-hostnames/{hostname}",
             // The languages the platform offers, from the registry (ADR 0149): a vendor's language picker.
             ROOT + "/locales",
+            // The languages one brand serves, default first (ADR 0149, Decision 5): a vendor's picker
+            // offers exactly what the brand has chosen, not everything the platform has live.
+            BRAND + "/locales",
             TENANT + "/channels/{channel}/pages/{slug}",
             TENANT + "/channels/{channel}/presentation",
             BRAND + "/analytics",

@@ -395,6 +395,16 @@ export interface AssistantKnowledgeControllerVersionResponse {
   version?: number;
 }
 
+export interface AssistantLanguageResponse {
+  code?: string;
+  disclosureKey?: string;
+  locale?: string;
+}
+
+export interface AssistantLanguagesResponse {
+  languages?: Array<AssistantLanguageResponse>;
+}
+
 export interface AssistantUsageControllerUsageResponse {
   answered?: number;
   ceilingReached?: boolean;
@@ -4781,6 +4791,12 @@ export interface OperationsOrderControllerOrderSummaryResponse {
 export interface OperationsOrderControllerStateActionRequest {
   reasonCode: string;
   targetStatus: "RECEIVED" | "PAYMENT_AUTHORIZING" | "AWAITING_APPROVAL" | "PAYMENT_FAILED" | "CONFIRMED" | "REJECTED" | "EXPIRED" | "PREPARING" | "READY" | "FULFILLING" | "COMPLETED" | "CANCELLED";
+}
+
+export interface OperationsOrderOutcomeReasonControllerLocaleSetResponse {
+  configured?: boolean;
+  defaultLocale?: string;
+  locales?: Array<string>;
 }
 
 export interface OperationsPaymentControllerPaymentSessionResponse {
@@ -9548,6 +9564,7 @@ export interface Operations {
   "endBreak": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/breaks/end"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } } }; responses: { "200": unknown } };
   "close_4": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/close"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } }; body: CloseShiftRequest }; responses: { "200": CloseResponse } };
   "me_1": { method: "GET"; path: "/api/v1/devices/me"; request: { parameters: Record<string, never> }; responses: { "200": DeviceSelfResponse } };
+  "languages": { method: "GET"; path: "/api/v1/operations/assistant/languages"; request: { parameters: Record<string, never> }; responses: { "200": AssistantLanguagesResponse } };
   "ownOperations": { method: "GET"; path: "/api/v1/operations/auth/mfa/authenticators"; request: { parameters: Record<string, never> }; responses: { "200": OwnMfaResponse } };
   "removeOperations": { method: "DELETE"; path: "/api/v1/operations/auth/mfa/authenticators/{authenticatorId}"; request: { parameters: { path: { authenticatorId: string } }; body: RemoveAuthenticatorRequest }; responses: { "200": unknown } };
   "beginOperations": { method: "POST"; path: "/api/v1/operations/auth/mfa/enrolments"; request: { parameters: Record<string, never>; body: BeginEnrolmentRequest }; responses: { "200": Enrolment } };
@@ -9890,6 +9907,7 @@ export interface Operations {
   "list_16": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string }; query: { activeOnly?: boolean; kind: "CANCELLATION" | "COMPLETION" | "LINE_REMOVAL" } } }; responses: { "200": Array<ReasonResponse> } };
   "create_8": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerIdResponse } };
   "categories": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/categories"; request: { parameters: { path: { tenantId: string }; query: { kind: "CANCELLATION" | "COMPLETION" | "LINE_REMOVAL" } } }; responses: { "200": Array<string> } };
+  "localeSet_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/locale-set"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OperationsOrderOutcomeReasonControllerLocaleSetResponse } };
   "reorder_1": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/reorder"; request: { parameters: { path: { tenantId: string } }; body: OrderOutcomeReasonControllerReorderRequest }; responses: { "200": Array<ReasonResponse> } };
   "archive": { method: "DELETE"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } } }; responses: { "200": unknown } };
   "update_3": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerVersionResponse } };

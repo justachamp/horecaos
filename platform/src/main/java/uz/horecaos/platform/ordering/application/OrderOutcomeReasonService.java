@@ -29,6 +29,7 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOutcomeReaso
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOutcomeReasonStore.ReasonRow;
 import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
+import uz.horecaos.platform.tenancy.api.TenantLocaleSet;
 
 /**
  * Authoring the tenant's cancellation, completion and line-removal reasons (ADR 0039, ADR 0169).
@@ -484,6 +485,15 @@ public class OrderOutcomeReasonService {
 
     private static @Nullable String enumName(@Nullable Enum<?> value) {
         return value == null ? null : value.name();
+    }
+
+    /**
+     * The languages a reason's customer wording is authored in for this tenant, default first: the same
+     * set {@link #validate} requires a text in, so the console that offers a form for it asks the one
+     * question the write side answers (ADR 0149, Decisions 4 and 5).
+     */
+    public TenantLocaleSet localeSet(UUID tenantId) {
+        return brandLocales.tenantLocaleSet(tenantId);
     }
 
     private void validate(UUID tenantId, CreateReason command) {

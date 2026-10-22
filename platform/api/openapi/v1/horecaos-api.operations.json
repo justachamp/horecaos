@@ -1285,6 +1285,31 @@
         },
         "type" : "object"
       },
+      "AssistantLanguageResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "disclosureKey" : {
+            "type" : "string"
+          },
+          "locale" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "AssistantLanguagesResponse" : {
+        "properties" : {
+          "languages" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AssistantLanguageResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "AssistantUsageControllerUsageResponse" : {
         "properties" : {
           "answered" : {
@@ -15093,6 +15118,23 @@
           }
         },
         "required" : [ "reasonCode", "targetStatus" ],
+        "type" : "object"
+      },
+      "OperationsOrderOutcomeReasonControllerLocaleSetResponse" : {
+        "properties" : {
+          "configured" : {
+            "type" : "boolean"
+          },
+          "defaultLocale" : {
+            "type" : "string"
+          },
+          "locales" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
         "type" : "object"
       },
       "OperationsPaymentControllerPaymentSessionResponse" : {
@@ -30889,6 +30931,26 @@
         },
         "summary" : "The calling device's own record",
         "tags" : [ "Kitchen device self" ]
+      }
+    },
+    "/api/v1/operations/assistant/languages" : {
+      "get" : {
+        "description" : "The languages the assistant's detector has a vocabulary for, each with the platform language it is and the configuration key that holds the disclosure wording in it. A note and a disclosure can be written in exactly these. A read of code, so the console offers what the detector knows and not a list of its own.",
+        "operationId" : "languages",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AssistantLanguagesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The languages the assistant answers in",
+        "tags" : [ "Assistant languages" ]
       }
     },
     "/api/v1/operations/auth/mfa/authenticators" : {
@@ -46909,6 +46971,35 @@
           }
         },
         "summary" : "The platform categories a reason of this kind may carry",
+        "tags" : [ "Order outcome reasons" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/locale-set" : {
+      "get" : {
+        "description" : "Row 10.12 (ADR 0149, Decisions 4 and 5). A reason belongs to the tenant, so its customer wording is written in the union of the tenant's brands' supported languages, default first, the default being the tenant's first brand's. A brand that has chosen no set contributes the registry's content languages. This is exactly the set a create or an update refuses to leave a wording out of, so a form built on it can never send a body the service answers with a 400. Needs only order.read, like the list the cancel dialog reads.",
+        "operationId" : "localeSet_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OperationsOrderOutcomeReasonControllerLocaleSetResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The languages a reason's customer wording is authored in",
         "tags" : [ "Order outcome reasons" ]
       }
     },
@@ -71762,6 +71853,9 @@
   }, {
     "description" : "Tighter caps and wider quiet hours, per channel and purpose (ADR 0112)",
     "name" : "Marketing contact policy"
+  }, {
+    "description" : "The languages the grounded assistant answers in",
+    "name" : "Assistant languages"
   }, {
     "description" : "ADR 0082: staged rollout as boolean configuration keys",
     "name" : "Feature flags"
