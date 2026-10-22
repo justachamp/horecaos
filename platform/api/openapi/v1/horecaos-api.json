@@ -1396,6 +1396,12 @@
           },
           "source" : {
             "type" : "string"
+          },
+          "titles" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           }
         },
         "type" : "object"
@@ -7978,6 +7984,31 @@
           },
           "status" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CompensationCandidatesResponse" : {
+        "properties" : {
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "grants" : {
+            "items" : {
+              "$ref" : "#/components/schemas/GrantCandidateResponse"
+            },
+            "type" : "array"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "remedies" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RemedyCandidateResponse"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -16133,6 +16164,45 @@
           "variantId" : {
             "format" : "uuid",
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "GrantCandidateResponse" : {
+        "properties" : {
+          "benefitType" : {
+            "type" : "string"
+          },
+          "codeHint" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "grantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sourceType" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "taken" : {
+            "type" : "boolean"
+          },
+          "value" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -27657,6 +27727,9 @@
           },
           "missingPolicyMode" : {
             "type" : "string"
+          },
+          "worklist" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -29832,6 +29905,13 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "titles" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "What a storefront may print for this promotion, per locale (ADR 0140). Optional; a locale with no title is described by the kind of benefit.",
+            "type" : "object"
+          },
           "validFrom" : {
             "format" : "date-time",
             "type" : "string"
@@ -30149,6 +30229,12 @@
           },
           "status" : {
             "type" : "string"
+          },
+          "titles" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           },
           "updatedAt" : {
             "format" : "date-time",
@@ -32188,6 +32274,14 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "legalEntityId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "markupSom" : {
             "format" : "int64",
             "type" : "integer"
@@ -33061,6 +33155,35 @@
           }
         },
         "required" : [ "expectedVersion", "reasonCode" ],
+        "type" : "object"
+      },
+      "RemedyCandidateResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "recordedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "refId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "state" : {
+            "type" : "string"
+          },
+          "taken" : {
+            "type" : "boolean"
+          }
+        },
         "type" : "object"
       },
       "RemedyResponse" : {
@@ -39695,6 +39818,10 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "legalEntityId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "markupSom" : {
             "format" : "int64",
             "type" : "integer"
@@ -44645,7 +44772,7 @@
     "/api/v1/control-plane/capabilities" : {
       "get" : {
         "description" : "The code-owned registry, not one session's slice of it. Platform-admin only: the vocabulary itself is what an approval policy's requiredApproverCapability and a grant's roleCode are built from.",
-        "operationId" : "list_61",
+        "operationId" : "list_62",
         "responses" : {
           "200" : {
             "content" : {
@@ -44943,7 +45070,7 @@
     "/api/v1/control-plane/event-contracts" : {
       "get" : {
         "description" : "Code-owned (ADR 0032): a producer cannot publish an event with no entry here. Static within a build, so there is nothing to paginate.",
-        "operationId" : "list_60",
+        "operationId" : "list_61",
         "responses" : {
           "200" : {
             "content" : {
@@ -45326,7 +45453,7 @@
     },
     "/api/v1/control-plane/grants" : {
       "get" : {
-        "operationId" : "list_45",
+        "operationId" : "list_46",
         "responses" : {
           "200" : {
             "content" : {
@@ -45416,7 +45543,7 @@
     "/api/v1/control-plane/incidents" : {
       "get" : {
         "description" : "Each alert class and subject has at most one live incident; raising it again counts another occurrence.",
-        "operationId" : "list_59",
+        "operationId" : "list_60",
         "parameters" : [ {
           "in" : "query",
           "name" : "includeResolved",
@@ -46048,7 +46175,7 @@
     },
     "/api/v1/control-plane/onboarding-templates" : {
       "get" : {
-        "operationId" : "list_58",
+        "operationId" : "list_59",
         "responses" : {
           "200" : {
             "content" : {
@@ -46731,7 +46858,7 @@
     "/api/v1/control-plane/template-reviews" : {
       "get" : {
         "description" : "Versions in force or in draft, awaiting first. A version awaiting or refused is not sent. Filter to one state with ?state=.",
-        "operationId" : "list_57",
+        "operationId" : "list_58",
         "parameters" : [ {
           "in" : "query",
           "name" : "state",
@@ -46942,7 +47069,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/approval-policies" : {
       "get" : {
         "description" : "Every version of each policy, newest first. An action code with no row here needs no second signature, which is the state every action is in until somebody publishes one.",
-        "operationId" : "list_44",
+        "operationId" : "list_45",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -46992,7 +47119,7 @@
       },
       "post" : {
         "description" : "Never an edit. The previous open version is closed at the instant this one starts, so what an earlier approver was shown stays readable and the version snapshotted onto their request still means what it said.",
-        "operationId" : "author_2",
+        "operationId" : "author_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -47031,7 +47158,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/approval-policies/coverage" : {
       "get" : {
         "description" : "An empty configuredScopes list is an unresolved action. Its missingPolicyMode states whether it currently proceeds on one signature or is refused until a policy is authored. A scoped row is not presented as tenant-wide coverage.",
-        "operationId" : "coverage_2",
+        "operationId" : "coverage_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -47063,7 +47190,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/approval-policies/{policyId}/expiry" : {
       "post" : {
         "description" : "Closes the version's window, which is the only way to retire a threshold: resolution takes the highest version whose window is open, so a superseding row cannot switch an earlier one off. This is how an operator says stop requiring approval, so it only applies to the version in force. Retroactive ends are refused, a closed version is never reopened — that is a new version — and a version scheduled to take effect later is refused too: cancelling it would leave the version it superseded closed with nothing to follow it, which turns the control off from the scheduled date onwards. To call off a scheduled change, publish the threshold you want as a new version.",
-        "operationId" : "endDate",
+        "operationId" : "endDate_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -47537,7 +47664,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/auto-add-rules" : {
       "get" : {
         "description" : "Draft, active and archived rules in display order. Only active rules reach customers, and only with the next publication.",
-        "operationId" : "list_43",
+        "operationId" : "list_44",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -50101,7 +50228,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus" : {
       "get" : {
-        "operationId" : "list_42",
+        "operationId" : "list_43",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -52156,7 +52283,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows" : {
       "get" : {
         "description" : "Every version of every flow key, newest first. At most one version per flow key is ever active at once.",
-        "operationId" : "list_56",
+        "operationId" : "list_57",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -52196,7 +52323,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows/{flowKey}" : {
       "post" : {
         "description" : "Never an edit — always the next version. When activate is true, the previously active version for this flowKey is deactivated in the same transaction the new one activates in, so a reader never observes zero or two active versions. A malformed or invalid document (unknown block type, a transition naming a state that does not exist, a cycle with no exit) is refused whole, with every problem named.",
-        "operationId" : "author_1",
+        "operationId" : "author_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -52250,7 +52377,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs" : {
       "get" : {
         "description" : "Operations §3.7.",
-        "operationId" : "list_41",
+        "operationId" : "list_42",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -53796,7 +53923,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/products/{productId}/comment-presets" : {
       "get" : {
-        "operationId" : "list_40",
+        "operationId" : "list_41",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -54233,7 +54360,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules" : {
       "get" : {
         "description" : "The Hours tab's rebind picker and the shared-schedule warning's source: each schedule's name and how many locations currently bind it.",
-        "operationId" : "list_39",
+        "operationId" : "list_40",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -54460,7 +54587,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones" : {
       "get" : {
         "description" : "Operations §3.6.",
-        "operationId" : "list_38",
+        "operationId" : "list_39",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -54786,7 +54913,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/comment-presets" : {
       "get" : {
-        "operationId" : "list_37",
+        "operationId" : "list_38",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -55097,7 +55224,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/grants" : {
       "get" : {
         "description" : "Active only by default. Pass includeInactive=true for staff-and-access.md §2's suspended-row state and §11.2's restore action, which both need to see a revoked grant, not only what remains active.",
-        "operationId" : "list_36",
+        "operationId" : "list_37",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -55262,7 +55389,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/ingredients" : {
       "get" : {
         "description" : "Each ingredient carries its code and its name per locale. It is a label for the customer to read, not a stock item.",
-        "operationId" : "list_35",
+        "operationId" : "list_36",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -55448,7 +55575,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/integrations" : {
       "get" : {
-        "operationId" : "list_34",
+        "operationId" : "list_35",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -56109,7 +56236,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities" : {
       "get" : {
-        "operationId" : "list_33",
+        "operationId" : "list_34",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -56885,7 +57012,7 @@
       },
       "post" : {
         "description" : "Never edits a version in force. Orders already accepted keep the version they resolved (ADR 0030); this only changes what a new order resolves from now on.",
-        "operationId" : "author",
+        "operationId" : "author_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -56924,7 +57051,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons" : {
       "get" : {
         "description" : "Read with ORDER_READ rather than the manage capability, because the cancel dialog has to populate its list for every operator who can cancel an order and almost none of them may author one.",
-        "operationId" : "list_32",
+        "operationId" : "list_33",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -57388,7 +57515,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/pos-mappings" : {
       "get" : {
         "description" : "Optionally filtered by status (PROPOSED, ACTIVE, CONFLICTED, RETIRED). Newest-updated first.",
-        "operationId" : "list_31",
+        "operationId" : "list_32",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -58101,7 +58228,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels" : {
       "get" : {
         "description" : "Archived channels are listed because a historical order still renders through one; the status says whether a new cart may use it. Each row also carries its branch count, enabled payment-method count and enabled fulfilment modes -- settings.md 10.4a's three previously absent columns.",
-        "operationId" : "list_30",
+        "operationId" : "list_31",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -59284,7 +59411,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/statements" : {
       "get" : {
         "description" : "Newest month first, void ones included.",
-        "operationId" : "list_55",
+        "operationId" : "list_56",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -59652,7 +59779,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/tags" : {
       "get" : {
         "description" : "Each tag carries its code, an optional icon from a closed list, whether it is shown as a badge and/or offered as a filter, and its name per locale.",
-        "operationId" : "list_29",
+        "operationId" : "list_30",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -61405,6 +61532,174 @@
         "tags" : [ "Courier operations" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/approval-policies" : {
+      "get" : {
+        "description" : "Every version of each policy, newest first; the control-plane route's twin. An action code with no row here follows its registered missing-policy mode.",
+        "operationId" : "list_29",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "actionCode",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "includeEnded",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PagePolicyResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List the approval policies governing this tenant",
+        "tags" : [ "Approval policies (operations)" ]
+      },
+      "post" : {
+        "description" : "Never an edit: the previous open version is closed at the instant this one starts. The control-plane route's twin.",
+        "operationId" : "author",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AuthorPolicyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PolicyResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Publish the next version of an approval policy",
+        "tags" : [ "Approval policies (operations)" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/approval-policies/coverage" : {
+      "get" : {
+        "description" : "An empty configuredScopes list is an unresolved action; its missingPolicyMode says whether it proceeds on one signature (ALLOW_WITHOUT_APPROVAL) or is refused until a policy is authored (REQUIRE_CONFIGURED_POLICY). The control-plane route's twin.",
+        "operationId" : "coverage_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PolicyCoverageResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Show registered approval actions and their configured scopes",
+        "tags" : [ "Approval policies (operations)" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/approval-policies/{policyId}/expiry" : {
+      "post" : {
+        "description" : "Closes the version's window, the only way to retire a threshold. Retroactive ends and versions scheduled for later are refused. The control-plane route's twin.",
+        "operationId" : "endDate",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "policyId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/EndPolicyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PolicyResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "End-date a policy version",
+        "tags" : [ "Approval policies (operations)" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/approval-requests" : {
       "get" : {
         "description" : "The same read as the control-plane route, reachable from the operations frontend so a tenant's own manager can see what is waiting on them.",
@@ -62111,7 +62406,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands" : {
       "get" : {
-        "operationId" : "list_51",
+        "operationId" : "list_52",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -62601,7 +62896,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations" : {
       "get" : {
         "description" : "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation whose newest message nobody has answered yet, then everything else by last activity. assistantActive marks a conversation the assistant is answering (ADR 0069), assistantInvolved one it has spoken in at all. No message bodies here — open a conversation for its decrypted history.",
-        "operationId" : "list_54",
+        "operationId" : "list_55",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -65849,6 +66144,22 @@
           }
         }, {
           "in" : "query",
+          "name" : "minRating",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "maxRating",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
           "name" : "cursor",
           "required" : false,
           "schema" : {
@@ -66027,6 +66338,59 @@
           }
         },
         "summary" : "One case: the drawer",
+        "tags" : [ "Service recovery" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/recovery-cases/{caseId}/compensation-candidates" : {
+      "get" : {
+        "description" : "The picker behind the drawer's «attach». Read under the case's own capability, because the order-remedy console's read needs a tenant-scope payment capability a branch case worker does not hold. Lists the remedies recorded against the case's own order and the one-off codes minted for its customer at its brand (shape, value, expiry and the last characters of the code, never the code), each marked taken when it already belongs to a case. Also returns the order and the customer, so the console can open the order-remedy console and prefill the mint. The case still links and never pays: choosing one goes through the compensations endpoint, which verifies it again.",
+        "operationId" : "compensationCandidates",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "caseId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CompensationCandidatesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What this case could be linked to: the order's remedies and the customer's one-off codes",
         "tags" : [ "Service recovery" ]
       }
     },
@@ -70006,8 +70370,8 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/recovery-cases" : {
       "get" : {
-        "description" : "Open cases most-urgent first (by resolution due time), closed ones most recently closed first. Filter by state, owner, branch and where the clocks stand (ON_TRACK, AT_RISK, BREACHED, or MET for a closed case in time). Cursor-paginated per ADR 0031. No comment and no note: they are in the drawer.",
-        "operationId" : "list_53",
+        "description" : "Open cases most-urgent first (by resolution due time), closed ones most recently closed first. Filter by state, owner, branch, the rating of the review (minRating and maxRating, 1 to 5) and where the clocks stand (ON_TRACK, AT_RISK, BREACHED, or MET for a closed case in time). Cursor-paginated per ADR 0031. No comment and no note: they are in the drawer.",
+        "operationId" : "list_54",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -70055,6 +70419,22 @@
           "schema" : {
             "enum" : [ "ON_TRACK", "AT_RISK", "BREACHED", "MET" ],
             "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "minRating",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "maxRating",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         }, {
           "in" : "query",
@@ -70375,7 +70755,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews" : {
       "get" : {
         "description" : "Every filter is optional. Cursor-paginated per ADR 0031: pass the previous page's nextCursor, and a null nextCursor is the end. Row 5.2h: pass customerAccountId to narrow to one customer's own reviews — the customer detail pane's own tab.",
-        "operationId" : "list_52",
+        "operationId" : "list_53",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -79532,7 +79912,7 @@
     "/api/v1/operations/tenants/{tenantId}/staff/me/sessions" : {
       "get" : {
         "description" : "The signed-in account's sessions, newest activity first. Keycloak decides which are live; the platform's sign-in record names the device (browser, system, form), and a session with no record has a null deviceLabel and reads «Неизвестное устройство». `current` marks the session whose `sid` is this token's. A session is the account's, shared by every company the person works for. `keycloak: UNAVAILABLE` means Keycloak could not be asked and the list is the platform's own record. No address, header or position is ever returned.",
-        "operationId" : "list_50",
+        "operationId" : "list_51",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -92193,7 +92573,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices" : {
       "get" : {
         "description" : "Active and revoked alike, with who enrolled or revoked each one, the class each asked for and was approved as, and for a wall display the station it shows, when it last read and whether it counts as not seen. Behind kitchen.station.manage rather than kitchen.ticket.read, because a revocation reason and an enrolling manager's name are administrative facts a line cook's board read does not need.",
-        "operationId" : "list_49",
+        "operationId" : "list_50",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -98652,7 +99032,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/terminals" : {
       "get" : {
         "description" : "Of any class: name, class, state, attribution mode, the device's auto-lock and what applies now, who is unlocked at it, when it was last seen and the build it reported, who enrolled it and who revoked it. «Last seen» is the last authenticated request from the device, stamped at most once a minute: no heartbeat endpoint exists, so a healthy idle device and a stuck one are told apart by how long since.",
-        "operationId" : "list_48",
+        "operationId" : "list_49",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -103564,7 +103944,7 @@
     "/api/v1/tenants/{tenantId}/consent-types" : {
       "get" : {
         "description" : "Bootstraps the code-owned default catalogue on this tenant's first read, so a tenant with no rows yet still sees the two purposes already in production use (MARKETING_PROMOTIONS, TERMS_OF_SERVICE) rather than an empty registry.",
-        "operationId" : "list_47",
+        "operationId" : "list_48",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -105220,7 +105600,7 @@
     "/api/v1/tenants/{tenantId}/customers/{accountId}/notification-preferences" : {
       "get" : {
         "description" : "Only what has been set. An absent row means the default for that class, which is on rather than off: a customer who never expressed a preference has not opted out of anything.",
-        "operationId" : "list_46",
+        "operationId" : "list_47",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -107825,7 +108205,7 @@
     },
     "/api/v1/tenants/{tenantId}/reporting/promotions/summary" : {
       "get" : {
-        "description" : "One row per promotion over the closed business days in the range. Cancelled, rejected, expired and payment-failed orders are excluded here and stay in the log. The average check with and without is a comparison over the same brand and period, not a causal uplift: customers who use a promotion differ from those who do not.",
+        "description" : "One row per promotion and legal entity over the closed business days in the range (the promo.* metrics are money, and ADR 0038 refuses a total across two companies). Cancelled, rejected, expired and payment-failed orders are excluded here and stay in the log. A customer's one-off benefit grant has no promotion: its rows carry no promotionId and are labelled by where the grant came from. The average check with and without is a comparison over the same brand, entity and period, not a causal uplift: customers who use a promotion differ from those who do not.",
         "operationId" : "summary_1",
         "parameters" : [ {
           "in" : "path",
@@ -107854,6 +108234,22 @@
         }, {
           "in" : "query",
           "name" : "brandId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "legalEntityId",
           "required" : false,
           "schema" : {
             "format" : "uuid",
@@ -109196,6 +109592,9 @@
   }, {
     "description" : "Monthly statements of what a tenant owes, before tax",
     "name" : "Commercial statements"
+  }, {
+    "description" : "The maker-checker thresholds that decide when an action needs a second signature, for the operations console",
+    "name" : "Approval policies (operations)"
   }, {
     "description" : "Registrations, baskets, checkouts and orders; acquisition by source (ADR 0167)",
     "name" : "Customer funnel"

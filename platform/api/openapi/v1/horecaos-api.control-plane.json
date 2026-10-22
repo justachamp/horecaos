@@ -9293,6 +9293,9 @@
           },
           "missingPolicyMode" : {
             "type" : "string"
+          },
+          "worklist" : {
+            "type" : "string"
           }
         },
         "type" : "object"
