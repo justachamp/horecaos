@@ -162,13 +162,8 @@ Telegram mini app for couriers.**
    tests against that.
 8. **Order of work.** Telemetry ingest ships last (ADR 0045's rollout): the sender, and the
    recorded acknowledgement of the transparency notice that must precede it, are client
-   part 2. The app refuses to open a duty session or start the sender until the notice is
-   acknowledged, and the acknowledgement is recorded by the platform
-   (`POST .../telemetry-notice-acknowledgements`, an audit fact naming the courier, the notice
-   version and the time; there is no table, an acknowledgement being an event and not a state).
-   **The platform records it; it does not gate on it** — the gate is the app's, so a client
-   that did not ask would be tracked without the record. That is why the revisit trigger
-   below exists.
+   part 2; the endpoints exist here so part 2 has something to call, and no client calls
+   them before then.
 
 ## Alternatives considered
 
@@ -182,8 +177,6 @@ Telegram mini app for couriers.**
 | Persist the refresh token (storage or `offline_access`) so a courier signs in once a month | AGENTS.md forbids persisting tokens; a personal phone is lost and shared more often than a till. The cost is the session lifetime above, and it is a configuration the owner can lengthen at the realm | The owner accepts a device-bound credential for this client, ideally with a passkey |
 | A courier-self controller inside `telemetry` | It closes a module cycle: `telemetry` would import `courier.api` for the self-authorization declaration while `courier` already imports `telemetry.api`. Moving the declaration to a neutral module would touch the imports of every courier controller other waves are editing | The declaration moves to a shared module for another reason |
 | A tenant-agnostic `GET /me` that lists a courier's workplaces | Nothing yet has a courier serving two tenants (a courier-service tenant is ADR 0164, not started), and it would be the only courier endpoint without the tenant in its path (ADR 0031). The tenant is configuration of the deployment | A courier genuinely works for more than one tenant on one handset |
-| The platform refuses a duty session until the notice has been acknowledged | It is the stronger guarantee, and it is a refusal added to `POST .../duty-sessions` that every existing test, every staff flow that opens a session for a courier and the telemetry module's own rollout would have to satisfy, for a notice whose wording does not exist yet. The record exists (an audit fact per acknowledgement), so a courier tracked without one is visible; prevention waits for the wording | The wording is agreed and ingest is about to be switched on for a real tenant, or an audit shows a session opened by a courier with no acknowledgement |
-| A table of acknowledgements, read back by `GET /me` so a new phone knows | An acknowledgement is an event, not a state: a table would hold the latest version and lose the history counsel will ask for, and the audit trail is already append-only with its own retention. A new phone asking again is the safe direction to be wrong in | Couriers complain of being asked on every new phone, or a subject-access request needs the current state without reading the trail |
 | Let the courier app send its own `courierId` as the staff batch does | The one parameter through which a courier could post as somebody else. The courier is the token's subject and nothing else | Never |
 
 ## Consequences
@@ -218,15 +211,6 @@ Telegram mini app for couriers.**
 - Tokens in memory mean every reload is a round trip to the identity provider. The identity
   provider is therefore on the courier's critical path in a way it is not for the staff
   consoles.
-- **The acknowledgement is recorded, not enforced, by the platform.** The app will not go on
-  duty without it, but a client that skipped it would be tracked all the same; the platform's
-  record would then show no acknowledgement for that courier, which is evidence of the failure
-  and not a prevention of it. Enforcing it server-side means a refusal in the duty-session open
-  that every existing test and client would have to satisfy.
-- **The pickup and handover calls are written to a contract whose server side is another wave's.**
-  Until it merges they answer `404`; the specs pin both branches of the answer and the paths.
-- **A phone clock that is wrong shows a wrong countdown on an offer.** The countdown is a guide;
-  the platform decides whether an offer is still there.
 - The frontends stay split across Angular 21 (both storefronts, courier) and 22 (operations,
   control-plane); the README already named this debt and a new app on the older line widens
   it by one. It moves with the storefronts.
@@ -252,10 +236,9 @@ Telegram mini app for couriers.**
   reads the track, and a stale or coarse position is absent, not approximate.
 - A deployment serves one tenant's couriers (the tenant is in `config.json`). A second tenant
   is a second container, as with the storefront.
-- The notice that ships is a draft. The platform has the mechanism (the screen, the version,
-  the recorded acknowledgement, the refusal to collect without it) and not the tenant's words;
-  ingest is not to be switched on for a real tenant until the wording replaces the draft and
-  the version changes. Nothing in the code can make that true, so the runbook says it.
+- The self endpoints exist before the notice does. Nothing calls them until client part 2
+  ships the notice and its acknowledgement, and the ingest rollout stays last; the gap is a
+  matter of sequence inside one wave, not of production.
 
 ## Specification
 
@@ -429,3 +412,43 @@ a call the `courier` OpenAPI group documents.
 - [ADR 0062: Staff sign-in happens inside the platform](../built/0062-staff-sign-in-happens-inside-the-platform.md)
 - [ADR 0066: `platform-admin` joins the control-plane OpenAPI surface](../built/0066-platform-admin-joins-the-control-plane-openapi-surface.md)
 - [ADR 0164: A courier service tenant](../not-started/0164-a-courier-service-tenant.md)
+
+## Status addition (2026-10-23)
+
+Client parts 2 and 3 are built (see Implementation status and the checklist), and nothing in the
+Decision, Alternatives considered or Consequences above is changed. What building them settled,
+which those sections left open, is recorded here.
+
+**D7.8 made concrete: the acknowledgement is recorded by the platform and enforced by the app.**
+The app will not open a duty session or start the sender until the courier has acknowledged the
+notice, and the acknowledgement is an audit fact written by
+`POST .../telemetry-notice-acknowledgements` (`courier.telemetry`; the courier row, the notice
+version and the time; no table, since an acknowledgement is an event and a new version is a new
+event). Nothing else was added to the platform for it: no migration, no new capability.
+
+### Alternatives considered (additional)
+
+| Option | Why not chosen | Revisit when |
+|---|---|---|
+| The platform refuses a duty session until the notice has been acknowledged | It is the stronger guarantee, and it is a refusal added to `POST .../duty-sessions` that every existing test, every staff flow that opens a session for a courier and the telemetry module's own rollout would have to satisfy, for a notice whose wording does not exist yet. The record exists, so a courier tracked without one is visible; prevention waits for the wording | The wording is agreed and ingest is about to be switched on for a real tenant, or an audit shows a session opened by a courier with no acknowledgement |
+| A table of acknowledgements, read back by `GET /me` so a new phone knows | An acknowledgement is an event, not a state: a table would hold the latest version and lose the history counsel will ask for, and the audit trail is already append-only with its own retention. A new phone asking again is the safe direction to be wrong in | Couriers complain of being asked on every new phone, or a subject-access request needs the current state without reading the trail |
+| Call `POST .../advance` with `PICKED_UP` and `DELIVERED` for pickup and handover, which exist today | The cross-wave gate contract names `POST .../pickup` and `.../handover`, and the delivery-maps wave builds its server side to that. A client that called `advance` would be correct today and wrong the day the gates arrive, or the reverse | The merged server turns out not to carry the gates on the new paths; `CourierApi.gateStep` is the one line that changes |
+
+### Consequences (additional)
+
+- **The acknowledgement is recorded, not enforced, by the platform.** A client that skipped it
+  would be tracked all the same; the platform's record would then show no acknowledgement for that
+  courier, which is evidence of the failure and not a prevention of it.
+- **The notice that ships is a draft.** The platform has the mechanism (the screen, the version,
+  the recorded acknowledgement, the refusal to collect without it) and not the tenant's words.
+  Ingest is not to be switched on for a real tenant until the wording replaces the draft and the
+  version changes. Nothing in the code can make that true, so the runbook says it.
+- **The pickup and handover buttons are written to a contract whose server side is another wave's.**
+  Until it merges they answer `404`; the specs pin both paths and both branches of the answer. A
+  photo check needs a photo and the contract names no way to send one, so the app reports it and
+  cannot satisfy it.
+- **A phone clock that is wrong shows a wrong countdown on an offer.** The countdown is a guide; the
+  platform decides whether an offer is still there, and a courier is never blocked on the phone's
+  say-so.
+- **Offers are seen only while the app is open and visible.** A courier who locks the phone learns
+  of an offer when they next open it, and it may have lapsed (ADR 0020's push channel is the fix).
