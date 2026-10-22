@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/fiscal.events/FiscalCorrectionRequested.v1.schema.json",
+  "title": "FiscalCorrectionRequested v1 payload",
+  "description": "A correction or a void was requested against an issued fiscal receipt (ADR 0166 Decision 8), by a person under a second person's approval or by the platform because an amendment changed a filed total. Identifiers, the kind, the document's status and a stable reason code. Never a fiscal sign, a receipt number, a receipt URL, a terminal id, a marking code or a taxpayer number: those are ADR 0029 evidence read through the evidence endpoint under a recorded purpose.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "documentId",
+    "requestId",
+    "orderId",
+    "kind",
+    "status",
+    "reasonCode",
+    "source"
+  ],
+  "properties": {
+    "documentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "requestId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "legalEntityId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "CORRECTION",
+        "VOID"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "CORRECTION_REQUESTED",
+        "VOID_REQUESTED"
+      ]
+    },
+    "reasonCode": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{1,31}$"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "OPERATOR",
+        "AMENDMENT"
+      ]
+    }
+  }
+}

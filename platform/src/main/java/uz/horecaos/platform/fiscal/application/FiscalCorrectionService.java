@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +19,8 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.fiscal.api.FiscalCorrectionAttached;
+import uz.horecaos.platform.fiscal.api.FiscalCorrectionRequested;
 import uz.horecaos.platform.fiscal.domain.FiscalDocumentState;
 import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalCorrectionStore;
 import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalCorrectionStore.AttachedReference;
@@ -98,6 +101,12 @@ public class FiscalCorrectionService {
         CANCELLED
     }
 
+    /** A person raised the request under a second person's approval (the event's {@code source}). */
+    public static final String SOURCE_OPERATOR = "OPERATOR";
+
+    /** The platform opened the request because an amendment changed a total that had been filed. */
+    public static final String SOURCE_AMENDMENT = "AMENDMENT";
+
     /** The reason code of a linked {@code CORRECTION} document an attachment created. */
     public static final String CORRECTION_ATTACHED = "CORRECTION_ATTACHED";
 
@@ -148,6 +157,7 @@ public class FiscalCorrectionService {
     private final AuditRecorder audit;
     private final Clock clock;
     private final FiscalReceiptLinks receiptLinks;
+    private final ApplicationEventPublisher events;
 
     public FiscalCorrectionService(
             JdbcFiscalLifecycleStore documents,
@@ -156,7 +166,8 @@ public class FiscalCorrectionService {
             ApprovalService approvals,
             AuditRecorder audit,
             Clock clock,
-            FiscalReceiptLinks receiptLinks) {
+            FiscalReceiptLinks receiptLinks,
+            ApplicationEventPublisher events) {
         this.documents = documents;
         this.corrections = corrections;
         this.evidence = evidence;
@@ -164,6 +175,7 @@ public class FiscalCorrectionService {
         this.audit = audit;
         this.clock = clock;
         this.receiptLinks = receiptLinks;
+        this.events = events;
     }
 
     @Transactional
@@ -253,6 +265,21 @@ public class FiscalCorrectionService {
                 .correlatedBy(correlationId == null ? documentId.toString() : correlationId)
                 .occurredAt(now)
                 .build());
+
+        // Through the outbox, in this transaction (ADR 0032, ADR 0004): the request and the fact that it was
+        // raised commit together. Identifiers, the kind and the status; no evidence field.
+        events.publishEvent(new FiscalCorrectionRequested(
+                UUID.randomUUID(),
+                tenantId,
+                documentId,
+                requestId,
+                document.orderId(),
+                document.legalEntityId(),
+                kind.name(),
+                kind.requested.name(),
+                reason.name(),
+                SOURCE_OPERATOR,
+                now));
 
         CorrectionRow created = evidence.findCorrection(tenantId, requestId).orElseThrow();
         return new RequestResult.Raised(created, expectedVersion + 1);
@@ -374,6 +401,19 @@ public class FiscalCorrectionService {
                 .correlatedBy(correlationId == null ? original.id().toString() : correlationId)
                 .occurredAt(now)
                 .build());
+
+        events.publishEvent(new FiscalCorrectionAttached(
+                UUID.randomUUID(),
+                tenantId,
+                original.id(),
+                requestId,
+                original.orderId(),
+                original.legalEntityId(),
+                kind.name(),
+                kind.done.name(),
+                linkedId,
+                kind.linkedDocumentType,
+                now));
 
         CorrectionRow attached = evidence.findCorrection(tenantId, requestId).orElseThrow();
         return new AttachResult.Done(new Attached(attached, linkedId, expectedVersion + 1));

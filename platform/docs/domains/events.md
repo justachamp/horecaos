@@ -52,6 +52,7 @@ changing retention is an approved operational migration with a rollback plan.
 | `content.events` | 3 | 1 | `PT168H` | `delete` |
 | `customers.events` | 3 | 1 | `PT168H` | `delete` |
 | `reviews.events` | 3 | 1 | `PT168H` | `delete` |
+| `fiscal.events` | 3 | 1 | `PT168H` | `delete` |
 | `integration.events` | 3 | 1 | `PT168H` | `delete` |
 | `pos.commands` | 3 | 1 | `PT24H` | `delete` |
 
@@ -372,6 +373,30 @@ envelope-encrypted in `customer.leads` (ADR 0029). A reschedule of a pending cal
 status and is not published; a conversion publishes `LeadStatusChanged` and `LeadConverted`
 both. The contact journal (`customer.contact_attempts`) is not an event stream: it is append-only
 by grant and read through the customer card.
+
+## `fiscal.events`
+
+- Producing module: `fiscal`
+- Retention class: business fact
+- Classification: `INTERNAL` — no personal data and no receipt evidence on this topic
+- Key: `documentId`
+
+| Event | Version | Key | Schema | Version-1 payload |
+|---|---|---|---|---|
+| `FiscalCorrectionRequested` | 1 | `documentId` | [`FiscalCorrectionRequested.v1`](../../src/main/resources/events/fiscal.events/FiscalCorrectionRequested.v1.schema.json) | `documentId`, `requestId`, `orderId`, `legalEntityId?`, `kind`, `status`, `reasonCode`, `source` |
+| `FiscalCorrectionAttached` | 1 | `documentId` | [`FiscalCorrectionAttached.v1`](../../src/main/resources/events/fiscal.events/FiscalCorrectionAttached.v1.schema.json) | `documentId`, `requestId`, `orderId`, `legalEntityId?`, `kind`, `status`, `linkedDocumentId`, `linkedDocumentType` |
+
+ADR 0166 Decision 8. HorecaOS records a request to correct or void an issued receipt and the tenant's own
+fiscal agent issues it; these two facts are the request and the attachment of the agent's reference. Both are
+written through the outbox in the same transaction as the row they describe. `FiscalCorrectionRequested` is
+published whether a person raised the request under a second person's approval (`source: OPERATOR`) or the
+platform opened it because an amendment of the order changed a total that had already been filed (`source:
+AMENDMENT`, ADR 0039). Every payload is identifiers, the kind, the document's status and a stable reason code:
+never a fiscal sign, a receipt number, a receipt URL, a terminal id, a marking code or a taxpayer number, which
+are ADR 0029 `FINANCIAL` evidence read through the evidence endpoint under a recorded purpose;
+`FiscalEventContractTests` walks the payload types and refuses a field whose name is evidence. The fiscal
+lifecycle signals (`FiscalDocumentIssued`, `FiscalDocumentBlocked`) stay in-process signals as ADR 0166 says
+and are not on this topic.
 
 ## `reviews.events`
 
