@@ -1321,6 +1321,131 @@ class LoyaltyLedgerAndSplitTenderTests {
                 .isEqualTo(versionBefore);
     }
 
+    // ------------------------------------ ADR 0185: the money leg follows a payment-method change
+
+    @Test
+    @DisplayName("the money leg moves to the new method and the points leg is left exactly as it was")
+    void theMoneyLegMovesAndThePointsStay() {
+        UUID order = completedOrder("M-1", 94_000L, 0L);
+        seedBalance(12_000L);
+        planPointsAndCash(order, 94_000L, 12_000L, 82_000L, "k-replan-1");
+        UUID settlementId =
+                settlementStore.findSettlement(TENANT, order).orElseThrow().id();
+        var before = settlementStore.tendersOf(TENANT, settlementId);
+
+        var due = replan(order, 94_000L, clickMethod);
+
+        assertThat(due).hasValue(82_000L);
+        var after = settlementStore.tendersOf(TENANT, settlementId);
+        assertThat(after)
+                .extracting(
+                        JdbcSettlementStore.TenderRow::settlesFromBalance,
+                        JdbcSettlementStore.TenderRow::paymentMethodId,
+                        JdbcSettlementStore.TenderRow::amountMinor,
+                        JdbcSettlementStore.TenderRow::status)
+                .containsExactly(
+                        org.assertj.core.api.Assertions.tuple(true, pointsMethod, 12_000L, TenderStatus.RESERVED),
+                        org.assertj.core.api.Assertions.tuple(false, clickMethod, 82_000L, TenderStatus.PLANNED));
+        assertThat(after.get(0).loyaltyReservationId())
+                .as("the hold on the points is the same hold")
+                .isEqualTo(before.get(0).loyaltyReservationId());
+        assertThat(settlementStore.findSettlement(TENANT, order).orElseThrow().totalDueMinor())
+                .isEqualTo(94_000L);
+        assertThat(after.stream().filter(tender -> tender.paymentMethodId().equals(cashMethod)))
+                .as("no tender names cash any more: the customer is not paying the courier")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("the money leg follows an amended total too, points untouched")
+    void theMoneyLegFollowsAnAmendedTotal() {
+        UUID order = completedOrder("M-2", 94_000L, 0L);
+        seedBalance(12_000L);
+        planPointsAndCash(order, 94_000L, 12_000L, 82_000L, "k-replan-2");
+
+        assertThat(replan(order, 120_000L, clickMethod)).hasValue(108_000L);
+
+        var settlement = settlementStore.findSettlement(TENANT, order).orElseThrow();
+        assertThat(settlement.totalDueMinor()).isEqualTo(120_000L);
+        assertThat(settlementStore.tendersOf(TENANT, settlement.id()))
+                .extracting(JdbcSettlementStore.TenderRow::amountMinor)
+                .containsExactly(12_000L, 108_000L);
+    }
+
+    @Test
+    @DisplayName("a move that would leave nothing to collect in money is refused and changes nothing")
+    void aReplanCannotLeaveTheMoneyLegEmpty() {
+        UUID order = completedOrder("M-3", 94_000L, 0L);
+        seedBalance(12_000L);
+        planPointsAndCash(order, 94_000L, 12_000L, 82_000L, "k-replan-3");
+        UUID settlementId =
+                settlementStore.findSettlement(TENANT, order).orElseThrow().id();
+
+        assertThat(replan(order, 12_000L, clickMethod)).isEmpty();
+
+        assertThat(settlementStore.tendersOf(TENANT, settlementId))
+                .extracting(JdbcSettlementStore.TenderRow::paymentMethodId, JdbcSettlementStore.TenderRow::amountMinor)
+                .containsExactly(
+                        org.assertj.core.api.Assertions.tuple(pointsMethod, 12_000L),
+                        org.assertj.core.api.Assertions.tuple(cashMethod, 82_000L));
+    }
+
+    @Test
+    @DisplayName("once a leg has settled the plan is not moved, and a balance method is never a target")
+    void aSettledPlanAndABalanceTargetAreNotReplanned() {
+        UUID order = completedOrder("M-4", 94_000L, 0L);
+        seedBalance(12_000L);
+        planPointsAndCash(order, 94_000L, 12_000L, 82_000L, "k-replan-4");
+        UUID settlementId =
+                settlementStore.findSettlement(TENANT, order).orElseThrow().id();
+
+        assertThat(replan(order, 94_000L, pointsMethod))
+                .as("points can never be the method a provider is asked to collect")
+                .isEmpty();
+
+        UUID pointsTender = settlementStore.tendersOf(TENANT, settlementId).stream()
+                .filter(JdbcSettlementStore.TenderRow::settlesFromBalance)
+                .findFirst()
+                .orElseThrow()
+                .id();
+        transactions.executeWithoutResult(
+                status -> settlements.recordTenderSettled(TENANT, order, pointsTender, "test"));
+        assertThat(replan(order, 94_000L, clickMethod)).isEmpty();
+        assertThat(settlementStore.tendersOf(TENANT, settlementId).get(1).paymentMethodId())
+                .isEqualTo(cashMethod);
+    }
+
+    @Test
+    @DisplayName("an order with no settlement, and a settlement with two money tenders, have nothing to move")
+    void nothingToReplan() {
+        assertThat(replan(completedOrder("M-5", 50_000L, 0L), 50_000L, clickMethod))
+                .isEmpty();
+
+        UUID order = completedOrder("M-6", 130_000L, 0L);
+        seedBalance(10_000L);
+        transactions.execute(status -> settlements.plan(new SettlementPlan(
+                TENANT,
+                BRAND,
+                order,
+                customerId,
+                "UZS",
+                130_000L,
+                List.of(
+                        new PlannedTender(pointsMethod, 10_000L),
+                        new PlannedTender(clickMethod, 50_000L),
+                        new PlannedTender(cashMethod, 70_000L)),
+                "k-replan-6",
+                "test")));
+        assertThat(replan(order, 130_000L, clickMethod))
+                .as("which of two money tenders would the new method replace?")
+                .isEmpty();
+    }
+
+    private java.util.OptionalLong replan(UUID order, long totalMinor, UUID methodId) {
+        return Objects.requireNonNull(transactions.execute(
+                status -> settlements.replanMoneyLeg(TENANT, order, totalMinor, methodId, "operator")));
+    }
+
     private boolean restate(UUID order, long totalMinor) {
         return Boolean.TRUE.equals(
                 transactions.execute(status -> settlements.restateTotal(TENANT, order, totalMinor, "scale")));

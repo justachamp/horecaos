@@ -487,6 +487,67 @@ public class JdbcSettlementStore {
     }
 
     /**
+     * Moves a still-planned settlement's one money tender to another payment method and, when the order was repriced
+     * in the same amendment, to a new total (ADR 0039, ADR 0046), guarded on both rows so a settlement that began to
+     * settle between the caller's read and this write is left exactly as it is.
+     *
+     * <p>Claimed on the settlement's version first, as {@link #restatePlanned}: once it is, the tender can only fail
+     * to move if it changed underneath a settlement that had not, which no consistent state produces, so that case
+     * throws and the caller's transaction rolls the settlement back with it. The method row is the registry's, tied
+     * to the tender by the composite foreign key that also carries {@code settles_from_balance}, so a tender can
+     * never be re-pointed at a balance method by this.
+     *
+     * @return false when the settlement was no longer {@code PLANNED} at {@code expectedVersion}, in which case
+     *         nothing was written
+     */
+    public boolean replanMoneyTender(
+            UUID tenantId,
+            UUID settlementId,
+            int expectedVersion,
+            long newTotalMinor,
+            UUID moneyTenderId,
+            long newMoneyMinor,
+            UUID newPaymentMethodId,
+            Instant now) {
+        boolean settlementMoved = jdbc.sql("""
+                UPDATE payments.order_settlements
+                   SET total_due_minor = :total, version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id AND status = 'PLANNED' AND settled_minor = 0
+                   AND version = :version
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", settlementId)
+                        .param("version", expectedVersion)
+                        .param("total", newTotalMinor)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+        if (!settlementMoved) {
+            return false;
+        }
+        boolean tenderMoved = jdbc.sql("""
+                UPDATE payments.tenders
+                   SET amount_minor = :amount, payment_method_id = :methodId,
+                       version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id AND settlement_id = :settlementId
+                   AND status = 'PLANNED' AND payment_intent_id IS NULL AND NOT settles_from_balance
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", moneyTenderId)
+                        .param("settlementId", settlementId)
+                        .param("amount", newMoneyMinor)
+                        .param("methodId", newPaymentMethodId)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+        if (!tenderMoved) {
+            throw new IllegalStateException(
+                    "The money tender of settlement " + settlementId + " changed while it was being re-planned");
+        }
+        return true;
+    }
+
+    /**
      * One tender within a settlement.
      *
      * @param refundedMinor how much of this tender has already been given back.

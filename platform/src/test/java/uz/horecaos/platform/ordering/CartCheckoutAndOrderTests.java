@@ -234,6 +234,8 @@ class CartCheckoutAndOrderTests {
     private uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService loyaltyAdjustments;
     private uz.horecaos.platform.loyalty.application.LoyaltyMaintenanceService loyaltySweep;
     private uz.horecaos.platform.loyalty.application.LoyaltyQueryService loyaltyBalances;
+    private uz.horecaos.platform.ordering.application.CartRedemptionOffers cartRedemptionOffers;
+    private uz.horecaos.platform.ordering.application.OperatorRedemptionOffers operatorRedemptionOffers;
     private uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore loyaltyStore;
 
     /** ADR 0037 authoring, real classes over the real schema — see {@code seedDefaultDeliveryZone}. */
@@ -663,6 +665,13 @@ class CartCheckoutAndOrderTests {
                 orderStore,
                 new JdbcAuditRecorder(jdbc, objectMapper),
                 clock);
+
+        // ADR 0185: the offer a screen shows, over the same ledger and the same quote the checkout accepts.
+        var offerPort = new uz.horecaos.platform.loyalty.application.LoyaltyRedemptionOffers(redemption);
+        cartRedemptionOffers = new uz.horecaos.platform.ordering.application.CartRedemptionOffers(
+                carts, quotes, channelStore, offerPort, clock);
+        operatorRedemptionOffers = new uz.horecaos.platform.ordering.application.OperatorRedemptionOffers(
+                operatorOrdering, new TransactionTemplate(new DataSourceTransactionManager(dataSource)), offerPort);
 
         seedTenancyAndCatalog();
         seedPublication("STOREFRONT");
@@ -7526,6 +7535,341 @@ class CartCheckoutAndOrderTests {
                 .param("source", latitude == null ? "LANDMARK_ONLY" : "CUSTOMER_PIN")
                 .update();
         return addressId;
+    }
+
+    // ------------------------------- ADR 0185: points at order entry, and what can be offered before it
+
+    /** Two burgers at 50 000 each, for the customer the call is from, with part paid from their points. */
+    private uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand operatorOrder(
+            String idempotencyKey, long redeemMinor, boolean attested, @Nullable Long cashTenderedMinor) {
+        return new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
+                TENANT,
+                BRAND,
+                LOCATION,
+                CUSTOMER,
+                "STOREFRONT",
+                FulfillmentMode.PICKUP,
+                List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
+                        burgerVariant, 2, List.of(), List.of(), null)),
+                null,
+                "CASH",
+                null,
+                idempotencyKey,
+                "operator-subject-9",
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                cashTenderedMinor,
+                List.of(),
+                redeemMinor,
+                attested);
+    }
+
+    @Test
+    @DisplayName("an operator-taken order redeems the identified customer's points at entry: the points are held, "
+            + "the cash to collect and the tenders follow, and the operator's attestation is audited once")
+    void anOperatorOrderRedeemsPointsAtEntry() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+
+        var result = tx(() -> operatorOrdering.place(operatorOrder("idem-op-redeem", 10_000L, true, null)));
+
+        assertThat(result.created()).isTrue();
+        UUID orderId = orderIdOf(result);
+        assertThat(tenderAmounts(orderId)).containsExactly(10_000L, 90_000L);
+        assertThat(tenderStatuses(orderId)).containsExactly(TenderStatus.RESERVED, TenderStatus.PLANNED);
+        assertThat(settlements.cashDueMinor(TENANT, orderId, "CASH"))
+                .as("the operator reads the customer the cash they still owe, not the total")
+                .isEqualTo(90_000L);
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor())
+                .as("the points left the balance inside the checkout transaction")
+                .isEqualTo(20_000L);
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().createdByActorId())
+                .isEqualTo("operator-subject-9");
+        assertThat(auditFactCount("ordering.order.redemption_attested")).isEqualTo(1);
+        assertThat(jdbc.sql("SELECT change_document::text FROM audit.audit_events WHERE action_code = :code")
+                        .param("code", "ordering.order.redemption_attested")
+                        .query(String.class)
+                        .single())
+                .contains("10000")
+                .contains("customerAgreementAttested");
+    }
+
+    @Test
+    @DisplayName("a replay of the same operator order takes no second hold and writes no second attestation")
+    void aReplayedOperatorRedemptionIsNotTakenTwice() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+        var command = operatorOrder("idem-op-redeem-replay", 10_000L, true, null);
+
+        var first = tx(() -> operatorOrdering.place(command));
+        var again = tx(() -> operatorOrdering.place(command));
+
+        assertThat(again.outcome()).isEqualTo(CheckoutService.CheckoutResult.Outcome.REPLAYED);
+        assertThat(orderIdOf(again)).isEqualTo(orderIdOf(first));
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor()).isEqualTo(20_000L);
+        assertThat(auditFactCount("ordering.order.redemption_attested")).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("an operator cannot spend a customer's points without saying the customer agreed, and nothing is "
+            + "created or held when they do not")
+    void anOperatorCannotRedeemWithoutTheCustomersAgreement() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+
+        Throwable refused = catchThrowable(
+                () -> tx(() -> operatorOrdering.place(operatorOrder("idem-op-unattested", 10_000L, false, null))));
+
+        assertThat(refused)
+                .isInstanceOfSatisfying(
+                        uz.horecaos.platform.web.api.ApiException.class,
+                        exception -> assertThat(exception.properties())
+                                .containsEntry(
+                                        "reason",
+                                        uz.horecaos.platform.ordering.application.OperatorOrderingService
+                                                .REDEMPTION_NEEDS_CUSTOMER_AGREEMENT));
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor()).isEqualTo(30_000L);
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.orders")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(auditFactCount("ordering.order.redemption_attested")).isZero();
+    }
+
+    @Test
+    @DisplayName("an operator redemption beyond what the brand permits is refused whole: no order, no hold, no fact")
+    void anOperatorRedemptionBeyondTheCapIsRefusedWhole() {
+        seedRedemptionPolicy();
+        seedBalance(90_000L);
+
+        // 50% of 100 000 is the cap; 60 000 is beyond it.
+        Throwable refused = catchThrowable(
+                () -> tx(() -> operatorOrdering.place(operatorOrder("idem-op-over-cap", 60_000L, true, null))));
+
+        assertThat(refused).isInstanceOf(uz.horecaos.platform.web.api.ApiException.class);
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor()).isEqualTo(90_000L);
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.orders")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(auditFactCount("ordering.order.redemption_attested")).isZero();
+    }
+
+    @Test
+    @DisplayName("an operator order redeems only against the customer it was taken for: another customer's points "
+            + "are not reachable from it")
+    void anOperatorRedemptionReachesOnlyTheIdentifiedCustomersAccount() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+
+        // The call is from OTHER_CUSTOMER, who has no points, even though CUSTOMER has plenty at the same brand.
+        var command = new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
+                TENANT,
+                BRAND,
+                LOCATION,
+                OTHER_CUSTOMER,
+                "STOREFRONT",
+                FulfillmentMode.PICKUP,
+                List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
+                        burgerVariant, 2, List.of(), List.of(), null)),
+                null,
+                "CASH",
+                null,
+                "idem-op-other-customer",
+                "operator-subject-9",
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                10_000L,
+                true);
+
+        Throwable refused = catchThrowable(() -> tx(() -> operatorOrdering.place(command)));
+
+        assertThat(refused).isInstanceOf(uz.horecaos.platform.web.api.ApiException.class);
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor())
+                .as("CUSTOMER's points were never within reach of an order taken for somebody else")
+                .isEqualTo(30_000L);
+    }
+
+    @Test
+    @DisplayName(
+            "the cash tendered is compared with the cash the customer still owes after their points, not the total")
+    void theCashTenderedIsComparedWithTheMoneyLeg() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+
+        var enough = tx(() -> operatorOrdering.place(operatorOrder("idem-op-tender-enough", 10_000L, true, 90_000L)));
+        var shortTender =
+                tx(() -> operatorOrdering.place(operatorOrder("idem-op-tender-short", 10_000L, true, 89_999L)));
+
+        assertThat(enough.warnings())
+                .as("90 000 covers the 90 000 still owed, though it is short of the 100 000 total")
+                .doesNotContain("CASH_TENDERED_INSUFFICIENT");
+        assertThat(shortTender.warnings()).contains("CASH_TENDERED_INSUFFICIENT");
+    }
+
+    @Test
+    @DisplayName("the operator's offer names what the customer can spend and the cash they would owe, from the "
+            + "figure the order would be booked at, and creates and holds nothing")
+    void theOperatorsOfferReadsTheBookedFigureAndHoldsNothing() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+
+        var offer = operatorRedemptionOffers.offer(operatorOrder("idem-op-offer", 0L, false, null));
+
+        assertThat(offer.currency()).isEqualTo("UZS");
+        assertThat(offer.orderTotalMinor()).isEqualTo(100_000L);
+        assertThat(offer.offer().availableMinor()).isEqualTo(30_000L);
+        assertThat(offer.offer().maximumMinor())
+                .as("the smaller of the 50% cap (50 000) and what they hold (30 000)")
+                .isEqualTo(30_000L);
+        assertThat(offer.offer().redeemable()).isTrue();
+        assertThat(uz.horecaos.platform.ordering.application.CartRedemptionOffers.cashToCollect(
+                        offer.orderTotalMinor(), offer.offer(), 30_000L))
+                .isEqualTo(70_000L);
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.orders")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.carts")
+                        .query(Long.class)
+                        .single())
+                .as("the basket was priced and the pricing undone")
+                .isZero();
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor()).isEqualTo(30_000L);
+        assertThat(jdbc.sql("SELECT count(*) FROM loyalty.reservations")
+                        .query(Long.class)
+                        .single())
+                .as("a quote holds nothing: the hold is the checkout's")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("the operator's offer says why nothing is redeemable, in a code")
+    void theOperatorsOfferSaysWhyNothingIsRedeemable() {
+        // No policy: redemption is enabled for a brand by a deliberate act, and until then the answer is no.
+        seedBalance(30_000L);
+        assertThat(operatorRedemptionOffers
+                        .offer(operatorOrder("idem-op-offer-nopolicy", 0L, false, null))
+                        .offer())
+                .satisfies(offer -> {
+                    assertThat(offer.redeemable()).isFalse();
+                    assertThat(offer.refusal()).isEqualTo("REDEMPTION_NOT_ENABLED");
+                    assertThat(offer.availableMinor())
+                            .as("what they hold is still theirs to see")
+                            .isEqualTo(30_000L);
+                });
+
+        seedRedemptionPolicy();
+        var nobody = operatorOrder("idem-op-offer-nobody", 0L, false, null);
+        var offer = operatorRedemptionOffers.offer(
+                new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
+                        nobody.tenantId(),
+                        nobody.brandId(),
+                        nobody.locationId(),
+                        OTHER_CUSTOMER,
+                        nobody.channelCode(),
+                        nobody.fulfillmentMode(),
+                        nobody.lines(),
+                        null,
+                        nobody.paymentMethodCode(),
+                        null,
+                        nobody.idempotencyKey(),
+                        nobody.operatorSubject(),
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null));
+        assertThat(offer.offer().refusal()).isEqualTo("NO_ACCOUNT");
+    }
+
+    @Test
+    @DisplayName("a customer's cart offer is the maximum the checkout then accepts, and one som more is refused")
+    void theCartOfferIsTheCheckoutsOwnMaximum() {
+        seedRedemptionPolicy();
+        seedBalance(70_000L);
+        UUID cart = readyCart();
+
+        var offer = cartRedemptionOffers.forCart(TENANT, BRAND, CUSTOMER, cart).orElseThrow();
+
+        assertThat(offer.priced()).isTrue();
+        assertThat(offer.orderTotalMinor()).isEqualTo(100_000L);
+        assertThat(offer.offer().availableMinor()).isEqualTo(70_000L);
+        assertThat(offer.offer().maximumMinor()).as("50% of 100 000").isEqualTo(50_000L);
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor())
+                .as("asking holds nothing")
+                .isEqualTo(70_000L);
+
+        Throwable over = catchThrowable(
+                () -> tx(() -> checkout.checkout(checkoutCommand(cart, "idem-cart-offer-over", "CASH", 50_001L))));
+        assertThat(over).isInstanceOf(uz.horecaos.platform.web.api.ApiException.class);
+        assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor())
+                .as("the refused checkout took nothing")
+                .isEqualTo(70_000L);
+
+        var placed = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-cart-offer-max", "CASH", 50_000L)));
+        assertThat(placed.created()).isTrue();
+        assertThat(tenderAmounts(orderIdOf(placed))).containsExactly(50_000L, 50_000L);
+    }
+
+    @Test
+    @DisplayName("a cart that is not the caller's offers the caller nothing, and one that was never priced says so")
+    void aStrangersCartAndAnUnpricedCartOfferNothing() {
+        seedRedemptionPolicy();
+        seedBalance(70_000L);
+        UUID priced = readyCart();
+        UUID unpriced = openCart();
+        putLine(unpriced, "a", burgerVariant, 2);
+
+        assertThat(cartRedemptionOffers.forCart(TENANT, BRAND, OTHER_CUSTOMER, priced))
+                .isEmpty();
+        assertThat(cartRedemptionOffers.forCart(TENANT, BRAND, CUSTOMER, UUID.randomUUID()))
+                .isEmpty();
+        assertThat(cartRedemptionOffers
+                        .forCart(TENANT, BRAND, CUSTOMER, unpriced)
+                        .orElseThrow())
+                .satisfies(offer -> {
+                    assertThat(offer.priced()).isFalse();
+                    assertThat(offer.offer().refusal()).isEqualTo("CART_NOT_PRICED");
+                });
+
+        // A quote that has aged out is no figure to offer against.
+        clock.advance(Duration.ofMinutes(16));
+        assertThat(cartRedemptionOffers
+                        .forCart(TENANT, BRAND, CUSTOMER, priced)
+                        .orElseThrow()
+                        .offer()
+                        .refusal())
+                .isEqualTo("QUOTE_EXPIRED");
     }
 
     /** A delivery cart with a destination, priced, checked out. */

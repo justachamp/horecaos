@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
+import uz.horecaos.platform.ordering.api.RedemptionOfferPort;
 
 /**
  * Supplies a {@link PaymentIntentPort} when no payments module is present (ADR 0019).
@@ -125,6 +126,36 @@ public class OrderPaymentConfiguration {
             public void recordTerminalOutcome(UUID tenantId, UUID orderId, String reasonCode, String actor) {
                 // Nothing was planned, so nothing is held. A cancellation must not
                 // fail because payments is absent either.
+            }
+
+            @Override
+            public boolean isWired() {
+                return false;
+            }
+        };
+    }
+
+    /**
+     * Supplies a {@link RedemptionOfferPort} when no loyalty module is present (ADR 0185).
+     *
+     * <p>An assembly without loyalty can redeem nothing, and says so as the offer's refusal rather than by
+     * an error: a screen that asks what a customer may spend gets "not wired", worded, and not a 500.
+     */
+    @Bean
+    @ConditionalOnMissingBean(RedemptionOfferPort.class)
+    RedemptionOfferPort unwiredRedemptionOfferPort() {
+        return new RedemptionOfferPort() {
+
+            @Override
+            public Offer offer(
+                    UUID tenantId,
+                    UUID brandId,
+                    UUID customerAccountId,
+                    long orderTotalMinor,
+                    long deliveryFeeMinor,
+                    String currency,
+                    String channelCode) {
+                return new Offer(null, 0L, 0L, currency, NOT_WIRED_REFUSAL);
             }
 
             @Override
