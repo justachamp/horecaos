@@ -252,28 +252,9 @@
   cursor: pointer;
 }
 
-/* ADR 0046, ADR 0185: the customer's own points, beside the identity. */
-.points {
-  margin: 22px 24px 0;
-  padding: 14px 16px;
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.points__title {
-  margin: 0;
-  font: 700 15px/1.2 var(--font-display);
-  color: var(--text-primary);
-}
+/* ADR 0046, ADR 0185: the customer's own points sit in the rate-card's frame, beside the identity. */
 .points__line {
   margin: 0;
   font: 600 14px/1.4 var(--font-ui);
   color: var(--text-primary);
-}
-.points__note {
-  margin: 0;
-  font: 400 12px/1.4 var(--font-ui);
-  color: var(--text-muted);
 }

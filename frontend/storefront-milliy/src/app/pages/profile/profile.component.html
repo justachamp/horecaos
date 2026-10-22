@@ -56,13 +56,13 @@
     </section>
 
     @if (pointsLines(); as lines) {
-      <section class="points" data-testid="profile-points">
-        <h2 class="points__title">{{ 'points.profileTitle' | t }}</h2>
+      <section class="rate-card" data-testid="profile-points">
+        <h2 class="rate-card__title">{{ 'points.profileTitle' | t }}</h2>
         <p class="points__line" data-testid="profile-points-spendable">
           {{ 'points.profileSpendable' | t: { amount: lines.spendable } }}
         </p>
         @if (lines.total) {
-          <p class="points__note" data-testid="profile-points-total">
+          <p class="rate-card__sub" data-testid="profile-points-total">
             {{ 'points.profileTotal' | t: { amount: lines.total } }}
           </p>
         }
