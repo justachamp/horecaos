@@ -46,6 +46,17 @@ export interface AccessCheckResponse {
   verdict?: "ALLOWED" | "INSUFFICIENT_CAPABILITY" | "ENTITLEMENT_REQUIRED";
 }
 
+export interface AccessStateResponse {
+  acceptedAt?: string;
+  expiresAt?: string;
+  kind?: string;
+  lastErrorCode?: string;
+  requestedAt?: string;
+  sentAt?: string;
+  smsConnected?: boolean;
+  state?: string;
+}
+
 export interface AccrualRuleResponse {
   earnDelayHours?: number;
   expiryWarningDays?: number;
@@ -1319,6 +1330,11 @@ export interface ChannelStopThresholdResponse {
   stopAtOrBelow?: number;
 }
 
+export interface CheckResponse {
+  kind?: string;
+  outcome?: string;
+}
+
 export interface ChoosePaymentMethodRequest {
   paymentMethod: string;
 }
@@ -1835,6 +1851,13 @@ export interface CostReport {
   totalMinor?: number;
 }
 
+export interface CostResponse {
+  amountMinor?: number;
+  basis?: string;
+  currency?: string;
+  path?: string;
+}
+
 export interface CourierAcceptOfferRequest {
   position?: CourierPositionBody;
 }
@@ -1842,6 +1865,19 @@ export interface CourierAcceptOfferRequest {
 export interface CourierAcceptOfferResponse {
   delivery?: CourierDeliveryResponse;
   outcome?: string;
+}
+
+export interface CourierAccessAcceptRequest {
+  password: string;
+  token: string;
+}
+
+export interface CourierAccessAcceptance {
+  sessionsEnded?: boolean;
+}
+
+export interface CourierAccessTokenRequest {
+  token: string;
 }
 
 export interface CourierAdvanceDeliveryRequest {
@@ -1905,6 +1941,14 @@ export interface CourierComplianceRevealResponse {
   fields?: Array<RevealedComplianceField>;
 }
 
+export interface CourierCorrectedResponse {
+  courierId?: string;
+  courierTypeId?: string;
+  displayReference?: string;
+  status?: string;
+  version?: number;
+}
+
 export interface CourierCustomerLocationResponse {
   addressLine?: string;
   apartment?: string;
@@ -1922,6 +1966,7 @@ export interface CourierDeclineOfferResponse {
 export interface CourierDeliveryResponse {
   assignedAt?: string;
   cashDueMinor?: number;
+  checks?: Array<CheckResponse>;
   currency?: string;
   deliveredAt?: string;
   destinationLabel?: string;
@@ -1971,6 +2016,10 @@ export interface CourierDutyControllerOpenRequest {
   courierId: string;
   deviceId: string;
   reason: string;
+}
+
+export interface CourierGateStepRequest {
+  position?: CourierPositionBody;
 }
 
 export interface CourierGroupIdResponse {
@@ -2049,6 +2098,7 @@ export interface CourierPolicyResponse {
   onlineWithinMinutes?: number;
   penaltyApprovalThresholdMinor?: number;
   pendingApprovalRequestId?: string;
+  pickupHandoverGate?: string;
   policyId?: string;
   policyVersion?: number;
   postDeliveryPaymentCheckRequired?: boolean;
@@ -2072,6 +2122,7 @@ export interface CourierPolicyWriteRequest {
   kitchenReadyOnly?: boolean;
   onlineWithinMinutes?: number;
   penaltyApprovalThresholdMinor?: number;
+  pickupHandoverGate?: string;
   postDeliveryPaymentCheckRequired?: boolean;
   reason: string;
   revealCustomerLocationTiming: string;
@@ -2086,6 +2137,10 @@ export interface CourierPositionBody {
   accuracyMeters: number;
   latitude: number;
   longitude: number;
+}
+
+export interface CourierReasonRequest {
+  reason: string;
 }
 
 export interface CourierResponse {
@@ -2588,6 +2643,33 @@ export interface DeliveryExceptionResponse {
   reasonCode?: string;
   severity?: string;
   status?: string;
+}
+
+export interface DeliveryResponse {
+  branchName?: string;
+  brandId?: string;
+  cashToCollectMinor?: number;
+  confirmedAt?: string;
+  cost?: CostResponse;
+  courierId?: string;
+  currency?: string;
+  deliveredAt?: string;
+  destinationLabel?: string;
+  distanceMeters?: number;
+  locationId?: string;
+  orderId?: string;
+  orderReference?: string;
+  orderTotalMinor?: number;
+  pickedUpAt?: string;
+  planId?: string;
+  planStatus?: string;
+  prepaid?: boolean;
+  promisedDeliveryEnd?: string;
+  promisedDeliveryStart?: string;
+  providerType?: string;
+  shipmentId?: string;
+  shipmentStatus?: string;
+  sourceType?: string;
 }
 
 export interface DeliveryTariffControllerBandRequest {
@@ -3377,6 +3459,18 @@ export interface HealthCheckRequest {
   outcome: "HEALTHY" | "UNHEALTHY";
 }
 
+export interface HitResponse {
+  amountMinor?: number;
+  courierId?: string;
+  courierReference?: string;
+  currency?: string;
+  value?: number;
+  windowEnd?: string;
+  windowId?: string;
+  windowStatus?: string;
+  windowStillOpen?: boolean;
+}
+
 export interface HolidayAddedResponse {
   holidayId?: string;
 }
@@ -3460,6 +3554,12 @@ export interface IngestResponse {
   windowsWritten?: number;
 }
 
+export interface Inspection {
+  expiresAt?: string;
+  kind?: string;
+  locale?: string;
+}
+
 export interface InstallRequest {
   category: "POS" | "PAYMENT" | "DELIVERY" | "MARKETPLACE" | "NOTIFICATION" | "GEOCODING" | "VOICE" | "ANALYTICS" | "ROUTING" | "ASSISTANT" | "OTHER";
   displayName: string;
@@ -3532,6 +3632,11 @@ export interface InvitationTokenRequest {
   token: string;
 }
 
+export interface InviteCourierRequest {
+  kind: "INVITE" | "RESET";
+  locale?: string;
+}
+
 export interface IssuePartnerClientRequest {
   displayLabel: string;
   reason: string;
@@ -3549,6 +3654,13 @@ export interface IssuedClientResponse {
   secretExpiresAt?: string;
   secretValue?: string;
   version?: number;
+}
+
+export interface IssuedResponse {
+  invitationId?: string;
+  kind?: string;
+  smsConnected?: boolean;
+  status?: string;
 }
 
 export interface ItemPage {
@@ -4585,6 +4697,18 @@ export interface OperationsCourierControllerShiftResponse {
   status?: string;
 }
 
+export interface OperationsCourierRuleSimulationControllerSimulationResponse {
+  couriersHit?: number;
+  currency?: string;
+  hits?: Array<HitResponse>;
+  includesOpenPeriods?: boolean;
+  lookbackDays?: number;
+  totalAmountMinor?: number;
+  truncated?: boolean;
+  window?: string;
+  windowsReplayed?: number;
+}
+
 export interface OperationsCustomerControllerCreateCustomerRequest {
   displayName?: string;
   phone: string;
@@ -5343,6 +5467,11 @@ export interface PageCustomerSummaryResponse {
 
 export interface PageDecidedApprovalResponse {
   items?: Array<DecidedApprovalResponse>;
+  nextCursor?: string;
+}
+
+export interface PageDeliveryResponse {
+  items?: Array<DeliveryResponse>;
   nextCursor?: string;
 }
 
@@ -7436,6 +7565,7 @@ export interface RosterEntryResponse {
   reverificationDueOn?: string;
   status?: string;
   vehicleClass?: string;
+  version?: number;
   warningState?: string;
 }
 
@@ -7970,6 +8100,17 @@ export interface ShipmentView {
   sourceType?: string;
   status?: string;
   version?: number;
+}
+
+export interface SimulateRuleRequest {
+  locationId?: string;
+  lookbackDays?: number;
+  outcomeBasis: string;
+  ruleAmountMinor: number;
+  ruleComparator: string;
+  ruleCurrency: string;
+  ruleThreshold: number;
+  ruleWindow: string;
 }
 
 export interface SimulatedAdjustment {
@@ -9178,6 +9319,13 @@ export interface UpdateContactRequest {
   value: string;
 }
 
+export interface UpdateCourierRequest {
+  courierTypeId?: string;
+  displayReference?: string;
+  expectedVersion: number;
+  reason: string;
+}
+
 export interface UpdateCourierTypeRequest {
   code: string;
   displayName: string;
@@ -9509,7 +9657,9 @@ export interface Operations {
   "courierGetDelivery": { method: "GET"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}"; request: { parameters: { path: { brandId: string; locationId: string; shipmentId: string; tenantId: string } } }; responses: { "200": CourierDeliveryResponse } };
   "courierAdvanceDelivery": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/advance"; request: { parameters: { path: { brandId: string; locationId: string; shipmentId: string; tenantId: string } }; body: CourierAdvanceDeliveryRequest }; responses: { "200": CourierDeliveryResponse } };
   "courierRevealDeliveryCustomerLocation": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/customer-location-reveals"; request: { parameters: { path: { brandId: string; locationId: string; shipmentId: string; tenantId: string } } }; responses: { "200": CourierCustomerLocationResponse } };
+  "courierHandOverDelivery": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/handover"; request: { parameters: { path: { brandId: string; locationId: string; shipmentId: string; tenantId: string } }; body?: CourierGateStepRequest }; responses: { "200": CourierDeliveryResponse } };
   "courierConfirmDeliveryPayment": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/payment-confirmation"; request: { parameters: { path: { brandId: string; locationId: string; shipmentId: string; tenantId: string } }; body: CourierPaymentConfirmationRequest }; responses: { "200": CourierDeliveryResponse } };
+  "courierPickUpDelivery": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/pickup"; request: { parameters: { path: { brandId: string; locationId: string; shipmentId: string; tenantId: string } }; body?: CourierGateStepRequest }; responses: { "200": CourierDeliveryResponse } };
   "courierListOffers": { method: "GET"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/offers"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<CourierOfferResponse> } };
   "courierAcceptOffer": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/offers/{offerId}/accept"; request: { parameters: { path: { brandId: string; locationId: string; offerId: string; tenantId: string } }; body?: CourierAcceptOfferRequest }; responses: { "200": CourierAcceptOfferResponse } };
   "courierRevealOfferCustomerLocation": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/offers/{offerId}/customer-location-reveals"; request: { parameters: { path: { brandId: string; locationId: string; offerId: string; tenantId: string } } }; responses: { "200": CourierCustomerLocationResponse } };
@@ -9529,12 +9679,15 @@ export interface Operations {
   "signInOperations": { method: "POST"; path: "/api/v1/operations/auth/sessions"; request: { parameters: Record<string, never>; body: StaffSignInRequest }; responses: { "200": StaffSessionResponse } };
   "signOutOperations": { method: "DELETE"; path: "/api/v1/operations/auth/sessions/current"; request: { parameters: Record<string, never>; body: StaffLogoutRequest }; responses: { "200": unknown } };
   "refreshOperations": { method: "POST"; path: "/api/v1/operations/auth/sessions/refresh"; request: { parameters: Record<string, never>; body: StaffRefreshRequest }; responses: { "200": StaffSessionResponse } };
+  "acceptCourierAccessLink": { method: "POST"; path: "/api/v1/operations/courier-access/accept"; request: { parameters: Record<string, never>; body: CourierAccessAcceptRequest }; responses: { "200": CourierAccessAcceptance } };
+  "inspectCourierAccessLink": { method: "POST"; path: "/api/v1/operations/courier-access/inspect"; request: { parameters: Record<string, never>; body: CourierAccessTokenRequest }; responses: { "200": Inspection } };
   "accept_1": { method: "POST"; path: "/api/v1/operations/invitations/accept"; request: { parameters: Record<string, never>; body: InvitationAcceptRequest }; responses: { "200": InvitationAcceptResponse } };
   "inspect": { method: "POST"; path: "/api/v1/operations/invitations/inspect"; request: { parameters: Record<string, never>; body: InvitationTokenRequest }; responses: { "200": InvitationInspectionResponse } };
   "operations": { method: "GET"; path: "/api/v1/operations/locales"; request: { parameters: Record<string, never> }; responses: { "200": PlatformLocalesResponse } };
   "adjustmentReasons": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/adjustment-reasons"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<AdjustmentReasonResponse> } };
   "createAdjustmentReason": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/adjustment-reasons"; request: { parameters: { path: { tenantId: string } }; body: CreateAdjustmentReasonRequest }; responses: { "200": AdjustmentReasonResponse } };
   "archiveAdjustmentReason": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/adjustment-reasons/{reasonId}/archival"; request: { parameters: { path: { reasonId: string; tenantId: string } }; body: ArchiveCourierTypeRequest }; responses: { "200": unknown } };
+  "simulateCourierAdjustmentRule": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/adjustment-rule-simulations"; request: { parameters: { path: { tenantId: string } }; body: SimulateRuleRequest }; responses: { "200": OperationsCourierRuleSimulationControllerSimulationResponse } };
   "operationsPending": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/approval-requests"; request: { parameters: { path: { tenantId: string }; query: { actionCode?: string; limit?: number } } }; responses: { "200": PagePendingApprovalResponse } };
   "decided": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/approval-requests/decided"; request: { parameters: { path: { tenantId: string }; query: { actionCode?: string; limit?: number } } }; responses: { "200": PageDecidedApprovalResponse } };
   "operationsDecide": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/approval-requests/{requestId}/decision"; request: { parameters: { path: { requestId: string; tenantId: string } }; body: ApprovalRequestControllerDecisionRequest }; responses: { "200": ApprovalRequestControllerDecisionResponse } };
@@ -9775,11 +9928,16 @@ export interface Operations {
   "roster_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/couriers"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<RosterEntryResponse> } };
   "register_3": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/couriers"; request: { parameters: { path: { tenantId: string } }; body: RegisterCourierRequest }; responses: { "200": CourierResponse } };
   "courier": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}"; request: { parameters: { path: { courierId: string; tenantId: string } } }; responses: { "200": CourierDetailResponse } };
+  "updateCourier": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}"; request: { parameters: { path: { courierId: string; tenantId: string } }; body: UpdateCourierRequest }; responses: { "200": CourierCorrectedResponse } };
+  "courierAccessState": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/access"; request: { parameters: { path: { courierId: string; tenantId: string } } }; responses: { "200": AccessStateResponse } };
+  "inviteCourier": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/access-invitations"; request: { parameters: { path: { courierId: string; tenantId: string } }; body: InviteCourierRequest }; responses: { "200": IssuedResponse } };
   "adjust_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/adjustments"; request: { parameters: { path: { courierId: string; tenantId: string } }; body: OperationsCourierControllerAdjustmentRequest }; responses: { "200": OperationsCourierControllerAdjustmentResponse } };
+  "archiveCourier": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/archival"; request: { parameters: { path: { courierId: string; tenantId: string } }; body: CourierReasonRequest }; responses: { "200": unknown } };
   "bindCourierToBranch": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/branch-bindings"; request: { parameters: { path: { courierId: string; tenantId: string } }; body: CourierBranchBindingRequest }; responses: { "200": unknown } };
   "unbindCourierFromBranch": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/branch-bindings/{brandId}/{locationId}/removal"; request: { parameters: { path: { brandId: string; courierId: string; locationId: string; tenantId: string } }; body: CourierRosterReasonRequest }; responses: { "200": unknown } };
   "revealComplianceFile": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/compliance-file"; request: { parameters: { path: { courierId: string; tenantId: string }; query: { purpose: string } } }; responses: { "200": CourierComplianceRevealResponse } };
   "recordComplianceFile": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/compliance-file"; request: { parameters: { path: { courierId: string; tenantId: string } }; body: CourierComplianceFileRequest }; responses: { "200": unknown } };
+  "endCourierEngagement": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/engagement-ending"; request: { parameters: { path: { courierId: string; tenantId: string } }; body: CourierReasonRequest }; responses: { "200": unknown } };
   "joinCourierGroup": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/groups"; request: { parameters: { path: { courierId: string; tenantId: string } }; body: CourierGroupMembershipRequest }; responses: { "200": unknown } };
   "leaveCourierGroup": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/groups/{groupId}/removal"; request: { parameters: { path: { courierId: string; groupId: string; tenantId: string } }; body: CourierRosterReasonRequest }; responses: { "200": unknown } };
   "ledgerOf": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/ledger"; request: { parameters: { path: { courierId: string; tenantId: string }; query: { limit?: number } } }; responses: { "200": LedgerResponse } };
@@ -9787,6 +9945,7 @@ export interface Operations {
   "balances": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/customers/{customerId}/loyalty"; request: { parameters: { path: { customerId: string; tenantId: string } } }; responses: { "200": Array<BalanceResponse> } };
   "adjust": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/customers/{customerId}/loyalty/adjustments"; request: { parameters: { path: { customerId: string; tenantId: string } }; body: LoyaltyOperationsControllerAdjustmentRequest }; responses: { "200": LoyaltyOperationsControllerAdjustmentResponse } };
   "entries": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/customers/{customerId}/loyalty/{accountId}/entries"; request: { parameters: { path: { accountId: string; customerId: string; tenantId: string } } }; responses: { "200": Array<LoyaltyOperationsControllerEntryResponse> } };
+  "listDeliveries": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/deliveries"; request: { parameters: { path: { tenantId: string }; query: { brandId?: string; courierId?: string; cursor?: string; from?: string; limit?: number; locationId?: Array<string>; status?: Array<string>; to?: string } } }; responses: { "200": PageDeliveryResponse } };
   "deliveryCosts": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/delivery-costs"; request: { parameters: { path: { tenantId: string }; query: { basis?: string; from: string; to: string } } }; responses: { "200": CostReport } };
   "readRules": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/dispatch-rules"; request: { parameters: { path: { tenantId: string }; query: { brandId?: string; locationId?: string } } }; responses: { "200": RulesResponse } };
   "writeRules": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/dispatch-rules"; request: { parameters: { path: { tenantId: string }; query: { brandId?: string; locationId?: string } }; body: RulesWriteRequest }; responses: { "200": RulesResponse } };

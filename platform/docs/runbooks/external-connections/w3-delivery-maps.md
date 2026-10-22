@@ -6,8 +6,11 @@ null provider for each, so each screen works in its dark state today and each co
 configuration change, not a code change. This file says, for each fact: **what exists**, **where
 the value goes**, **how to prove the connection**, and **how to take it back**.
 
-Rows this file serves: `X.4` (map seam), `3.1` (dispatch board map pane), `3.2` (live map). The
-governing record is [ADR 0145](../../adr/partial/0145-map-and-geocoding-provider.md); the route
+Rows this file serves: `X.4` (map seam), `3.1` (dispatch board map pane), `3.2` (live map) for
+sections 1 to 7; `3.3` (a courier's first sign-in by text message) for section 8; `3.1b` (the
+deliveries-console module and the extensions it declines) for sections 9 and 10; `3.4c` and the
+moved `3.9` gate item for section 11, which names what is not an external fact but is still open.
+The governing record for the maps is [ADR 0145](../../adr/partial/0145-map-and-geocoding-provider.md); the route
 descriptor is [`routes/geo-lookup.md`](../../routes/geo-lookup.md); the provider transcription is
 [`providers/yandex-maps.md`](../../providers/yandex-maps.md); the processors it adds to are in
 [`processor-register.md`](../../processor-register.md).
@@ -157,3 +160,72 @@ under what contract, is a legal opinion this repository cannot supply (ADR 0034 
 in-country storage obligation currently binds the platform; counsel confirms or changes that).
 It does not gate the build and it does gate turning the provider on for a customer. Owner:
 legal, through the platform owner.
+
+## 8. The SMS gateway that carries a courier's first sign-in link (row 3.3)
+
+| | |
+|---|---|
+| What exists | `CourierAccessService` and `CourierAccessRelay` (V0657 `fulfillment.courier_access_invitations`): a manager's «Send invite» or «Reset access» queues a text; the relay makes the one-time token, reads the courier's number from the identity provider for the length of the send, hands `CourierAccessMessenger` the words and the link, and records only the token's SHA-256. The accept endpoints (`/api/v1/operations/courier-access/{inspect,accept}`) and the `/courier-access` page set the password at Keycloak. `FakeCourierAccessMessenger` (the `local` profile only) accepts the message and logs the link; the tests use a recording double. **No real SMS has ever left for a courier.** |
+| What is missing | (a) An SMS gateway account that is **cleared for the `COURIER` purpose** (ADR 0146 refuses courier traffic by default: the VAS account may carry codes and order messages only until the owner answers in writing) and an approved sender name; (b) the adapter that implements `CourierAccessMessenger` over that account (the ADR 0146 `COURIER` route; it is code, and it is not written because it cannot be proved without the account) |
+| Where the value goes | The account is a provider installation and binding (ADR 0026); its credential is an ADR 0028 reference; the purposes it may carry are the installation's `permittedPurposes` configuration key (`SmsPurposes`), which the owner sets to include `COURIER` once the provider agrees |
+| Who | The platform owner (the account and the sender), with the provider; integration writes the adapter |
+
+**Until it exists** a deployment with no `CourierAccessMessenger` bean leaves every invitation `QUEUED`
+with `last_error_code = SMS_NOT_CONNECTED` and the courier's record says so ("no SMS gateway carries
+courier messages yet"); nothing is dropped and nothing pretends to be sent. A deployment that is not the
+`local` profile has no fake.
+
+**How to prove it.** (a) In the console open a courier registered with your own phone, press «Send
+invite»: the card says "Waiting to be texted", then "The link was texted"; (b) the handset receives one SMS
+in the courier's language with a link of the form `<origin>/courier-access#token=...`; (c) opening it shows
+the password form, choosing a password ends on "Your password is set", and the card says "The courier has set
+their password"; (d) signing in to the courier app with it works (the courier client's own runbook:
+`w4-courier-client.md`); (e) `SELECT status, last_error_code FROM fulfillment.courier_access_invitations`
+says `ACCEPTED` and `NULL`, and no row, audit fact or log line contains the number or the token.
+
+**The link's origin.** `horecaos.courier.access.link-origin` (default: the operations console's
+`horecaos.frontends.operations-origin`). When the courier client carries the accept page, set it to that
+origin and nothing else changes.
+
+**How to take it back.** Remove the adapter bean (or the installation's `COURIER` purpose): invitations wait
+as `SMS_NOT_CONNECTED` again. A link already texted keeps working until it expires (72 hours) or the manager
+asks again, which voids it.
+
+## 9. The `deliveries-console` module row (row 3.1b)
+
+| | |
+|---|---|
+| What exists | `ConsoleProfileController` and the profile (slice one), the deliveries list (slice two: `GET /api/v1/operations/tenants/{t}/deliveries`, the `/deliveries` screen, a row opening the order's own detail pane), `ConsoleProfileHttpTests` and `OperationsDeliveryListEndpointTests` proving both against a tenant given the module by calling the services directly |
+| What is missing | The `deliveries-console` row in `commercial.modules` **in any real environment**: drafted at price 0 by one person and activated by a second (ADR 0087 four-eyes), then granted to the first courier-service tenant by platform support. No migration may insert it: that would bypass four-eyes. Nothing resolves `DELIVERIES` anywhere real until it is done |
+| Who | Two named humans with control-plane access (finance sets the real price later); platform support grants it |
+
+**How to prove it.** Sign in as the tenant's owner: the console opens on `/deliveries`, the rail puts Kitchen,
+Marketing and Inbox away, Orders reads «Доставки», and the list shows the tenant's deliveries with the cost at
+its basis and the cash to collect.
+
+**How to take it back.** End the module for the tenant (ADR 0087); the owner lands on `/today` at the next
+session. `/deliveries` remains reachable by URL for anyone holding `delivery.plan.read`.
+
+## 10. Extensions ADR 0164 declines until a signed tenant asks (row 3.1b)
+
+A client-facing API for a shop's own system to create deliveries, a client portal, per-client invoicing and
+statements, pickups from an arbitrary address per delivery, and parcel-to-parcel deliveries are each declined
+by ADR 0164 Decision 8, and each is a record of its own, written when a signed courier-service tenant asks.
+They are not built and cannot be built against a fake: there is no second aggregate to put them in (Decision
+7). The ADR's exit criteria mark row 3.1b built when slice two ships; these are listed here so the gap is
+stated and not forgotten. Owner: the platform owner, when a tenant asks.
+
+## 11. Not external facts, and still open (rows 3.3, 3.4c, 3.9)
+
+Listed beside the facts so a re-auditor does not look for a connection that does not exist:
+
+- **`ORDER_UNDELIVERED` / `ORDER_DAMAGED`** read the delivery-exception reason codes (ADR 0178 decision 6).
+  The codes are not in the exception list and no screen records one at close; the API refuses a rule on either
+  basis until they do. Owner: the platform owner, with counsel (and see the next item).
+- **Employed couriers.** Only employed couriers are scored on those two bases, and every engagement is
+  `SELF_EMPLOYED` by constraint (V0040). Widening it is a labour-law decision. Owner: counsel.
+- **A photo check at the handover.** The courier client's contract names a `PHOTO` kind; no policy asks for one.
+  Owner: operations, when a tenant wants it.
+- **The courier rating** is declined for v1 (ADR 0178 decision 5). Reopening it needs the owner, counsel and a
+  source of the data (`platform/intent/0004`).
+

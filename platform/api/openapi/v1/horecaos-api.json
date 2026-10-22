@@ -219,6 +219,39 @@
         },
         "type" : "object"
       },
+      "AccessStateResponse" : {
+        "properties" : {
+          "acceptedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "lastErrorCode" : {
+            "type" : "string"
+          },
+          "requestedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "sentAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "smsConnected" : {
+            "type" : "boolean"
+          },
+          "state" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "AccrualRuleResponse" : {
         "properties" : {
           "earnDelayHours" : {
@@ -6767,6 +6800,17 @@
         },
         "type" : "object"
       },
+      "CheckResponse" : {
+        "properties" : {
+          "kind" : {
+            "type" : "string"
+          },
+          "outcome" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "CheckoutRequest" : {
         "properties" : {
           "cartId" : {
@@ -9072,6 +9116,24 @@
         },
         "type" : "object"
       },
+      "CostResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "basis" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "path" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "Country" : {
         "properties" : {
           "code" : {
@@ -9134,6 +9196,41 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "CourierAccessAcceptRequest" : {
+        "properties" : {
+          "password" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "token" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "password", "token" ],
+        "type" : "object"
+      },
+      "CourierAccessAcceptance" : {
+        "properties" : {
+          "sessionsEnded" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierAccessTokenRequest" : {
+        "properties" : {
+          "token" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "token" ],
         "type" : "object"
       },
       "CourierAdvanceDeliveryRequest" : {
@@ -9338,6 +9435,29 @@
         },
         "type" : "object"
       },
+      "CourierCorrectedResponse" : {
+        "properties" : {
+          "courierId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "courierTypeId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "displayReference" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "CourierCustomerLocationResponse" : {
         "properties" : {
           "addressLine" : {
@@ -9383,6 +9503,12 @@
           "cashDueMinor" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "checks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CheckResponse"
+            },
+            "type" : "array"
           },
           "currency" : {
             "type" : "string"
@@ -9561,6 +9687,14 @@
           }
         },
         "required" : [ "courierId", "deviceId", "reason" ],
+        "type" : "object"
+      },
+      "CourierGateStepRequest" : {
+        "properties" : {
+          "position" : {
+            "$ref" : "#/components/schemas/CourierPositionBody"
+          }
+        },
         "type" : "object"
       },
       "CourierGroupIdResponse" : {
@@ -9801,6 +9935,9 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "pickupHandoverGate" : {
+            "type" : "string"
+          },
           "policyId" : {
             "format" : "uuid",
             "type" : "string"
@@ -9885,6 +10022,9 @@
             "minimum" : 0,
             "type" : "integer"
           },
+          "pickupHandoverGate" : {
+            "type" : "string"
+          },
           "postDeliveryPaymentCheckRequired" : {
             "type" : "boolean"
           },
@@ -9944,6 +10084,17 @@
           }
         },
         "required" : [ "accuracyMeters", "latitude", "longitude" ],
+        "type" : "object"
+      },
+      "CourierReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
         "type" : "object"
       },
       "CourierResponse" : {
@@ -12417,6 +12568,97 @@
             "type" : "string"
           },
           "reasonCode" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "DeliveryResponse" : {
+        "properties" : {
+          "branchName" : {
+            "type" : "string"
+          },
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "cashToCollectMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "confirmedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "cost" : {
+            "$ref" : "#/components/schemas/CostResponse"
+          },
+          "courierId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "deliveredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "destinationLabel" : {
+            "type" : "string"
+          },
+          "distanceMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "orderReference" : {
+            "type" : "string"
+          },
+          "orderTotalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "pickedUpAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "planId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "planStatus" : {
+            "type" : "string"
+          },
+          "prepaid" : {
+            "type" : "boolean"
+          },
+          "promisedDeliveryEnd" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "promisedDeliveryStart" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "providerType" : {
+            "type" : "string"
+          },
+          "shipmentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "shipmentStatus" : {
+            "type" : "string"
+          },
+          "sourceType" : {
             "type" : "string"
           }
         },
@@ -16640,6 +16882,43 @@
         },
         "type" : "object"
       },
+      "HitResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "courierId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "courierReference" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "value" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "windowEnd" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "windowId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "windowStatus" : {
+            "type" : "string"
+          },
+          "windowStillOpen" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "Holiday" : {
         "properties" : {
           "countryCode" : {
@@ -17227,6 +17506,20 @@
         },
         "type" : "object"
       },
+      "Inspection" : {
+        "properties" : {
+          "expiresAt" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "locale" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "InstallRequest" : {
         "properties" : {
           "category" : {
@@ -17438,6 +17731,20 @@
         "required" : [ "token" ],
         "type" : "object"
       },
+      "InviteCourierRequest" : {
+        "properties" : {
+          "kind" : {
+            "enum" : [ "INVITE", "RESET" ],
+            "type" : "string"
+          },
+          "locale" : {
+            "pattern" : "uz-Latn|uz|ru|en",
+            "type" : "string"
+          }
+        },
+        "required" : [ "kind" ],
+        "type" : "object"
+      },
       "IssuePartnerClientRequest" : {
         "properties" : {
           "displayLabel" : {
@@ -17488,6 +17795,24 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "IssuedResponse" : {
+        "properties" : {
+          "invitationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "smsConnected" : {
+            "type" : "boolean"
+          },
+          "status" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -22161,6 +22486,45 @@
         },
         "type" : "object"
       },
+      "OperationsCourierRuleSimulationControllerSimulationResponse" : {
+        "properties" : {
+          "couriersHit" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "hits" : {
+            "items" : {
+              "$ref" : "#/components/schemas/HitResponse"
+            },
+            "type" : "array"
+          },
+          "includesOpenPeriods" : {
+            "type" : "boolean"
+          },
+          "lookbackDays" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "totalAmountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "truncated" : {
+            "type" : "boolean"
+          },
+          "window" : {
+            "type" : "string"
+          },
+          "windowsReplayed" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "OperationsCustomerControllerCreateCustomerRequest" : {
         "properties" : {
           "displayName" : {
@@ -25137,6 +25501,20 @@
           "items" : {
             "items" : {
               "$ref" : "#/components/schemas/DecidedApprovalResponse"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PageDeliveryResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DeliveryResponse"
             },
             "type" : "array"
           },
@@ -34939,6 +35317,10 @@
           "vehicleClass" : {
             "type" : "string"
           },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
           "warningState" : {
             "type" : "string"
           }
@@ -37352,6 +37734,45 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "SimulateRuleRequest" : {
+        "properties" : {
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lookbackDays" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "outcomeBasis" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "ruleAmountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "ruleComparator" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "ruleCurrency" : {
+            "maxLength" : 3,
+            "minLength" : 3,
+            "type" : "string"
+          },
+          "ruleThreshold" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "ruleWindow" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "outcomeBasis", "ruleAmountMinor", "ruleComparator", "ruleCurrency", "ruleThreshold", "ruleWindow" ],
         "type" : "object"
       },
       "SimulatedAdjustment" : {
@@ -42576,6 +42997,30 @@
           }
         },
         "required" : [ "value" ],
+        "type" : "object"
+      },
+      "UpdateCourierRequest" : {
+        "properties" : {
+          "courierTypeId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "displayReference" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "expectedVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "expectedVersion", "reason" ],
         "type" : "object"
       },
       "UpdateCourierTypeRequest" : {
@@ -60364,7 +60809,7 @@
     },
     "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/advance" : {
       "post" : {
-        "description" : "Requires If-Match with the delivery's version. step is PICKUP_PENDING (arrived), PICKED_UP or DELIVERED. When the tenant's GPS gate is on, the body carries the courier's own position and the step is refused (422) when it is further than the status-change radius from the branch (arrival, pickup) or the customer's door (handover): reasons GPS_POSITION_REQUIRED, GPS_ACCURACY_INSUFFICIENT, TOO_FAR_FROM_PICKUP, TOO_FAR_FROM_DROPOFF. DELIVERED is also refused (PAYMENT_CONFIRMATION_REQUIRED) while the tenant requires the cash to be confirmed and cash is due and unconfirmed. The position is measured and discarded.",
+        "description" : "Requires If-Match with the delivery's version. step is PICKUP_PENDING (arrived), PICKED_UP or DELIVERED. When the tenant's GPS gate is on, the body carries the courier's own position and the step is refused (422) when it is further than the status-change radius from the branch (arrival, pickup) or the customer's door (handover): reasons GPS_POSITION_REQUIRED, GPS_ACCURACY_INSUFFICIENT, TOO_FAR_FROM_PICKUP, TOO_FAR_FROM_DROPOFF. DELIVERED is also refused (PAYMENT_CONFIRMATION_REQUIRED) while the tenant requires the cash to be confirmed and cash is due and unconfirmed. The position is measured and discarded. PICKED_UP and DELIVERED are the older door to the steps POST .../pickup and .../handover take, held to the same pickup and handover mode: a position check that fails under HARD is refused here with 422 and the reason, where those answer 409 GATE_FAILED; under SOFT it is recorded and the step goes ahead.",
         "operationId" : "courierAdvanceDelivery",
         "parameters" : [ {
           "in" : "path",
@@ -60478,6 +60923,68 @@
         "tags" : [ "Courier deliveries" ]
       }
     },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/handover" : {
+      "post" : {
+        "description" : "Requires If-Match with the delivery's version; the body may be empty or carry the courier's own position, measured against the customer's door. Held to the location's handover mode exactly as the pickup is (SOFT records and proceeds with checks; HARD refuses a failed position check with 409 GATE_FAILED). The cash step never softens: while the tenant requires the cash to be confirmed and cash is due and unconfirmed the handover is refused (422, PAYMENT_CONFIRMATION_REQUIRED), and a confirmed one reports PAYMENT PASSED in checks.",
+        "operationId" : "courierHandOverDelivery",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "shipmentId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CourierGateStepRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierDeliveryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "I have given it to the customer: hand over my delivery",
+        "tags" : [ "Courier deliveries" ]
+      }
+    },
     "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/payment-confirmation" : {
       "post" : {
         "description" : "Requires If-Match with the delivery's version. Only on a delivery that has been picked up. The amount must equal what the settlement says is due (zero for an order the platform already holds the money for); anything else is refused (422, PAYMENT_AMOUNT_MISMATCH) and nothing is stored.",
@@ -60538,6 +61045,68 @@
           }
         },
         "summary" : "Confirm the cash I collected at the door",
+        "tags" : [ "Courier deliveries" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/pickup" : {
+      "post" : {
+        "description" : "Requires If-Match with the delivery's version; the body may be empty or carry the courier's own position. Held to the location's pickup mode (courier policy pickupHandoverGate): SOFT, the default, takes the step whatever the position check came to and answers 200 with checks, [{kind, outcome}] for each check the location asks for (GEO while the GPS switch is on), so a check that failed is told to the courier and recorded for the accrual; HARD refuses a failed check with 409 GATE_FAILED whose detail is the failed check kinds, and nothing changes. Also refused (422) with reason STEP_NOT_ALLOWED when the delivery is not waiting at the pickup. The position is measured and discarded.",
+        "operationId" : "courierPickUpDelivery",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "shipmentId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CourierGateStepRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierDeliveryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "I have the bag: pick up my delivery",
         "tags" : [ "Courier deliveries" ]
       }
     },
@@ -61262,6 +61831,66 @@
         "tags" : [ "Staff sign-in" ]
       }
     },
+    "/api/v1/operations/courier-access/accept" : {
+      "post" : {
+        "description" : "Sets the password at the identity provider, spends the link and ends every other session the account holds. The realm's password policy applies; a refusal is VALIDATION_FAILED naming the rule, and the link then still works. Answers 200 with sessionsEnded, which is false when the password was set and the other sessions could not be ended.",
+        "operationId" : "acceptCourierAccessLink",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CourierAccessAcceptRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierAccessAcceptance"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set the courier's password from the texted link",
+        "tags" : [ "Courier access links" ]
+      }
+    },
+    "/api/v1/operations/courier-access/inspect" : {
+      "post" : {
+        "description" : "Which kind it is (INVITE or RESET), the language to show it in and when it stops working. Answers not-found with a reason of INVALID or EXPIRED.",
+        "operationId" : "inspectCourierAccessLink",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CourierAccessTokenRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Inspection"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Read a courier's texted link before using it",
+        "tags" : [ "Courier access links" ]
+      }
+    },
     "/api/v1/operations/invitations/accept" : {
       "post" : {
         "description" : "Sets the person's name and password at the identity provider and spends the link. The realm's password policy applies; a refusal names the rule.",
@@ -61374,7 +62003,7 @@
         "tags" : [ "Courier operations" ]
       },
       "post" : {
-        "description" : "outcomeBasis is closed (ADR 0042): every code names a delivery outcome, never a behaviour. Omit every rule* field for a manual-only reason; supply all five to wire it to AdjustmentRuleEvaluator — ruleAmountMinor's sign must match kind, and ORDER_UNDELIVERED/ORDER_DAMAGED have no evaluator reader and may only be authored manual-only.",
+        "description" : "outcomeBasis is closed (ADR 0042): every code names a delivery outcome, never a behaviour. Omit every rule* field for a manual-only reason; supply all five to wire it to AdjustmentRuleEvaluator — ruleAmountMinor's sign must match kind. ORDER_UNDELIVERED and ORDER_DAMAGED have no evaluator reader (ADR 0178): a request that gives either any rule field is refused with 422 UNPROCESSABLE_STATE, reason BASIS_HAS_NO_EVALUATOR_READER, and they may only be authored manual-only.",
         "operationId" : "createAdjustmentReason",
         "parameters" : [ {
           "in" : "path",
@@ -61449,6 +62078,45 @@
         },
         "summary" : "Archive a bonus/penalty reason",
         "tags" : [ "Courier operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/adjustment-rule-simulations" : {
+      "post" : {
+        "description" : "Replays the very arithmetic AdjustmentRuleEvaluator posts from over shifts that closed (window SHIFT) or settlement periods that ended (window SETTLEMENT_PERIOD) in the last lookbackDays, and writes nothing. windowsReplayed says how many were looked at, so «nobody» can be told from «nothing to look at». An open period is replayed as it stands and flagged. locationId narrows shifts only: a settlement period has no location. A basis nothing reads (ORDER_UNDELIVERED, ORDER_DAMAGED) is 422 BASIS_HAS_NO_EVALUATOR_READER, and CASH_VARIANCE on a shift window is 400.",
+        "operationId" : "simulateCourierAdjustmentRule",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SimulateRuleRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OperationsCourierRuleSimulationControllerSimulationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Who a bonus or penalty rule would have hit in the last days, and for how much",
+        "tags" : [ "Courier rule simulation" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/approval-requests" : {
@@ -73346,6 +74014,135 @@
         },
         "summary" : "One courier, with the standing of their compliance file (IA 3.3)",
         "tags" : [ "Courier operations" ]
+      },
+      "put" : {
+        "description" : "expectedVersion is the version the roster last reported for this courier; a stale one is refused with STALE_VERSION. Name the display reference, the type, or both; a reference another courier of the tenant holds is a RESOURCE_CONFLICT with field displayReference. An archived courier is not edited. Audited with the reason.",
+        "operationId" : "updateCourier",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "courierId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateCourierRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierCorrectedResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Correct a courier's display reference or type",
+        "tags" : [ "Courier lifecycle" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/access" : {
+      "get" : {
+        "description" : "NONE, QUEUED, SENT, EXPIRED, ACCEPTED, VOIDED or FAILED, with when it was asked for, sent and spent and the stable code of the last failure. smsConnected is false while no SMS gateway carries courier messages: an invitation then waits and says SMS_NOT_CONNECTED. Never a phone number, never a link.",
+        "operationId" : "courierAccessState",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "courierId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AccessStateResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Where a courier's app access stands",
+        "tags" : [ "Courier access" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/access-invitations" : {
+      "post" : {
+        "description" : "kind is INVITE (a first sign-in) or RESET. The link is texted to the courier's phone and works once, for 72 hours; asking again voids the one before. A courier who is archived or has no engagement is refused (RESOURCE_CONFLICT); a second request within a minute is refused (RATE_LIMIT_EXCEEDED, retryAfterSeconds). Answers 202: the text is sent by a relay, not by this call.",
+        "operationId" : "inviteCourier",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "courierId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/InviteCourierRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IssuedResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Text a courier a link to set their own password (first sign-in or reset)",
+        "tags" : [ "Courier access" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/adjustments" : {
@@ -73393,6 +74190,46 @@
         },
         "summary" : "Record a bonus or a penalty",
         "tags" : [ "Courier operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/archival" : {
+      "post" : {
+        "description" : "Ends any engagement the courier still holds and archives them. Refused with 422 UNPROCESSABLE_STATE and reason COURIER_BALANCE_NOT_ZERO, COURIER_HAS_OPEN_SHIFT or COURIER_HAS_ACTIVE_DELIVERIES. Archived, never deleted: the ledger, the shifts and the deliveries still name the courier.",
+        "operationId" : "archiveCourier",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "courierId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CourierReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Archive a courier whose balance is zero",
+        "tags" : [ "Courier lifecycle" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/branch-bindings" : {
@@ -73572,6 +74409,46 @@
         },
         "summary" : "Record or correct the compliance file (IA 3.3)",
         "tags" : [ "Courier operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/engagement-ending" : {
+      "post" : {
+        "description" : "The date they stopped working for the tenant. Refused with 422 UNPROCESSABLE_STATE and reason COURIER_HAS_OPEN_SHIFT or COURIER_HAS_ACTIVE_DELIVERIES while they stand on a shift or carry a delivery, and with RESOURCE_CONFLICT when there is no engagement to end. The courier stays on the roster until archived.",
+        "operationId" : "endCourierEngagement",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "courierId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CourierReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "End the courier's engagement",
+        "tags" : [ "Courier lifecycle" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/couriers/{courierId}/groups" : {
@@ -73878,6 +74755,103 @@
         },
         "summary" : "One balance's own movement ledger",
         "tags" : [ "Loyalty operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/deliveries" : {
+      "get" : {
+        "description" : "Newest first. Filters: brandId and locationId (repeat locationId for several branches; it needs the brandId it belongs to), status (plan states: PLANNED, WAITING_TO_SOURCE, SOURCING, BOOKING, RETRY_PENDING, SCHEDULED, ASSIGNED, IN_PROGRESS, COMPLETED, MANUAL_ACTION_REQUIRED, CANCELLED; repeat for several), courierId (the in-house courier carrying it), from and to (when the order was confirmed; to is exclusive). Requires delivery.plan.read at the scope the filters name: a locationId at that branch, a brandId at that brand, neither at the tenant. Keyset-paginated (ADR 0031); changing a filter invalidates the cursor. A row has the order reference, the branch, the plan and shipment states, who carries it (an in-house courier by id, or the partner), the non-PII destination label, the promise, when it was picked up and delivered, the order total, the cash to collect and the newest cost line with its basis (ACCRUED, INVOICED or SETTLED; never summed across bases). It never carries a recipient's name, telephone number or address.",
+        "operationId" : "listDeliveries",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "courierId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageDeliveryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every delivery, with history: one row per plan",
+        "tags" : [ "Deliveries" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/delivery-costs" : {
@@ -108950,6 +109924,9 @@
     "description" : "The tenant's own consent-purpose registry",
     "name" : "Consent types"
   }, {
+    "description" : "Invite a courier to the app, or reset their access, by text message",
+    "name" : "Courier access"
+  }, {
     "description" : "Price books, prices, assignments, and VAT",
     "name" : "Price authoring"
   }, {
@@ -108973,6 +109950,9 @@
   }, {
     "description" : "ADR 0091: SMS wordings waiting on their gateway's approval",
     "name" : "Template moderation"
+  }, {
+    "description" : "Correct, end the engagement of, and archive a courier",
+    "name" : "Courier lifecycle"
   }, {
     "description" : "POS, payment, delivery, and notification accounts",
     "name" : "Provider integrations"
@@ -109112,6 +110092,9 @@
     "description" : "Deterministic cart pricing and checkout acceptance",
     "name" : "Quotes"
   }, {
+    "description" : "Every delivery a tenant has had, for a courier-service tenant (ADR 0164)",
+    "name" : "Deliveries"
+  }, {
     "description" : "Customer accounts, contact details, addresses, and consent",
     "name" : "Customers"
   }, {
@@ -109138,6 +110121,9 @@
   }, {
     "description" : "Where each tenant trades, and what kind of business it is",
     "name" : "Tenant residency and business type"
+  }, {
+    "description" : "A courier setting their password from the link they were texted",
+    "name" : "Courier access links"
   }, {
     "description" : "ADR 0085: control-plane alerts kept as incidents",
     "name" : "Incidents"
@@ -109297,6 +110283,9 @@
   }, {
     "description" : "Cooks needed per station and hour (ADR 0163)",
     "name" : "Kitchen headcount"
+  }, {
+    "description" : "Preview a bonus or penalty rule against recent shifts and periods",
+    "name" : "Courier rule simulation"
   }, {
     "description" : "Month-to-date turns, outcomes, tokens and spend",
     "name" : "Assistant usage"
