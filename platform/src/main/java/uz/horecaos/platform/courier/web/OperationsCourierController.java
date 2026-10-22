@@ -37,6 +37,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.courier.application.AdjustmentRuleEvaluator;
 import uz.horecaos.platform.courier.application.CourierAccountProvisioningService;
 import uz.horecaos.platform.courier.application.CourierAdjustmentService;
 import uz.horecaos.platform.courier.application.CourierCashService;
@@ -59,6 +60,7 @@ import uz.horecaos.platform.courier.domain.AdjustmentOrigin;
 import uz.horecaos.platform.courier.domain.ComplianceField;
 import uz.horecaos.platform.courier.domain.CostBasis;
 import uz.horecaos.platform.courier.domain.CourierCompensationPolicy;
+import uz.horecaos.platform.courier.domain.GateMode;
 import uz.horecaos.platform.courier.domain.PartnerChargeType;
 import uz.horecaos.platform.courier.domain.PayoutMethod;
 import uz.horecaos.platform.courier.domain.RateCard;
@@ -1016,8 +1018,10 @@ public class OperationsCourierController {
             description = "outcomeBasis is closed (ADR 0042): every code names a delivery outcome, "
                     + "never a behaviour. Omit every rule* field for a manual-only reason; supply "
                     + "all five to wire it to AdjustmentRuleEvaluator — ruleAmountMinor's sign must "
-                    + "match kind, and ORDER_UNDELIVERED/ORDER_DAMAGED have no evaluator reader and "
-                    + "may only be authored manual-only.")
+                    + "match kind. ORDER_UNDELIVERED and ORDER_DAMAGED have no evaluator reader "
+                    + "(ADR 0178): a request that gives either any rule field is refused with "
+                    + "422 UNPROCESSABLE_STATE, reason BASIS_HAS_NO_EVALUATOR_READER, and they may "
+                    + "only be authored manual-only.")
     public ResponseEntity<AdjustmentReasonResponse> createAdjustmentReason(
             @PathVariable UUID tenantId, @Valid @RequestBody CreateAdjustmentReasonRequest body) {
 
@@ -1685,6 +1689,16 @@ public class OperationsCourierController {
             if (presentCount == 0) {
                 return null;
             }
+            if (!AdjustmentRuleEvaluator.hasReader(outcomeBasis)) {
+                // ADR 0178 (D6): a rule on a basis nothing reads would be stored and never fire. Refused
+                // here rather than left to look like a rule: the basis stays manual-only until a reader
+                // exists, and a manager records those adjustments by hand.
+                throw new ApiException(
+                        ErrorCode.UNPROCESSABLE_STATE,
+                        "%s has no reader, so it cannot carry a rule: leave every rule field empty and record it as a manual adjustment"
+                                .formatted(outcomeBasis),
+                        Map.of("reason", "BASIS_HAS_NO_EVALUATOR_READER", "outcomeBasis", outcomeBasis));
+            }
             if (presentCount < present.size()) {
                 throw new ApiException(
                         ErrorCode.VALIDATION_FAILED,
@@ -1764,7 +1778,8 @@ public class OperationsCourierController {
             @Nullable String warningState,
             @Nullable LocalDate reverificationDueOn,
             boolean online,
-            @Nullable Instant lastSeenAt) {
+            @Nullable Instant lastSeenAt,
+            int version) {
 
         static RosterEntryResponse of(RosterEntry entry) {
             var courier = entry.courier();
@@ -1782,7 +1797,8 @@ public class OperationsCourierController {
                     courier.warningState(),
                     courier.reverificationDueOn(),
                     entry.online(),
-                    entry.lastSeenAt());
+                    entry.lastSeenAt(),
+                    courier.version());
         }
     }
 
@@ -2045,6 +2061,7 @@ public class OperationsCourierController {
             boolean postDeliveryPaymentCheckRequired,
             int onlineWithinMinutes,
             @Nullable String runPayMode,
+            String pickupHandoverGate,
             @Nullable UUID pendingApprovalRequestId,
             String winningScope,
             UUID policyId,
@@ -2069,6 +2086,7 @@ public class OperationsCourierController {
                     postDeliveryPaymentCheckRequired,
                     onlineWithinMinutes,
                     runPayMode,
+                    pickupHandoverGate,
                     approvalRequestId,
                     winningScope,
                     policyId,
@@ -2094,6 +2112,7 @@ public class OperationsCourierController {
                     doc.postDeliveryPaymentCheckRequired(),
                     doc.onlineWithinMinutes(),
                     doc.runPayMode() == null ? null : doc.runPayMode().name(),
+                    doc.effectiveGateMode().name(),
                     null,
                     resolved.winningScope().name(),
                     resolved.policyId(),
@@ -2125,6 +2144,7 @@ public class OperationsCourierController {
             boolean postDeliveryPaymentCheckRequired,
             @Positive int onlineWithinMinutes,
             @Nullable String runPayMode,
+            @Nullable String pickupHandoverGate,
             @Nullable Boolean acknowledgeEngagementTerms,
             @NotBlank @Size(max = 500) String reason) {
 
@@ -2145,7 +2165,21 @@ public class OperationsCourierController {
                     parseRevealTiming(),
                     postDeliveryPaymentCheckRequired,
                     onlineWithinMinutes,
-                    parseRunPayMode());
+                    parseRunPayMode(),
+                    parseGateMode());
+        }
+
+        /** Absent or blank is SOFT, ADR 0042's default; the stored document then simply carries no value. */
+        private @Nullable GateMode parseGateMode() {
+            if (pickupHandoverGate == null || pickupHandoverGate.isBlank()) {
+                return null;
+            }
+            try {
+                return GateMode.valueOf(pickupHandoverGate);
+            } catch (IllegalArgumentException unknown) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED, "Unknown pickupHandoverGate \"%s\"".formatted(pickupHandoverGate));
+            }
         }
 
         private @Nullable RunPayMode parseRunPayMode() {

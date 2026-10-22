@@ -135,6 +135,16 @@ public enum ErrorCode {
      */
     PAYMENT_WINDOW_TOO_SHORT_FOR_CANCEL(HttpStatus.UNPROCESSABLE_ENTITY, "Payment window too short to cancel"),
 
+    /**
+     * ADR 0042, ADR 0178: a courier's pickup or handover was refused because a check it is held to did not
+     * hold, at a location that holds those steps {@code HARD}. The detail names the failed check kinds
+     * ({@code GEO}, {@code PHOTO}, {@code PAYMENT}); {@code failedChecks} and {@code reason} carry the same as
+     * data. Distinct from {@link #UNPROCESSABLE_STATE}, which refuses a rule of the delivery's state: this
+     * one says the step was fine and the evidence for it was not, so the courier's answer is to be where the
+     * step needs them, not to wait.
+     */
+    GATE_FAILED(HttpStatus.CONFLICT, "Gate failed"),
+
     /** ADR 0018: the quote's inputs changed; never silently charge the difference. */
     PRICE_CHANGED(HttpStatus.CONFLICT, "Price changed"),
 

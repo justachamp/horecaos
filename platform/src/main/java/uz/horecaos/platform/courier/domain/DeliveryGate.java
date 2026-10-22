@@ -91,6 +91,45 @@ public final class DeliveryGate {
         return Optional.empty();
     }
 
+    /**
+     * The position check of a pickup or a handover as a recorded fact (ADR 0042, ADR 0178).
+     *
+     * <p>{@link #gps} says whether the courier may proceed; this says what the check came to, which is
+     * what a SOFT gate stores instead of refusing. {@link StepCheck.Outcome#SKIPPED} when the GPS switch
+     * is off (nothing was measured, so nothing is claimed), {@link StepCheck.Outcome#PASSED} when the
+     * courier was where the stage needs, and {@link StepCheck.Outcome#FAILED} carrying the refusal
+     * otherwise -- including a position too coarse, missing, or with no place on record to compare it
+     * with, because a check that could not be made did not verify anything.
+     */
+    public static StepCheck geoCheck(
+            CourierCompensationPolicy policy,
+            Stage stage,
+            boolean positionGiven,
+            @Nullable Double accuracyMeters,
+            OptionalInt distance) {
+        if (!policy.gpsVerificationEnabled()) {
+            return StepCheck.skipped(StepCheck.Kind.GEO);
+        }
+        return gps(policy, stage, positionGiven, accuracyMeters, distance)
+                .map(refusal -> StepCheck.failed(StepCheck.Kind.GEO, refusal))
+                .orElseGet(() -> StepCheck.passed(StepCheck.Kind.GEO));
+    }
+
+    /**
+     * The cash step of a handover as a recorded fact. Skipped when the tenant does not require the
+     * confirmation or there is nothing to collect; failed when it is required and not yet given.
+     * Unlike the position check this never softens: the amount a courier is to hand in is the
+     * settlement's, and a handover that closes without it leaves the tenant counting on trust.
+     */
+    public static StepCheck paymentStepCheck(CourierCompensationPolicy policy, long cashDueMinor, boolean confirmed) {
+        if (!paymentConfirmationRequired(policy, cashDueMinor)) {
+            return StepCheck.skipped(StepCheck.Kind.PAYMENT);
+        }
+        return confirmed
+                ? StepCheck.passed(StepCheck.Kind.PAYMENT)
+                : StepCheck.failed(StepCheck.Kind.PAYMENT, GateRefusal.PAYMENT_CONFIRMATION_REQUIRED);
+    }
+
     /** Whether a courier may take (and, in a list, even see) an order given where the kitchen is with it. */
     public static Optional<GateRefusal> kitchen(CourierCompensationPolicy policy, boolean kitchenReady) {
         return policy.kitchenReadyOnly() && !kitchenReady

@@ -525,8 +525,16 @@ class CourierDeliveryEndpointTests {
     @DisplayName(
             "with the GPS gate on, the accept radius governs taking an offer and the status radius every step after")
     void theTwoRadiiAreEnforcedSeparately() throws Exception {
+        // HARD: the pickup is refused, not recorded. SOFT is the default and is pinned below.
         publishPolicy(Map.of(
-                "gpsVerificationEnabled", true, "gpsAcceptRadiusMeters", 400, "gpsStatusChangeRadiusMeters", 60));
+                "gpsVerificationEnabled",
+                true,
+                "gpsAcceptRadiusMeters",
+                400,
+                "gpsStatusChangeRadiusMeters",
+                60,
+                "pickupHandoverGate",
+                "HARD"));
         UUID offer = seedOffer(COURIER_ALISHER, "READY");
 
         double nearBranch = BRANCH_LATITUDE + 0.00027;
@@ -601,7 +609,14 @@ class CourierDeliveryEndpointTests {
         // Switched on only now: the delivery was taken and collected under the default policy, and
         // the gate is about the step still to come.
         publishPolicy(Map.of(
-                "gpsVerificationEnabled", true, "gpsAcceptRadiusMeters", 400, "gpsStatusChangeRadiusMeters", 60));
+                "gpsVerificationEnabled",
+                true,
+                "gpsAcceptRadiusMeters",
+                400,
+                "gpsStatusChangeRadiusMeters",
+                60,
+                "pickupHandoverGate",
+                "HARD"));
 
         MvcResult atTheBranch = advance(
                 ALISHER, shipment, versionOf(shipment), "DELIVERED", position(BRANCH_LATITUDE, BRANCH_LONGITUDE, 5));
@@ -647,6 +662,254 @@ class CourierDeliveryEndpointTests {
 
         assertThat(reason(refused)).isEqualTo("GPS_REFERENCE_UNAVAILABLE");
         assertThat(attemptStatus(offer)).isEqualTo("OFFERED");
+    }
+
+    // ------------------------------------------------ ADR 0178: soft or hard pickup and handover
+
+    @Test
+    @DisplayName("ADR 0042: the pickup and the handover are soft by default -- a failed position check is told, "
+            + "recorded and does not stop the step")
+    void thePickupAndTheHandoverAreSoftByDefault() throws Exception {
+        publishPolicy(Map.of(
+                "gpsVerificationEnabled", true, "gpsAcceptRadiusMeters", 400, "gpsStatusChangeRadiusMeters", 60));
+        UUID offer = seedOffer(COURIER_ALISHER, "READY");
+        UUID shipment = acceptedShipmentAt(offer, BRANCH_LATITUDE);
+        double twoKilometres = BRANCH_LATITUDE + 0.018;
+
+        MvcResult pickedUp = gateStep(
+                ALISHER, shipment, versionOf(shipment), "pickup", position(twoKilometres, BRANCH_LONGITUDE, 8));
+
+        assertThat(pickedUp.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json(pickedUp).path("status").asText()).isEqualTo("PICKED_UP");
+        assertThat(reportedChecks(pickedUp))
+                .as("the courier is told the position could not be confirmed, because the step happened")
+                .containsExactly("GEO FAILED");
+        assertThat(recordedChecks(shipment)).containsExactly("PICKED_UP GEO FAILED TOO_FAR_FROM_PICKUP");
+        assertThat(pickedUp.getResponse().getContentAsString(UTF_8))
+                .as("where the courier stood is measured and discarded, never echoed")
+                .doesNotContain(String.valueOf(twoKilometres));
+
+        MvcResult delivered = gateStep(ALISHER, shipment, versionOf(shipment), "handover", null);
+
+        assertThat(delivered.getResponse().getStatus())
+                .as("no position at all is a failed check, not a stranded courier")
+                .isEqualTo(200);
+        assertThat(json(delivered).path("status").asText()).isEqualTo("DELIVERED");
+        assertThat(reportedChecks(delivered)).containsExactly("GEO FAILED");
+        assertThat(recordedChecks(shipment))
+                .as("the cash step is not asked for here, and that too is recorded as skipped")
+                .containsExactly(
+                        "DELIVERED GEO FAILED GPS_POSITION_REQUIRED",
+                        "DELIVERED PAYMENT SKIPPED",
+                        "PICKED_UP GEO FAILED TOO_FAR_FROM_PICKUP");
+    }
+
+    @Test
+    @DisplayName("ADR 0042: the older advance door is soft by default for the same two steps, and records the same")
+    void theAdvanceDoorIsSoftByDefaultToo() throws Exception {
+        publishPolicy(Map.of(
+                "gpsVerificationEnabled", true, "gpsAcceptRadiusMeters", 400, "gpsStatusChangeRadiusMeters", 60));
+        UUID shipment = acceptedShipmentAt(seedOffer(COURIER_ALISHER, "READY"), BRANCH_LATITUDE);
+
+        MvcResult pickedUp = advance(
+                ALISHER,
+                shipment,
+                versionOf(shipment),
+                "PICKED_UP",
+                position(BRANCH_LATITUDE + 0.018, BRANCH_LONGITUDE, 8));
+
+        assertThat(pickedUp.getResponse().getStatus()).isEqualTo(200);
+        assertThat(recordedChecks(shipment)).containsExactly("PICKED_UP GEO FAILED TOO_FAR_FROM_PICKUP");
+    }
+
+    @Test
+    @DisplayName("ADR 0042: arriving at the branch is not a soft step -- it stays held while the GPS switch is on")
+    void theArrivalStaysHardWhateverTheModeSays() throws Exception {
+        publishPolicy(Map.of(
+                "gpsVerificationEnabled", true, "gpsAcceptRadiusMeters", 400, "gpsStatusChangeRadiusMeters", 60));
+        UUID shipment = acceptedShipmentAt(seedOffer(COURIER_ALISHER, "READY"), BRANCH_LATITUDE);
+
+        MvcResult arrivedFar = advance(
+                ALISHER,
+                shipment,
+                versionOf(shipment),
+                "PICKUP_PENDING",
+                position(BRANCH_LATITUDE + 0.018, BRANCH_LONGITUDE, 8));
+
+        assertThat(arrivedFar.getResponse().getStatus()).isEqualTo(422);
+        assertThat(reason(arrivedFar)).isEqualTo("TOO_FAR_FROM_PICKUP");
+        assertThat(recordedChecks(shipment)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a location that hardens the pickup and handover refuses a failed check with 409 GATE_FAILED, "
+            + "names the failed kinds, and changes and records nothing")
+    void aHardLocationRefusesWithGateFailed() throws Exception {
+        publishPolicy(Map.of(
+                "gpsVerificationEnabled",
+                true,
+                "gpsAcceptRadiusMeters",
+                400,
+                "gpsStatusChangeRadiusMeters",
+                60,
+                "pickupHandoverGate",
+                "HARD"));
+        UUID shipment = acceptedShipmentAt(seedOffer(COURIER_ALISHER, "READY"), BRANCH_LATITUDE);
+        double twoKilometres = BRANCH_LATITUDE + 0.018;
+
+        MvcResult far = gateStep(
+                ALISHER, shipment, versionOf(shipment), "pickup", position(twoKilometres, BRANCH_LONGITUDE, 8));
+
+        assertThat(far.getResponse().getStatus()).isEqualTo(409);
+        assertThat(json(far).path("code").asText()).isEqualTo("GATE_FAILED");
+        assertThat(json(far).path("detail").asText())
+                .as("the client names the kinds from the detail, so it holds the kinds and nothing else")
+                .isEqualTo("GEO");
+        assertThat(json(far).path("failedChecks").get(0).asText()).isEqualTo("GEO");
+        assertThat(json(far).path("reason").asText()).isEqualTo("TOO_FAR_FROM_PICKUP");
+        assertThat(far.getResponse().getContentAsString(UTF_8)).doesNotContain(String.valueOf(twoKilometres));
+        assertThat(shipmentStatus(shipment)).isEqualTo("ASSIGNED");
+        assertThat(recordedChecks(shipment)).isEmpty();
+
+        MvcResult none = gateStep(ALISHER, shipment, versionOf(shipment), "pickup", null);
+        assertThat(none.getResponse().getStatus()).isEqualTo(409);
+        assertThat(json(none).path("reason").asText()).isEqualTo("GPS_POSITION_REQUIRED");
+
+        MvcResult near = gateStep(
+                ALISHER, shipment, versionOf(shipment), "pickup", position(BRANCH_LATITUDE, BRANCH_LONGITUDE, 8));
+        assertThat(near.getResponse().getStatus()).isEqualTo(200);
+        assertThat(reportedChecks(near)).containsExactly("GEO PASSED");
+        assertThat(recordedChecks(shipment)).containsExactly("PICKED_UP GEO PASSED");
+
+        MvcResult atTheBranch = gateStep(
+                ALISHER, shipment, versionOf(shipment), "handover", position(BRANCH_LATITUDE, BRANCH_LONGITUDE, 5));
+        assertThat(atTheBranch.getResponse().getStatus())
+                .as("standing at the branch is not standing at the door")
+                .isEqualTo(409);
+        assertThat(json(atTheBranch).path("reason").asText()).isEqualTo("TOO_FAR_FROM_DROPOFF");
+        assertThat(shipmentStatus(shipment)).isEqualTo("PICKED_UP");
+
+        MvcResult atTheDoor = gateStep(
+                ALISHER,
+                shipment,
+                versionOf(shipment),
+                "handover",
+                position(DOOR_LATITUDE + 0.0002, DOOR_LONGITUDE, 5));
+        assertThat(atTheDoor.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json(atTheDoor).path("status").asText()).isEqualTo("DELIVERED");
+        assertThat(recordedChecks(shipment))
+                .containsExactly("DELIVERED GEO PASSED", "DELIVERED PAYMENT SKIPPED", "PICKED_UP GEO PASSED");
+    }
+
+    @Test
+    @DisplayName("the older advance door keeps its 422 reason under HARD, so a client written to it still branches")
+    void theAdvanceDoorKeepsItsReasonUnderHard() throws Exception {
+        publishPolicy(Map.of(
+                "gpsVerificationEnabled",
+                true,
+                "gpsAcceptRadiusMeters",
+                400,
+                "gpsStatusChangeRadiusMeters",
+                60,
+                "pickupHandoverGate",
+                "HARD"));
+        UUID shipment = acceptedShipmentAt(seedOffer(COURIER_ALISHER, "READY"), BRANCH_LATITUDE);
+
+        MvcResult far = advance(
+                ALISHER,
+                shipment,
+                versionOf(shipment),
+                "PICKED_UP",
+                position(BRANCH_LATITUDE + 0.018, BRANCH_LONGITUDE, 8));
+
+        assertThat(far.getResponse().getStatus()).isEqualTo(422);
+        assertThat(reason(far)).isEqualTo("TOO_FAR_FROM_PICKUP");
+    }
+
+    @Test
+    @DisplayName("with the GPS switch off nothing is asked, nothing is reported, and the record says it was skipped")
+    void withTheSwitchOffThePickupReportsNothingAndRecordsSkipped() throws Exception {
+        UUID shipment = acceptedShipmentAt(seedOffer(COURIER_ALISHER, "READY"), BRANCH_LATITUDE + 0.2);
+
+        MvcResult pickedUp = gateStep(ALISHER, shipment, versionOf(shipment), "pickup", null);
+
+        assertThat(pickedUp.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json(pickedUp).path("checks").isArray()).isTrue();
+        assertThat(reportedChecks(pickedUp))
+                .as("a check the location does not ask for is not a warning to the courier")
+                .isEmpty();
+        assertThat(recordedChecks(shipment))
+                .as("but it is not silence either: not measured is a statement")
+                .containsExactly("PICKED_UP GEO SKIPPED");
+    }
+
+    @Test
+    @DisplayName("the cash step never softens: a handover with cash due and unconfirmed is a 422 in either mode, "
+            + "and a confirmed one reports PAYMENT passed")
+    void theCashStepNeverSoftens() throws Exception {
+        publishPolicy(Map.of("postDeliveryPaymentCheckRequired", true));
+        UUID shipment = pickedUpShipment(ALISHER, "READY", false);
+        cashDue.byOrder.put(orderOfShipment(shipment), 15_000L);
+
+        MvcResult early = gateStep(ALISHER, shipment, versionOf(shipment), "handover", null);
+
+        assertThat(early.getResponse().getStatus()).isEqualTo(422);
+        assertThat(reason(early)).isEqualTo("PAYMENT_CONFIRMATION_REQUIRED");
+        assertThat(shipmentStatus(shipment)).isEqualTo("PICKED_UP");
+
+        assertThat(confirmPayment(ALISHER, shipment, versionOf(shipment), 15_000L)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+        MvcResult delivered = gateStep(ALISHER, shipment, versionOf(shipment), "handover", null);
+
+        assertThat(delivered.getResponse().getStatus()).isEqualTo(200);
+        assertThat(reportedChecks(delivered)).containsExactly("PAYMENT PASSED");
+        assertThat(recordedChecks(shipment)).contains("DELIVERED PAYMENT PASSED");
+    }
+
+    @Test
+    @DisplayName("a step taken twice answers what it came to the first time, and records it once")
+    void aReplayedStepAnswersWithItsFirstChecks() throws Exception {
+        publishPolicy(Map.of(
+                "gpsVerificationEnabled", true, "gpsAcceptRadiusMeters", 400, "gpsStatusChangeRadiusMeters", 60));
+        UUID shipment = acceptedShipmentAt(seedOffer(COURIER_ALISHER, "READY"), BRANCH_LATITUDE);
+        long version = versionOf(shipment);
+        MvcResult first =
+                gateStep(ALISHER, shipment, version, "pickup", position(BRANCH_LATITUDE + 0.018, BRANCH_LONGITUDE, 8));
+        assertThat(first.getResponse().getStatus()).isEqualTo(200);
+
+        MvcResult again = gateStep(
+                ALISHER, shipment, versionOf(shipment), "pickup", position(BRANCH_LATITUDE, BRANCH_LONGITUDE, 8));
+
+        assertThat(again.getResponse().getStatus()).isEqualTo(200);
+        assertThat(reportedChecks(again))
+                .as("the second tap from the right place does not rewrite the first, worse, record")
+                .containsExactly("GEO FAILED");
+        assertThat(recordedChecks(shipment)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("another courier's delivery, a missing If-Match and a stale one answer as every other step does")
+    void thePickupAnswersOwnershipAndVersionsAsEveryStepDoes() throws Exception {
+        UUID shipment = acceptedShipmentAt(seedOffer(COURIER_ALISHER, "READY"), BRANCH_LATITUDE);
+
+        assertThat(gateStep(BOBUR, shipment, versionOf(shipment), "pickup", null)
+                        .getResponse()
+                        .getStatus())
+                .as("a delivery that is not yours answers as one that does not exist")
+                .isEqualTo(404);
+        assertThat(mvc.perform(post(BASE + "/deliveries/" + shipment + "/pickup")
+                                .with(tokenFor(ALISHER))
+                                .header("Idempotency-Key", nextKey()))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(400);
+        MvcResult stale = gateStep(ALISHER, shipment, versionOf(shipment) + 7, "pickup", null);
+        assertThat(stale.getResponse().getStatus()).isEqualTo(409);
+        assertThat(json(stale).path("code").asText()).isEqualTo("STALE_VERSION");
+        assertThat(shipmentStatus(shipment)).isEqualTo("ASSIGNED");
     }
 
     // ------------------------------------------------------------- kitchen-ready only
@@ -1094,6 +1357,44 @@ class CourierDeliveryEndpointTests {
                 .andReturn();
     }
 
+    private MvcResult gateStep(
+            String subject, UUID shipmentId, long version, String door, @Nullable String positionJson, String key)
+            throws Exception {
+        var request = post(BASE + "/deliveries/" + shipmentId + "/" + door)
+                .with(tokenFor(subject))
+                .header("Idempotency-Key", key)
+                .header(HttpHeaders.IF_MATCH, "W/\"" + version + "\"");
+        if (positionJson != null) {
+            request = request.contentType(MediaType.APPLICATION_JSON).content("{\"position\":" + positionJson + "}");
+        }
+        return mvc.perform(request).andReturn();
+    }
+
+    private MvcResult gateStep(
+            String subject, UUID shipmentId, long version, String door, @Nullable String positionJson)
+            throws Exception {
+        return gateStep(subject, shipmentId, version, door, positionJson, nextKey());
+    }
+
+    /** Every recorded check of a shipment as «STEP KIND OUTCOME reason», in a stable order. */
+    private List<String> recordedChecks(UUID shipmentId) {
+        return jdbc.sql("""
+                        SELECT step || ' ' || kind || ' ' || outcome || coalesce(' ' || reason_code, '')
+                          FROM fulfillment.courier_step_checks
+                         WHERE shipment_id = :id
+                         ORDER BY step, kind
+                        """).param("id", shipmentId).query(String.class).list();
+    }
+
+    private static List<String> reportedChecks(MvcResult result) throws Exception {
+        List<String> reported = new java.util.ArrayList<>();
+        for (JsonNode check : json(result).path("checks")) {
+            reported.add(
+                    check.path("kind").asText() + " " + check.path("outcome").asText());
+        }
+        return reported;
+    }
+
     private MvcResult confirmPayment(String subject, UUID shipmentId, long version, long collectedMinor)
             throws Exception {
         return mvc.perform(post(BASE + "/deliveries/" + shipmentId + "/payment-confirmation")
@@ -1138,6 +1439,14 @@ class CourierDeliveryEndpointTests {
         assertThat(json(accepted).path("outcome").asText()).isEqualTo("ACCEPTED");
         return UUID.fromString(
                 json(accepted).path("delivery").path("shipmentId").asText());
+    }
+
+    /** An offer taken over HTTP while the courier stands at {@code latitude}, returning the shipment. */
+    private UUID acceptedShipmentAt(UUID offer, double latitude) throws Exception {
+        return UUID.fromString(json(accept(ALISHER, offer, 1, position(latitude, BRANCH_LONGITUDE, 5)))
+                .path("delivery")
+                .path("shipmentId")
+                .asText());
     }
 
     /** A shipment the courier has accepted and collected, ready to be handed over. */

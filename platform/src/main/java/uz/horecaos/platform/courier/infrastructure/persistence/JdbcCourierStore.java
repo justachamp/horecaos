@@ -986,7 +986,8 @@ public class JdbcCourierStore {
             @Nullable UUID engagementId,
             @Nullable String engagementStatus,
             @Nullable String warningState,
-            @Nullable LocalDate reverificationDueOn) {}
+            @Nullable LocalDate reverificationDueOn,
+            int version) {}
 
     /**
      * An engagement as the ordinary projection reads it.
@@ -1095,7 +1096,7 @@ public class JdbcCourierStore {
      * the columns is what makes that a deliberate act rather than an omission.
      */
     private static final String SELECT_ROSTER = """
-            SELECT c.id, c.display_reference, c.status,
+            SELECT c.id, c.display_reference, c.status, c.version,
                    c.courier_type_id, t.display_name AS type_name, t.vehicle_class,
                    t.max_concurrent_assignments,
                    e.id AS engagement_id, e.status AS engagement_status,
@@ -1182,7 +1183,8 @@ public class JdbcCourierStore {
                 rs.getObject("engagement_id", UUID.class),
                 rs.getString("engagement_status"),
                 rs.getString("warning_state"),
-                rs.getObject("reverification_due_on", LocalDate.class));
+                rs.getObject("reverification_due_on", LocalDate.class),
+                rs.getInt("version"));
     }
 
     private static CourierRow mapCourier(ResultSet rs, int rowNumber) throws SQLException {
@@ -1288,6 +1290,72 @@ public class JdbcCourierStore {
                        protected_registration_ref = NULL, version = version + 1, updated_at = :now
                  WHERE tenant_id = :tenantId AND courier_id = :courierId AND status <> 'ENDED'
                 """)
+                .param("today", today)
+                .param("now", utc(now))
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .update();
+    }
+
+    /**
+     * Corrects a courier's display reference and/or type, version-checked (ADR 0178, IA 3.3 «courier CRUD»).
+     * Only a courier still {@code ACTIVE}: an archived one is a record, not a profile.
+     *
+     * @return false when the version moved or the courier is archived
+     */
+    public boolean updateCourier(
+            UUID tenantId,
+            UUID courierId,
+            int expectedVersion,
+            @Nullable String displayReference,
+            @Nullable UUID courierTypeId,
+            Instant now) {
+        return jdbc.sql("""
+                        UPDATE fulfillment.couriers
+                           SET display_reference = COALESCE(:reference, display_reference),
+                               courier_type_id = COALESCE(:typeId, courier_type_id),
+                               version = version + 1, updated_at = :now
+                         WHERE tenant_id = :tenantId AND id = :courierId
+                           AND version = :version AND status = 'ACTIVE'
+                        """)
+                        .param("reference", displayReference)
+                        .param("typeId", courierTypeId)
+                        .param("now", utc(now))
+                        .param("tenantId", tenantId)
+                        .param("courierId", courierId)
+                        .param("version", expectedVersion)
+                        .update()
+                == 1;
+    }
+
+    /** Archives an {@code ACTIVE} courier. False when it already is, or there is no such courier. */
+    public boolean archiveCourier(UUID tenantId, UUID courierId, Instant now) {
+        return jdbc.sql("""
+                        UPDATE fulfillment.couriers
+                           SET status = 'ARCHIVED', version = version + 1, updated_at = :now
+                         WHERE tenant_id = :tenantId AND id = :courierId AND status = 'ACTIVE'
+                        """)
+                        .param("now", utc(now))
+                        .param("tenantId", tenantId)
+                        .param("courierId", courierId)
+                        .update()
+                == 1;
+    }
+
+    /**
+     * Ends every engagement the courier still holds. The registration reference stays: it is what an
+     * accountant's export names the courier by, and unlike an erased applicant's it is a record of
+     * work that happened.
+     *
+     * @return how many engagements this ended
+     */
+    public int endEngagements(UUID tenantId, UUID courierId, LocalDate today, Instant now) {
+        return jdbc.sql("""
+                        UPDATE fulfillment.courier_engagements
+                           SET status = 'ENDED', engaged_until = GREATEST(engaged_from, CAST(:today AS date)),
+                               version = version + 1, updated_at = :now
+                         WHERE tenant_id = :tenantId AND courier_id = :courierId AND status <> 'ENDED'
+                        """)
                 .param("today", today)
                 .param("now", utc(now))
                 .param("tenantId", tenantId)

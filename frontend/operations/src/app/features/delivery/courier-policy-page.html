@@ -153,6 +153,23 @@
             {{ 'delivery.policy.consequence.revealCustomerLocationTiming' | t }}
           </p>
 
+          <label class="q-caption" for="policy-pickup-handover-gate">{{
+            'delivery.policy.pickupHandoverGate' | t
+          }}</label>
+          <select
+            id="policy-pickup-handover-gate"
+            class="q-body field"
+            [value]="draftPickupHandoverGate()"
+            (change)="draftPickupHandoverGate.set($any($event.target).value)"
+            data-testid="policy-input-pickupHandoverGate"
+          >
+            <option value="SOFT">{{ 'delivery.policy.pickupHandoverGate.SOFT' | t }}</option>
+            <option value="HARD">{{ 'delivery.policy.pickupHandoverGate.HARD' | t }}</option>
+          </select>
+          <p class="policy__consequence q-caption">
+            {{ 'delivery.policy.consequence.pickupHandoverGate' | t }}
+          </p>
+
           <label class="checkbox q-body" for="policy-payment-check">
             <input
               id="policy-payment-check"

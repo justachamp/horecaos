@@ -2,9 +2,11 @@ package uz.horecaos.platform.courier.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.UUID;
@@ -20,7 +22,10 @@ import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.courier.domain.CourierCompensationPolicy;
 import uz.horecaos.platform.courier.domain.DeliveryGate;
 import uz.horecaos.platform.courier.domain.DeliveryGate.Stage;
+import uz.horecaos.platform.courier.domain.GateMode;
 import uz.horecaos.platform.courier.domain.GateRefusal;
+import uz.horecaos.platform.courier.domain.StepCheck;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStepCheckStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
 import uz.horecaos.platform.fulfillment.api.CourierJobsPort;
 import uz.horecaos.platform.fulfillment.api.CourierJobsPort.Job;
@@ -34,6 +39,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.payments.api.CashDueLookupPort;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
+import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -63,6 +69,13 @@ import uz.horecaos.platform.web.api.ErrorCode;
  *   <li><b>Post-delivery payment check.</b> With cash due and the check on, the delivery is
  *       not marked delivered until the courier has stated the cash they collected and it
  *       equals what the settlement says was due.</li>
+ *   <li><b>Soft or hard pickup and handover (ADR 0042, ADR 0178).</b> The position check of
+ *       the two steps that matter to a customer is {@link GateMode#SOFT} unless the location
+ *       hardens it: a check that fails is recorded ({@code fulfillment.courier_step_checks})
+ *       and the step goes ahead, because a courier stranded in a stairwell with a customer
+ *       waiting is a worse outcome than a delivery marked from the street. HARD refuses it.
+ *       The record is what the accrual's {@code geo_unverified} flag, and so the
+ *       GEO_UNVERIFIED_RATE basis of a rule, is read from.</li>
  * </ul>
  *
  * <p><strong>The position is a measurement, not a record.</strong> It is turned into a
@@ -91,6 +104,7 @@ public class CourierDeliveryService {
     private final AuditRecorder audit;
     private final Clock clock;
     private final CourierOfferQuoteService quotes;
+    private final JdbcCourierStepCheckStore steps;
 
     public CourierDeliveryService(
             CourierJobsPort jobs,
@@ -99,7 +113,8 @@ public class CourierDeliveryService {
             CashDueLookupPort cashDue,
             AuditRecorder audit,
             Clock clock,
-            CourierOfferQuoteService quotes) {
+            CourierOfferQuoteService quotes,
+            JdbcCourierStepCheckStore steps) {
         this.jobs = jobs;
         this.policies = policies;
         this.couriers = couriers;
@@ -107,6 +122,7 @@ public class CourierDeliveryService {
         this.audit = audit;
         this.clock = clock;
         this.quotes = quotes;
+        this.steps = steps;
     }
 
     /**
@@ -158,8 +174,23 @@ public class CourierDeliveryService {
             @Nullable String quoteCurrency,
             @Nullable Integer quotedDistanceMeters) {}
 
-    /** A delivery as the courier sees it. */
-    public record DeliveryView(Job job, long cashDueMinor, boolean paymentConfirmationRequired) {}
+    /**
+     * A delivery as the courier sees it.
+     *
+     * @param checks what the pickup or handover that produced this view checked, without the checks
+     *               the location does not ask for; null for every other view (a list, a read, an
+     *               arrival), where nothing was just decided
+     */
+    public record DeliveryView(
+            Job job,
+            long cashDueMinor,
+            boolean paymentConfirmationRequired,
+            @Nullable List<StepCheck> checks) {
+
+        public DeliveryView(Job job, long cashDueMinor, boolean paymentConfirmationRequired) {
+            this(job, cashDueMinor, paymentConfirmationRequired, null);
+        }
+    }
 
     /**
      * What taking an offer came to.
@@ -326,6 +357,12 @@ public class CourierDeliveryService {
      * to move closer), then the policy gates, and only then the compare-and-set. The position
      * is measured only if the GPS toggle is on; the customer's door is decrypted only for the
      * handover step and only then.
+     *
+     * <p>This is the older door to the same steps {@link #pickUp} and {@link #handOver} take, and it
+     * keeps its older answer: a position check that fails under {@link GateMode#HARD} is refused with
+     * {@code 422} and the {@link GateRefusal} that says why, where the two newer doors answer
+     * {@code 409 GATE_FAILED}. Under {@link GateMode#SOFT} it records and proceeds, as they do. The
+     * arrival step ({@code PICKUP_PENDING}) is not a soft step and is held whenever the GPS switch is on.
      */
     @Transactional
     public DeliveryView advance(
@@ -336,20 +373,71 @@ public class CourierDeliveryService {
             Step step,
             @Nullable Position position,
             ActorRef actor) {
+        return takeStep(where, courierId, shipmentId, expectedVersion, step, position, actor, false);
+    }
+
+    /**
+     * The pickup: the courier collects the bag at the branch (ADR 0042, ADR 0178).
+     *
+     * @throws ApiException {@code 409 GATE_FAILED} naming the failed check kinds when the location holds
+     *                      the pickup {@link GateMode#HARD} and the position check failed
+     */
+    @Transactional
+    public DeliveryView pickUp(
+            Where where,
+            UUID courierId,
+            UUID shipmentId,
+            long expectedVersion,
+            @Nullable Position position,
+            ActorRef actor) {
+        return takeStep(where, courierId, shipmentId, expectedVersion, Step.PICKED_UP, position, actor, true);
+    }
+
+    /**
+     * The handover: the courier gives the order to the customer (ADR 0042, ADR 0178). Held to the cash
+     * step as well, which never softens.
+     *
+     * @throws ApiException {@code 409 GATE_FAILED} when the location holds the handover
+     *                      {@link GateMode#HARD} and the position check failed; {@code 422
+     *                      PAYMENT_CONFIRMATION_REQUIRED} when the cash is due and unconfirmed
+     */
+    @Transactional
+    public DeliveryView handOver(
+            Where where,
+            UUID courierId,
+            UUID shipmentId,
+            long expectedVersion,
+            @Nullable Position position,
+            ActorRef actor) {
+        return takeStep(where, courierId, shipmentId, expectedVersion, Step.DELIVERED, position, actor, true);
+    }
+
+    private DeliveryView takeStep(
+            Where where,
+            UUID courierId,
+            UUID shipmentId,
+            long expectedVersion,
+            Step step,
+            @Nullable Position position,
+            ActorRef actor,
+            boolean gateFailedAnswer) {
 
         Job job = requireJob(where, courierId, shipmentId);
         requireVersion(expectedVersion, job.version());
-        CourierCompensationPolicy policy = policies.resolve(where.scope());
+        ResolvedPolicy<CourierCompensationPolicy> resolved = policies.resolveWithIdentity(where.scope());
+        CourierCompensationPolicy policy = resolved.document();
+        JdbcCourierStepCheckStore.Step recorded = recordedStep(step);
 
         if (job.status().name().equals(step.name())) {
-            return view(where, policy, job);
+            // The step is already taken: answer with what it came to the first time.
+            return view(where, policy, job, recorded == null ? null : reported(checksOf(where, shipmentId, recorded)));
         }
         if (!step.canFollow(job.status())) {
             throw refusal(GateRefusal.STEP_NOT_ALLOWED);
         }
 
         Stage stage = step == Step.DELIVERED ? Stage.AT_DROPOFF : Stage.AT_PICKUP;
-        refuse(DeliveryGate.gps(
+        StepCheck geo = DeliveryGate.geoCheck(
                 policy,
                 stage,
                 position != null,
@@ -359,10 +447,28 @@ public class CourierDeliveryService {
                         position,
                         point -> stage == Stage.AT_DROPOFF
                                 ? jobs.metresFromDoor(where.tenantId(), courierId, shipmentId, point)
-                                : jobs.metresFromBranch(where.tenantId(), job.brandId(), job.locationId(), point))));
+                                : jobs.metresFromBranch(where.tenantId(), job.brandId(), job.locationId(), point)));
 
+        GateMode mode = policy.effectiveGateMode();
+        if (geo.failed() && (recorded == null || mode == GateMode.HARD)) {
+            GateRefusal reason = Objects.requireNonNull(geo.reason());
+            if (recorded != null && gateFailedAnswer) {
+                throw gateFailed(reason, List.of(geo));
+            }
+            throw refusal(reason);
+        }
+
+        List<StepCheck> checks = new ArrayList<>();
+        if (recorded != null) {
+            checks.add(geo);
+        }
         if (step == Step.DELIVERED) {
-            refuse(DeliveryGate.paymentCheck(policy, cashDueMinor(where, job), job.paymentConfirmedAt() != null));
+            StepCheck payment =
+                    DeliveryGate.paymentStepCheck(policy, cashDueMinor(where, job), job.paymentConfirmedAt() != null);
+            if (payment.failed()) {
+                throw refusal(Objects.requireNonNull(payment.reason()));
+            }
+            checks.add(payment);
         }
 
         Instant now = clock.instant();
@@ -375,25 +481,61 @@ public class CourierDeliveryService {
             throw refusal(GateRefusal.STEP_NOT_ALLOWED);
         }
         if (transition.result() == Result.APPLIED) {
+            if (recorded != null) {
+                steps.record(
+                        where.tenantId(),
+                        shipmentId,
+                        courierId,
+                        recorded,
+                        checks,
+                        mode,
+                        resolved.policyId(),
+                        resolved.policyVersion(),
+                        now);
+            }
+            Map<String, Object> changed = new LinkedHashMap<>();
+            changed.put("status", step.name());
+            changed.put("courierId", courierId.toString());
+            changed.put("orderId", job.orderId().toString());
+            // Whether the gate measured the courier, never where they were.
+            changed.put("positionChecked", DeliveryGate.needsPosition(policy));
+            if (recorded != null) {
+                changed.put("geoCheck", geo.outcome().name());
+                changed.put("gateMode", mode.name());
+            }
             audit.record(AuditFact.of("courier.delivery.advanced", AuditClass.BUSINESS)
                     .by(actor)
                     .at(where.scope())
                     .target("fulfillment.shipment", shipmentId)
                     .because("Courier moved the delivery to " + step.name())
                     .usingCapability(Capability.COURIER_DELIVERY_ADVANCE.code())
-                    .changed(ChangeDocuments.diff(
-                            Map.of("status", job.status().name()),
-                            Map.of(
-                                    "status", step.name(),
-                                    "courierId", courierId.toString(),
-                                    "orderId", job.orderId().toString(),
-                                    // Whether the gate measured the courier, never where they were.
-                                    "positionChecked", DeliveryGate.needsPosition(policy))))
+                    .changed(ChangeDocuments.diff(Map.of("status", job.status().name()), changed))
                     .correlatedBy(job.planId().toString())
                     .occurredAt(now)
                     .build());
+            return view(where, policy, after, recorded == null ? null : reported(checks));
         }
-        return view(where, policy, after);
+        return view(where, policy, after, recorded == null ? null : reported(checksOf(where, shipmentId, recorded)));
+    }
+
+    /** The two steps whose checks are kept; the arrival is not one of them. */
+    private static JdbcCourierStepCheckStore.@Nullable Step recordedStep(Step step) {
+        return switch (step) {
+            case PICKED_UP -> JdbcCourierStepCheckStore.Step.PICKED_UP;
+            case DELIVERED -> JdbcCourierStepCheckStore.Step.DELIVERED;
+            default -> null;
+        };
+    }
+
+    private List<StepCheck> checksOf(Where where, UUID shipmentId, JdbcCourierStepCheckStore.Step recorded) {
+        return steps.checksOf(where.tenantId(), shipmentId, recorded);
+    }
+
+    /** What the courier is told: the checks the location asks for, never the ones it does not. */
+    private static List<StepCheck> reported(List<StepCheck> checks) {
+        return checks.stream()
+                .filter(check -> check.outcome() != StepCheck.Outcome.SKIPPED)
+                .toList();
     }
 
     /**
@@ -525,8 +667,13 @@ public class CourierDeliveryService {
     // ----------------------------------------------------------------- helpers
 
     private DeliveryView view(Where where, CourierCompensationPolicy policy, Job job) {
+        return view(where, policy, job, null);
+    }
+
+    private DeliveryView view(
+            Where where, CourierCompensationPolicy policy, Job job, @Nullable List<StepCheck> checks) {
         long due = cashDueMinor(where, job);
-        return new DeliveryView(job, due, DeliveryGate.paymentConfirmationRequired(policy, due));
+        return new DeliveryView(job, due, DeliveryGate.paymentConfirmationRequired(policy, due), checks);
     }
 
     /**
@@ -605,6 +752,20 @@ public class CourierDeliveryService {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("reason", reason.name());
         return new ApiException(ErrorCode.UNPROCESSABLE_STATE, describe(reason), properties);
+    }
+
+    /**
+     * {@code 409 GATE_FAILED}: a pickup or a handover held {@link GateMode#HARD} whose position check did
+     * not hold. The detail is the failed check kinds and nothing else, because the courier client names
+     * them to the courier and parses them from it; the refusal behind it rides as {@code reason}, a name
+     * and never a figure.
+     */
+    static ApiException gateFailed(GateRefusal reason, List<StepCheck> failed) {
+        List<String> kinds = failed.stream().map(check -> check.kind().name()).toList();
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("failedChecks", kinds);
+        properties.put("reason", reason.name());
+        return new ApiException(ErrorCode.GATE_FAILED, String.join(", ", kinds), properties);
     }
 
     private static String describe(GateRefusal reason) {
