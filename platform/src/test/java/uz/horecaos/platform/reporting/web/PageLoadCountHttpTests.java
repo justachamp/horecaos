@@ -121,8 +121,17 @@ class PageLoadCountHttpTests {
     @Autowired
     private MovableClock clock;
 
+    /**
+     * The limiter keeps one bucket per tenant and visitor in the context, and the context outlives a test. A loop that
+     * drains the visitor's thirty tokens would leave every test after it refused for as long as the bucket takes to
+     * refill, which is a few seconds on a quiet machine and nothing at all on a loaded one. Each test is therefore a
+     * different visitor, the way a different person opening the shop is.
+     */
+    private int visitor;
+
     @BeforeEach
     void reset() {
+        visitor++;
         // The limiter is a token bucket that refills with time, so a loop of pings that takes a minute on a loaded
         // machine is
         // allowed more than its budget. The context's clock is held still for the test, as the content tests hold
@@ -344,6 +353,10 @@ class PageLoadCountHttpTests {
 
     private MvcResult ping(UUID brand, String channel) throws Exception {
         return mvc.perform(post("/api/v1/storefront/tenants/" + TENANT + "/brands/" + brand + "/page-loads")
+                        .with(request -> {
+                            request.setRemoteAddr("198.51.100." + (visitor % 250 + 1));
+                            return request;
+                        })
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"channel\":\"" + channel + "\"}"))
                 .andReturn();

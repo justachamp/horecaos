@@ -4039,6 +4039,28 @@ export interface TaxProfileResponse {
   version?: number;
 }
 
+export interface TelegramSettingsRequest {
+  brandId?: string;
+  menuButtonLabels?: { [key: string]: string };
+  miniAppEnabled?: boolean;
+  miniAppShortName?: string;
+  publicOfferLink?: boolean;
+  welcomeTexts?: { [key: string]: string };
+}
+
+export interface TelegramSettingsView {
+  brandId?: string;
+  channelVersion?: number;
+  menuButtonLabels?: { [key: string]: string };
+  miniAppEnabled?: boolean;
+  miniAppShortName?: string;
+  miniAppUnavailable?: string;
+  miniAppUrl?: string;
+  publicOfferLink?: boolean;
+  publicOfferUrl?: string;
+  welcomeTexts?: { [key: string]: string };
+}
+
 export interface TemplateReviewView {
   body?: string;
   locale?: string;
@@ -4825,6 +4847,8 @@ export interface Operations {
   "get_4": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/pages/{slug}/{version}"; request: { parameters: { path: { channelId: string; slug: string; tenantId: string; version: number } } }; responses: { "200": PageVersionView } };
   "presentation": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/presentation"; request: { parameters: { path: { channelId: string; tenantId: string } } }; responses: { "200": ChannelSetupControllerPresentationView } };
   "setPresentation": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/presentation"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } }; body: PresentationRequest }; responses: { "200": ChannelSetupControllerPresentationView } };
+  "readTelegramSettings": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/telegram"; request: { parameters: { path: { channelId: string; tenantId: string } } }; responses: { "200": TelegramSettingsView } };
+  "replaceTelegramSettings": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/telegram"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } }; body: TelegramSettingsRequest }; responses: { "200": TelegramSettingsView } };
   "replaceSocialLinks": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/social-links"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } }; body: { [key: string]: string } }; responses: { "200": unknown } };
   "importContacts": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/sendpulse-imports"; request: { parameters: { path: { tenantId: string }; query: { dryRun?: boolean } }; body: ImportRequest }; responses: { "200": SendPulseImportReport } };
   "report": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sendpulse-imports/{runId}"; request: { parameters: { path: { runId: string; tenantId: string }; query: { limit?: number; offset?: number } } }; responses: { "200": SendPulseImportReport } };

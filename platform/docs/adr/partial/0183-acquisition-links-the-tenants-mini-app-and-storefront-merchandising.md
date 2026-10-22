@@ -240,8 +240,9 @@ tenant.telegram_channel_texts                      -- V0674
 
 - `reporting.page_load_counts_day` (`V0675`): `tenant_id, brand_id, business_date, channel_code, page_loads bigint`,
   counts only, the structural no-subject test extended to it.
-- `POST /api/v1/storefront/tenants/{t}/brands/{b}/page-loads`: public, 202 always, rate limited per visitor-handle before
-  anything else; counts only when `reporting.page_load_count_enabled` is true for the platform.
+- `POST /api/v1/storefront/tenants/{t}/brands/{b}/page-loads`: public, answers 202 whether or not it counted (429 only for a
+  visitor past thirty a minute), rate limited per visitor handle before anything else; counts only when
+  `reporting.page_load_count_enabled` is true for the platform.
 - The funnel read's `VISITS` stage stays `measured=false, reason=NOT_COLLECTED` while the flag is off. With it on the stage is
   `measured=true` with a `count` and `basis=PAGE_LOADS`, and `unrecordedDays` counts the business dates in the range before the
   counter wrote its first row (a range reaching back past the day it was switched on says its total is partial rather than

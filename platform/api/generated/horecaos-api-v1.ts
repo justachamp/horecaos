@@ -695,6 +695,8 @@ export interface AttributionLinkResponse {
   ownerNote?: string;
   status?: string;
   token?: string;
+  unavailable?: string;
+  url?: string;
   validFrom?: string;
   validUntil?: string;
 }
@@ -1254,6 +1256,10 @@ export interface BranchMenuBindingResponse {
 export interface BranchOrderCountsResponse {
   counts?: OrderCountTotalsResponse;
   locationId?: string;
+}
+
+export interface BranchOrderRequest {
+  locationIds: Array<string>;
 }
 
 export interface BranchOverrideReasonResponse {
@@ -4473,6 +4479,10 @@ export interface EmergencyContactsResponse {
   memberVersion?: number;
 }
 
+export interface EnabledView {
+  enabled?: boolean;
+}
+
 export interface EncryptedColumn {
   column?: string;
   schema?: string;
@@ -5279,8 +5289,10 @@ export interface HolidayResponse {
 }
 
 export interface HomeDocument {
+  brandSwitcher?: Array<SwitcherEntry>;
   carousel?: Array<CarouselItem>;
   groups?: Array<Group>;
+  layout?: string;
   locale?: string;
   popup?: Popup;
   promoGrid?: Array<CarouselItem>;
@@ -5730,6 +5742,11 @@ export interface LatestStatementView {
   periodKey?: string;
   statementId?: string;
   total?: ApiMoney;
+}
+
+export interface LayoutPolicyRequest {
+  layout: string;
+  reason?: string;
 }
 
 export interface LeadView {
@@ -6506,6 +6523,24 @@ export interface MigrationRunView {
 
 export interface MiniAppLinkRequest {
   initData: string;
+}
+
+export interface MiniAppStatusView {
+  botUsername?: string;
+  channelId?: string;
+  channelVersion?: number;
+  menuButtonLabel?: string;
+  menuButtonUrl?: string;
+  miniAppShortName?: string;
+  miniAppUrl?: string;
+  steps?: Array<MiniAppStepView>;
+  testLink?: string;
+}
+
+export interface MiniAppStepView {
+  code?: string;
+  detail?: string;
+  state?: string;
 }
 
 export interface MintBenefitGrantRequest {
@@ -8507,6 +8542,7 @@ export interface PickupLocation {
   brandId?: string;
   brandName?: string;
   city?: string;
+  distanceKnown?: boolean;
   distanceMeters?: number;
   district?: string;
   locationId?: string;
@@ -8518,7 +8554,7 @@ export interface PickupLocation {
 
 export interface PickupLocationSearchRequest {
   limit?: number;
-  point: GeoPoint;
+  point?: GeoPoint;
 }
 
 export interface PickupLocations {
@@ -8548,6 +8584,10 @@ export interface PinStateResponse {
   pending?: PendingPinCode;
   setAt?: string;
   status?: string;
+}
+
+export interface PingRequest {
+  channel?: string;
 }
 
 export interface PlaceDirectory {
@@ -8777,6 +8817,8 @@ export interface Policies {
   editorial?: EditorialPolicy;
   editorialEntitled?: boolean;
   editorialVersion?: number;
+  layout?: string;
+  layoutVersion?: number;
   publishing?: PublishingPolicy;
   publishingVersion?: number;
   videoEntitled?: boolean;
@@ -12062,6 +12104,7 @@ export interface StaffSignInRequest {
 }
 
 export interface StageResponse {
+  basis?: string;
   count?: number;
   measured?: boolean;
   reason?: string;
@@ -12423,6 +12466,13 @@ export interface StorefrontAvailabilityResponse {
   remainingQuantity?: number;
 }
 
+export interface StorefrontBranchView {
+  displayName?: string;
+  locationId?: string;
+  status?: string;
+  storefrontSortOrder?: number;
+}
+
 export interface StorefrontChannelSetupControllerPresentationView {
   ogImageAssetId?: string;
   seoDescription?: string;
@@ -12650,6 +12700,47 @@ export interface SuspendScopeRequest {
   reason: string;
 }
 
+export interface SwitcherAddRequest {
+  channelId: string;
+  targetBrandId: string;
+}
+
+export interface SwitcherCandidateView {
+  brandId?: string;
+  brandName?: string;
+  channelCode?: string;
+  channelId?: string;
+  hostname?: string;
+}
+
+export interface SwitcherEntry {
+  logo?: Media;
+  name?: string;
+  targetBrandId?: string;
+  url?: string;
+}
+
+export interface SwitcherEntryView {
+  channelCode?: string;
+  channelId?: string;
+  hostname?: string;
+  id?: string;
+  shown?: boolean;
+  sortKey?: number;
+  state?: string;
+  targetBrandId?: string;
+  targetBrandName?: string;
+  version?: number;
+}
+
+export interface SwitcherOrderRequest {
+  ids: Array<string>;
+}
+
+export interface SwitcherStateRequest {
+  state: string;
+}
+
 export interface TableLayoutRequest {
   layoutX: number;
   layoutY: number;
@@ -12816,6 +12907,28 @@ export interface TelegramRoutingControllerBindingResponse {
   status?: string;
   subscriptions?: Array<RoutingSubscriptionResponse>;
   topicId?: number;
+}
+
+export interface TelegramSettingsRequest {
+  brandId?: string;
+  menuButtonLabels?: { [key: string]: string };
+  miniAppEnabled?: boolean;
+  miniAppShortName?: string;
+  publicOfferLink?: boolean;
+  welcomeTexts?: { [key: string]: string };
+}
+
+export interface TelegramSettingsView {
+  brandId?: string;
+  channelVersion?: number;
+  menuButtonLabels?: { [key: string]: string };
+  miniAppEnabled?: boolean;
+  miniAppShortName?: string;
+  miniAppUnavailable?: string;
+  miniAppUrl?: string;
+  publicOfferLink?: boolean;
+  publicOfferUrl?: string;
+  welcomeTexts?: { [key: string]: string };
 }
 
 export interface TelegramStaffLinkCodeControllerReasonRequest {
@@ -14348,6 +14461,8 @@ export interface Operations {
   "get_13": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/pages/{slug}/{version}"; request: { parameters: { path: { channelId: string; slug: string; tenantId: string; version: number } } }; responses: { "200": PageVersionView } };
   "presentation": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/presentation"; request: { parameters: { path: { channelId: string; tenantId: string } } }; responses: { "200": ChannelSetupControllerPresentationView } };
   "setPresentation": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/presentation"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } }; body: PresentationRequest }; responses: { "200": ChannelSetupControllerPresentationView } };
+  "readTelegramSettings": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/telegram"; request: { parameters: { path: { channelId: string; tenantId: string } } }; responses: { "200": TelegramSettingsView } };
+  "replaceTelegramSettings": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/telegram"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } }; body: TelegramSettingsRequest }; responses: { "200": TelegramSettingsView } };
   "replaceSocialLinks": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/social-links"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } }; body: { [key: string]: string } }; responses: { "200": unknown } };
   "importContacts": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/sendpulse-imports"; request: { parameters: { path: { tenantId: string }; query: { dryRun?: boolean } }; body: ImportRequest }; responses: { "200": SendPulseImportReport } };
   "report_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sendpulse-imports/{runId}"; request: { parameters: { path: { runId: string; tenantId: string }; query: { limit?: number; offset?: number } } }; responses: { "200": SendPulseImportReport } };
@@ -14611,6 +14726,10 @@ export interface Operations {
   "storefrontAppCatalogue": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/storefront-apps"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<StorefrontAppCatalogueEntry> } };
   "authoriseStorefrontApp": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/storefront-apps/{appId}/authorisations"; request: { parameters: { path: { appId: string; brandId: string; tenantId: string } }; body: OperationsStorefrontAppControllerReasonRequest }; responses: { "200": StorefrontAppBrandAuthorisationView } };
   "revokeStorefrontApp": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/storefront-apps/{appId}/revocations"; request: { parameters: { path: { appId: string; brandId: string; tenantId: string } }; body: OperationsStorefrontAppControllerReasonRequest }; responses: { "200": StorefrontAppBrandAuthorisationView } };
+  "readStorefrontBranchOrder": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/storefront-branch-order"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<StorefrontBranchView> } };
+  "replaceStorefrontBranchOrder": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/storefront-branch-order"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: BranchOrderRequest }; responses: { "200": Array<StorefrontBranchView> } };
+  "miniAppSetupStatus": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/telegram/mini-app-setup"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": MiniAppStatusView } };
+  "applyMenuButton": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/telegram/mini-app-setup/menu-button"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": MiniAppStatusView } };
   "history": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/terms-documents"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<TermsVersionSummaryView> } };
   "publish_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/terms-documents"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: OperationsTermsControllerPublishRequest }; responses: { "200": TermsVersionView } };
   "current_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/terms-documents/current"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": TermsVersionView } };
@@ -14953,6 +15072,8 @@ export interface Operations {
   "receipts": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/receipts"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } } }; responses: { "200": ReceiptsResponse } };
   "reorderPlan_2": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/reorder"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } } }; responses: { "200": ReorderPlanResponse } };
   "submit_2": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/review"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } }; body: SubmitReviewRequest }; responses: { "200": StorefrontReviewControllerReviewResponse } };
+  "pageLoadCountingEnabled": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/page-loads"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": EnabledView } };
+  "countPageLoad": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/page-loads"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: PingRequest }; responses: { "200": unknown } };
   "poll_2": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/presented-offers"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { surface?: string } } }; responses: { "200": Array<Banner> } };
   "dismiss": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/presented-offers/{presentedOfferId}/dismissals"; request: { parameters: { path: { brandId: string; presentedOfferId: string; tenantId: string } } }; responses: { "200": unknown } };
   "myReferral": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/me"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": MyReferralResponse } };
@@ -14981,6 +15102,12 @@ export interface Operations {
   "listAllowedHosts": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/allowed-hosts"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<AllowedHost> } };
   "addAllowedHost": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/allowed-hosts"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: HostRequest }; responses: { "200": HostResponse } };
   "removeAllowedHost": { method: "DELETE"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/allowed-hosts/{host}"; request: { parameters: { path: { brandId: string; host: string; tenantId: string } } }; responses: { "200": unknown } };
+  "listSwitcherCandidates": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/brand-switcher/candidates"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<SwitcherCandidateView> } };
+  "listSwitcherEntries": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/brand-switcher/entries"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<SwitcherEntryView> } };
+  "addSwitcherEntry": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/brand-switcher/entries"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: SwitcherAddRequest }; responses: { "200": SwitcherEntryView } };
+  "removeSwitcherEntry": { method: "DELETE"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/brand-switcher/entries/{entryId}"; request: { parameters: { path: { brandId: string; entryId: string; tenantId: string } } }; responses: { "200": unknown } };
+  "setSwitcherEntryState": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/brand-switcher/entries/{entryId}"; request: { parameters: { path: { brandId: string; entryId: string; tenantId: string } }; body: SwitcherStateRequest }; responses: { "200": SwitcherEntryView } };
+  "reorderSwitcherEntries": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/brand-switcher/order"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: SwitcherOrderRequest }; responses: { "200": Array<SwitcherEntryView> } };
   "contentHealth": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/health"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<Unhealthy> } };
   "listItems": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/items"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { cursor?: string; kind?: string; limit?: number; placement?: string; state?: string; visibility?: string } } }; responses: { "200": ItemPage } };
   "createItem": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/items"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateItemRequest }; responses: { "200": ItemView } };
@@ -14997,6 +15124,7 @@ export interface Operations {
   "orderPlacement": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/placements/{placement}/order"; request: { parameters: { path: { brandId: string; placement: string; tenantId: string } }; body: OrderRequest }; responses: { "200": PlacementOrderResponse } };
   "getPolicies": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/policies"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Policies } };
   "setEditorialPolicy": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/policies/editorial"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: EditorialPolicyRequest }; responses: { "200": Policies } };
+  "setLayoutPolicy": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/policies/layout"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: LayoutPolicyRequest }; responses: { "200": Policies } };
   "setPublishingPolicy": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/policies/publishing"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: PublishingPolicyRequest }; responses: { "200": Policies } };
   "previewHome": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/preview"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { asOf?: string; channel: string; locale?: string } } }; responses: { "200": HomeDocument } };
   "listOrders_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/customers/{accountId}/orders"; request: { parameters: { path: { accountId: string; brandId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PageCustomerOrderHistoryControllerOrderSummaryResponse } };

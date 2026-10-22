@@ -467,6 +467,8 @@ export interface AttributionLinkResponse {
   ownerNote?: string;
   status?: string;
   token?: string;
+  unavailable?: string;
+  url?: string;
   validFrom?: string;
   validUntil?: string;
 }
@@ -814,6 +816,10 @@ export interface BranchCandidateResponse {
 export interface BranchOrderCountsResponse {
   counts?: OrderCountTotalsResponse;
   locationId?: string;
+}
+
+export interface BranchOrderRequest {
+  locationIds: Array<string>;
 }
 
 export interface BranchOverrideReasonResponse {
@@ -3390,8 +3396,10 @@ export interface HolidayResponse {
 }
 
 export interface HomeDocument {
+  brandSwitcher?: Array<SwitcherEntry>;
   carousel?: Array<CarouselItem>;
   groups?: Array<Group>;
+  layout?: string;
   locale?: string;
   popup?: Popup;
   promoGrid?: Array<CarouselItem>;
@@ -3737,6 +3745,11 @@ export interface LatestStatementView {
   periodKey?: string;
   statementId?: string;
   total?: ApiMoney;
+}
+
+export interface LayoutPolicyRequest {
+  layout: string;
+  reason?: string;
 }
 
 export interface LeadView {
@@ -4256,6 +4269,24 @@ export interface MetricResponse {
   sourceFact?: string;
   unit?: string;
   version?: number;
+}
+
+export interface MiniAppStatusView {
+  botUsername?: string;
+  channelId?: string;
+  channelVersion?: number;
+  menuButtonLabel?: string;
+  menuButtonUrl?: string;
+  miniAppShortName?: string;
+  miniAppUrl?: string;
+  steps?: Array<MiniAppStepView>;
+  testLink?: string;
+}
+
+export interface MiniAppStepView {
+  code?: string;
+  detail?: string;
+  state?: string;
 }
 
 export interface MintBenefitGrantRequest {
@@ -5787,6 +5818,8 @@ export interface Policies {
   editorial?: EditorialPolicy;
   editorialEntitled?: boolean;
   editorialVersion?: number;
+  layout?: string;
+  layoutVersion?: number;
   publishing?: PublishingPolicy;
   publishingVersion?: number;
   videoEntitled?: boolean;
@@ -8195,6 +8228,7 @@ export interface StaffSignInRequest {
 }
 
 export interface StageResponse {
+  basis?: string;
   count?: number;
   measured?: boolean;
   reason?: string;
@@ -8446,6 +8480,13 @@ export interface StorefrontAppConformance {
   status?: "NOT_RUN" | "PASSED" | "FAILED" | "EXPIRED";
 }
 
+export interface StorefrontBranchView {
+  displayName?: string;
+  locationId?: string;
+  status?: string;
+  storefrontSortOrder?: number;
+}
+
 export interface StoryGroup {
   avatar?: Media;
   id?: string;
@@ -8540,6 +8581,47 @@ export interface SuppressionResponse {
 export interface SuspendRequest {
   reason: string;
   reasonCode: string;
+}
+
+export interface SwitcherAddRequest {
+  channelId: string;
+  targetBrandId: string;
+}
+
+export interface SwitcherCandidateView {
+  brandId?: string;
+  brandName?: string;
+  channelCode?: string;
+  channelId?: string;
+  hostname?: string;
+}
+
+export interface SwitcherEntry {
+  logo?: Media;
+  name?: string;
+  targetBrandId?: string;
+  url?: string;
+}
+
+export interface SwitcherEntryView {
+  channelCode?: string;
+  channelId?: string;
+  hostname?: string;
+  id?: string;
+  shown?: boolean;
+  sortKey?: number;
+  state?: string;
+  targetBrandId?: string;
+  targetBrandName?: string;
+  version?: number;
+}
+
+export interface SwitcherOrderRequest {
+  ids: Array<string>;
+}
+
+export interface SwitcherStateRequest {
+  state: string;
 }
 
 export interface TableLayoutRequest {
@@ -9740,6 +9822,10 @@ export interface Operations {
   "storefrontAppCatalogue": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/storefront-apps"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<StorefrontAppCatalogueEntry> } };
   "authoriseStorefrontApp": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/storefront-apps/{appId}/authorisations"; request: { parameters: { path: { appId: string; brandId: string; tenantId: string } }; body: OperationsStorefrontAppControllerReasonRequest }; responses: { "200": StorefrontAppBrandAuthorisationView } };
   "revokeStorefrontApp": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/storefront-apps/{appId}/revocations"; request: { parameters: { path: { appId: string; brandId: string; tenantId: string } }; body: OperationsStorefrontAppControllerReasonRequest }; responses: { "200": StorefrontAppBrandAuthorisationView } };
+  "readStorefrontBranchOrder": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/storefront-branch-order"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<StorefrontBranchView> } };
+  "replaceStorefrontBranchOrder": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/storefront-branch-order"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: BranchOrderRequest }; responses: { "200": Array<StorefrontBranchView> } };
+  "miniAppSetupStatus": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/telegram/mini-app-setup"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": MiniAppStatusView } };
+  "applyMenuButton": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/telegram/mini-app-setup/menu-button"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": MiniAppStatusView } };
   "history": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/terms-documents"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<TermsVersionSummaryView> } };
   "publish_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/terms-documents"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: OperationsTermsControllerPublishRequest }; responses: { "200": TermsVersionView } };
   "current_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/terms-documents/current"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": TermsVersionView } };
@@ -9952,6 +10038,12 @@ export interface Operations {
   "listAllowedHosts": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/allowed-hosts"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<AllowedHost> } };
   "addAllowedHost": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/allowed-hosts"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: HostRequest }; responses: { "200": HostResponse } };
   "removeAllowedHost": { method: "DELETE"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/allowed-hosts/{host}"; request: { parameters: { path: { brandId: string; host: string; tenantId: string } } }; responses: { "200": unknown } };
+  "listSwitcherCandidates": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/brand-switcher/candidates"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<SwitcherCandidateView> } };
+  "listSwitcherEntries": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/brand-switcher/entries"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<SwitcherEntryView> } };
+  "addSwitcherEntry": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/brand-switcher/entries"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: SwitcherAddRequest }; responses: { "200": SwitcherEntryView } };
+  "removeSwitcherEntry": { method: "DELETE"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/brand-switcher/entries/{entryId}"; request: { parameters: { path: { brandId: string; entryId: string; tenantId: string } } }; responses: { "200": unknown } };
+  "setSwitcherEntryState": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/brand-switcher/entries/{entryId}"; request: { parameters: { path: { brandId: string; entryId: string; tenantId: string } }; body: SwitcherStateRequest }; responses: { "200": SwitcherEntryView } };
+  "reorderSwitcherEntries": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/brand-switcher/order"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: SwitcherOrderRequest }; responses: { "200": Array<SwitcherEntryView> } };
   "contentHealth": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/health"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<Unhealthy> } };
   "listItems": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/items"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { cursor?: string; kind?: string; limit?: number; placement?: string; state?: string; visibility?: string } } }; responses: { "200": ItemPage } };
   "createItem": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/items"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateItemRequest }; responses: { "200": ItemView } };
@@ -9968,6 +10060,7 @@ export interface Operations {
   "orderPlacement": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/placements/{placement}/order"; request: { parameters: { path: { brandId: string; placement: string; tenantId: string } }; body: OrderRequest }; responses: { "200": PlacementOrderResponse } };
   "getPolicies": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/policies"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Policies } };
   "setEditorialPolicy": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/policies/editorial"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: EditorialPolicyRequest }; responses: { "200": Policies } };
+  "setLayoutPolicy": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/policies/layout"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: LayoutPolicyRequest }; responses: { "200": Policies } };
   "setPublishingPolicy": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/policies/publishing"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: PublishingPolicyRequest }; responses: { "200": Policies } };
   "previewHome": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/content/preview"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { asOf?: string; channel: string; locale?: string } } }; responses: { "200": HomeDocument } };
   "listOrders_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/customers/{accountId}/orders"; request: { parameters: { path: { accountId: string; brandId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PageCustomerOrderHistoryControllerOrderSummaryResponse } };

@@ -12659,6 +12659,81 @@
         },
         "type" : "object"
       },
+      "TelegramSettingsRequest" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "menuButtonLabels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "miniAppEnabled" : {
+            "type" : "boolean"
+          },
+          "miniAppShortName" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "publicOfferLink" : {
+            "type" : "boolean"
+          },
+          "welcomeTexts" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
+      "TelegramSettingsView" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "channelVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "menuButtonLabels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "miniAppEnabled" : {
+            "type" : "boolean"
+          },
+          "miniAppShortName" : {
+            "type" : "string"
+          },
+          "miniAppUnavailable" : {
+            "type" : "string"
+          },
+          "miniAppUrl" : {
+            "type" : "string"
+          },
+          "publicOfferLink" : {
+            "type" : "boolean"
+          },
+          "publicOfferUrl" : {
+            "type" : "string"
+          },
+          "welcomeTexts" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
       "TemplateReviewView" : {
         "properties" : {
           "body" : {
@@ -29046,6 +29121,96 @@
         "tags" : [ "Channel setup" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/telegram" : {
+      "get" : {
+        "description" : "miniAppUrl is the brand's verified storefront hostname, never a value a tenant typed; miniAppUnavailable names why there is none (BRAND_NOT_CHOSEN, HOSTNAME_NOT_CLAIMED, HOSTNAME_NOT_VERIFIED, HOSTNAME_AMBIGUOUS). A channel nobody has configured reads as everything off. 400 for a channel that is not a TELEGRAM channel.",
+        "operationId" : "readTelegramSettings",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TelegramSettingsView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "This Telegram channel's settings, and the addresses derived from them",
+        "tags" : [ "Channel setup" ]
+      },
+      "put" : {
+        "description" : "A full replace: an omitted language drops its text and an omitted flag is false. Gated on the channel's version, like every facet of Channel setup. Never calls Telegram.",
+        "operationId" : "replaceTelegramSettings",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TelegramSettingsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TelegramSettingsView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replace this Telegram channel's settings",
+        "tags" : [ "Channel setup" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/social-links" : {
       "put" : {
         "description" : "Whole set, never per-link -- the same discipline the payment-method, fulfilment-mode and location matrices already use. Key is the platform, a checked vocabulary (ADR 0036); value is the destination URL, https only. Entry order in the request body becomes display order.",
@@ -32691,6 +32856,9 @@
   }, {
     "description" : "The tenant-wide coded kitchen-instruction vocabulary",
     "name" : "Preset product comments"
+  }, {
+    "description" : "Row 10.5: a Telegram channel's menu button, Mini App and texts",
+    "name" : "Channel setup"
   }, {
     "description" : "Draft menu authoring; never visible to customers",
     "name" : "Catalog authoring"

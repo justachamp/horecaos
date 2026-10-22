@@ -849,6 +849,14 @@
         },
         "type" : "object"
       },
+      "EnabledView" : {
+        "properties" : {
+          "enabled" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "EntryDetail" : {
         "properties" : {
           "blocks" : {
@@ -1297,6 +1305,12 @@
       },
       "HomeDocument" : {
         "properties" : {
+          "brandSwitcher" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SwitcherEntry"
+            },
+            "type" : "array"
+          },
           "carousel" : {
             "items" : {
               "$ref" : "#/components/schemas/CarouselItem"
@@ -1308,6 +1322,9 @@
               "$ref" : "#/components/schemas/Group"
             },
             "type" : "array"
+          },
+          "layout" : {
+            "type" : "string"
           },
           "locale" : {
             "type" : "string"
@@ -2263,6 +2280,9 @@
           "city" : {
             "type" : "string"
           },
+          "distanceKnown" : {
+            "type" : "boolean"
+          },
           "distanceMeters" : {
             "format" : "int64",
             "type" : "integer"
@@ -2301,7 +2321,6 @@
             "$ref" : "#/components/schemas/GeoPoint"
           }
         },
-        "required" : [ "point" ],
         "type" : "object"
       },
       "PickupLocations" : {
@@ -2311,6 +2330,16 @@
               "$ref" : "#/components/schemas/PickupLocation"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "PingRequest" : {
+        "properties" : {
+          "channel" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -3456,6 +3485,24 @@
         },
         "type" : "object"
       },
+      "SwitcherEntry" : {
+        "properties" : {
+          "logo" : {
+            "$ref" : "#/components/schemas/Media"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "targetBrandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "TermsView" : {
         "properties" : {
           "body" : {
@@ -3845,7 +3892,7 @@
     },
     "/api/v1/storefront/pickup-locations" : {
       "post" : {
-        "description" : "Returns at most twenty active pickup branches, nearest first. Each result carries the same current serviceability answer the checkout path will later re-resolve authoritatively. POST so the caller's coordinate travels in the body rather than the query string; nothing is written and no resource is created.",
+        "description" : "Returns at most twenty active pickup branches, nearest first; with no point, in the brand's own storefront order (distanceKnown is then false on every branch). Each result carries the same current serviceability answer the checkout path will later re-resolve authoritatively. POST so the caller's coordinate travels in the body rather than the query string; nothing is written and no resource is created.",
         "operationId" : "nearbyPickupLocations",
         "requestBody" : {
           "content" : {
@@ -6819,6 +6866,83 @@
         "x-horecaos-surface" : "published"
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/page-loads" : {
+      "get" : {
+        "description" : "False until the platform owner switches it on after counsel answers. A storefront sends the ping only when this is true.",
+        "operationId" : "pageLoadCountingEnabled",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EnabledView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether the platform counts page loads",
+        "tags" : [ "Storefront page loads" ],
+        "x-horecaos-surface" : "published"
+      },
+      "post" : {
+        "description" : "Public. Answers 202 whether or not anything was counted. Reads no cookie and stores no address, user agent, session or path; a page load is not a person. Limited per visitor.",
+        "operationId" : "countPageLoad",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PingRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Count one page load (one per browser tab session)",
+        "tags" : [ "Storefront page loads" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/presented-offers" : {
       "get" : {
         "description" : "Counts each returned banner against today's cap. A banner the customer closed, one past the daily cap, and one whose offer has left its validity window are not returned.",
@@ -7960,6 +8084,9 @@
   }, {
     "description" : "Scanning a table code, and the bill it leads to",
     "name" : "QR dine-in"
+  }, {
+    "description" : "An anonymous page-load count, dark until counsel answers (ADR 0183)",
+    "name" : "Storefront page loads"
   }, {
     "description" : "A restaurant's review summary, published comments and feedback tags",
     "name" : "Public reviews"
