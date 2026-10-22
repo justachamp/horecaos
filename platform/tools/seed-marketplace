@@ -34,9 +34,11 @@
 #      the banner shows the channel stale after the stale threshold, and one alert goes to the tenant
 #      queue; end it with   curl -sX POST 'http://localhost:18090/_fake/outage?on=false'  and the
 #      incident closes itself
-#   4. dry run: set marketplace.availability.dry_run to true for the location (console > Settings >
-#      Integrations > the installation) and stop a dish -- the fake receives nothing, and the propagation
-#      read lists what the reconciler would have sent
+#   4. dry run: a platform administrator writes marketplace.availability.dry_run = true at the location
+#      (the control-plane configuration call of docs/runbooks/stop-read-switch-decommission.md step 4,
+#      with scopeType LOCATION; the key is not tenant-visible, so the operations console has no switch
+#      for it) and a dish is stopped -- the fake receives nothing, and the propagation read lists what
+#      the reconciler would have sent
 #   5. walk the scenarios by renaming a mapping's external id to fake-scenario-timeout, -http-500,
 #      -unknown-item or -accepted-then-lost (FakeAggregatorHttpProvider's own constants)
 

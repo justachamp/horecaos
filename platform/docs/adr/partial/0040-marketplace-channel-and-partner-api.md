@@ -58,6 +58,10 @@
   episode, shown in the propagation read and the stop-list banner, and closed by recovery
   with no person resolving it. It is not an ADR 0006 record and ADR 0006 is not amended;
   `MarketplaceChannelRecovered` stays unpublished.
+  The "menu pull is not built" above is no longer true of the read side: `GET /api/v1/partner/tenants/{tenantId}/restaurants`
+  and `.../restaurants/{locationId}/menu` (`marketplace.menu.read`) serve the channel's assembled
+  projection under an `ETag`, each variant by its platform id and, where a `MENU_ITEM` mapping exists, the
+  partner's own item id. The availability push, the menu push and every outbound adapter stay unbuilt.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-23
 - Deciders: Ayubkhon Abbosov (platform architecture), finance (settlement), legal (fiscal liability on aggregator-collected payments), product (partner programme terms)

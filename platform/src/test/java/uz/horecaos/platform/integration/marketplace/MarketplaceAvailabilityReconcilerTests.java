@@ -1699,6 +1699,8 @@ class MarketplaceAvailabilityReconcilerTests {
         goStale(w);
         assertThat(propagation.at(w.tenant, w.location).get(0).incidentOpenSince())
                 .isNotNull();
+        assertThat(alerts.calls()).hasSize(1);
+        String firstEpisode = alerts.calls().get(0).idempotencyKeyBase();
 
         configuration.put("marketplace.availability.reconcile_enabled", false);
         build();
@@ -1719,7 +1721,11 @@ class MarketplaceAvailabilityReconcilerTests {
         assertThat(propagation.at(w.tenant, w.location).get(0).incidentOpenSince())
                 .as("a binding switched back into a partner that still refuses is a new incident")
                 .isNotNull();
-        assertThat(alerts.calls()).hasSize(2);
+        // build() gave the fixture a fresh recorder, so it holds only this second episode's alert.
+        assertThat(alerts.calls()).hasSize(1);
+        assertThat(alerts.calls().get(0).idempotencyKeyBase())
+                .as("a new episode is a new alert, never swallowed as a repeat of the first")
+                .isNotEqualTo(firstEpisode);
     }
 
     @Test
