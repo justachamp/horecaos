@@ -920,7 +920,7 @@ carries a comment or a note, and an erasure leaves ratings and nulls both.
   [ADR 0087](../built/0087-a-module-is-sold-on-its-own-unit-and-switches-features-on.md),
   [ADR 0140](../partial/0140-promotions-the-automatic-discount-and-markup-rule-engine.md) (the fact
   pattern), [ADR 0149](../partial/0149-languages-beyond-ru-uz-latn-and-en.md),
-  [ADR 0145](../not-started/0145-map-and-geocoding-provider.md) (the record shape)
+  [ADR 0145](../partial/0145-map-and-geocoding-provider.md) (the record shape)
 - [`operations-gap-map.md`](../../operations-gap-map.md) rows `5.4`, `5.5`, `5.2h`, `6.2a`, `X.5`, `X.12`
 - [`frontend-information-architecture.md`](../../frontend-information-architecture.md) §5.4, §5.5 and
   PART 4's pilot-blocker table
