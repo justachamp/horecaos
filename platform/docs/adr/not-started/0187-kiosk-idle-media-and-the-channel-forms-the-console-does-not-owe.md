@@ -128,7 +128,9 @@ app, with an honest locked state in the hub until then.**
    the message carries the review's id and its rating and nothing else (ADR 0029: no customer, no comment, no tag). A
    chat hears it only if it subscribed (no default set includes the new classes; a subscription is the opt-in, unlike the
    recovery alerts, which also need a policy switch because they start clocks). It runs after the review commits, in a transaction of its own
-   (`AfterCommitAlertTransaction`: an `AFTER_COMMIT` listener that wrote through the finished transaction would write nothing), and a fault in
+   (`AfterCommitAlertTransaction`: an `AFTER_COMMIT` listener that writes through the finished transaction is, by Spring's contract, not
+   committed by it, and a fan-out that fails half way would have nothing to roll back; the current stack happens to commit them anyway, which the
+   end-to-end test below witnessed with and without the own transaction), and a fault in
    telling a chat is logged by identifier, never raised: a customer's review is not failed by a chat, where a recovery alert commits with its
    case because it starts clocks. A review that rolled back tells nobody. The till-difference alert (row `6.3b`) is told the same way.
 6. **Hub completeness.** For `AGGREGATOR` the hub links to Integrations (read-only here: an aggregator is an installation

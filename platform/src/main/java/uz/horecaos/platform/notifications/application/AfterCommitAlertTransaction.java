@@ -12,10 +12,13 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <p>A {@code TransactionPhase.AFTER_COMMIT} listener runs while the publisher's transaction is finished but its
  * resources are still bound to the thread, so anything it writes through the ordinary data access joins that finished
- * transaction and is never committed. The listener has to open one of its own ({@code REQUIRES_NEW}), the way {@code
- * PrintJobPlanner} does for the same reason. This is that, in one place, so a trigger that is told after the commit (a
- * review is news, and must not fail the customer's submission; a till difference is found by a pass that has already written
- * it) neither loses its alert nor repeats the arrangement.
+ * transaction. Spring's contract for that case is that the writes are not committed by the listener; on the current stack
+ * the connection's clean-up happens to commit them (witnessed in {@code TelegramRoutingControllerEndpointTests}, which
+ * passes with and without this class), but that is a side effect of the clean-up, not a promise, and it leaves a
+ * fan-out that fails half way nothing to roll back. The listener therefore opens a transaction of its own ({@code REQUIRES_NEW}), the way {@code
+ * PrintJobPlanner} does for the same reason, so the alert is written and committed, or rolled back, as one. This is that,
+ * in one place, for the triggers that are told after the commit (a review is news, and must not fail the customer's
+ * submission; a till difference is found by a pass that has already written it).
  *
  * <p>A failure inside {@link #run} rolls the alert's own transaction back and is rethrown to the caller, which logs it by
  * identifier and goes no further: the telling is lost, the thing that was told about is not.
