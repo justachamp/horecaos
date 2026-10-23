@@ -28380,7 +28380,7 @@
       "PasswordResetRequest" : {
         "properties" : {
           "locale" : {
-            "pattern" : "uz|ru|en",
+            "pattern" : "uz-Latn|uz|ru|en",
             "type" : "string"
           },
           "login" : {
