@@ -17,6 +17,7 @@ import uz.horecaos.platform.pos.RecordingPosTransport;
 import uz.horecaos.platform.pos.api.CapabilitySnapshot;
 import uz.horecaos.platform.pos.api.CapabilitySupport;
 import uz.horecaos.platform.pos.api.PosCapability;
+import uz.horecaos.platform.pos.application.port.PosAdapter;
 import uz.horecaos.platform.pos.application.port.PosAdapter.ExportProbe;
 import uz.horecaos.platform.pos.application.port.PosAdapter.ExportResult;
 import uz.horecaos.platform.pos.application.port.PosAdapter.OrderExport;
@@ -67,6 +68,110 @@ class CloposAdapterTests {
             assertThat(entry.evidence()).contains("we write");
         });
         assertThat(snapshot.usable(PosCapability.PREPARATION_STATUS)).isFalse();
+    }
+
+    @Test
+    @DisplayName("operator attribution is unsupported, stated rather than omitted, and nothing is sent for it")
+    void theOperatorIsNotCarriedAndTheSnapshotSaysSo() {
+        transport.answerWith(RecordingPosTransport.list(List.of()));
+
+        CapabilitySnapshot snapshot = adapter.discoverCapabilities(context());
+
+        assertThat(snapshot.entry(PosCapability.ORDER_OPERATOR_ATTRIBUTION))
+                .get()
+                .satisfies(entry -> {
+                    assertThat(entry.support()).isEqualTo(CapabilitySupport.UNSUPPORTED);
+                    assertThat(entry.evidence()).contains("CreateOrderRequest");
+                });
+        assertThat(adapter.declaredCapabilities()).doesNotContain(PosCapability.ORDER_OPERATOR_ATTRIBUTION);
+    }
+
+    @Test
+    @DisplayName("an order handed an operator id still sends no operator field of any name")
+    void anOperatorIdIsNeverPutOnTheCloposWire() {
+        transport.enqueue(authOk()).enqueue(RecordingPosTransport.object(Map.of("id", 771, "status", "PENDING")));
+        PosAdapter.OrderExport withOperator = order();
+        withOperator = new PosAdapter.OrderExport(
+                withOperator.orderId(),
+                withOperator.correlationReference(),
+                withOperator.publicOrderNumber(),
+                withOperator.customer(),
+                withOperator.lines(),
+                withOperator.totalMinor(),
+                withOperator.currency(),
+                withOperator.fulfillmentMode(),
+                withOperator.requireProviderApproval(),
+                withOperator.placedAt(),
+                "OP-48151623");
+
+        adapter.exportOrder(context(), withOperator);
+
+        assertThat(transport.bodies().getLast().toString())
+                .as("Clopos documents no operator on an order, and this adapter does not guess one")
+                .doesNotContain("OP-48151623");
+        assertThat(transport.bodies().getLast().keySet())
+                .doesNotContain("operator_id", "user_id", "waiter_id", "cashier_id", "staff_id", "user", "operator");
+    }
+
+    @Test
+    @DisplayName("the brand's users are listed by id and name, never by login, email or phone")
+    void discoverOperatorsListsTheBrandsUsersAndNothingPersonal() {
+        transport
+                .enqueue(authOk())
+                .enqueue(RecordingPosTransport.list(List.of(
+                        Map.of(
+                                "id",
+                                17,
+                                "name",
+                                "Aziza Karimova",
+                                "email",
+                                "aziza@example.test",
+                                "phone",
+                                "+998901234567"),
+                        Map.of("id", "18", "first_name", "Bobur", "last_name", "Yusupov", "username", "bobur"),
+                        Map.of("id", 19),
+                        Map.of("name", "no id, not listable"))));
+
+        PosAdapter.ReferenceListRead read = adapter.discoverOperators(context());
+
+        assertThat(read.outcome().status()).isEqualTo(ProviderOutcome.Status.SUCCESS);
+        assertThat(read.entries())
+                .extracting(entry -> entry.externalId() + "=" + entry.name())
+                .containsExactly("17=Aziza Karimova", "18=Bobur Yusupov", "19=Clopos user #19");
+        assertThat(read.entries().toString()).doesNotContain("example.test", "+998", "username");
+        assertThat(transport.lastCall().method()).isEqualTo("GET");
+        assertThat(transport.lastCall().path()).startsWith("/users");
+    }
+
+    @Test
+    @DisplayName("a walk that keeps returning the same page stops instead of listing everyone 200 times")
+    void discoverOperatorsStopsWhenAPageBringsNothingNew() {
+        transport.enqueue(authOk());
+        List<Map<String, Object>> samePage = new java.util.ArrayList<>();
+        for (int i = 1; i <= 100; i++) {
+            samePage.add(Map.of("id", i, "name", "User " + i));
+        }
+        transport.answerWith(RecordingPosTransport.list(samePage));
+
+        PosAdapter.ReferenceListRead read = adapter.discoverOperators(context());
+
+        assertThat(read.entries()).hasSize(100);
+        assertThat(transport.calls().stream()
+                        .filter(call -> call.path().startsWith("/users"))
+                        .count())
+                .as("one page to find them, one to find that nothing is new")
+                .isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("a refused read is the vendor's outcome and no entries, not an empty success")
+    void discoverOperatorsPassesAFailureThrough() {
+        transport.enqueue(authOk()).enqueue(ProviderOutcome.rejected("CLOPOS_REFUSED", "Forbidden"));
+
+        PosAdapter.ReferenceListRead read = adapter.discoverOperators(context());
+
+        assertThat(read.outcome().status()).isEqualTo(ProviderOutcome.Status.REJECTED);
+        assertThat(read.entries()).isEmpty();
     }
 
     @Test

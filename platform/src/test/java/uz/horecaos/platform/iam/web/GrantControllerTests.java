@@ -19,7 +19,6 @@ import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.iam.api.TenantOrganizationDirectory;
-import uz.horecaos.platform.iam.api.TenantRoleCatalog;
 import uz.horecaos.platform.iam.application.AccessCheckService;
 import uz.horecaos.platform.iam.application.AccessCheckService.AccessCheckAnswer;
 import uz.horecaos.platform.iam.application.AccessCheckService.Verdict;
@@ -49,10 +48,26 @@ class GrantControllerTests {
     }
 
     @Test
-    void rolesReturnsTheStaticTenantRoleCatalogWithoutTouchingTheDatabase() {
-        List<TenantRoleCatalog.RoleDescriptor> result = controller.roles(UUID.randomUUID());
+    void rolesAsksTheGrantServiceForTheCompanysJobsAsTheCallerSeesThem() {
+        UUID tenantId = UUID.randomUUID();
+        when(currentActor.get())
+                .thenReturn(
+                        new uz.horecaos.platform.iam.api.AuthenticatedActor("caller-1", Set.of(), java.util.Map.of()));
+        List<GrantManagementService.GrantableRole> jobs = List.of(new GrantManagementService.GrantableRole(
+                "job-0123456789",
+                ScopeType.LOCATION,
+                Set.of("order.read"),
+                true,
+                true,
+                "Старший кассир",
+                3L,
+                "ACTIVE"));
+        when(grants.grantableRoles(ResourceScope.tenant(tenantId), "caller-1")).thenReturn(jobs);
 
-        assertThat(result).isEqualTo(TenantRoleCatalog.tenantVisible());
+        assertThat(controller.roles(tenantId))
+                .as(
+                        "ADR 0186: the code-owned bundles and the company's own, with grantable read back from the grant rule")
+                .isSameAs(jobs);
     }
 
     @Test

@@ -114,7 +114,8 @@ public class PosMappingController {
                         .toList(),
                 result.horecaos().stream()
                         .map(PosMappingController::toHorecaosCandidateView)
-                        .toList());
+                        .toList(),
+                result.receivedByProvider());
     }
 
     @PostMapping
@@ -303,11 +304,17 @@ public class PosMappingController {
     /** One HorecaOS-side candidate not yet mapped — the dual list's left column. Never PII: a courier's own {@code display_reference}, never its protected name. */
     public record HorecaosCandidateView(UUID id, @Nullable String name) {}
 
+    /**
+     * @param receivedByProvider only for entityType OPERATOR: whether the till's create-order API carries the paired
+     *                           operator (the adapter declares ORDER_OPERATOR_ATTRIBUTION). False means a pairing is
+     *                           recorded but sent nowhere, and the console says so; null for every other entity type
+     */
     public record UnmappedResponse(
             boolean sourced,
             @Nullable String detail,
             List<UnmappedExternalView> entities,
-            List<HorecaosCandidateView> horecaosCandidates) {}
+            List<HorecaosCandidateView> horecaosCandidates,
+            @Nullable Boolean receivedByProvider) {}
 
     /** The two-sided conflict card's own data: a shared name and every candidate id on each side. */
     public record MappingConflictView(String name, List<String> externalIds, List<UUID> horecaosEntityIds) {}

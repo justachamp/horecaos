@@ -1,6 +1,16 @@
 <div class="page">
   <h1 class="q-title">{{ 'staff.roles.title' | t }}</h1>
   <p class="q-body-sm lead">{{ 'staff.roles.lead' | t }}</p>
+  <div class="actions">
+    <a class="text-button" routerLink="/staff/roles/grid" data-testid="roles-grid-link">{{
+      'staff.roles.grid' | t
+    }}</a>
+    @if (canManage()) {
+      <button type="button" class="primary-button" (click)="create()" data-testid="roles-create">
+        {{ 'staff.roles.create' | t }}
+      </button>
+    }
+  </div>
 
   @if (loading()) {
     <p class="q-body-sm">{{ 'staff.people.loading' | t }}</p>
@@ -26,6 +36,9 @@
         data-testid="staff-roles-search"
       />
     </label>
+    @if (hasOwnJobs()) {
+      <p class="q-caption lead" data-testid="roles-own-note">{{ 'staff.roles.ownNote' | t }}</p>
+    }
     @if (rows().length === 0) {
       <p class="q-body-sm empty">{{ 'staff.roles.search.empty' | t: { query: query() } }}</p>
     } @else {
@@ -43,6 +56,11 @@
             <tr class="row" (click)="toggle(row.role.code)">
               <td class="q-body-sm">
                 <span class="q-emphasis">{{ roleLabel(row.role.code) }}</span>
+                @if (row.role.custom) {
+                  <span class="chip chip--own" data-testid="role-own">{{
+                    'staff.roles.own' | t
+                  }}</span>
+                }
                 @if (roleDescription(row.role.code); as description) {
                   <p class="q-caption role-description">{{ description }}</p>
                 }
@@ -64,6 +82,28 @@
             @if (expandedCode() === row.role.code) {
               <tr class="detail-row">
                 <td colspan="4">
+                  @if (canManage()) {
+                    <div class="detail__actions">
+                      @if (row.role.custom) {
+                        <button
+                          type="button"
+                          class="text-button"
+                          (click)="edit(row.role.code)"
+                          data-testid="role-edit"
+                        >
+                          {{ 'staff.roles.edit' | t }}
+                        </button>
+                      }
+                      <button
+                        type="button"
+                        class="text-button"
+                        (click)="copy(row.role.code)"
+                        data-testid="role-copy"
+                      >
+                        {{ 'staff.roles.copy' | t }}
+                      </button>
+                    </div>
+                  }
                   <div class="detail">
                     <div class="detail__column">
                       <p class="q-caption detail__heading">{{ 'staff.roles.canDo' | t }}</p>

@@ -226,6 +226,22 @@ describe('StaffMemberDetailPane', () => {
     expect(text).toContain('555');
   });
 
+  it('says on the Безопасность tab that a colleague’s sign-ins are not shown, on purpose, and no longer that the PIN is untracked (ADR 0176, ADR 0155)', async () => {
+    const { fixture } = await setUp([grant({})]);
+
+    const tabs = [...fixture.nativeElement.querySelectorAll('.tab')] as HTMLButtonElement[];
+    tabs[1].click(); // «Безопасность»
+    fixture.detectChanges();
+
+    const sentence = fixture.nativeElement.querySelector(
+      '[data-testid="detail-security-declined"]',
+    ) as HTMLElement;
+    expect(sentence.textContent).toContain('Входы и сеансы коллеги здесь не показываются');
+    expect(sentence.textContent).toContain('«Мой профиль»');
+    expect(sentence.textContent).toContain('завершите его работу');
+    expect(fixture.nativeElement.textContent).not.toContain('пока не отслеживаются');
+  });
+
   it('renders today’s created/accepted counts on the card (Staff 9.2d)', async () => {
     const api = makeApi([grant({})]);
     api.operatorTodayOrderCounts.mockResolvedValue({

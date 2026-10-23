@@ -1486,6 +1486,8 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.integrations.detail.mapping.entityType.DISCOUNT': 'Chegirmalar',
   'settings.integrations.detail.mapping.entityType.COURIER': 'Kuryerlar',
   'settings.integrations.detail.mapping.entityType.OPERATOR': 'Operatorlar',
+  'settings.integrations.detail.mapping.operatorNotReceived':
+    'Bu kassa hali operatorni qabul qilmaydi. Hamkasblarni kassa operatorlari bilan bogʻlab qoʻyish mumkin va bogʻlanish saqlanadi, lekin kassaning buyurtma interfeysi operatorni uzata olmaguncha u hech bir buyurtmaga yetib bormaydi.',
   'settings.integrations.detail.mapping.entityType.CANCELLATION_REASON': 'Bekor qilish sabablari',
   'settings.integrations.detail.mapping.entityType.CHANNEL_POS_CODE': 'Kanal → POS kodi',
 

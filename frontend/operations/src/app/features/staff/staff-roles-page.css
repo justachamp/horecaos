@@ -135,3 +135,32 @@
   color: var(--q-ink-muted);
   margin-top: 16px;
 }
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.primary-button {
+  height: 40px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+}
+
+.chip--own {
+  margin-left: 8px;
+  border-color: var(--q-primary);
+  color: var(--q-primary);
+}
+
+.detail__actions {
+  display: flex;
+  gap: 16px;
+  padding-top: 12px;
+}

@@ -162,8 +162,6 @@ export const staffEn = {
   'staff.detail.field.revokedReason': 'Revocation reason',
   'staff.detail.field.subject': 'Internal identifier',
   'staff.detail.field.telegram': 'Telegram',
-  'staff.detail.security.notBuilt':
-    'Sign-in method, last sign-in and terminal PIN are not tracked yet',
   'staff.detail.today.created': 'Created today: {count}',
   'staff.detail.today.accepted': 'Accepted today: {count}',
   'staff.detail.today.loading': 'Loading today’s orders…',
@@ -230,8 +228,6 @@ export const staffEn = {
   'staff.myProfile.telegram.issue': 'Get a code',
   'staff.myProfile.telegram.sendThis': 'Send this to the bot in a private chat:',
   'staff.myProfile.security.title': 'Security',
-  'staff.myProfile.security.notBuilt':
-    'Changing your password and your terminal PIN are not built yet',
   'staff.myProfile.sessions.title': 'Sessions',
   'staff.myProfile.sessions.lead':
     'These are the sessions of your account. They are shared by every company where you work: ending one signs you out of it in all of them.',
@@ -833,4 +829,71 @@ export const staffEn = {
   'staff.myProfile.interface.reset.confirm':
     'Your columns and every saved view will be deleted. This cannot be undone.',
   'staff.myProfile.interface.reset.yes': 'Yes, reset',
+
+  // ----------------------------------------- batch 21: jobs a company defines (ADR 0186), password card
+  'staff.roles.create': 'New job',
+  'staff.roles.grid': 'Table of rights',
+  'staff.roles.own': 'Own',
+  'staff.roles.edit': 'Edit',
+  'staff.roles.copy': 'Copy',
+  'staff.roles.ownNote':
+    'Jobs marked “Own” were made by your company from the same list of things the product knows how to do. A job like that can never do more than the person who made it could.',
+  'staff.grid.title': 'Table of rights',
+  'staff.grid.lead':
+    'Jobs across, everything a job can do down, grouped by area. A filled cell means the job can do it.',
+  'staff.grid.backToJobs': 'Jobs',
+  'staff.grid.loading': 'Reading the table…',
+  'staff.grid.search.label': 'Search the table',
+  'staff.grid.search.placeholder': 'Search what can be done — “cancel orders”, “refund”…',
+  'staff.grid.search.empty': 'Nothing matches “{query}”',
+  'staff.grid.canDo': 'Can',
+  'staff.grid.cannotDo': 'Cannot',
+  'staff.jobEditor.title.new': 'New job',
+  'staff.jobEditor.title.copy': 'Copy of “{name}”',
+  'staff.jobEditor.title.edit': 'Edit “{name}”',
+  'staff.jobEditor.name.label': 'Name',
+  'staff.jobEditor.name.hint': 'One line, up to 80 characters, in any language you like.',
+  'staff.jobEditor.name.required': 'Give the job a name',
+  'staff.jobEditor.level.label': 'Given at',
+  'staff.jobEditor.level.fixed': 'The level of a job does not change. To move it, make a copy.',
+  'staff.jobEditor.capabilities.title': 'What the job can do',
+  'staff.jobEditor.capabilities.selected': 'Selected: {count}',
+  'staff.jobEditor.capabilities.search': 'Search the list',
+  'staff.jobEditor.capabilities.none': 'Tick at least one thing the job can do.',
+  'staff.jobEditor.capabilities.notHeld': 'You cannot give what you do not have yourself',
+  'staff.jobEditor.capabilities.never': 'Never part of a job a company makes',
+  'staff.jobEditor.capabilities.trimmed':
+    'Left out of the copy because you cannot give them: {count}',
+  'staff.jobEditor.reason.label': 'Why',
+  'staff.jobEditor.reason.placeholder': 'Goes into the activity log',
+  'staff.jobEditor.reason.required': 'Say why',
+  'staff.jobEditor.holders.some':
+    '{count} people hold this job. A change applies to them at their next request.',
+  'staff.jobEditor.holders.none': 'Nobody holds this job yet.',
+  'staff.jobEditor.save': 'Save',
+  'staff.jobEditor.saving': 'Saving…',
+  'staff.jobEditor.cancel': 'Cancel',
+  'staff.jobEditor.saved': 'Saved: “{name}”',
+  'staff.jobEditor.retired': 'Closed: “{name}”',
+  'staff.jobEditor.capabilities.mustDrop': 'Untick what you cannot give before saving',
+  'staff.jobEditor.retire.title': 'Close this job',
+  'staff.jobEditor.retire.hint':
+    'A closed job leaves the list and can no longer be given. What it was stays in the activity log.',
+  'staff.jobEditor.retire.blocked':
+    'Still held by {count} people. Take the job away from them first.',
+  'staff.jobEditor.retire.confirm': 'Close the job',
+  'staff.activity.action.roleCreated': 'Job created',
+  'staff.activity.action.roleChanged': 'Job changed',
+  'staff.activity.action.roleRetired': 'Job closed',
+  'staff.myProfile.password.title': 'Password',
+  'staff.myProfile.password.lead':
+    'Your password is kept by the sign-in service, not by this system. The button takes you to the reset page, and a link arrives by email.',
+  'staff.myProfile.password.endsAll':
+    'After the reset you are signed out everywhere, this console included, and sign in again with the new password.',
+  'staff.myProfile.password.action': 'Change password',
+  'staff.myProfile.password.checking': 'Checking whether email works here…',
+  'staff.myProfile.password.noMail':
+    'This installation cannot send email yet, so the link would not arrive. Ask whoever runs the platform to set up email.',
+  'staff.detail.security.declined':
+    'A colleague’s sign-ins and sessions are not shown here, on purpose: each person sees and ends their own under “My profile”. To lock out someone who has left, end their employment.',
 } as const;

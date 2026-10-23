@@ -1469,6 +1469,8 @@ export const settingsEn = {
   'settings.integrations.detail.mapping.entityType.DISCOUNT': 'Discounts',
   'settings.integrations.detail.mapping.entityType.COURIER': 'Couriers',
   'settings.integrations.detail.mapping.entityType.OPERATOR': 'Operators',
+  'settings.integrations.detail.mapping.operatorNotReceived':
+    'This till does not receive an operator yet. You can still pair colleagues with the till’s operators and the pairing is kept, but it reaches no order until the till’s order interface can carry one.',
   'settings.integrations.detail.mapping.entityType.CANCELLATION_REASON': 'Cancellation reasons',
   'settings.integrations.detail.mapping.entityType.CHANNEL_POS_CODE': 'Channel → POS code',
 

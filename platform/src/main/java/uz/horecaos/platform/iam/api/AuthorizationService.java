@@ -44,6 +44,26 @@ public interface AuthorizationService {
         return viewFor(subject, tenantId).capabilities().contains(capability);
     }
 
+    /**
+     * Every capability the subject holds at a scope that covers {@code scope}, answered in one
+     * read -- what {@link #has} would say for each capability in turn.
+     *
+     * <p>Exists for the callers that ask the same question of a whole role at once: whether a
+     * granter could confer a job is a subset test over its capabilities (ADR 0103, ADR 0186),
+     * and asking {@code has} per capability reads the subject's grants once per capability.
+     * This default is the slow, always-correct answer for an implementation that has no faster
+     * one; {@code JdbcAuthorizationService} overrides it with a single grant read.
+     */
+    default java.util.Set<Capability> held(String subject, ResourceScope scope) {
+        java.util.Set<Capability> held = java.util.EnumSet.noneOf(Capability.class);
+        for (Capability capability : Capability.values()) {
+            if (has(subject, capability, scope)) {
+                held.add(capability);
+            }
+        }
+        return held;
+    }
+
     /** Raised when a capability check fails. */
     final class AccessDeniedException extends RuntimeException {
 

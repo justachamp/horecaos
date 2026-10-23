@@ -416,6 +416,8 @@ public enum PlatformRole {
                     COMMERCIAL_WALLET_TOPUP,
                     COMMERCIAL_CARD_MANAGE,
                     IAM_GRANT_MANAGE,
+                    // ADR 0186: the tenant's own jobs, composed from this catalogue.
+                    IAM_ROLE_MANAGE,
                     // ADR 0081: who from HorecaOS entered this account, and why.
                     SUPPORT_SESSION_READ,
                     REPORTING_READ,
@@ -669,6 +671,8 @@ public enum PlatformRole {
                     NOTIFICATION_RETRY,
                     COMMERCIAL_PLAN_READ,
                     IAM_GRANT_MANAGE,
+                    // ADR 0186: same as TENANT_OWNER's own copy.
+                    IAM_ROLE_MANAGE,
                     // ADR 0081: who from HorecaOS entered this account, and why.
                     SUPPORT_SESSION_READ,
                     REPORTING_READ,

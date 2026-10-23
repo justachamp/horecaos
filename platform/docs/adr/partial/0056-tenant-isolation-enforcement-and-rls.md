@@ -11,6 +11,7 @@
   nearly all of its ~30 scheduled cross-tenant jobs, are not yet migrated — see
   Specification for the inventory it now has and Rollout for what "schema by schema"
   means for the waves after this one.
+- Status addition, 2026-10-14: the nullable-`tenant_id` shape reserved below for `iam.roles` (and, with it, `iam.role_capabilities`) is built by [ADR 0186](../built/0186-tenant-defined-jobs-composed-from-the-capability-catalogue.md) (V0693): a tenant reads the platform's rows and its own and writes only its own, and the platform rows are written under the exempt role. `iam.grants` is still not covered. The Specification's paragraph «A shape this template does not cover» and the line that lists `iam.role_capabilities` among the tables deliberately not tenant-scoped describe the state before that migration.
 - Date proposed: 2026-08-30
 - Date decided: 2026-08-30
 - Deciders: platform owner (via the founding review queue), Claude

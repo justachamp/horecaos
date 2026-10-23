@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
 import { CurrentTenant } from '../../core/auth/current-tenant';
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { ApiError } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
@@ -11,6 +12,7 @@ import { LockedState } from '../../shared/ui/locked-state';
 import { CAPABILITY_SENTENCES, SentenceLocale, capabilityAreaName } from './capability-sentences';
 import { GrantView, RoleDescriptor, ScopeDirectory, StaffApi } from './staff-api';
 import { roleDescription, roleLabel, scopeLevelLabel } from './staff-role-labels';
+import { StaffJobNames } from './staff-job-names';
 
 interface RoleRow {
   readonly role: RoleDescriptor;
@@ -62,7 +64,7 @@ interface Holder {
  */
 @Component({
   selector: 'q-staff-roles-page',
-  imports: [TPipe, DeniedState, LockedState],
+  imports: [TPipe, RouterLink, DeniedState, LockedState],
   templateUrl: './staff-roles-page.html',
   styleUrl: './staff-roles-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -71,7 +73,9 @@ export class StaffRolesPage {
   private readonly api = inject(StaffApi);
   private readonly tenant = inject(CurrentTenant);
   private readonly router = inject(Router);
+  private readonly capabilities = inject(SessionCapabilities);
   protected readonly i18n = inject(I18n);
+  private readonly jobNames = inject(StaffJobNames);
 
   protected readonly loading = signal(true);
   /** No active tenant at all (a platform-scope session) — distinct from {@link refusal}. */
@@ -90,6 +94,12 @@ export class StaffRolesPage {
   private readonly grants = signal<readonly GrantView[]>([]);
   private readonly directory = signal<ScopeDirectory>({ brands: [], locations: [] });
   protected readonly expandedCode = signal<string | null>(null);
+
+  /** Whether the reader may define, change and copy jobs of the company's own (ADR 0186): `iam.role.manage`. */
+  protected readonly canManage = computed(() => this.capabilities.has('IAM_ROLE_MANAGE'));
+
+  /** True once the company has made a job of its own, which is when the library says what «Своя» means. */
+  protected readonly hasOwnJobs = computed(() => this.roles().some((role) => role.custom === true));
 
   /** «Поиск» over the capability sentences a job carries — see `matchesQuery`'s own doc. */
   protected readonly query = signal('');
@@ -119,7 +129,8 @@ export class StaffRolesPage {
   }
 
   protected roleLabel(code: string): string {
-    return roleLabel(code, (key) => this.i18n.t(key));
+    const own = this.roles().find((role) => role.code === code)?.name ?? this.jobNames.nameOf(code);
+    return roleLabel(code, (key) => this.i18n.t(key), own);
   }
 
   protected roleDescription(code: string): string | null {
@@ -187,6 +198,19 @@ export class StaffRolesPage {
         scopeText: this.scopeText(grant),
         since: grant.validFrom.slice(0, 10),
       }));
+  }
+
+  /** Opens the grid's editor on a blank job, on a copy of this one, or on this one (ADR 0186). */
+  protected create(): void {
+    void this.router.navigate(['/staff/roles/grid'], { queryParams: { new: 1 } });
+  }
+
+  protected copy(code: string): void {
+    void this.router.navigate(['/staff/roles/grid'], { queryParams: { copy: code } });
+  }
+
+  protected edit(code: string): void {
+    void this.router.navigate(['/staff/roles/grid'], { queryParams: { edit: code } });
   }
 
   protected openPerson(subject: string): void {

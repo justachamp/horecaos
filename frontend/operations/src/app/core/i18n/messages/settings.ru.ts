@@ -1468,6 +1468,8 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.integrations.detail.mapping.entityType.DISCOUNT': 'Скидки',
   'settings.integrations.detail.mapping.entityType.COURIER': 'Курьеры',
   'settings.integrations.detail.mapping.entityType.OPERATOR': 'Операторы',
+  'settings.integrations.detail.mapping.operatorNotReceived':
+    'Эта касса пока не получает оператора. Сопоставление можно записать, оно сохранится, но ни в один заказ не попадёт, пока интерфейс заказов кассы не умеет передавать оператора.',
   'settings.integrations.detail.mapping.entityType.CANCELLATION_REASON': 'Причины отмены',
   'settings.integrations.detail.mapping.entityType.CHANNEL_POS_CODE': 'Канал → код POS',
 

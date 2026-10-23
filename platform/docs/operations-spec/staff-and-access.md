@@ -410,15 +410,19 @@ no shift-tracked job, the tab is **absent**, not empty.
 | Field | Type | Source |
 |---|---|---|
 | Способ входа | Text: «Логин и пароль» \| «Логин, пароль и код», with each authenticator's name and date and **Сбросить второй фактор** | Keycloak's credential list, cached 60 s — **not projected, §11.9** (ADR 0148) |
-| Последний вход | Timestamp + coarse device string | **Not built — §11.6** |
-| Активные сеансы | Count + **Завершить все** | **Not built — §11.6** |
-| PIN на терминале | Set / not set + **Сбросить** | **Not built — §11.7** |
+| Последний вход | Timestamp + coarse device string | **Declined for a colleague (ADR 0176, §11.6)**; the person sees their own on «Мой профиль» |
+| Активные сеансы | Count + **Завершить все** | **Declined for a colleague (ADR 0176, §11.6)**; the person ends their own on «Мой профиль» |
+| PIN на терминале | Set / not set + **Сбросить** | Built (ADR 0155, §11.7) |
 | Внутренний идентификатор | Mono + copy | `iam.grants.principal_subject` |
 
-Actions: **Сбросить пароль** (triggers Keycloak's own reset flow; HorecaOS never
-handles the password), **Сбросить PIN**, **Завершить все сеансы**. All three
-require confirmation and a reason. None of the three exists in the backend
-today.
+Actions: **Сбросить PIN** is built (ADR 0155, `staff-pin-panel`) and asks for a
+confirmation and a reason. **Завершить все сеансы** for a colleague is declined
+(ADR 0176, §11.6): a person ends their own from «Мой профиль», and a colleague who
+has left is locked out by ending their employment. **Сбросить пароль** is the
+person's own act, never an administrator's: they ask for a reset on the sign-in page
+or from «Безопасность» in «Мой профиль» (ADR 0098), Keycloak's own flow carries it
+and HorecaOS never handles the password. A reset ends every sign-in, the console's
+included.
 
 ### States
 
@@ -509,7 +513,11 @@ question ("which roles have `catalog.publish`?") that a restaurant manager never
 asks. She asks "what does a manager get?", which is a page per job.
 
 The grid earns its place exactly once — when tenant-defined jobs ship (§11.4) —
-and should be built then, not now.
+and should be built then, not now. **They shipped (ADR 0186, batch 21), and the grid
+is «Таблица прав»**, a lazy route under this tab (`/staff/roles/grid`): every job across,
+every capability down in plain sentences grouped by area, a read-only matrix with a
+search over the list itself. The library above stays the page a manager reads; the grid
+is where an owner sees the whole vocabulary and, beside it, the job editor.
 
 ### List columns
 
@@ -553,8 +561,16 @@ Read-only. Three blocks:
    rows linking to 9.2. Empty state: «Пока никто».
 
 Actions: **Назначить кому-то** (opens the job dialog with the job preselected).
-No edit, no duplicate, no delete — jobs are code-owned in v1 and the screen
-should not imply otherwise by showing greyed-out edit controls.
+The eight code-owned jobs have no edit and no delete — they are the product's, and the
+screen does not imply otherwise by showing greyed-out edit controls. A job the company
+made (ADR 0186) is marked «Своя», carries its own name, and for a person holding
+`iam.role.manage` (the owner and the administrator) offers **Изменить** and
+**Копировать** (every job, code-owned ones included, can be copied: a "template" is a
+copy). **Создать должность** opens the same editor blank. The editor asks for a name, the
+level (fixed once made), the things the job can do (ticked from the vocabulary; what the
+author does not hold herself, and what a company's job can never carry, is shown locked
+with the reason), and a reason that goes to the activity log; closing a job is refused
+while anyone holds it.
 
 ### The one thing this screen must beat Delever on
 
@@ -957,6 +973,12 @@ never sees the value), «Мой PIN» (set or change, at a terminal only — the
 shows the state and a reset, never an entry field), active sessions with a
 «Выйти везде» action.
 
+Built (batch 21): «Сменить пароль» is a card that sends the person to ADR 0098's reset
+flow with their sign-in name already filled in (carried in the router's state, never in the
+address). It says, before the button, that a reset ends **every** sign-in, this console's
+included, and that the link arrives by email. Where the platform has no mail provider
+configured it says that too and sends nothing.
+
 **Мои должности** — read-only. The same assignment cards as §3, without any
 action. A person should be able to see what they have; they should never be able
 to change it, and the absence of controls is how that is communicated.
@@ -1047,30 +1069,29 @@ thing and this spec is explicit about the difference (§2.6). **ADR 0009.**
 
 ### 11.4 Tenant-defined jobs
 
-`iam.roles` carries `tenant_id` and `is_platform_defined`, and
-`uq_role_tenant_code` exists — the schema is ready, and more of the plumbing
-around it is built than a grant-creation reading would suggest.
-`GrantManagementService`'s private `resolveRole` no longer stops at
-`PlatformRole.find(roleCode)`: when a code names no platform role it falls
-back to a tenant-scoped lookup in `iam.roles` itself, so a grant *can* name a
-tenant-owned role today. `V0086` and `V0089` closed the security gap that
-made this safe to allow — `fk_grant_role` originally referenced `iam.roles`
-on `id` alone, so a grant in one tenant could have named a role another
-tenant defined privately, which the two migrations closed with a composite
-key and a trigger doing the same check for every writer that is not this
-method.
+**Built (ADR 0186, batch 21), reversing ADR 0025's closed input «no tenant-defined roles in
+v1».** A company defines its own jobs as named subsets of the capability catalogue:
+`POST`, `PUT .../{code}` (under `If-Match`) and `DELETE .../{code}` on
+`/api/v1/control-plane/tenants/{tenantId}/roles`, under the new `iam.role.manage` (the
+owner and the administrator, never a branch manager, and never part of a job a company
+makes). Every capability in a job is one its author holds company-wide at the moment of the
+write and one a company's job may carry at all: the deny-list is derived from what the
+code-owned human jobs carry, minus `platform.*` and `iam.*`, so a tenant job can never
+confer the power to define jobs or to give them away. The code a grant names is generated
+(`job-` and ten hex digits), the name is one free-text line, the level is fixed once made,
+an edit is live for every holder at their next request, a close is refused while the job is
+held, and a company has at most twenty active jobs. Giving one away is the unchanged ADR 0103
+path: the granter must hold every capability at the scope, and a granter whose
+`iam.grant.manage` stops short of the company may give a job only at a level no broader than
+the scope, read from the job's own level. `GET .../roles` returns the code-owned jobs and the
+company's own (`custom`, `name`, `version`, `grantable`); `GET .../capabilities` returns the
+vocabulary with what the reader holds; the branch and brand `grant-roles` routes include the
+company's jobs. `iam.roles` and `iam.role_capabilities` have row-level security (V0693),
+and every reader of a grant's role binds the tenant. The person holding a job reads its name
+from the session context (`roleName`), because she cannot read the company's list.
 
-None of that creates a tenant-owned role. There is no `POST` for one —
-`RoleRegistrySynchronizer` only projects the code-owned `PlatformRole`
-catalogue into `iam.roles` at startup — so `iam.roles` today holds platform
-roles alone regardless of what the grant path can now resolve. ADR 0025's own
-decision record still closes this for v1: "no tenant-defined roles in v1" is
-listed among its closed inputs. What changed is that granting one would work
-correctly the day a creation path exists; what has not changed is that the
-creation path, and therefore the feature, does not exist. This is still the
-trigger for building the permission grid described in §5, not before.
-**ADR 0025**, explicitly deferred; the resolution and boundary-safety half is
-done ahead of the decision to build the rest.
+The audit facts are `iam.role.created`, `iam.role.changed` and `iam.role.retired`, each a
+before-and-after change document with the reason. The console side is §5.
 
 ### 11.5 Order attribution
 
@@ -1090,10 +1111,24 @@ change. **ADR 0039** for the read; the write path is done.
 
 ### 11.6 Last sign-in, active sessions, session termination
 
-Keycloak holds all three. Nothing projects them and no endpoint exposes them.
-ADR 0009's scheduled drift report is the nearest existing mechanism and is not a
-substitute — it compares memberships, not sessions. **ADR 0009**, with the
-projection likely belonging to the new staff-identity ADR from §11.1.
+**Built for the person's own account (ADR 0176); declined for a colleague's.** Keycloak
+decides whether a session is alive and the platform keeps what it was: `iam.staff_sign_ins`
+(V0528) holds, per sign-in, a device label out of three closed sets (browser, operating
+system, form), the times and an end reason, and **no address, header, position or device
+identifier**. «Мой профиль» → «Сеансы» lists the signed-in person's sessions, marks «Это
+устройство», and ends one or all of them (`GET`, `POST .../terminations` and
+`POST .../{sessionId}/terminations` under `.../staff/me/sessions`), each act audited with a
+reason and a count. A password reset (ADR 0098) ends every session and marks the history
+`PASSWORD_RESET` only after Keycloak confirmed it.
+
+What the person card's «Безопасность» tab does **not** show, by decision: a manager gets no
+view of a colleague's sign-ins or sessions (ADR 0176, Accepted 2026-10-07). The tab says so in
+the manager's words and names the way a departed colleague is locked out: ending their
+employment. The terminal PIN is built (ADR 0155, §11.7) and shows its state on this tab.
+
+Not yet proven: no real realm has served the list (`docs/runbooks/staff-sessions.md`, «Last
+executed: never»), and a deployment needs `HORECAOS_KEYCLOAK_STAFF_LOGIN_CLIENT_UUID`; without
+it the card lists the platform's own record only.
 
 ### 11.7 Shared-terminal identity and PINs
 

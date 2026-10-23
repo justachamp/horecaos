@@ -77,6 +77,7 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
   'fiscal.evidence.reveal',
   'geo.lookup',
   'iam.grant.manage',
+  'iam.role.manage',
   'iam.staff.mfa.read',
   'iam.staff.mfa.reset',
   'integration.binding.activate',

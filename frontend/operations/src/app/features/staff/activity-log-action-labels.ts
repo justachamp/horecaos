@@ -20,6 +20,10 @@ import { ACTIVITY_ACTION_SENTENCES } from './activity-log-action-sentences';
 const ACTION_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
   'iam.grant.granted': 'staff.activity.action.grantGranted',
   'iam.grant.revoked': 'staff.activity.action.grantRevoked',
+  // ADR 0186: a company defining, changing and closing its own jobs.
+  'iam.role.created': 'staff.activity.action.roleCreated',
+  'iam.role.changed': 'staff.activity.action.roleChanged',
+  'iam.role.retired': 'staff.activity.action.roleRetired',
   'audit.read': 'staff.activity.action.auditRead',
   'brand.revised': 'staff.activity.action.brandRevised',
   'brand.activated': 'staff.activity.action.brandActivated',

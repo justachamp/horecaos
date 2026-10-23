@@ -1356,6 +1356,18 @@ difference engine where the answer changed what the code assumed.
   filter example uses `status=2` for "closed"; nothing else is stated.
 * **Q22.** What is the actual `limit` maximum per resource? `/common-objects.md`
   says "typically 200", `/products` says 100. (§10.2)
+* **Q23. Does `POST /orders` accept the user, waiter or cashier who took the order?**
+  A field on the request or a header, what it is called, what it takes (the `id` from
+  `GET /users`?), and what an order created with the integration's Staff user as its
+  author does with it. *Open (2026-10-14).* `CreateOrderRequest` names `sale_type_id`,
+  `venue_id`, `customer` and `products` only (§6.5), and every call acts on behalf of the
+  credential's Staff user (§2.1), which points to no per-order operator. Until it is
+  answered `PosCapability#ORDER_OPERATOR_ATTRIBUTION` is `UNSUPPORTED` for Clopos
+  (V0694), the console's «Операторы» tab says the till does not receive an operator yet,
+  and `CloposAdapter#exportOrder` sends none. `CloposAdapter#discoverOperators` lists the
+  brand's users over `GET /users` for the pairing, whose response shape was not
+  re-verified on 2026-10-14 (`docs/runbooks/external-connections/w13-staff-access.md`,
+  1a). Gap-map row `9.2c`.
 
 ---
 

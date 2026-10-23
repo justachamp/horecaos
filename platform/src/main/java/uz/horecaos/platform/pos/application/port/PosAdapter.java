@@ -82,6 +82,24 @@ public interface PosAdapter {
     ReferenceListRead discoverDiscounts(PosContext context);
 
     /**
+     * Discovers the vendor's own operators (waiters, cashiers, staff users), for the tenant-facing
+     * mapping pane's right-hand side when a person is paired with a till operator (gap-map row
+     * {@code 9.2c}). See {@link #discoverPaymentTypes} for the {@code NOT_SUPPORTED} contract.
+     *
+     * <p>Listing a vendor's operators is not the same fact as the vendor's order API carrying one:
+     * a till can list its users and still receive no operator on an order. That second fact is
+     * {@link PosCapability#ORDER_OPERATOR_ATTRIBUTION}, and the pane says which of the two is true.
+     * The entries are names and ids only; a user's login, email and phone are never read into one.
+     *
+     * <p>Defaulted to "not supported" so an adapter whose vendor exposes no such list compiles and
+     * behaves as before: an empty success would read as "everyone is paired".
+     */
+    default ReferenceListRead discoverOperators(PosContext context) {
+        return new ReferenceListRead(
+                ProviderOutcome.rejected("NOT_SUPPORTED", "This point of sale does not list its operators"), List.of());
+    }
+
+    /**
      * Sends an order to the till.
      *
      * <p>The most consequential call in the module. Where the vendor offers no
@@ -405,17 +423,19 @@ public interface PosAdapter {
      *                                ordering.orders.accepted_by_actor_id} —
      *                                null whenever the order was not accepted by
      *                                a signed-in user, or no such mapping has
-     *                                been recorded yet (operations-gap-map.md
-     *                                {@code 9.2c}: the mapping is provider-neutral
-     *                                and this field is that contract's whole
-     *                                shape, but no console screen writes a
-     *                                mapping row of this entity type yet — see
-     *                                that row's own note). An adapter whose
-     *                                vendor has no documented field for this
-     *                                (Clopos: {@code docs/providers/clopos-api.md}
-     *                                §6.5's {@code CreateOrderRequest} names
-     *                                none) must not invent one; it simply never
-     *                                reads this field
+     *                                been recorded yet. The console writes the mapping
+     *                                (the {@code OPERATOR} pairing on an installation's
+     *                                detail, operations-gap-map.md {@code 9.2c}); the
+     *                                export path resolves it, and hands it <em>only</em>
+     *                                to an adapter that declares {@link
+     *                                PosCapability#ORDER_OPERATOR_ATTRIBUTION} - for any
+     *                                other adapter this is null whatever is paired. An
+     *                                adapter that declares the capability must put this
+     *                                value in the create-order body (the contract test
+     *                                holds it to that); one that does not (Clopos: {@code
+     *                                docs/providers/clopos-api.md} §6.5's {@code
+     *                                CreateOrderRequest} names no such field) must not
+     *                                invent a field for it
      */
     record OrderExport(
             UUID orderId,

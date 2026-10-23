@@ -45,6 +45,7 @@ import {
   statusOf,
 } from './staff-row';
 import { registerStaffListKeys } from './staff-keys';
+import { StaffJobNames } from './staff-job-names';
 
 type StatusFilter = 'all' | 'active' | 'suspended';
 type ViewMode = 'flat' | 'byBranch';
@@ -100,6 +101,7 @@ export class StaffPage {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   protected readonly i18n = inject(I18n);
+  private readonly jobNames = inject(StaffJobNames);
 
   /** ADR 0103: her `iam.grant.manage` stops at a branch or brand, so this is that place's team and not the company's. */
   protected readonly scoped = this.reach.scoped;
@@ -391,7 +393,7 @@ export class StaffPage {
   }
 
   protected roleLabel(code: string): string {
-    return roleLabel(code, (key) => this.i18n.t(key));
+    return roleLabel(code, (key) => this.i18n.t(key), this.jobNames.nameOf(code));
   }
 
   protected scopeLevelLabel(scopeType: GrantView['scopeType']): string {

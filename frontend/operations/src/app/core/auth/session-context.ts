@@ -28,6 +28,11 @@ export interface ScopeGrant {
   };
   readonly roleCode: string;
   /**
+   * The company's own name for the job, present only for a job the company defined (ADR 0186);
+   * absent for a code-owned job, whose name is a translation this console owns.
+   */
+  readonly roleName?: string | null;
+  /**
    * Capability codes this scope grants. Optional so every fixture written
    * before the Staff section still type-checks; a scope-coverage read that
    * finds it absent treats it as empty rather than throwing.

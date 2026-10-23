@@ -385,6 +385,17 @@ public class StaffInvitationService {
     }
 
     /**
+     * A job's name for a person who has not signed in yet: the translated name of a code-owned
+     * job, or the name the tenant gave its own (ADR 0186) -- never the generated code.
+     */
+    private String roleName(UUID tenantId, String roleCode, String language) {
+        if (StaffRoleNames.names(roleCode)) {
+            return StaffRoleNames.of(roleCode, language);
+        }
+        return store.customJobName(tenantId, roleCode).orElse(roleCode);
+    }
+
+    /**
      * Sends the email and records the outcome, entirely outside a
      * transaction ({@link PlatformMailer}'s own contract) -- a slow or
      * unreachable mail server costs this call its own latency, never a
@@ -405,7 +416,7 @@ public class StaffInvitationService {
                 email,
                 language,
                 store.tenantName(tenantId),
-                StaffRoleNames.of(roleCode, language),
+                roleName(tenantId, roleCode, language),
                 link,
                 LINK_LIFETIME.toHours()));
         switch (outcome) {
@@ -462,7 +473,7 @@ public class StaffInvitationService {
         if (row.emailGiven()) {
             accounts.find(row.subjectId()).ifPresent(account -> {
                 if (account.email() != null) {
-                    String roleCode = store.roleCodeOfGrant(row.grantId())
+                    String roleCode = store.roleCodeOfGrant(tenantId, row.grantId())
                             .orElse(row.grantId().toString());
                     sendMail(invitationId, tenantId, account, account.email(), roleCode, row.locale(), link, now);
                 }
@@ -530,10 +541,10 @@ public class StaffInvitationService {
         Instant now = clock.instant();
         Row row = live(hash(token.strip()), now);
         transactions.executeWithoutResult(ignored -> store.markOpened(row.id(), now));
-        String roleCode = store.roleCodeOfGrant(row.grantId()).orElse(null);
+        String roleCode = store.roleCodeOfGrant(row.tenantId(), row.grantId()).orElse(null);
         return new Inspection(
                 store.tenantName(row.tenantId()),
-                roleCode == null ? null : StaffRoleNames.of(roleCode, row.locale()),
+                roleCode == null ? null : roleName(row.tenantId(), roleCode, row.locale()),
                 Objects.requireNonNull(row.expiresAt()).toString(),
                 row.locale());
     }

@@ -607,6 +607,21 @@ class PlatformRoleTests {
     }
 
     @Test
+    void definingAJobIsTheOwnersAndTheAdministratorsAndNobodyElsesAmongTheTenantVisibleRoles() {
+        // ADR 0186: iam.role.manage is the power to define a job the company then gives away. It stays with
+        // the two roles that already administer access, and is never in a job a company makes (TenantJobRules).
+        assertThat(Capability.IAM_ROLE_MANAGE.code()).isEqualTo("iam.role.manage");
+        assertThat(Capability.IAM_ROLE_MANAGE.isRead()).isFalse();
+        assertThat(TenantRoleCatalog.tenantVisibleRoles().stream()
+                        .filter(role -> role.capabilities().contains(Capability.IAM_ROLE_MANAGE)))
+                .containsExactly(PlatformRole.TENANT_OWNER, PlatformRole.TENANT_ADMIN);
+        assertThat(PlatformRole.TENANT_OWNER.scopeType()).isEqualTo(ScopeType.TENANT);
+        assertThat(PlatformRole.BRAND_MANAGER.capabilities()).doesNotContain(Capability.IAM_ROLE_MANAGE);
+        assertThat(PlatformRole.LOCATION_MANAGER.capabilities()).doesNotContain(Capability.IAM_ROLE_MANAGE);
+        assertThat(TenantJobRules.isComposable(Capability.IAM_ROLE_MANAGE)).isFalse();
+    }
+
+    @Test
     void rolesAndCapabilitiesResolveByCode() {
         assertThat(PlatformRole.find("location-manager")).contains(PlatformRole.LOCATION_MANAGER);
         assertThat(Capability.find("order.approve")).contains(Capability.ORDER_APPROVE);

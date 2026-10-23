@@ -183,6 +183,114 @@ class PosAdapterContractTests {
                 .isEqualTo(1);
     }
 
+    // ------------------------------------------------------------------
+    // Gap-map row 9.2c: the operator a colleague is paired with
+    // ------------------------------------------------------------------
+
+    /** One adapter and a way to ask what its create-order call put on the wire. */
+    private record Till(String name, PosAdapter adapter, java.util.function.Supplier<String> lastWireBody) {
+
+        @Override
+        public String toString() {
+            return name;
+        }
+    }
+
+    /**
+     * Three tills: the controlled fake that carries the operator, the fake configured like Clopos (lists
+     * users, receives none), and the real Clopos adapter reading its body off the recording transport.
+     */
+    static Stream<Till> tills() {
+        Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+        FakePosAdapter carrying = new FakePosAdapter();
+        FakePosAdapter notCarrying = new FakePosAdapter().withoutOperatorAttribution();
+        RecordingPosTransport transport = new RecordingPosTransport()
+                .answerWith(ProviderOutcome.success(
+                        Map.of(
+                                "success",
+                                true,
+                                "token",
+                                "t",
+                                "expires_at",
+                                NOW.plusSeconds(3600).getEpochSecond(),
+                                "data",
+                                Map.of("id", 9)),
+                        null));
+        CloposAdapter clopos = new CloposAdapter(transport, new CloposSession(transport, clock), clock);
+        return Stream.of(
+                new Till(
+                        "fake that carries the operator",
+                        carrying,
+                        () -> String.valueOf(carrying.wireBodies().getLast())),
+                new Till(
+                        "fake like Clopos",
+                        notCarrying,
+                        () -> String.valueOf(notCarrying.wireBodies().getLast())),
+                new Till(
+                        "Clopos",
+                        clopos,
+                        () -> String.valueOf(transport.bodies().getLast())));
+    }
+
+    private static PosAdapter.OrderExport orderWithOperator(String operatorExternalId) {
+        return new PosAdapter.OrderExport(
+                UUID.randomUUID(),
+                "A-2048",
+                "A-2048",
+                new PosAdapter.OrderExport.Customer("1", "Anvar", "+998901234567", "Amir Temur 1"),
+                List.of(new PosAdapter.OrderExport.Line("1", "Dish", 1, 10_000L, List.of(), "PKG-1")),
+                10_000L,
+                "UZS",
+                "DELIVERY",
+                false,
+                NOW,
+                operatorExternalId);
+    }
+
+    @ParameterizedTest
+    @MethodSource("tills")
+    @DisplayName(
+            "a till that declares ORDER_OPERATOR_ATTRIBUTION puts the operator in the create body; one that does not never does")
+    void anAdapterThatDeclaresOperatorAttributionSendsItAndOneThatDoesNotNeverDoes(Till till) {
+        String operator = "OP-48151623";
+
+        till.adapter().exportOrder(context(), orderWithOperator(operator));
+
+        boolean declared = till.adapter().declaredCapabilities().contains(PosCapability.ORDER_OPERATOR_ATTRIBUTION);
+        if (declared) {
+            assertThat(till.lastWireBody().get())
+                    .as("%s declares the capability, so the operator it was handed has to reach the till", till)
+                    .contains(operator);
+        } else {
+            assertThat(till.lastWireBody().get())
+                    .as(
+                            "%s does not declare it, so an operator id on its wire is a guess at an undocumented field",
+                            till)
+                    .doesNotContain(operator);
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("tills")
+    @DisplayName("the snapshot says the capability is unusable exactly when the adapter does not declare it")
+    void theSnapshotAgreesWithTheDeclarationAboutOperatorAttribution(Till till) {
+        boolean declared = till.adapter().declaredCapabilities().contains(PosCapability.ORDER_OPERATOR_ATTRIBUTION);
+
+        assertThat(till.adapter().discoverCapabilities(context()).usable(PosCapability.ORDER_OPERATOR_ATTRIBUTION))
+                .isEqualTo(declared);
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Clopos declares the capability false: the documented create-order request has no operator field")
+    void cloposDoesNotDeclareOperatorAttribution() {
+        Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+        RecordingPosTransport transport = new RecordingPosTransport();
+        CloposAdapter clopos = new CloposAdapter(transport, new CloposSession(transport, clock), clock);
+
+        assertThat(clopos.declaredCapabilities()).doesNotContain(PosCapability.ORDER_OPERATOR_ATTRIBUTION);
+        assertThat(new FakePosAdapter().declaredCapabilities()).contains(PosCapability.ORDER_OPERATOR_ATTRIBUTION);
+    }
+
     private static PosContext context() {
         return new PosContext(
                 TENANT,
@@ -193,6 +301,7 @@ class PosAdapterContractTests {
                         CloposConfig.BRAND, "openapitest",
                         CloposConfig.CLIENT_ID, "client-1",
                         CloposConfig.INTEGRATOR_ID, "horecaos-test",
+                        CloposConfig.SALE_TYPE_ID, "5",
                         CloposConfig.CURRENCY, "UZS"),
                 "correlation-1");
     }
