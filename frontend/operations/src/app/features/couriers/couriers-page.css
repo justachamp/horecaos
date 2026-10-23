@@ -213,3 +213,13 @@
   background: var(--q-error-tint);
   color: var(--q-error-text);
 }
+
+.couriers__photo {
+  display: block;
+  width: 96px;
+  height: 96px;
+  margin: 4px 0 8px;
+  object-fit: cover;
+  border-radius: var(--q-radius);
+  border: 1px solid var(--q-hairline);
+}

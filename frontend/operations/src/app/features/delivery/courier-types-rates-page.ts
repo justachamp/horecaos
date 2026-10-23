@@ -1,10 +1,18 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { ExternalRuleResult, RuleSimulator, SimulatedRule } from '../../shared/ui/rule-simulator';
 import {
   AdjustmentReasonResponse,
   CouriersApi,
@@ -14,6 +22,7 @@ import {
   RateCardSummaryResponse,
   RateComponentRequest,
   RateComponentView,
+  RuleSimulation,
 } from '../couriers/couriers-api';
 import { describeApiError } from '../orders/order-errors';
 
@@ -94,18 +103,25 @@ const PERIOD_ONLY_BASES = new Set(['CASH_VARIANCE']);
  *    courier is on {@link CouriersPage}'s own detail pane, not here: this
  *    page defines policy, that one acts on one person.
  *
- * **Deliberately not built.** A visual band-gap/overlap ruler and a payout
- * simulator (`docs/operations-spec/couriers.md` §10-11 describe both) —
+ * **The rule simulator (couriers.md §11, ADR 0178).** «Who would this rule have
+ * hit last week, and for how much» before a rule is saved: the reason form runs
+ * the candidate through `POST .../adjustment-rule-simulations`, which replays
+ * the evaluator's own arithmetic over recent closed shifts and settlement
+ * periods and writes nothing. The verdict is drawn by the shared
+ * `q-rule-simulator` in its engine mode (the platform answered, the component
+ * does not guess), and the couriers it would have hit are listed beside it by
+ * reference, never by name.
+ *
+ * **Deliberately not built.** A visual band-gap/overlap ruler
+ * (`docs/operations-spec/couriers.md` §10 describes it) —
  * activation's own server-side validation still catches every gap and
  * overlap, and its message renders in `cardError`/`activateError` exactly
- * as before. `ConditionBuilder`/`RuleSimulator` (IA Part 4's own component
- * gap list) do not exist on this design system yet; the reason form below
- * is the minimum typed editor ADR 0108's five rule columns need, built
- * locally rather than waiting on that shared component.
+ * as before. The reason form below is the minimum typed editor ADR 0108's
+ * five rule columns need.
  */
 @Component({
   selector: 'q-courier-types-rates-page',
-  imports: [TPipe],
+  imports: [TPipe, RuleSimulator],
   templateUrl: './courier-types-rates-page.html',
   styleUrl: './courier-types-rates-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -190,6 +206,10 @@ export class CourierTypesRatesPage implements OnInit {
   protected readonly newReasonAmount = signal(0);
   protected readonly newReasonCurrency = signal('UZS');
   protected readonly newReasonComparator = signal<'GTE' | 'LTE'>('GTE');
+  protected readonly simLookbackDays = signal(7);
+  protected readonly simRunning = signal(false);
+  protected readonly simError = signal<string | null>(null);
+  protected readonly simulation = signal<RuleSimulation | null>(null);
   protected readonly newReasonThreshold = signal(0);
   protected readonly newReasonWindow = signal<'SHIFT' | 'SETTLEMENT_PERIOD'>('SHIFT');
   protected readonly newReasonTrigger = signal<'SHIFT_CLOSE' | 'SETTLEMENT_PERIOD_CLOSE'>(
@@ -664,6 +684,8 @@ export class CourierTypesRatesPage implements OnInit {
     this.newReasonThreshold.set(0);
     this.newReasonWindow.set('SHIFT');
     this.newReasonTrigger.set('SHIFT_CLOSE');
+    this.simulation.set(null);
+    this.simError.set(null);
     this.reasonError.set(null);
     this.showReasonForm.set(true);
   }
@@ -755,6 +777,102 @@ export class CourierTypesRatesPage implements OnInit {
     } finally {
       this.reasonSubmitting.set(false);
     }
+  }
+
+  // ------------------------------------------------------------ the simulator
+
+  /** The one rule the simulator draws: the candidate in the form, named as the operator named it. */
+  protected readonly simRules = computed<readonly SimulatedRule[]>(() => [
+    {
+      id: 'candidate',
+      label: this.newReasonDisplayName().trim() || this.newReasonCode().trim().toUpperCase(),
+      enabled: true,
+      groups: [],
+      outcome: '',
+    },
+  ]);
+
+  /** The platform's verdict in the shape the shared simulator draws in its engine mode; null before one exists. */
+  protected readonly simVerdict = computed<readonly ExternalRuleResult[] | null>(() => {
+    const result = this.simulation();
+    if (result === null) {
+      return null;
+    }
+    const label = this.simRules()[0].label;
+    if (result.couriersHit === 0) {
+      return [
+        {
+          id: 'candidate',
+          label,
+          state: 'unmatched',
+          detail: this.i18n.t('delivery.rates.reasons.sim.nobody', {
+            days: result.lookbackDays,
+            windows: result.windowsReplayed,
+          }),
+        },
+      ];
+    }
+    return [
+      {
+        id: 'candidate',
+        label,
+        state: 'matched',
+        detail: this.i18n.t('delivery.rates.reasons.sim.hit', {
+          couriers: result.couriersHit,
+          total: this.simMoney(result.totalAmountMinor, result.currency),
+          windows: result.windowsReplayed,
+          days: result.lookbackDays,
+        }),
+      },
+    ];
+  });
+
+  /** A preview needs a wired, evaluated rule: there is nothing to replay for a manual-only reason. */
+  protected canSimulate(): boolean {
+    return (
+      !this.simRunning() &&
+      this.newReasonWired() &&
+      this.basisIsEvaluated(this.newReasonOutcomeBasis()) &&
+      this.newReasonCurrency().trim().length === 3 &&
+      Number.isFinite(this.newReasonThreshold()) &&
+      this.newReasonThreshold() >= 0
+    );
+  }
+
+  protected async runSimulation(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope || !this.canSimulate()) {
+      return;
+    }
+    this.simRunning.set(true);
+    this.simError.set(null);
+    try {
+      const signedAmount =
+        this.newReasonKind() === 'PENALTY'
+          ? -Math.abs(this.newReasonAmount())
+          : Math.abs(this.newReasonAmount());
+      this.simulation.set(
+        await this.api.simulateRule(scope.tenantId, {
+          outcomeBasis: this.newReasonOutcomeBasis(),
+          ruleComparator: this.newReasonComparator(),
+          ruleThreshold: this.newReasonThreshold(),
+          ruleWindow: this.newReasonWindow(),
+          ruleAmountMinor: signedAmount,
+          ruleCurrency: this.newReasonCurrency().trim().toUpperCase(),
+          lookbackDays: this.simLookbackDays(),
+          locationId: scope.locationId,
+        }),
+      );
+    } catch (error) {
+      this.simulation.set(null);
+      this.simError.set(this.describe(error));
+    } finally {
+      this.simRunning.set(false);
+    }
+  }
+
+  protected simMoney(minor: number, currency: string): string {
+    return formatMoney({ amountMinor: minor, currency }, this.i18n.locale(), { withUnit: true });
   }
 
   protected startArchiveReason(reason: AdjustmentReasonResponse): void {

@@ -1,0 +1,91 @@
+{
+  "G-001": [
+    {
+      "lat": 41.311441,
+      "lon": 69.240562,
+      "confidence": "HIGH",
+      "locality": "Tashkent"
+    }
+  ],
+  "G-002": [
+    {
+      "lat": 41.311441,
+      "lon": 69.244562,
+      "confidence": "HIGH",
+      "locality": "Tashkent"
+    }
+  ],
+  "G-003": [
+    {
+      "lat": 41.311441,
+      "lon": 69.248562,
+      "confidence": "HIGH",
+      "locality": "Tashkent"
+    }
+  ],
+  "G-004": [
+    {
+      "lat": 41.311441,
+      "lon": 69.252562,
+      "confidence": "HIGH",
+      "locality": "Tashkent"
+    }
+  ],
+  "G-005": [
+    {
+      "lat": 41.315441,
+      "lon": 69.240562,
+      "confidence": "HIGH",
+      "locality": "Tashkent"
+    }
+  ],
+  "G-006": [
+    {
+      "lat": 41.315441,
+      "lon": 69.244562,
+      "confidence": "HIGH",
+      "locality": "Tashkent"
+    }
+  ],
+  "G-007": [
+    {
+      "lat": 41.315441,
+      "lon": 69.248562,
+      "confidence": "HIGH",
+      "locality": "Tashkent"
+    }
+  ],
+  "G-008": [
+    {
+      "lat": 41.315441,
+      "lon": 69.252562,
+      "confidence": "HIGH",
+      "locality": "Tashkent"
+    }
+  ],
+  "G-009": [
+    {
+      "lat": 41.319441,
+      "lon": 69.240562,
+      "confidence": "HIGH",
+      "locality": "Tashkent"
+    }
+  ],
+  "G-010": [
+    {
+      "lat": 41.319441,
+      "lon": 69.244562,
+      "confidence": "HIGH",
+      "locality": "Tashkent"
+    }
+  ],
+  "G-011": [],
+  "G-012": [
+    {
+      "lat": 42.8746,
+      "lon": 74.5698,
+      "confidence": "LOW_CONFIDENCE",
+      "locality": "Bishkek"
+    }
+  ]
+}

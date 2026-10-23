@@ -1,3 +1,71 @@
+<ng-template #searchBar>
+  <!-- Search bar -->
+  <div class="relative shrink-0 px-4 pb-3 mb-4">
+    <div
+      class="flex items-center gap-3 rounded-xl border border-zinc-500 bg-surface-raised px-4 py-3 focus-within:border-brand-accent focus-within:ring-2 focus-within:ring-brand-accent"
+    >
+      <span class="shrink-0 text-zinc-400" aria-hidden="true">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          />
+        </svg>
+      </span>
+      <input
+        type="text"
+        [ngModel]="searchQuery()"
+        (ngModelChange)="onSearchInput($event)"
+        (focus)="suggestions().length > 0 && showDropdown.set(true)"
+        [placeholder]="
+          (mode() === 'text' ? 'locations.typeAddress' : 'locations.searchAddress') | t
+        "
+        data-testid="locations-add-search"
+        class="min-w-0 flex-1 bg-transparent text-sm text-text-primary placeholder:text-zinc-500 focus:outline-none"
+      />
+      @if (searchLoading()) {
+        <span
+          class="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
+        ></span>
+      }
+    </div>
+    @if (showDropdown() && suggestions().length > 0) {
+      <div
+        class="absolute left-4 right-4 top-full z-50 mt-1 max-h-60 overflow-y-auto scrollbar-stable rounded-xl border border-zinc-700 bg-surface-base shadow-lg"
+        (click)="$event.stopPropagation()"
+      >
+        @for (s of suggestions(); track s.text) {
+          <button
+            type="button"
+            (click)="selectSuggestion(s)"
+            data-testid="locations-add-suggestion"
+            class="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-text-primary transition-colors hover:bg-surface-hover"
+          >
+            <span class="shrink-0 text-brand-accent">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                />
+              </svg>
+            </span>
+            <span class="min-w-0 flex-1 truncate">{{ s.text }}</span>
+          </button>
+        }
+      </div>
+    }
+    @if (suggestionsUnavailable() && mode() === 'map') {
+      <p class="mt-2 text-xs text-zinc-400" data-testid="locations-add-search-unavailable">
+        {{ 'locations.searchUnavailable' | t }}
+      </p>
+    }
+  </div>
+</ng-template>
+
 <div class="flex min-h-screen flex-col bg-surface-base pb-40 text-text-primary">
   <header class="flex shrink-0 items-center gap-3 px-4 py-4">
     <button
@@ -14,63 +82,29 @@
     <span class="w-20"></span>
   </header>
 
-  @if (permissionState() === 'granted') {
-    <!-- Search bar -->
-    <div class="relative shrink-0 px-4 pb-3 mb-4">
-      <div
-        class="flex items-center gap-3 rounded-xl border border-zinc-500 bg-surface-raised px-4 py-3 focus-within:border-brand-accent focus-within:ring-2 focus-within:ring-brand-accent"
+  @if (mode() === 'text') {
+    <ng-container *ngTemplateOutlet="searchBar" />
+    <p class="px-4 text-sm text-zinc-400" data-testid="locations-add-no-map">
+      {{ 'locations.noMapHint' | t }}
+    </p>
+
+    <!-- Fixed bottom card: above bottom-nav (like cart-confirmation) -->
+    <div
+      class="fixed left-1/2 z-40 w-full max-w-[420px] -translate-x-1/2 border-t border-zinc-800 bg-surface-base px-4 pt-4 pb-safe"
+      style="bottom: 5.5rem"
+    >
+      <button
+        type="button"
+        (click)="goToSave()"
+        [disabled]="!canContinue()"
+        data-testid="locations-add-continue"
+        class="mt-4 w-full rounded-xl bg-brand-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-95 disabled:opacity-60"
       >
-        <span class="shrink-0 text-zinc-400" aria-hidden="true">
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-        </span>
-        <input
-          type="text"
-          [ngModel]="searchQuery()"
-          (ngModelChange)="onSearchInput($event)"
-          (focus)="suggestions().length > 0 && showDropdown.set(true)"
-          [placeholder]="'locations.searchAddress' | t"
-          class="min-w-0 flex-1 bg-transparent text-sm text-text-primary placeholder:text-zinc-500 focus:outline-none"
-        />
-        @if (searchLoading()) {
-          <span
-            class="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
-          ></span>
-        }
-      </div>
-      @if (showDropdown() && suggestions().length > 0) {
-        <div
-          class="absolute left-4 right-4 top-full z-50 mt-1 max-h-60 overflow-y-auto scrollbar-stable rounded-xl border border-zinc-700 bg-surface-base shadow-lg"
-          (click)="$event.stopPropagation()"
-        >
-          @for (s of suggestions(); track s.address + s.lat + s.lng) {
-            <button
-              type="button"
-              (click)="selectSuggestion(s)"
-              class="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-text-primary transition-colors hover:bg-surface-hover"
-            >
-              <span class="shrink-0 text-brand-accent">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                  />
-                </svg>
-              </span>
-              <span class="min-w-0 flex-1 truncate">{{ s.address }}</span>
-            </button>
-          }
-        </div>
-      }
+        {{ 'common.continue' | t }}
+      </button>
     </div>
+  } @else if (permissionState() === 'granted') {
+    <ng-container *ngTemplateOutlet="searchBar" />
 
     <!-- Map container - explicit height required for Yandex Maps API -->
     <div class="map-container relative w-full shrink-0" (click)="closeDropdown()">

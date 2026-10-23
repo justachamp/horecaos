@@ -83,7 +83,9 @@ public final class EntitlementKeys {
     public static final EntitlementKey<Long> GEOCODE_REQUESTS = EntitlementKey.counted("geocode.requests", "request")
             .resetting(ResetPeriod.BILLING_PERIOD)
             .ownedBy("fulfillment")
-            .withDimensions("operation")
+            // `surface` is `staff` for the operations console and `customer` for a storefront (row X.4):
+            // the same quota, but which screen is spending it is the first thing asked when it runs out.
+            .withDimensions("operation", "surface")
             .describedAs(
                     "Geocoder calls to the map provider (suggest, geocode, reverse). Metered, not priced (ADR 0145).")
             .build();

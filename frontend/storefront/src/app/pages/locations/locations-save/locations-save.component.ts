@@ -47,17 +47,23 @@ export class LocationsSaveComponent {
 
   save(): void {
     const name = this.locationName.trim() || 'Manzil';
-    let lat: number;
-    let lng: number;
+    let lat: number | null;
+    let lng: number | null;
     try {
       const stored = sessionStorage.getItem('new-location');
       if (!stored) {
         this.error.set('Manzil topilmadi. Qaytadan xaritadan tanlang.');
         return;
       }
-      const data = JSON.parse(stored) as { lat?: number; lng?: number; address?: string };
-      lat = data.lat ?? 0;
-      lng = data.lng ?? 0;
+      const data = JSON.parse(stored) as {
+        lat?: number | null;
+        lng?: number | null;
+        address?: string;
+      };
+      // An address typed with no map has no point, and "no point" is `null`, never `(0, 0)`: that is
+      // the Gulf of Guinea, saved as a pin the customer is taken to have dropped (ADR 0145 decision 6).
+      lat = typeof data.lat === 'number' ? data.lat : null;
+      lng = typeof data.lng === 'number' ? data.lng : null;
       this.addressText = data.address ?? '';
     } catch {
       this.error.set("Manzil ma'lumotlari noto'g'ri.");

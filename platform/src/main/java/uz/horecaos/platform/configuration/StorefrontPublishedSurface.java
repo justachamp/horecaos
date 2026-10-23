@@ -65,6 +65,14 @@ final class StorefrontPublishedSurface {
             LOCATION + "/delivery-fee",
             LOCATION + "/fulfillment-modes",
             LOCATION + "/serviceability",
+            // Finding an address, for a customer's own session (ADR 0145 decision 2): the platform's map
+            // configuration and its three address lookups, so no storefront calls a geocoder vendor from
+            // the browser. Not bound to one channel (any storefront has an address screen), so not
+            // internal under ADR 0070's rule; additive-only like the rest of the commerce.
+            BRAND + "/map-config",
+            BRAND + "/geocode/suggestions",
+            BRAND + "/geocode/resolutions",
+            BRAND + "/geocode/reverse-resolutions",
             // The cart, its pricing, and the checkout.
             BRAND + "/carts",
             CART,

@@ -11,6 +11,21 @@
 
 **Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
 
+**Status addition, 2026-10-23 (ADR 0178; the decision above is not edited).** Three statements in this record
+are now out of date. (1) `SETTLEMENT_PERIOD`-window evaluation **is** called from production:
+`CourierSettlementService.close` runs `evaluatePeriodClose` before it reads the period's entries and hashes
+the statement (line 130 of that class), which is the reordering the alternatives table declined to do; the
+"not reachable" consequence and the unticked checklist item below describe the state before that. (2)
+`rule_version` stamping is moot rather than missing: a reason is immutable once created and its `(tenant,
+code)` is unique including archived reasons (V0040), so a ledger entry's reason code already names exactly
+one rule. (3) "stay manual-only by construction until a reader exists" is answered by
+[ADR 0178](../partial/0178-the-pickup-and-handover-are-soft-by-default-a-courier-is-not-rated-and-a-rule-needs-a-reader.md)
+decision 6: the two bases read the delivery-exception reason codes recorded by the operator who closes the
+exception, only employed couriers are scored, and until that reader exists the rule API refuses a rule on
+either basis with `422` (it used to store one that never fired). ADR 0178 also builds the rule simulator this
+record's spec (couriers.md §11) requires and makes `GEO_UNVERIFIED_RATE` read a recorded fact instead of a
+constant `true`.
+
 ## Context
 
 The operations gap map verified three finishing gaps against ADR 0042's own module,
@@ -288,11 +303,10 @@ into shift close with no reason yet authored is safe by construction.
       reading `origin` (keeps the field for wire compatibility).
 - [x] `AdjustmentRuleEvaluator`, wired into `CourierShiftService.close`/
       `.approveHours` for the `SHIFT` window.
-- [ ] **Not wired: `SETTLEMENT_PERIOD`-window evaluation from
-      `CourierSettlementService.close`.** Built and tested
-      (`evaluatePeriodClose`); see this ADR's alternatives table for why the
-      call site needs the close method's own read-then-hash sequence
-      reordered first.
+- [x] `SETTLEMENT_PERIOD`-window evaluation from
+      `CourierSettlementService.close` (corrected 2026-10-23: it is called, before the
+      close method's own read and hash, and `CourierCompensationTests` proves a rule-posted
+      entry lands inside the statement it closes).
 - [x] Capability `COURIER_ADJUSTMENT_REASON_MANAGE`, granted to
       `TENANT_OWNER`.
 - [x] Console: courier-type edit/archive, `maxDistanceMeters` on create, the
@@ -304,12 +318,13 @@ into shift close with no reason yet authored is safe by construction.
 - [ ] **Not built: `starting_minute_offset`/`work_mode` read by
       `CourierAccrualService`/`CourierDispatchGate`.** Captured and rendered
       only — see open inputs.
-- [ ] **Not built: `rule_version` stamped onto the ledger entries a rule
-      writes.** `courier_ledger_entries` has no column for it; see open
-      inputs.
+- [x] `rule_version` stamping is moot (corrected 2026-10-23): reasons are
+      immutable and `(tenant, code)` is unique including archived ones (V0040), so a
+      ledger entry's reason code already names exactly one rule.
 - [ ] **Not built: `ORDER_UNDELIVERED`/`ORDER_DAMAGED` evaluation.** No
       reader exists for `fulfillment.delivery_exceptions`; these two bases
-      stay manual-only by construction until one does.
+      stay manual-only until one does, and since 2026-10-23 the rule API refuses a
+      rule on either (ADR 0178 decision 6).
 
 ## Exit criteria
 

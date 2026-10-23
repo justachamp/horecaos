@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { I18n } from '../../../core/i18n/i18n';
-import { MapArea, MapCanvas, MapMarker } from './map-canvas';
+import { MapArea, MapCanvas, MapLine, MapMarker } from './map-canvas';
 import { LatLng, MapHandle, MapUnavailableError, MapUnavailableReason } from './map-provider';
 import { NullMapProvider, provideNullMapProvider } from './null-map-provider';
 
@@ -194,6 +194,72 @@ describe('MapCanvas (ADR 0145, row X.4)', () => {
 
       expect(provider.map.livePolygons).toHaveLength(2);
       expect(zone.ring[1]).toEqual(at(41.35, 69.3));
+    });
+  });
+
+  describe('lines (the dispatch board’s legs, rows 3.1 and X.4)', () => {
+    it('draws a line between points, display only, keyed so a moved end is one line redrawn', async () => {
+      const lines: MapLine[] = [
+        {
+          id: 'leg:1',
+          path: [at(41.3, 69.2), at(41.31, 69.21)],
+          label: 'Branch to courier',
+          tone: 'courier',
+          dashed: true,
+        },
+      ];
+      const fixture = create({ lines });
+      await settle(fixture);
+      const [leg] = provider.map.livePolylines;
+      expect(leg.path).toEqual([at(41.3, 69.2), at(41.31, 69.21)]);
+      expect(leg.label).toBe('Branch to courier');
+      expect(leg.tone).toBe('courier');
+      expect(leg.dashed).toBe(true);
+
+      fixture.componentRef.setInput('lines', [
+        { id: 'leg:1', path: [at(41.3, 69.2), at(41.35, 69.25)], tone: 'order' },
+      ]);
+      await settle(fixture);
+
+      expect(provider.map.livePolylines).toEqual([leg]);
+      expect(leg.path[1]).toEqual(at(41.35, 69.25));
+      expect(leg.tone).toBe('order');
+      // A field left out of the new value is the plain default again, not what the old line carried.
+      expect(leg.dashed).toBe(false);
+      expect(provider.map.polylines).toHaveLength(1);
+    });
+
+    it('removes a line that is no longer wanted, and never draws a path of fewer than two points', async () => {
+      const fixture = create({
+        lines: [
+          { id: 'a', path: [at(41.3, 69.2), at(41.31, 69.21)] },
+          { id: 'b', path: [at(41.3, 69.2), at(41.32, 69.22)] },
+          { id: 'one-point', path: [at(41.3, 69.2)] },
+        ],
+      });
+      await settle(fixture);
+      expect(provider.map.livePolylines).toHaveLength(2);
+      const [first, second] = provider.map.livePolylines;
+
+      fixture.componentRef.setInput('lines', [
+        { id: 'a', path: [at(41.3, 69.2), at(41.31, 69.21)] },
+      ]);
+      await settle(fixture);
+
+      expect(provider.map.livePolylines).toEqual([first]);
+      expect(second.removed).toBe(true);
+    });
+
+    it('draws no line before a map exists, and the lines given meanwhile appear once it does', async () => {
+      const release = provider.holdLoad();
+      const fixture = create({ lines: [{ id: 'a', path: [at(41.3, 69.2), at(41.31, 69.21)] }] });
+      await settle(fixture);
+      expect(provider.maps).toHaveLength(0);
+
+      release();
+      await settle(fixture);
+
+      expect(provider.map.livePolylines).toHaveLength(1);
     });
   });
 

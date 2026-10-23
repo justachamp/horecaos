@@ -35,7 +35,17 @@
           [extraMarkers]="courierMarkers()"
           [alwaysShowMap]="true"
           [height]="320"
+          [lines]="routeLegs()"
+          [linesNote]="legsNote()"
+          (pointsRevealed)="onPointsRevealed($event)"
         />
+        @if (roadDistances().length > 0) {
+          <ul class="dispatch__road q-caption" data-testid="dispatch-road-distances">
+            @for (road of roadDistances(); track road.planId) {
+              <li data-testid="dispatch-road-distance">{{ road.text }}</li>
+            }
+          </ul>
+        }
       </div>
     }
   }

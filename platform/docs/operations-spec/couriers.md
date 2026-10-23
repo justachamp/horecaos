@@ -451,8 +451,9 @@ the blockers, not the alphabet.
 `Add courier` (§6.1), row → open record, row menu: `Open shift on their behalf`
 (supervisor capability, audited, reason required), `Suspend` (reason from a managed
 registry, confirm), `Restrict from dispatch until…` (reason + expiry, confirm),
-`Reset courier app access` (triggers a Keycloak credential reset — **never** sets a
-password, see §17), `Archive` (confirm, only when balance is zero and no open shift).
+`Reset courier app access` (texts the courier a link to choose their own password — the console
+**never** sets, shows or derives one, see §17 and §18; ADR 0178), `Archive` (confirm, only when balance is zero
+and no open shift; ends any engagement in the same step).
 
 ### Bulk
 `Assign to branch` and `Add to dispatch pool` — offered only when every selected courier
@@ -496,7 +497,7 @@ Fields, with the legacy dashboard's set preserved because staff already fill it 
 |---|---|---|---|
 | First name, last name | text | yes | principal profile |
 | Phone | text, `+998XXXXXXXXX` mask and regex | yes | legacy enforced exactly this pattern; keep it |
-| Photo | image upload | no | `media.assets` + `catalog.media_relations` pattern. Legacy made it required; it should not be — a courier who starts tonight should not be blocked on a photo |
+| Photo | image upload | no | Built: `q-media-uploader` in the register form and the record, a private tenant-owned asset opened by a signed link. Legacy made it required; it is not — a courier who starts tonight is not blocked on a photo |
 | Courier type | select | yes | `courier_types` (ADR 0042) |
 | Branches | multi-select combobox | yes, ≥1 | `dispatch_pool_locations`. Legacy called these "vendors" |
 | Dispatch pools | multi-select | no | `dispatch_pools` (ADR 0014). Replaces legacy "courier groups" |
@@ -511,7 +512,7 @@ Fields, with the legacy dashboard's set preserved because staff already fill it 
 | Referral | text | no | legacy required it; make it optional — it blocks onboarding for nothing |
 | Notes | repeatable text | no | legacy `notes: string[]`, protected free text |
 | Account status | select | yes | `fulfillment.courier_engagements.status` |
-| App account | read-only state + `Send invite` / `Reset access` | — | Keycloak courier client (IA 2.6) |
+| App account | read-only state + `Send invite` / `Reset access` | — | Built (ADR 0178): a one-time link texted to the courier, valid 72 hours, set at the identity provider; the card shows where it stands and never a number or a link. Waits as `SMS_NOT_CONNECTED` until the SMS gateway's courier purpose is connected |
 
 **Layout:** three columns on desktop, as the legacy form had, because that form is muscle
 memory. Sections: *Person*, *Documents*, *Vehicle*, *Work*. Sentence-case labels.
@@ -856,9 +857,12 @@ in a payout dispute.
 
 ### The bases, and the two that are manual-only
 
-*Recorded 2026-09-30 against gap-map row `3.4c`. The record is
+*Recorded 2026-09-30 against gap-map row `3.4c`, corrected 2026-10-23. The record is
 [ADR 0108](../adr/partial/0108-wave-t16-courier-types-rate-cards-and-adjustment-rules.md)
-(Decision status Proposed; it builds on ADR 0042, Accepted, which closed the set).*
+(Decision status Accepted 2026-10-07; it builds on ADR 0042, Accepted, which closed the set);
+what it left open is answered by
+[ADR 0178](../adr/partial/0178-the-pickup-and-handover-are-soft-by-default-a-courier-is-not-rated-and-a-rule-needs-a-reader.md).
+An earlier revision of this section called ADR 0108 Proposed; it is not.*
 
 `courier_adjustment_reasons.outcome_basis` is a closed set of seven, on purpose:
 every code names a delivery outcome, never a behaviour, because routinely sanctioning
@@ -886,19 +890,20 @@ fires (the count is 1 or 2) and an `LTE` rule fires for every courier. The thres
 count until someone decides otherwise; a shortfall-amount threshold would be a different
 basis and needs its own decision.
 
-**`ORDER_UNDELIVERED` and `ORDER_DAMAGED` are manual-only by design, and the design is
-conditional, not permanent.** They name facts that live in
-`fulfillment.delivery_exceptions`, which nothing in the courier module queries (ADR
-0108). The two therefore stay manual — a manager records the adjustment by hand
-(«Record an adjustment», below), naming the reason code — "by construction until" a
-reader exists. That reader is the whole of what is missing; no ADR refuses the rule, so
-this is *not built* rather than declined, and building it is a reader plus a case in
-the evaluator, not a redesign. Until then the guards are these, and only these:
-the rule form in `apps/operations` (delivery → courier types and rates) will not let an
-operator wire a reason on either basis, and the evaluator returns no reading for them
-(`default -> null`). **The API does not refuse it:** `POST .../adjustment-reasons`
-accepts all six `rule_*` fields on either basis and the rule then never fires, so a
-direct caller can define a dead rule. That is a known hole in the guard, not a feature.
+**`ORDER_UNDELIVERED` and `ORDER_DAMAGED` are manual-only, and ADR 0178 (decision 6) says what a reader
+for them will be and refuses a rule until there is one.** They name facts that live, or would live, in
+`fulfillment.delivery_exceptions`, which nothing in the courier module queries. The owner's decision is that
+they read the delivery-exception reason codes that already exist, recorded by the operator who closes the
+exception, and that only employed couriers are scored. Two facts stand between that and a reader, and neither
+is the code's to settle: the exception reason list (V0054) contains neither word and only `ADDRESS_ISSUE` is
+ever raised, and no screen records an outcome at close; and every engagement is `SELF_EMPLOYED` by constraint
+(V0040), so no courier could be scored on them today. So the two stay manual — a manager records the
+adjustment by hand («Record an adjustment», below), naming the reason code — and **the API now refuses the
+hole this section used to describe:** `POST .../adjustment-reasons` answers `422 UNPROCESSABLE_STATE`, reason
+`BASIS_HAS_NO_EVALUATOR_READER`, to a request that gives either basis any `rule_*` field, instead of storing a
+rule that never fires. The rule form in `apps/operations` (delivery → courier types and rates) does not let an
+operator wire a reason on either basis either, and the evaluator returns no reading for them
+(`AdjustmentRuleEvaluator.hasReader`).
 
 Two facts about the guards that the table above would otherwise hide. First, the rule
 form's list of wireable bases (`EVALUATED_BASES` in `courier-types-rates-page.ts`) still
@@ -913,7 +918,14 @@ worked is therefore neither built nor decided.
 
 Every rule has a **simulator** answering "who would this have hit last week, and for how
 much" before it is activated. A penalty rule shipped without that preview is a labour
-dispute waiting for a payday.
+dispute waiting for a payday. It is built (ADR 0178): the rule form's «Preview the rule»
+calls `POST .../adjustment-rule-simulations`, which replays the evaluator's own arithmetic
+(`AdjustmentRuleEvaluator.shiftValue` / `periodValue` / `holds`, the same functions that post)
+over the shifts that closed or the settlement periods that ended in the last 7, 14 or 30 days,
+writes nothing, and answers how many windows it looked at, how many couriers it would have hit
+(by display reference, never a name) and for how much. A `GEO_UNVERIFIED_RATE` rule at a branch
+that never turned the position check on hits everybody, because nothing was verified there, and
+the preview shows exactly that.
 
 ### Adjustments log columns
 Date · Courier · Effect · Amount · Origin (`Rule: <name> v3` or `Manual`) · Reason code ·
@@ -1127,7 +1139,7 @@ switches are read. Each refusal is a `422 UNPROCESSABLE_STATE` carrying a stable
 | Switch | Enforced at | Refusal |
 |---|---|---|
 | Acceptance GPS gate | `POST .../offers/{id}/accept`, measured against the branch within the accept radius | `GPS_POSITION_REQUIRED`, `GPS_ACCURACY_INSUFFICIENT`, `GPS_REFERENCE_UNAVAILABLE`, `TOO_FAR_FROM_PICKUP` |
-| Pickup / delivery GPS gate | `POST .../deliveries/{id}/advance`: arrival and pickup against the branch, handover against the customer's door, within the status-change radius | the same four, with `TOO_FAR_FROM_DROPOFF` at the door |
+| Pickup / delivery GPS gate | `POST .../deliveries/{id}/advance` (arrival), `.../pickup` and `.../handover`: arrival and pickup against the branch, handover against the customer's door, within the status-change radius. Arrival is hard; pickup and handover follow `pickupHandoverGate` | the same four, with `TOO_FAR_FROM_DROPOFF` at the door; under `HARD` on `.../pickup` and `.../handover`, `409 GATE_FAILED` |
 | Show only kitchen-ready orders | `GET .../offers` (an unfinished order is not listed) and accept | `KITCHEN_NOT_READY` |
 | Reveal customer location | `POST .../offers/{id}/customer-location-reveals` (only when the tenant reveals before acceptance) and `POST .../deliveries/{id}/customer-location-reveals` (the carrier, while the delivery is live) | `LOCATION_NOT_YET_REVEALED` |
 | Post-delivery payment check | `POST .../deliveries/{id}/payment-confirmation`, then `advance` to `DELIVERED` | `PAYMENT_CONFIRMATION_REQUIRED`, `PAYMENT_AMOUNT_MISMATCH` |
@@ -1135,9 +1147,18 @@ switches are read. Each refusal is a `422 UNPROCESSABLE_STATE` carrying a stable
 The position a courier sends is measured and discarded: it is in no response, no audit fact, no
 log and no table. Every reveal is a `SECURITY` audit fact naming the courier, the order and the
 offer or shipment, written before the address is read and never containing it; the address itself
-is an ADR 0029 reveal with a recorded purpose. The gate is a hard refusal in both directions, as the
-two radii imply; the "soft, records `GEO_UNVERIFIED`" mode ADR 0042 describes for the status steps is
-not a setting on this policy document and is not built.
+is an ADR 0029 reveal with a recorded purpose. Arriving at the branch and accepting an offer are hard refusals whenever the GPS switch is on. **The pickup
+and the handover are soft unless the location hardens them** (ADR 0042, ADR 0178): the policy document
+carries `pickupHandoverGate` (`SOFT` by default, `HARD`), a failed position check under `SOFT` is recorded
+(`fulfillment.courier_step_checks`, V0656) and the step goes ahead, and under `HARD` it refuses the step. The
+pickup and the handover have their own endpoints, `POST .../deliveries/{id}/pickup` and `.../handover`
+(`If-Match`, `Idempotency-Key`, a body of `{}` or `{position}`): `SOFT` answers 200 with `checks:
+[{kind, outcome}]` for each check the location asks for (`GEO`; `PAYMENT` once the cash is confirmed), `HARD`
+answers `409 GATE_FAILED` whose detail is the failed check kinds, and the cash step never softens
+(`422 PAYMENT_CONFIRMATION_REQUIRED` in both modes). `.../advance` still takes `PICKED_UP` and `DELIVERED`
+under the same mode and keeps its `422` reasons under `HARD`. What the courier app measured feeds the
+accrual's `geo_unverified` flag (both ends measured and passed, or unverified), which is what the
+`GEO_UNVERIFIED_RATE` basis counts.
 
 **Deliberately absent: courier billing mode.** Delever's master toggle enables a personal
 courier balance from which commissions are debited — a prepaid float the worker tops up.
@@ -1243,7 +1264,7 @@ From `legacy-archive/qoida-dashboard/src`:
 | Detach courier with a confirmation dialog | same | §3 unassign, confirmed |
 | `courier_note` as a distinct comment channel on the order, beside `internal_note` and `vendor_note` | `types/Order.ts` | Keep three channels. A note to the courier is not a note to the kitchen |
 | `DISPATCHER` role that can view couriers but not create, edit or delete | `types/User.ts`, `Couriers.page.tsx` | ADR 0025 capabilities: dispatchers get `courier.read`, `courier.assign`, never `courier.manage`. Affordances omitted, not disabled |
-| Courier `online`, `rating`, `rating_count`, `last_order` on the record | `types/Courier.ts` | `online` becomes the live work state (§2); rating stays read-only until reviews have an ADR |
+| Courier `online`, `rating`, `rating_count`, `last_order` on the record | `types/Courier.ts` | `online` becomes the live work state (§2); the rating is declined for v1 (ADR 0178 decision 5; ADR 0159 keeps couriers out of review data) |
 
 ### One legacy behaviour to remove, deliberately
 
@@ -1374,8 +1395,9 @@ Courier-directed messages and statement delivery. Blocks `Message courier` in §
    Provisional home: `courier_types.max_load` plus an order-level size attribute.
 2. **Courier rating and the four-axis review taxonomy** (meal, operator, courier, delivery
    time). The legacy record carries `rating` and `rating_count`; the parity matrix records
-   that no ADR owns reviews or feedback intake. §5 shows rating read-only and §15 omits it
-   until one exists.
+   that no ADR owns reviews or feedback intake. The platform shows no courier rating: ADR 0178
+   decision 5 declines it for v1, and §5, §6 and §15 carry none. Reopening it needs the owner,
+   counsel and a source of the data (`platform/intent/0004-rating-what-happened`).
 3. **Delivery capacity as a lattice** — windows × capacity lines per zone, which is how a
    pre-booked delivery market is actually planned. ADR 0014 covers scheduled sourcing but
    no slot, window or capacity table exists in the model or the IA. It would serve the

@@ -45,8 +45,14 @@ export interface AppConfig {
    */
   readonly channel: string;
 
-  /** Yandex Maps browser key, for the address picker. Not a platform secret. */
-  readonly yandexMapsApiKey: string;
+  /**
+   * @deprecated Retired by ADR 0145 decision 4 and read by nothing. This storefront has no map and
+   * no geocoder; when it gets an address screen, the browser key and the lookups come from the
+   * platform (`GET .../map-config`, `POST .../geocode/*`), as they do in `frontend/storefront`. The
+   * field stays optional only so an older `config.json`, and the fixtures that still spell it, keep
+   * type-checking.
+   */
+  readonly yandexMapsApiKey?: string;
 
   /**
    * How this deployment presents itself: display name, mark, and the accent

@@ -5,6 +5,7 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -87,6 +88,30 @@ public class JdbcDeliveryCostStore {
                 .param("shipmentId", shipmentId)
                 .query(JdbcDeliveryCostStore::mapLine)
                 .list();
+    }
+
+    /**
+     * The newest live cost line of each shipment, for a page of the deliveries list (ADR 0164). Superseded
+     * lines are excluded, exactly as {@link #linesOfShipment} excludes them; where a shipment has several live
+     * lines the most recently recognised one stands for it, with its own basis, and none is added to another.
+     */
+    public Map<UUID, CostLineRow> newestLiveLinePerShipment(UUID tenantId, Collection<UUID> shipmentIds) {
+        if (shipmentIds.isEmpty()) {
+            return Map.of();
+        }
+        List<CostLineRow> lines = jdbc.sql(SELECT_LINE + """
+                 WHERE line.tenant_id = :tenantId AND line.shipment_id IN (:shipmentIds)
+                """ + LIVE_LINES + " ORDER BY line.recognised_at")
+                .param("tenantId", tenantId)
+                .param("shipmentIds", shipmentIds)
+                .query(JdbcDeliveryCostStore::mapLine)
+                .list();
+        Map<UUID, CostLineRow> newest = new java.util.HashMap<>();
+        for (CostLineRow line : lines) {
+            // Ordered oldest first, so the last one written for a shipment is its newest.
+            newest.put(line.shipmentId(), line);
+        }
+        return newest;
     }
 
     /**

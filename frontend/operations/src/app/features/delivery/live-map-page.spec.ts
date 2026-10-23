@@ -8,6 +8,7 @@ import { I18n } from '../../core/i18n/i18n';
 import { MapUnavailableError } from '../../shared/ui/map/map-provider';
 import { NullMapProvider, provideNullMapProvider } from '../../shared/ui/map/null-map-provider';
 import { Toasts } from '../../shared/ui/toast';
+import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
 import { CourierPositionsApi, FleetResponse, TrackRevealResponse } from './courier-positions-api';
 import { DeliveryZonesApi, ZoneOutlineResponse } from './delivery-zones-api';
 import { LiveMapPage } from './live-map-page';
@@ -39,6 +40,32 @@ const ZONE_OUTLINE: ZoneOutlineResponse = {
   ],
 };
 
+function rosterEntry(courierId: string, displayReference: string): RosterEntryResponse {
+  return {
+    courierId,
+    displayReference,
+    status: 'ACTIVE',
+    courierTypeId: 'type-1',
+    courierTypeName: 'Courier',
+    vehicleClass: 'BIKE',
+    activeAssignments: 0,
+    concurrencyCeiling: 2,
+  };
+}
+
+function coarseOf(courierId: string, activeAssignmentCount: number) {
+  return {
+    courierId,
+    activeAssignmentCount,
+    lastFixAt: new Date().toISOString(),
+    reason: 'LAST_FIX_TOO_OLD',
+  };
+}
+
+function pinCarrying(courierId: string, orders: number, latitude: number, longitude: number) {
+  return { ...pinOf(courierId, latitude, longitude), activeAssignmentCount: orders };
+}
+
 function pinOf(courierId: string, latitude: number, longitude: number) {
   return {
     courierId,
@@ -67,6 +94,8 @@ describe('LiveMapPage', () => {
       selectLocation?: (locationId: string) => void;
       revealTrack?: (...args: unknown[]) => Promise<TrackRevealResponse>;
       fleetFn?: () => Promise<FleetResponse>;
+      /** The roster the page identifies couriers by; an Error is a caller who may not read it. */
+      roster?: readonly RosterEntryResponse[] | Error;
     } = {},
   ): Promise<HTMLElement> {
     mapProvider = overrides.provider ?? new NullMapProvider();
@@ -94,6 +123,15 @@ describe('LiveMapPage', () => {
           useValue: {
             fleet: overrides.fleetFn ?? (() => Promise.resolve(fleet)),
             revealTrack: overrides.revealTrack ?? vi.fn(),
+          },
+        },
+        {
+          provide: CouriersApi,
+          useValue: {
+            roster: () =>
+              overrides.roster instanceof Error
+                ? Promise.reject(overrides.roster)
+                : Promise.resolve(overrides.roster ?? []),
           },
         },
       ],
@@ -305,6 +343,7 @@ describe('LiveMapPage', () => {
           },
         },
         { provide: CourierPositionsApi, useValue: { fleet: vi.fn(), revealTrack: vi.fn() } },
+        { provide: CouriersApi, useValue: { roster: () => Promise.resolve([]) } },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -424,5 +463,205 @@ describe('LiveMapPage', () => {
     expect(host.textContent).toContain('No map provider is set up');
     expect(host.querySelectorAll('[data-testid="live-map-pin"]')).toHaveLength(1);
     expect(host.textContent).toContain('courier-1');
+  });
+
+  // ------------------------------------------- row 3.2: couriers by their reference, not their UUID
+
+  describe('identifying a courier (ADR 0029: no name on a pin, and no UUID either)', () => {
+    const UUID_A = '0190a1b2-c3d4-7e5f-8a6b-7c8d9e0f1a2b';
+    const UUID_B = '0190a1b2-c3d4-7e5f-8a6b-aaaaaaaaaaaa';
+
+    it('shows the roster’s reference on the pin, in the table and on the no-signal row', async () => {
+      const host = await render(
+        { pins: [pinOf(UUID_A, 41.31, 69.28)], withoutPin: [coarseOf(UUID_B, 1)] },
+        { roster: [rosterEntry(UUID_A, 'K-100'), rosterEntry(UUID_B, 'K-200')] },
+      );
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(mapProvider.map.livePins[0].label).toContain('K-100');
+      expect(mapProvider.map.livePins[0].label).not.toContain(UUID_A);
+      const row = host.querySelector('[data-testid="live-map-pin"]')!;
+      expect(row.querySelector('td')!.textContent?.trim()).toBe('K-100');
+      const coarse = host.querySelector('[data-testid="live-map-coarse"]')!;
+      expect(coarse.querySelector('td')!.textContent?.trim()).toBe('K-200');
+      expect(host.textContent).not.toContain(UUID_A);
+      expect(host.textContent).not.toContain(UUID_B);
+    });
+
+    it('names the courier by reference on the revealed track too', async () => {
+      const revealTrack = vi.fn().mockResolvedValue({
+        courierId: UUID_A,
+        from: '2026-09-12T10:00:00.000Z',
+        to: '2026-09-12T11:00:00.000Z',
+        purpose: 'Customer says the order never arrived',
+        windows: [],
+      } satisfies TrackRevealResponse);
+      const host = await render(
+        { pins: [pinOf(UUID_A, 41.31, 69.28)], withoutPin: [] },
+        { revealTrack, roster: [rosterEntry(UUID_A, 'K-100')] },
+      );
+      host.querySelector<HTMLButtonElement>('[data-testid="live-map-reveal-trigger"]')!.click();
+      fixture.detectChanges();
+      const purpose = host.querySelector<HTMLTextAreaElement>(
+        '[data-testid="track-reveal-dialog-purpose"]',
+      )!;
+      purpose.value = 'Customer says the order never arrived';
+      purpose.dispatchEvent(new Event('input'));
+      host.querySelector<HTMLButtonElement>('[data-testid="track-reveal-dialog-confirm"]')!.click();
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      const result = host.querySelector('[data-testid="live-map-reveal-result"]')!;
+      expect(result.textContent).toContain('K-100');
+      expect(result.textContent).not.toContain(UUID_A);
+    });
+
+    it('falls back to a short id when the caller may not read the roster, and still shows the fleet', async () => {
+      const host = await render(
+        { pins: [pinOf(UUID_A, 41.31, 69.28)], withoutPin: [coarseOf(UUID_B, 0)] },
+        { roster: new Error('403') },
+      );
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(host.querySelectorAll('[data-testid="live-map-pin"]')).toHaveLength(1);
+      expect(host.querySelector('[data-testid="live-map-pin"] td')!.textContent?.trim()).toBe(
+        '0190a1b2',
+      );
+      expect(mapProvider.map.livePins[0].label).toContain('0190a1b2');
+      expect(mapProvider.map.livePins[0].label).not.toContain(UUID_A);
+      expect(host.textContent).not.toContain(UUID_A);
+    });
+
+    it('falls back to the short id for a courier the roster does not list', async () => {
+      const host = await render(
+        { pins: [pinOf(UUID_A, 41.31, 69.28), pinOf(UUID_B, 41.32, 69.29)], withoutPin: [] },
+        { roster: [rosterEntry(UUID_A, 'K-100')] },
+      );
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      const cells = [...host.querySelectorAll('[data-testid="live-map-pin"]')].map((row) =>
+        row.querySelector('td')!.textContent?.trim(),
+      );
+      expect(cells).toEqual(['K-100', '0190a1b2']);
+    });
+  });
+
+  // -------------------------------- row 3.2: work-state filters (couriers.md §4 "Filters")
+
+  describe('work-state filters', () => {
+    const fleet: FleetResponse = {
+      pins: [
+        pinCarrying('courier-1', 2, 41.31, 69.28),
+        pinCarrying('courier-2', 0, 41.33, 69.22),
+        pinCarrying('courier-3', 1, 41.35, 69.2),
+      ],
+      withoutPin: [coarseOf('courier-4', 1), coarseOf('courier-5', 0)],
+    };
+
+    function chip(host: HTMLElement, state: string): HTMLButtonElement {
+      return host.querySelector<HTMLButtonElement>(`[data-testid="live-map-state-${state}"]`)!;
+    }
+
+    function listed(host: HTMLElement): string[] {
+      return [
+        ...host.querySelectorAll('[data-testid="live-map-pin"], [data-testid="live-map-coarse"]'),
+      ].map((row) => row.querySelector('td')!.textContent!.trim());
+    }
+
+    async function press(host: HTMLElement, state: string): Promise<void> {
+      chip(host, state).click();
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+    }
+
+    it('offers On shift, Carrying, Idle and No signal with how many couriers are in each', async () => {
+      const host = await render(fleet);
+
+      expect(chip(host, 'ON_SHIFT').textContent).toContain('On shift');
+      expect(chip(host, 'ON_SHIFT').textContent).toContain('5');
+      expect(chip(host, 'CARRYING').textContent).toContain('2');
+      expect(chip(host, 'IDLE').textContent).toContain('1');
+      expect(chip(host, 'NO_SIGNAL').textContent).toContain('2');
+      expect(chip(host, 'ON_SHIFT').getAttribute('aria-pressed')).toBe('true');
+      expect(chip(host, 'CARRYING').getAttribute('aria-pressed')).toBe('false');
+      expect(listed(host)).toEqual([
+        'courier-1',
+        'courier-2',
+        'courier-3',
+        'courier-4',
+        'courier-5',
+      ]);
+    });
+
+    it('Carrying keeps the drawable couriers with an order in hand, on the map and in the table', async () => {
+      const host = await render(fleet);
+
+      await press(host, 'CARRYING');
+
+      expect(listed(host)).toEqual(['courier-1', 'courier-3']);
+      expect(mapProvider.map.livePins.map((pin) => pin.label)).toEqual([
+        expect.stringContaining('courier-1'),
+        expect.stringContaining('courier-3'),
+      ]);
+      expect(chip(host, 'CARRYING').getAttribute('aria-pressed')).toBe('true');
+      expect(chip(host, 'ON_SHIFT').getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('Idle keeps the drawable couriers carrying nothing', async () => {
+      const host = await render(fleet);
+
+      await press(host, 'IDLE');
+
+      expect(listed(host)).toEqual(['courier-2']);
+      expect(mapProvider.map.livePins).toHaveLength(1);
+    });
+
+    it('No signal is the band the platform could not draw, whatever it is carrying, and puts nothing on the map', async () => {
+      const host = await render(fleet);
+
+      await press(host, 'NO_SIGNAL');
+
+      expect(listed(host)).toEqual(['courier-4', 'courier-5']);
+      expect(mapProvider.map.livePins).toHaveLength(0);
+    });
+
+    it('goes back to every courier on shift, and a filter with nobody in it says so without an error', async () => {
+      const host = await render({
+        pins: [pinCarrying('courier-1', 1, 41.31, 69.28)],
+        withoutPin: [],
+      });
+
+      await press(host, 'IDLE');
+      expect(listed(host)).toEqual([]);
+      expect(host.querySelector('[data-testid="live-map-state-empty"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="live-map-empty"]')).toBeNull();
+
+      await press(host, 'ON_SHIFT');
+      expect(listed(host)).toEqual(['courier-1']);
+      expect(host.querySelector('[data-testid="live-map-state-empty"]')).toBeNull();
+    });
+
+    it('keeps the chosen filter through the ten-second refresh', async () => {
+      let current: FleetResponse = fleet;
+      const host = await render(fleet, { fleetFn: () => Promise.resolve(current) });
+      await press(host, 'CARRYING');
+
+      current = {
+        pins: [pinCarrying('courier-1', 0, 41.31, 69.28), pinCarrying('courier-3', 3, 41.35, 69.2)],
+        withoutPin: [],
+      };
+      (host.querySelector('[data-testid="live-map-refresh"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+      await flushMicrotasks();
+
+      expect(chip(host, 'CARRYING').getAttribute('aria-pressed')).toBe('true');
+      expect(listed(host)).toEqual(['courier-3']);
+    });
   });
 });

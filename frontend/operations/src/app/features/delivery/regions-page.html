@@ -126,50 +126,13 @@
         }
 
         <p class="q-caption">{{ 'delivery.regions.field.boxHint' | t }}</p>
-        <div class="field-row">
-          <label class="field">
-            <span class="q-caption">{{ 'delivery.regions.field.swLat' | t }}</span>
-            <input
-              type="number"
-              step="0.000001"
-              data-testid="region-sw-lat"
-              [value]="swLat()"
-              (input)="swLat.set(+$any($event.target).value)"
-            />
-          </label>
-          <label class="field">
-            <span class="q-caption">{{ 'delivery.regions.field.swLon' | t }}</span>
-            <input
-              type="number"
-              step="0.000001"
-              data-testid="region-sw-lon"
-              [value]="swLon()"
-              (input)="swLon.set(+$any($event.target).value)"
-            />
-          </label>
-        </div>
-        <div class="field-row">
-          <label class="field">
-            <span class="q-caption">{{ 'delivery.regions.field.neLat' | t }}</span>
-            <input
-              type="number"
-              step="0.000001"
-              data-testid="region-ne-lat"
-              [value]="neLat()"
-              (input)="neLat.set(+$any($event.target).value)"
-            />
-          </label>
-          <label class="field">
-            <span class="q-caption">{{ 'delivery.regions.field.neLon' | t }}</span>
-            <input
-              type="number"
-              step="0.000001"
-              data-testid="region-ne-lon"
-              [value]="neLon()"
-              (input)="neLon.set(+$any($event.target).value)"
-            />
-          </label>
-        </div>
+        <q-bbox-editor
+          class="regions__bbox"
+          [bounds]="box()"
+          [center]="boxCentre()"
+          (boundsChange)="setBox($event)"
+          data-testid="region-bbox"
+        />
         <div class="field-row">
           <label class="field">
             <span class="q-caption">{{ 'delivery.regions.field.centreLat' | t }}</span>

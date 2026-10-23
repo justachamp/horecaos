@@ -42,16 +42,20 @@ import uz.horecaos.platform.courier.application.CourierShiftService;
 import uz.horecaos.platform.courier.application.DeliveryAccrualOrderCompletionTrigger;
 import uz.horecaos.platform.courier.application.port.LegalEntityResolver;
 import uz.horecaos.platform.courier.domain.AccrualCalculator;
+import uz.horecaos.platform.courier.domain.GateMode;
+import uz.horecaos.platform.courier.domain.GateRefusal;
 import uz.horecaos.platform.courier.domain.LedgerEntryType;
 import uz.horecaos.platform.courier.domain.OnTimeOutcome;
 import uz.horecaos.platform.courier.domain.RateCard;
 import uz.horecaos.platform.courier.domain.RateComponent;
 import uz.horecaos.platform.courier.domain.RateComponentType;
+import uz.horecaos.platform.courier.domain.StepCheck;
 import uz.horecaos.platform.courier.domain.VerificationMethod;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierLedgerStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierLedgerStore.LedgerEntryRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierRateCardStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStepCheckStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.CourierTypeRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcDeliveryCostStore;
@@ -95,6 +99,7 @@ class DeliveryAccrualOrderCompletionTriggerTests {
     private JdbcClient jdbc;
     private JdbcCourierStore courierStore;
     private JdbcCourierLedgerStore ledgerStore;
+    private JdbcCourierStepCheckStore stepChecks;
     private DeliveryAccrualOrderCompletionTrigger trigger;
     private FakeCashDueLookupPort cashDue;
     private JdbcDeliveryCompletionAdapter deliveryCompletion;
@@ -227,7 +232,8 @@ class DeliveryAccrualOrderCompletionTriggerTests {
         deliveryCompletion = new JdbcDeliveryCompletionAdapter(jdbc);
         cashDue = new FakeCashDueLookupPort();
 
-        trigger = new DeliveryAccrualOrderCompletionTrigger(deliveryCompletion, accruals, shifts, cashDue);
+        stepChecks = new JdbcCourierStepCheckStore(jdbc);
+        trigger = new DeliveryAccrualOrderCompletionTrigger(deliveryCompletion, accruals, shifts, cashDue, stepChecks);
 
         seedTenancy();
         seedCourier(engagements);
@@ -356,7 +362,8 @@ class DeliveryAccrualOrderCompletionTriggerTests {
         // CheckoutSettlementPlanner leaves behind when it does not recognise
         // the checkout's payment method code.
         var realCashDue = new OrderSettlementService(new JdbcSettlementStore(jdbc), unsupportedPointsPort(), clock);
-        var realTrigger = new DeliveryAccrualOrderCompletionTrigger(deliveryCompletion, accruals, shifts, realCashDue);
+        var realTrigger = new DeliveryAccrualOrderCompletionTrigger(
+                deliveryCompletion, accruals, shifts, realCashDue, stepChecks);
 
         Fixture fixture = seedAssignedShipment("NOT_REQUIRED");
         // Deliberately no row inserted into payments.order_settlements.
@@ -380,7 +387,8 @@ class DeliveryAccrualOrderCompletionTriggerTests {
         // settlement, so a regression in either half (the SQL that nets the balance leg out, or
         // the trigger asking for it) turns it red.
         var realCashDue = new OrderSettlementService(new JdbcSettlementStore(jdbc), unsupportedPointsPort(), clock);
-        var realTrigger = new DeliveryAccrualOrderCompletionTrigger(deliveryCompletion, accruals, shifts, realCashDue);
+        var realTrigger = new DeliveryAccrualOrderCompletionTrigger(
+                deliveryCompletion, accruals, shifts, realCashDue, stepChecks);
         Fixture fixture = seedAssignedShipment("NOT_REQUIRED");
         seedCashAndBalanceSettlement(fixture.orderId(), 45_000L, 12_000L);
 
@@ -456,6 +464,80 @@ class DeliveryAccrualOrderCompletionTriggerTests {
                 .as("nothing was captured, so nothing is guessed")
                 .isNull();
         assertThat(earning.onTimeOutcome()).isEqualTo(OnTimeOutcome.LATE);
+    }
+
+    // ------------------------------------------- ADR 0178: GEO_UNVERIFIED reads what the steps recorded
+
+    @Test
+    @DisplayName("ADR 0178: a delivery whose pickup and handover both recorded a passed position check is verified")
+    void aDeliveryMeasuredAtBothEndsIsVerified() {
+        Fixture fixture = seedAssignedShipment("NOT_REQUIRED");
+        recordGeo(fixture.shipmentId(), JdbcCourierStepCheckStore.Step.PICKED_UP, StepCheck.passed(StepCheck.Kind.GEO));
+        recordGeo(fixture.shipmentId(), JdbcCourierStepCheckStore.Step.DELIVERED, StepCheck.passed(StepCheck.Kind.GEO));
+
+        trigger.onOrderingEvent(orderCompleted(fixture.orderId(), 45_000));
+
+        assertThat(ledgerStore
+                        .findEarningByAttempt(TENANT, fixture.attemptId())
+                        .orElseThrow()
+                        .geoUnverified())
+                .as("the courier app measured both ends and found the courier in place")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("ADR 0178: an order an operator completed with no courier-app trail stays unverified")
+    void anOperatorClosedDeliveryIsUnverified() {
+        Fixture fixture = seedAssignedShipment("NOT_REQUIRED");
+
+        trigger.onOrderingEvent(orderCompleted(fixture.orderId(), 45_000));
+
+        assertThat(ledgerStore
+                        .findEarningByAttempt(TENANT, fixture.attemptId())
+                        .orElseThrow()
+                        .geoUnverified())
+                .as("nothing was measured, and claiming a verification that never ran is the worse answer")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("ADR 0178: a position check that failed, or was never asked for, at either end leaves it unverified")
+    void aFailedOrUnaskedCheckAtEitherEndIsUnverified() {
+        Fixture failedAtHandover = seedAssignedShipment("NOT_REQUIRED");
+        recordGeo(
+                failedAtHandover.shipmentId(),
+                JdbcCourierStepCheckStore.Step.PICKED_UP,
+                StepCheck.passed(StepCheck.Kind.GEO));
+        recordGeo(
+                failedAtHandover.shipmentId(),
+                JdbcCourierStepCheckStore.Step.DELIVERED,
+                StepCheck.failed(StepCheck.Kind.GEO, GateRefusal.TOO_FAR_FROM_DROPOFF));
+        Fixture unaskedAtPickup = seedAssignedShipment("NOT_REQUIRED");
+        recordGeo(
+                unaskedAtPickup.shipmentId(),
+                JdbcCourierStepCheckStore.Step.PICKED_UP,
+                StepCheck.skipped(StepCheck.Kind.GEO));
+        recordGeo(
+                unaskedAtPickup.shipmentId(),
+                JdbcCourierStepCheckStore.Step.DELIVERED,
+                StepCheck.passed(StepCheck.Kind.GEO));
+        Fixture onlyOneEnd = seedAssignedShipment("NOT_REQUIRED");
+        recordGeo(
+                onlyOneEnd.shipmentId(),
+                JdbcCourierStepCheckStore.Step.DELIVERED,
+                StepCheck.passed(StepCheck.Kind.GEO));
+
+        trigger.onOrderingEvent(orderCompleted(failedAtHandover.orderId(), 45_000));
+        trigger.onOrderingEvent(orderCompleted(unaskedAtPickup.orderId(), 45_000));
+        trigger.onOrderingEvent(orderCompleted(onlyOneEnd.orderId(), 45_000));
+
+        for (Fixture fixture : List.of(failedAtHandover, unaskedAtPickup, onlyOneEnd)) {
+            assertThat(ledgerStore
+                            .findEarningByAttempt(TENANT, fixture.attemptId())
+                            .orElseThrow()
+                            .geoUnverified())
+                    .isTrue();
+        }
     }
 
     // ----------------------------------------------------- ADR 0170: pay for a run of several orders
@@ -1069,6 +1151,11 @@ class DeliveryAccrualOrderCompletionTriggerTests {
      * What the courier app leaves on the shipment when the courier taps «picked up» or «delivered»
      * ({@code JdbcCourierJobStore.advance}): the status and the two timestamps, nothing else.
      */
+    private void recordGeo(UUID shipmentId, JdbcCourierStepCheckStore.Step step, StepCheck check) {
+        stepChecks.record(
+                TENANT, shipmentId, courierId, step, List.of(check), GateMode.SOFT, UUID.randomUUID(), 1, NOW);
+    }
+
     private void captureInApp(UUID shipmentId, String status, Instant pickedUpAt, @Nullable Instant deliveredAt) {
         jdbc.sql("""
                 UPDATE fulfillment.shipments

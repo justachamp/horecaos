@@ -1,9 +1,12 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation, LocationOption } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { MediaUploader, mediaUploaderRejectionMessageKey } from '../../shared/ui/media-uploader';
+import { MediaApi } from '../catalog/media-api';
 import { describeApiError } from '../orders/order-errors';
 import {
   AdjustmentReasonResponse,
@@ -17,6 +20,8 @@ import {
   VehicleFuelType,
 } from './couriers-api';
 import { newIdempotencyKey } from '../../core/api/idempotency';
+import { CourierAccessCard } from './courier-access-card';
+import { CourierLifecycleCard } from './courier-lifecycle-card';
 
 type DialogKind = {
   readonly kind: 'verify' | 'suspend' | 'adjustment';
@@ -90,7 +95,7 @@ const FUEL_TYPES: readonly VehicleFuelType[] = [
  */
 @Component({
   selector: 'q-couriers-page',
-  imports: [TPipe],
+  imports: [TPipe, CourierAccessCard, CourierLifecycleCard, MediaUploader],
   templateUrl: './couriers-page.html',
   styleUrl: './couriers-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -98,6 +103,7 @@ const FUEL_TYPES: readonly VehicleFuelType[] = [
 export class CouriersPage implements OnInit {
   private readonly api = inject(CouriersApi);
   private readonly location = inject(CurrentLocation);
+  private readonly mediaApi = inject(MediaApi);
   protected readonly i18n = inject(I18n);
 
   protected readonly loading = signal(true);
@@ -134,9 +140,19 @@ export class CouriersPage implements OnInit {
   protected readonly newCompliance = signal<Record<ComplianceFieldName, string>>(emptyCompliance());
   protected readonly newFuelType = signal('');
 
+  /**
+   * The courier's photo (IA 3.3, V0220): a private, tenant-owned asset. The register form holds the asset id it
+   * uploaded until the courier is registered; the detail pane replaces it on a courier who exists.
+   */
+  protected readonly newPhotoAssetId = signal<string | null>(null);
+  protected readonly newPhotoPreview = signal<string | null>(null);
+  protected readonly uploadingPhoto = signal(false);
+
   // ------------------------------------------------------------ detail pane
 
   protected readonly detail = signal<CourierDetailResponse | null>(null);
+  /** A short-lived signed URL of the open courier's photo, or null when there is none to show. */
+  protected readonly detailPhotoUrl = signal<string | null>(null);
   protected readonly detailLoading = signal(false);
   protected readonly detailError = signal<string | null>(null);
 
@@ -259,6 +275,7 @@ export class CouriersPage implements OnInit {
     this.newReason.set('');
     this.newCompliance.set(emptyCompliance());
     this.newFuelType.set('');
+    this.clearNewPhoto();
     this.registerError.set(null);
     this.showRegisterForm.set(true);
   }
@@ -303,13 +320,117 @@ export class CouriersPage implements OnInit {
         engagedFrom: this.newEngagedFrom(),
         reason: this.newReason().trim(),
         ...compliancePayload(this.newCompliance(), this.newFuelType()),
+        ...(this.newPhotoAssetId() ? { photoMediaId: this.newPhotoAssetId() } : {}),
       });
       this.showRegisterForm.set(false);
+      this.clearNewPhoto();
       await this.load();
     } catch (error) {
       this.registerError.set(this.describe(error));
     } finally {
       this.registerSubmitting.set(false);
+    }
+  }
+
+  // ------------------------------------------------------------------- photo
+
+  /** The register form's uploader: the asset id is held until the courier exists. */
+  protected async uploadNewPhoto(file: File): Promise<void> {
+    const asset = await this.uploadPhoto(file, this.registerError);
+    if (asset) {
+      this.revokePreview(this.newPhotoPreview());
+      this.newPhotoAssetId.set(asset);
+      this.newPhotoPreview.set(URL.createObjectURL(file));
+    }
+  }
+
+  /** The detail pane's uploader: replaces the photo on a courier who exists, as a compliance-file write. */
+  protected async replacePhoto(file: File): Promise<void> {
+    const scope = this.location.scope();
+    const courier = this.detail();
+    if (!scope || !courier) {
+      return;
+    }
+    const asset = await this.uploadPhoto(file, this.detailError);
+    if (!asset) {
+      return;
+    }
+    try {
+      await this.api.recordComplianceFile(scope.tenantId, courier.courierId, {
+        photoMediaId: asset,
+        reason: this.i18n.t('couriers.photo.reason'),
+      });
+      this.detail.set(await this.api.courier(scope.tenantId, courier.courierId));
+      await this.showDetailPhoto();
+    } catch (error) {
+      this.detailError.set(this.describe(error));
+    }
+  }
+
+  protected onPhotoRejected(reason: string): void {
+    const message = this.i18n.t(mediaUploaderRejectionMessageKey(reason));
+    if (this.detail()) {
+      this.detailError.set(message);
+    } else {
+      this.registerError.set(message);
+    }
+  }
+
+  /**
+   * request → PUT the bytes → finalize, as a tenant-owned asset that only a signed URL can open: a courier's
+   * photograph is a named person's likeness (V0220), never a public asset.
+   */
+  private async uploadPhoto(
+    file: File,
+    errorSignal: { set(value: string | null): void },
+  ): Promise<string | null> {
+    const scope = this.location.scope();
+    if (!scope || this.uploadingPhoto()) {
+      return null;
+    }
+    this.uploadingPhoto.set(true);
+    errorSignal.set(null);
+    try {
+      const asset = await firstValueFrom(
+        this.mediaApi.upload(scope.tenantId, 'TENANT', scope.tenantId, 'PRIVATE', file),
+      );
+      return asset.assetId;
+    } catch {
+      errorSignal.set(this.i18n.t('couriers.photo.failed'));
+      return null;
+    } finally {
+      this.uploadingPhoto.set(false);
+    }
+  }
+
+  private clearNewPhoto(): void {
+    this.revokePreview(this.newPhotoPreview());
+    this.newPhotoAssetId.set(null);
+    this.newPhotoPreview.set(null);
+  }
+
+  private revokePreview(url: string | null): void {
+    if (url) {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  /** A thumbnail for the open courier's photo; absent when none is on file or it cannot be fetched yet. */
+  private async showDetailPhoto(): Promise<void> {
+    const scope = this.location.scope();
+    const assetId = this.detail()?.photoMediaId;
+    if (!scope || !assetId) {
+      this.detailPhotoUrl.set(null);
+      return;
+    }
+    try {
+      this.detailPhotoUrl.set(
+        await firstValueFrom(this.mediaApi.downloadUrl(scope.tenantId, assetId, 'THUMBNAIL')),
+      );
+    } catch {
+      // A derivative that has not rendered yet answers like an asset that does not exist; the pane shows
+      // «no photo» rather than an error for a picture that will be there in a moment.
+      this.detailPhotoUrl.set(null);
     }
   }
 
@@ -492,10 +613,12 @@ export class CouriersPage implements OnInit {
     this.editing.set(false);
     this.closeGroupAndBranchForms();
     this.detail.set(null);
+    this.detailPhotoUrl.set(null);
     this.detailError.set(null);
     this.detailLoading.set(true);
     try {
       this.detail.set(await this.api.courier(scope.tenantId, courier.courierId));
+      await this.showDetailPhoto();
     } catch (error) {
       this.detailError.set(this.describe(error));
     } finally {
@@ -505,6 +628,7 @@ export class CouriersPage implements OnInit {
 
   protected closeDetail(): void {
     this.detail.set(null);
+    this.detailPhotoUrl.set(null);
     this.editing.set(false);
     this.closeRevealState();
     this.closeGroupAndBranchForms();
@@ -525,6 +649,31 @@ export class CouriersPage implements OnInit {
       return;
     }
     this.detail.set(await this.api.courier(scope.tenantId, courier.courierId));
+  }
+
+  /** The tenant the open record belongs to, for the cards beside it; empty before the scope is known. */
+  protected tenantIdOfScope(): string {
+    return this.location.scope()?.tenantId ?? '';
+  }
+
+  /** A correction, an end or an archive succeeded: the roster and the open record both moved. */
+  protected async onLifecycleChanged(): Promise<void> {
+    await this.load();
+    try {
+      await this.refreshDetail();
+    } catch (error) {
+      this.detailError.set(this.describe(error));
+    }
+  }
+
+  /** Access is for a courier who works here: not an archived one, and not one whose engagement has ended. */
+  protected canHaveAccess(courier: RosterEntryResponse): boolean {
+    return (
+      courier.status === 'ACTIVE' &&
+      courier.engagementStatus !== null &&
+      courier.engagementStatus !== undefined &&
+      courier.engagementStatus !== 'ENDED'
+    );
   }
 
   protected onFile(field: ComplianceFieldName): boolean {

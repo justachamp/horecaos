@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -86,6 +87,19 @@ public class AdjustmentRuleEvaluator {
         this.adjustments = adjustments;
     }
 
+    /**
+     * Whether some path of this class reads {@code outcomeBasis}, which is the whole of what lets a
+     * rule on it ever fire. The registry's API asks this before it stores a rule (ADR 0178): a rule
+     * on a basis with no reader is a promise the platform cannot keep, so it is refused where it is
+     * authored and not discovered, as silence, on payday.
+     */
+    public static boolean hasReader(String outcomeBasis) {
+        return switch (outcomeBasis) {
+            case "DELIVERED_VOLUME", "LATE_DELIVERY", "ON_TIME_RATE", "GEO_UNVERIFIED_RATE", "CASH_VARIANCE" -> true;
+            default -> false;
+        };
+    }
+
     /** Every {@code SHIFT}-window, {@code SHIFT_CLOSE}-trigger rule this shift's outcome may satisfy. */
     @Transactional
     public List<CourierAdjustmentService.Outcome> evaluateShiftClose(UUID tenantId, ShiftRow shift) {
@@ -97,7 +111,7 @@ public class AdjustmentRuleEvaluator {
 
         List<CourierAdjustmentService.Outcome> posted = new ArrayList<>();
         for (AdjustmentReasonRow rule : rules) {
-            metricFor(rule.outcomeBasis(), metrics)
+            shiftValue(rule.outcomeBasis(), metrics)
                     .filter(value -> holds(rule, value))
                     .ifPresent(value ->
                             posted.add(post(tenantId, shift.courierId(), shift.locationId(), rule, shift.id())));
@@ -120,39 +134,27 @@ public class AdjustmentRuleEvaluator {
             return List.of();
         }
         List<EarningRow> earnings = ledgerStore.earningsOf(tenantId, period.id());
-        long delivered = earnings.size();
-        long onTime = earnings.stream()
-                .filter(e -> e.onTimeOutcome() == OnTimeOutcome.ON_TIME)
-                .count();
-        long late = earnings.stream()
-                .filter(e -> e.onTimeOutcome() == OnTimeOutcome.LATE)
-                .count();
-        long geoUnverified = earnings.stream().filter(EarningRow::geoUnverified).count();
         long cashVariance = ledgerStore.entriesOf(tenantId, period.id()).stream()
                 .filter(e -> e.entryType() == LedgerEntryType.CASH_VARIANCE)
                 .count();
 
         List<CourierAdjustmentService.Outcome> posted = new ArrayList<>();
         for (AdjustmentReasonRow rule : rules) {
-            Long value =
-                    switch (rule.outcomeBasis()) {
-                        case "DELIVERED_VOLUME" -> delivered;
-                        case "LATE_DELIVERY" -> late;
-                        case "ON_TIME_RATE" -> delivered == 0 ? null : onTime * RATE_BASIS_POINTS / delivered;
-                        case "GEO_UNVERIFIED_RATE" ->
-                            delivered == 0 ? null : geoUnverified * RATE_BASIS_POINTS / delivered;
-                        case "CASH_VARIANCE" -> cashVariance;
-                        default -> null; // ORDER_UNDELIVERED, ORDER_DAMAGED: no reader here — manual only.
-                    };
-            if (value != null && holds(rule, value)) {
-                posted.add(post(tenantId, period.courierId(), locationId, rule, period.id()));
-            }
+            // ORDER_UNDELIVERED, ORDER_DAMAGED: no reader here -- manual only.
+            periodValue(rule.outcomeBasis(), earnings, cashVariance)
+                    .filter(value -> holds(rule, value))
+                    .ifPresent(value -> posted.add(post(tenantId, period.courierId(), locationId, rule, period.id())));
         }
         return posted;
     }
 
-    /** @return empty when the basis has no shift-level reading (a rate over zero deliveries, or an unsupported basis) */
-    private static Optional<Long> metricFor(String outcomeBasis, ShiftDeliveryMetrics metrics) {
+    /**
+     * What a basis reads over one closed shift. Shared with the rule simulator (ADR 0178) so that the preview
+     * and the real evaluation can never disagree about the arithmetic.
+     *
+     * @return empty when the basis has no shift-level reading (a rate over zero deliveries, or an unsupported basis)
+     */
+    public static Optional<Long> shiftValue(String outcomeBasis, ShiftDeliveryMetrics metrics) {
         return switch (outcomeBasis) {
             case "DELIVERED_VOLUME" -> Optional.of((long) metrics.deliveredCount());
             case "LATE_DELIVERY" -> Optional.of((long) metrics.lateCount());
@@ -171,12 +173,42 @@ public class AdjustmentRuleEvaluator {
         };
     }
 
+    /**
+     * What a basis reads over one settlement period, from the period's earnings and the number of its
+     * {@code CASH_VARIANCE} ledger entries. Empty for a rate over zero deliveries and for a basis nothing reads.
+     */
+    public static Optional<Long> periodValue(String outcomeBasis, List<EarningRow> earnings, long cashVarianceEntries) {
+        long delivered = earnings.size();
+        long onTime = earnings.stream()
+                .filter(e -> e.onTimeOutcome() == OnTimeOutcome.ON_TIME)
+                .count();
+        long late = earnings.stream()
+                .filter(e -> e.onTimeOutcome() == OnTimeOutcome.LATE)
+                .count();
+        long geoUnverified = earnings.stream().filter(EarningRow::geoUnverified).count();
+        return switch (outcomeBasis) {
+            case "DELIVERED_VOLUME" -> Optional.of(delivered);
+            case "LATE_DELIVERY" -> Optional.of(late);
+            case "ON_TIME_RATE" ->
+                delivered == 0 ? Optional.empty() : Optional.of(onTime * RATE_BASIS_POINTS / delivered);
+            case "GEO_UNVERIFIED_RATE" ->
+                delivered == 0 ? Optional.empty() : Optional.of(geoUnverified * RATE_BASIS_POINTS / delivered);
+            case "CASH_VARIANCE" -> Optional.of(cashVarianceEntries);
+            default -> Optional.empty();
+        };
+    }
+
+    /** Whether a reading satisfies a comparator and a threshold. {@code LTE} is at-or-below, anything else at-or-above. */
+    public static boolean holds(@Nullable String comparator, long threshold, long value) {
+        return "LTE".equals(comparator) ? value <= threshold : value >= threshold;
+    }
+
     private static boolean holds(AdjustmentReasonRow rule, long value) {
         Long threshold = rule.ruleThreshold();
         if (threshold == null) {
             return false;
         }
-        return "LTE".equals(rule.ruleComparator()) ? value <= threshold : value >= threshold;
+        return holds(rule.ruleComparator(), threshold, value);
     }
 
     private CourierAdjustmentService.Outcome post(

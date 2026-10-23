@@ -218,3 +218,14 @@ export const dispatchRulesPaths = {
     return `${this.base(tenantId)}/payment-window`;
   },
 } as const;
+
+/**
+ * The deliveries list of a courier-service tenant (`OperationsDeliveryListController`, ADR 0164 slice two):
+ * every delivery plan the tenant has had, with history, filtered and paged. Tenant-scoped on the path; its
+ * authorised scope follows the `brandId` and `locationId` filters (ADR 0144).
+ */
+export const deliveryListPaths = {
+  deliveries(tenantId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/deliveries`;
+  },
+};

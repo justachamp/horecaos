@@ -72,6 +72,7 @@
       [height]="height()"
       [markers]="markers()"
       [areas]="areas()"
+      [lines]="lines()"
       [label]="'delivery.orderPoints.mapLabel' | t"
       data-testid="order-points-canvas"
     />
@@ -87,5 +88,12 @@
         {{ 'delivery.orderPoints.legend.closed' | t }}
       }
     </p>
+    @if (linesNote(); as note) {
+      @if (lines().length > 0) {
+        <p class="order-points__legend q-caption" data-testid="order-points-lines-note">
+          {{ note }}
+        </p>
+      }
+    }
   }
 </section>

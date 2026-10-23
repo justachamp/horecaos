@@ -10,6 +10,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import uz.horecaos.platform.courier.domain.DistanceSource;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore.ShiftRow;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStepCheckStore;
 import uz.horecaos.platform.fulfillment.api.DeliveryCompletionPort;
 import uz.horecaos.platform.fulfillment.api.DeliveryCompletionPort.InternalDelivery;
 import uz.horecaos.platform.ordering.api.OrderCompleted;
@@ -31,8 +32,10 @@ import uz.horecaos.platform.web.api.ApiException;
  * those instants -- the kitchen handover is the courier's «picked up», the
  * delivery is the courier's «delivered» -- and when it captured nothing the
  * completion stands in for the delivery and the handover stays unknown. See
- * ADR 0125 for why completion is still the trigger, and for the {@code
- * geoUnverified} gap that remains until a position check is recorded.
+ * ADR 0125 for why completion is still the trigger. The accrual's {@code geoUnverified} flag is read
+ * from what the pickup and the handover recorded ({@code fulfillment.courier_step_checks}, ADR 0178):
+ * a delivery the courier app measured at both ends and found in place is verified; one an operator
+ * closed with no courier-app trail, or one whose position check failed or was never asked for, is not.
  *
  * <p><strong>{@link TransactionPhase#AFTER_COMMIT}, unlike {@code
  * loyalty.OrderCompletionAccrualTrigger}.</strong> {@code recordDelivery} is
@@ -73,16 +76,19 @@ public class DeliveryAccrualOrderCompletionTrigger {
     private final CourierAccrualService accrual;
     private final CourierShiftService shifts;
     private final CashDueLookupPort cashDue;
+    private final JdbcCourierStepCheckStore stepChecks;
 
     public DeliveryAccrualOrderCompletionTrigger(
             DeliveryCompletionPort delivery,
             CourierAccrualService accrual,
             CourierShiftService shifts,
-            CashDueLookupPort cashDue) {
+            CashDueLookupPort cashDue,
+            JdbcCourierStepCheckStore stepChecks) {
         this.delivery = delivery;
         this.accrual = accrual;
         this.shifts = shifts;
         this.cashDue = cashDue;
+        this.stepChecks = stepChecks;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -179,12 +185,11 @@ public class DeliveryAccrualOrderCompletionTrigger {
                     internal.pickedUpAt(),
                     internal.pickupWindowEnd(),
                     Math.max(0L, cashToCollectMinor),
-                    // No geo-confirmation capture exists yet either. true
-                    // rather than false: claiming a verification that never
-                    // ran would be a worse answer than stating the gap, and
-                    // AdjustmentRuleEvaluator's geo-unverified rate is meant
-                    // to surface exactly this until it does.
-                    true,
+                    // What the pickup and the handover recorded (ADR 0178). Unverified is
+                    // the answer to anything short of both steps measured and passed:
+                    // claiming a verification that never ran would be worse than stating
+                    // the gap, and an order an operator completed by hand has no trail.
+                    !geoVerified(tenantId, internal.shipmentId()),
                     null,
                     null,
                     internal.payBasis(),
@@ -201,6 +206,25 @@ public class DeliveryAccrualOrderCompletionTrigger {
                     internal.courierId(),
                     tenantId,
                     failure.getMessage());
+        }
+    }
+
+    /**
+     * Whether the courier app measured this delivery at both ends and found the courier in place.
+     * A read that fails is answered «not verified»: the accrual must still be written, and
+     * the flag errs towards the statement that a verification was not shown.
+     */
+    private boolean geoVerified(UUID tenantId, UUID shipmentId) {
+        try {
+            return stepChecks.geoVerified(tenantId, shipmentId);
+        } catch (RuntimeException failure) {
+            log.warn(
+                    "Could not read the recorded position checks of shipment {} (tenant {}); the delivery is "
+                            + "recorded as unverified: {}",
+                    shipmentId,
+                    tenantId,
+                    failure.getMessage());
+            return false;
         }
     }
 

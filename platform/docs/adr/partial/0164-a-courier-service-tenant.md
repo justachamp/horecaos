@@ -1,26 +1,20 @@
 # ADR 0164: A courier-service tenant
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Not started — the discriminator exists and nothing reads it
-  for routing, and the delivery screens exist and nothing puts them first. Built:
-  `tenant.tenants.business_type` with `COURIER_SERVICE` among nine kinds (V0203,
-  `BusinessType`: handovers `DELIVERY` only, no kitchen display), recorded and shown in
-  the control plane by `TenantProfileController` and used for one thing, the onboarding
-  template a run starts from (V0207, `OnboardingTemplateService.suggestedFor`); its own
-  Javadoc says it "enables and disables nothing on its own today". The sellable-module
-  mechanism (`commercial.modules`, `commercial.tenant_modules`, `feature_keys`,
-  V0201, ADR 0087) with a tenant's own purchase (`CommercialOperationsController
-  .purchaseModule`, ADR 0127), and code-owned feature entitlements
-  (`EntitlementKeys`, with `Boolean.FALSE` defaults for opt-in features such as the
-  Telegram family). The console's rail is one constant, `NAVIGATION`
-  (`shell/navigation.ts`), filtered by capability and nothing else; its landing is
-  `redirectTo: 'today'` (`app.routes.ts`); the delivery screens are a section of it
-  (`/delivery`: dispatch board, live map, zones, regions, tariffs, courier rates,
-  rules). Not built: any read of the entitlement or the type by the console, a
-  delivery-first landing, a profile of the rail, and a screen whose row is a delivery.
-  Stale in the gap map and worth correcting: row `3.1b` says "ADR 0002 has no
-  business-type axis"; ADR 0090 built one, and the second entry for the same row says
-  the discriminator exists and what is missing is a decision to let it drive routing.
+- Implementation status: Partial — slice one and slice two are built. Slice one: `tenant.tenants.business_type`
+  with `COURIER_SERVICE` (V0203, `BusinessType`), the `deliveries-console` module resolved to the
+  `DELIVERIES` profile by `ConsoleProfileController`/`ConsoleProfileService` (`ConsoleProfileHttpTests`),
+  the `landingGuard`, the rail's `hiddenSections`, the Orders label, the New order handovers, the
+  onboarding template recommendation and the control-plane directory note. Slice two (2026-10-23, on the
+  owner's instruction for batch 21, ahead of the first courier-service tenant this record named as its
+  trigger): `GET /api/v1/operations/tenants/{t}/deliveries` (`OperationsDeliveryListController`,
+  `DeliveryListService`, `JdbcDeliveryListStore`; `delivery.plan.read` at the scope the filters name; one row
+  per plan with history; filters by branch, courier, state and date; cursor paging; no recipient; the cost at
+  its basis and the cash to collect through `DeliveryMoneyPort`) and the `/deliveries` screen (a row opens
+  the order's own detail pane), proven by `OperationsDeliveryListEndpointTests` and `deliveries-page.spec.ts`.
+  Not done and not code: the `deliveries-console` module row in any real environment (drafted by one person,
+  activated by a second, granted by platform support) and the extensions Decision 8 declines until a signed
+  tenant asks. See `docs/runbooks/external-connections/w3-delivery-maps.md`.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
@@ -65,6 +59,14 @@
 on its proposed default.
 
 **Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) under the standing instruction "lets finish all" given the same day, which accepts every record proposed in batch 19 (ADRs 0154–0176) on the default each open input proposes. An input that names a person other than the owner, or an external fact (a device model, a legal wording, a provider capability, a dataset publication), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation starts in operations batch 20 (2026-10-07).
+
+**Implementation note, 2026-10-23 (the decision is not edited).** Decision 6 says slice two is "built when
+the first courier-service tenant signs", and the Open inputs default was to wait. The owner's instruction for
+batch 21 reverses that default for the build: the list is built now, against the services directly, as
+`ConsoleProfileHttpTests` already proves slice one without a real tenant. What did not change is everything
+that makes it a delivery list and not a second aggregate (Decision 7): it is the plan, its shipment and the
+order's non-PII facts. The `/deliveries` route is now the list and no longer redirects to the dispatch board,
+which stays at `/delivery/dispatch` as the open work; the Delivery section's tab strip links to it.
 
 ## Context
 
@@ -340,9 +342,9 @@ nothing is stored, so nothing is unwound.
 - [ ] Statistics landing on the couriers report for the profile.
 - [ ] Control-plane directory note for the two mismatches.
 - [ ] A recommended-module line in the `COURIER_SERVICE` onboarding template (no grant).
-- [ ] Update ADR 0090's status line to say a module, not the type, carries a console shape.
+- [x] Update ADR 0090's status line to say a module, not the type, carries a console shape (done 2026-10-23).
 - [ ] Tests listed under Testing, each seen failing first.
-- [ ] Slice two (the deliveries list), only after the first courier-service tenant signs.
+- [x] Slice two (the deliveries list): built 2026-10-23, ahead of the first courier-service tenant, on the owner's instruction for batch 21 (see the implementation note).
 
 ## Exit criteria
 

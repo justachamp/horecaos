@@ -23,10 +23,34 @@ Required by ADR 0007. A production route may not ship without one of these; see
 | Circuit breaker | One for the platform's one geocoder (`GeoCircuitBreaker`, resilience4j): count window 10, at least 5 calls, 50% failure rate opens it for 30s, 3 half-open probes. Only `RETRYABLE` and `UNCERTAIN` outcomes count; a refused key says nothing about the provider's health. While open the gateway answers `PROVIDER_UNAVAILABLE` without a network round trip, which is the point: ADR 0145 decision 6 makes an outage "a metric and an alert, not a checkout failure" |
 | Dead-letter destination | `geo.lookup.dead-letter` -> a `RETRYABLE` `GEO_ROUTE_FAILURE` outcome, which the port reports as `Unavailable(PROVIDER_UNAVAILABLE)`. Nothing is queued: a lookup nobody is waiting for any more is not work to retry later |
 | PII classification | The exchange carries a customer's typed address or a coordinate (ADR 0029). `GeoOperation`, `GeocodeResult`, `GeoSuggestion`, `AddressComponents` and `GeocodeOutcome.Answered` override `toString` to print none of it, because Camel writes exchange bodies into route logs and into the messages of the exceptions it wraps. **The provider call's query string is the provider's and is never logged**: `ProviderHttpClient.get(..., query, ...)` keeps it apart from the path it logs, percent-encodes it so a malformed one cannot become an exception message, and puts none of it on an outcome. A provider error body is reduced to an allowlist of scalar fields with long digit runs masked. Metric labels are provider, operation and outcome only. The key is never logged and `ProviderCall.toString` redacts it. **Backstop for a library that logs the request itself:** `SensitiveQueryTurboFilter` (installed by `LogRedactionInstaller` beside whatever logging configuration is active, so it covers every appender and encoder) masks the values of `apikey`, `api_key`, `api-key`, `access_token`, `geocode` and, as query parameters, `key`, `text`, `ll` and `ull` on every line, plain or percent-encoded into another URL. It is a second line, not a substitute: a throwable's message is not rewritten, and a raw space ends a masked value. The in-process JDK `HttpServer` behind `RecordingGeoProvider` writes the requests it receives at DEBUG through the JUL bridge; those lines are the *provider's* access log and the fixture pins that logger to WARN so `GeocodePortContractTests` captures only this code's output |
-| Expected volume | Pilot: under 60 suggestions per operator per minute (the limiter's ceiling is 90), under 30 geocodes and 30 reverse lookups. The thirty-day response cache (ADR 0033, `geo.responses`) absorbs repeats. Metered as `geocode.requests` (ADR 0021): provider calls only, not cache hits |
+| Expected volume | Pilot: under 60 suggestions per operator per minute (the limiter's ceiling is 90), under 30 geocodes and 30 reverse lookups. A storefront customer's ceilings are lower (60 suggestions and 20 lookups a minute each) and the tenant has a ceiling for all its customers together (1200 suggestions and 600 lookups a minute), checked after the personal one. The thirty-day response cache (ADR 0033, `geo.responses`) absorbs repeats. Metered as `geocode.requests` (ADR 0021) with the dimensions `operation` and `surface` (`staff` or `customer`): provider calls only, not cache hits |
 | SLO | p95 under 1.5s for a suggest, under 3s for a geocode or reverse. The deadlines above are the ceiling, not the target |
 | Runbook | `docs/routes/geo-lookup.md#runbook` |
 | Dashboard | Metric `horecaos.geo.lookups`, tagged `provider`, `operation` (`suggest`, `geocode`, `reverse`) and `outcome` (`answered`, `not_configured`, `refused`, `unavailable`); and `horecaos.geo.requests` for the service-level view, tagged `provider`, `operation` and `outcome` (`answered`, `cache_hit`, `rate_limited`, `not_configured`, `provider_refused`, `provider_unavailable`); and the gauge `horecaos.geo.circuit.not_closed` |
+
+## Who calls it
+
+| Surface | Endpoints | Authorised by | Region |
+|---|---|---|---|
+| Operations console | `GET /api/v1/operations/tenants/{t}/brands/{b}/map-config`; `POST .../geocode/{suggestions,resolutions,reverse-resolutions}` at brand scope and again under `.../locations/{l}/` | `geo.lookup` (`map-config`: any signed-in staff principal) | The caller names one, or the tenant's single active region is used |
+| Storefront (batch 21) | `GET /api/v1/storefront/tenants/{t}/brands/{b}/map-config`; `POST .../geocode/{suggestions,resolutions,reverse-resolutions}` | `@CustomerOwned`: the caller must hold an account at the brand (a guest and a stranger are both `404`) | The platform chooses: the tenant's own active region, else the platform's, by code. A customer cannot name one |
+
+Both reach the same `GeocodingService`, so both get the region's box applied and checked, the
+thirty-day cache and the meter. Neither stores anything the provider returns, and neither can
+produce a `GEOCODER` point: the storefront's address screen saves `CUSTOMER_PIN` (a pin the
+customer confirmed on a map) or `NOT_GEOCODED` (an address typed with no map), and the server
+refuses `GEOCODER` from that surface. The storefront paths are published storefront surface
+(ADR 0070).
+
+## Choosing the provider: the bake-off
+
+ADR 0145 decision 3 chose the provider by measurement. `tools/geo/bake_off.py` runs a
+200-address golden set (kept outside git) against the platform's own resolutions endpoint, so
+the provider under test is whichever the environment is configured with, and reports the share
+within 100 m of the surveyed point (pass: 90%), results outside the region's box that were not
+`LOW_CONFIDENCE` (pass: none) and results in another city (pass: none). Run it once for Yandex,
+and again against an environment configured for 2GIS if it fails. The runbook has the command
+and the facts it needs: `docs/runbooks/external-connections/w3-delivery-maps.md`, section 5.
 
 ## What the route decides, and what it deliberately does not
 

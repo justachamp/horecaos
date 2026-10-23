@@ -227,6 +227,59 @@ class CourierPolicyEndpointTests {
     }
 
     @Test
+    @DisplayName("ADR 0178: the pickup and handover mode reads SOFT until a location hardens it, and a write "
+            + "that names HARD reads back HARD")
+    void thePickupAndHandoverModeIsSoftUntilHardened() throws Exception {
+        assertThat(json(mvc.perform(get(policyPath()).with(tokenFor(MANAGER))).andReturn())
+                        .path("pickupHandoverGate")
+                        .asText())
+                .as("ADR 0042's default is soft")
+                .isEqualTo("SOFT");
+
+        MvcResult written = mvc.perform(put(policyPath())
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "courier-policy-gate-1")
+                        .header(HttpHeaders.IF_MATCH, "\"1\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(FULL_POLICY_BODY.replace(
+                                "\"reason\"", "\"pickupHandoverGate\": \"HARD\",\n  \"reason\"")))
+                .andReturn();
+
+        assertThat(written.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json(written).path("pickupHandoverGate").asText()).isEqualTo("HARD");
+        assertThat(json(mvc.perform(get(policyPath()).with(tokenFor(MANAGER))).andReturn())
+                        .path("pickupHandoverGate")
+                        .asText())
+                .isEqualTo("HARD");
+    }
+
+    @Test
+    @DisplayName("ADR 0178: a pickup and handover mode that is neither SOFT nor HARD is a validation failure, "
+            + "and a write that omits it is SOFT")
+    void anUnknownModeIsRefusedAndAnOmittedOneIsSoft() throws Exception {
+        MvcResult unknown = mvc.perform(put(policyPath())
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "courier-policy-gate-2")
+                        .header(HttpHeaders.IF_MATCH, "\"1\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(FULL_POLICY_BODY.replace(
+                                "\"reason\"", "\"pickupHandoverGate\": \"FIRM\",\n  \"reason\"")))
+                .andReturn();
+        assertThat(unknown.getResponse().getStatus()).isEqualTo(400);
+        assertThat(json(unknown).path("code").asText()).isEqualTo("VALIDATION_FAILED");
+
+        MvcResult omitted = mvc.perform(put(policyPath())
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "courier-policy-gate-3")
+                        .header(HttpHeaders.IF_MATCH, "\"1\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(FULL_POLICY_BODY))
+                .andReturn();
+        assertThat(omitted.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json(omitted).path("pickupHandoverGate").asText()).isEqualTo("SOFT");
+    }
+
+    @Test
     @DisplayName("a second write publishes version 2 without touching version 1 — ADR 0030 never edits in place")
     void aSecondWriteAdvancesTheVersion() throws Exception {
         mvc.perform(put(policyPath())

@@ -498,10 +498,6 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.regions.field.nameIn': 'Nomi ({locale})',
   'delivery.regions.field.boxHint':
     'Shimoli-sharqiy burchak janubi-gʻarbiydan shimolroq va sharqroq boʻlishi, markaz esa toʻrtburchak ichida turishi shart.',
-  'delivery.regions.field.swLat': 'JGʻ kenglik',
-  'delivery.regions.field.swLon': 'JGʻ uzunlik',
-  'delivery.regions.field.neLat': 'ShSh kenglik',
-  'delivery.regions.field.neLon': 'ShSh uzunlik',
   'delivery.regions.field.centreLat': 'Markaz kengligi',
   'delivery.regions.field.centreLon': 'Markaz uzunligi',
 
@@ -715,6 +711,12 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
     'Ikkinchi imzo uchun yuborildi (soʻrov {request}). Tasdiqlanmaguncha hech narsa oʻzgarmaydi; tasdiqdan keyin xuddi shu hujjatni qayta eʻlon qiling.',
   'delivery.policy.consequence.runPayMode':
     'Bir reys qoʻshni manzillarga bir necha buyurtma olib borganda kuryer qancha olishini belgilaydi. «Birinchisi toʻliq» keyingi har bir buyurtmaga buyurtma uchun stavka va minimumni toʻliq, kilometr uchun esa faqat oldingi nuqtadan keyingi masofani toʻlaydi; kuryer qabul qilishdan oldin summani koʻradi. Bu hal qilinmaguncha dispetcherlik qoidasi guruhlashni yoqa olmaydi.',
+  'delivery.policy.pickupHandoverGate': 'Olish va topshirishdagi joylashuv tekshiruvi',
+  'delivery.policy.pickupHandoverGate.SOFT':
+    'Yumshoq: yozib qoʻyish va kuryerga davom etishga ruxsat berish',
+  'delivery.policy.pickupHandoverGate.HARD': 'Qattiq: bosqichni rad etish',
+  'delivery.policy.consequence.pickupHandoverGate':
+    '«Oldim» va «yetkazdim» bosqichlariga GPS tekshiruvi yoqilgan boʻlsa qoʻllanadi. Yumshoq rejim (standart) joylashuvi tasdiqlanmagan kuryerga bosqichni yakunlashga ruxsat beradi va joylashuvni tekshirilmagan deb yozadi; bonus yoki jarima qoidasidagi tekshirilmagan joylashuvlar ulushi aynan shuni sanaydi. Qattiq rejim bosqichni rad etadi va oʻtmagan tekshiruvlarni nomlaydi. Taklifni qabul qilish va filialga yetib borish har doim qattiq.',
   'delivery.policy.shiftEnforcement': 'Smena nazorati',
   'delivery.policy.shiftEnforcement.ENFORCED': 'Qatʻiy',
   'delivery.policy.shiftEnforcement.ADVISORY': 'Tavsiya xarakterida',
@@ -848,6 +850,12 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.liveMap.map.pinLabel': '{courier}: faol buyurtmalar — {orders}',
   'delivery.liveMap.map.hint':
     'Har bir nuqta — oxirgi joylashuvi chizish uchun yetarlicha yangi va aniq boʻlgan kuryer; konturlar — amaldagi yetkazib berish zonalari. Nuqtasiz kuryerlar sababi bilan quyida keltirilgan, ular taxminan xaritaga qoʻyilmaydi.',
+  'delivery.liveMap.state.label': 'Kuryer holati',
+  'delivery.liveMap.state.ON_SHIFT': 'Smenada',
+  'delivery.liveMap.state.CARRYING': 'Buyurtma olib ketmoqda',
+  'delivery.liveMap.state.IDLE': 'Boʻsh',
+  'delivery.liveMap.state.NO_SIGNAL': 'Signal yoʻq',
+  'delivery.liveMap.state.empty': 'Hozir bu holatda kuryer yoʻq',
   'delivery.orderPoints.show': 'Bugungi yetkazib berish buyurtmalarini xaritada koʻrsatish',
   'delivery.orderPoints.refresh': 'Qayta ochish',
   'delivery.orderPoints.openOnly': 'Faqat jarayondagi buyurtmalar',
@@ -868,4 +876,66 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.orderPoints.legend.closed': 'yakunlangan yoki bekor qilingan buyurtma',
   'delivery.dispatch.map.show': 'Xarita',
   'delivery.dispatch.map.hide': 'Xaritani yashirish',
+  'delivery.dispatch.legs.branchToDoor':
+    'Buyurtma {number}: filialdan eshikkacha, hozircha uni hech kim olib ketmayapti — toʻgʻri chiziq, yoʻl emas',
+  'delivery.dispatch.legs.branchToCourier':
+    'Buyurtma {number}: filialdan {courier} kuryergacha — toʻgʻri chiziq, yoʻl emas',
+  'delivery.dispatch.legs.courierToDoor':
+    'Buyurtma {number}: {courier} kuryerdan eshikkacha — toʻgʻri chiziq, yoʻl emas',
+  'delivery.dispatch.legs.road': ' · rejadagi yoʻl {km} km',
+  'delivery.dispatch.legs.roadCaption': 'Buyurtma {number}: rejadagi yoʻl {km} km',
+  'delivery.dispatch.legs.note':
+    'Punktir chiziqlar — ikki nuqta orasidagi toʻgʻri chiziqlar, yoʻl emas. Yashil: filialdan kuryerning hozirgi joyigacha. Qizil: kuryerning joyidan eshikkacha, buyurtmani hech kim olib ketmayotgan paytda esa filialdan eshikkacha.',
+  'delivery.rates.reasons.sim.heading': 'Bu qoida kimga tegardi?',
+  'delivery.rates.reasons.sim.hint':
+    'Qoidani yaqinda yopilgan smenalar yoki hisob davrlari boʻyicha qayta oʻtkazadi. Hech narsa yozilmaydi va toʻlanmaydi.',
+  'delivery.rates.reasons.sim.lookback': 'Necha kun orqaga',
+  'delivery.rates.reasons.sim.run': 'Qoidani koʻrib chiqish',
+  'delivery.rates.reasons.sim.nobody':
+    'Oxirgi {days} kunda hech kim (koʻrilgan smena yoki davrlar: {windows}).',
+  'delivery.rates.reasons.sim.hit':
+    'Kuryerlar: {couriers}, jami {total}, oxirgi {days} kunda {windows} ta smena yoki davr boʻyicha.',
+  'delivery.rates.reasons.sim.openPeriod':
+    'Hali yopilmagan davr hozirgi holatida koʻrsatilgan va yopilguncha oʻzgarishi mumkin.',
+  'delivery.rates.reasons.sim.truncated': 'Qoida koʻrsatilganidan koʻproq kuryerga tegadi.',
+  'delivery.rates.reasons.sim.courier': 'Kuryer',
+  'delivery.rates.reasons.sim.reading': 'Koʻrsatkich',
+  'delivery.rates.reasons.sim.amount': 'Hisoblangan boʻlardi',
+  'delivery.deliveries.title': 'Yetkazmalar',
+  'delivery.deliveries.loading': 'Yetkazmalar yuklanmoqda',
+  'delivery.deliveries.denied': 'Bu yerda yetkazmalarni koʻrish huquqingiz yoʻq.',
+  'delivery.deliveries.empty': 'Bu filtrlar boʻyicha yetkazmalar yoʻq.',
+  'delivery.deliveries.more': 'Yana yuklash',
+  'delivery.deliveries.ownBranchOnly':
+    'Faqat sizning filialingiz koʻrsatilgan: barcha filiallarni koʻrish uchun butun kompaniya yetkazmalariga ruxsat kerak.',
+  'delivery.deliveries.filter.branch': 'Filial',
+  'delivery.deliveries.filter.state': 'Holat',
+  'delivery.deliveries.filter.courier': 'Kuryer',
+  'delivery.deliveries.filter.from': 'Dan',
+  'delivery.deliveries.filter.to': 'Gacha',
+  'delivery.deliveries.filter.all': 'Hammasi',
+  'delivery.deliveries.column.order': 'Buyurtma',
+  'delivery.deliveries.column.branch': 'Filial',
+  'delivery.deliveries.column.destination': 'Manzil',
+  'delivery.deliveries.column.state': 'Holat',
+  'delivery.deliveries.column.courier': 'Kuryer',
+  'delivery.deliveries.column.promised': 'Vaʻda qilingan',
+  'delivery.deliveries.column.delivered': 'Yetkazilgan',
+  'delivery.deliveries.column.cash': 'Naqd olinadi',
+  'delivery.deliveries.column.cost': 'Narx',
+  'delivery.deliveries.basis.ACCRUED': 'hisoblangan',
+  'delivery.deliveries.basis.INVOICED': 'hisob-faktura qilingan',
+  'delivery.deliveries.basis.SETTLED': 'hisob-kitob qilingan',
+  'delivery.deliveries.state.PLANNED': 'Rejalashtirilgan',
+  'delivery.deliveries.state.WAITING_TO_SOURCE': 'Kuryer qidirishni kutmoqda',
+  'delivery.deliveries.state.SOURCING': 'Kuryer qidirilmoqda',
+  'delivery.deliveries.state.BOOKING': 'Hamkor band qilinmoqda',
+  'delivery.deliveries.state.RETRY_PENDING': 'Qayta uriniladi',
+  'delivery.deliveries.state.SCHEDULED': 'Jadvalga qoʻyilgan',
+  'delivery.deliveries.state.ASSIGNED': 'Tayinlangan',
+  'delivery.deliveries.state.IN_PROGRESS': 'Yoʻlda',
+  'delivery.deliveries.state.COMPLETED': 'Yetkazilgan',
+  'delivery.deliveries.state.MANUAL_ACTION_REQUIRED': 'Odam kerak',
+  'delivery.deliveries.state.CANCELLED': 'Bekor qilingan',
+  'delivery.nav.deliveries': 'Yetkazmalar',
 };

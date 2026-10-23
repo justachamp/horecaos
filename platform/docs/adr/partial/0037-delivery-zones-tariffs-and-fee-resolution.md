@@ -56,6 +56,14 @@
   import (`LegacyTariffImport`) exists; a geometric tiling test for hairline gaps
   between adjacent zones; and an ADR 0027 approval on zone or tariff activation,
   which is capability-gated only.
+  **The map provider this record inherited from ADR 0015 is decided by ADR 0145
+  (update of 2026-10-14, batch 21):** the console draws zones, and a region's
+  box, on a provider-neutral map (`q-polygon-editor`; `q-bbox-editor`, mounted
+  on Delivery → Regions in batch 21, so the box is a rectangle on a map and four
+  numbers), the geocoder sits behind `GeocodePort` with the region's box applied
+  and checked on every result, and the provider is confirmed by the ADR 0145
+  bake-off (`tools/geo/bake_off.py`: built, and not run, because no environment
+  holds a key, so no real tile has been drawn and no real address resolved).
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-21
 - Date revised: 2026-08-23 — rate-table model corrected against the legacy writer and reader (V0032)

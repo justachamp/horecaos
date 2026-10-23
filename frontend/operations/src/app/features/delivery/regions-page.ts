@@ -20,6 +20,8 @@ import {
 } from '../../core/i18n/locale-labels';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { BoundingBoxEditor } from '../../shared/ui/map/bbox-editor';
+import { LatLng, MapBounds } from '../../shared/ui/map/map-provider';
 import { describeApiError } from '../orders/order-errors';
 import { localisedName } from './localised-name';
 import { RegionGeographyRequest, RegionResponse, RegionsApi } from './regions-api';
@@ -42,13 +44,15 @@ const STATUS_KEYS: Readonly<Record<string, MessageKey>> = {
  * for every zone anyone drew. Onboarding a merchant in a second city needed a
  * developer.
  *
- * **Typed numbers, not a dragged rectangle.** No `BoundingBoxEditor` exists —
- * ADR 0015 still owes the map/geocoder provider decision that ADR 0037
- * inherited — so the four corners are four inputs. The database's own
- * `ck_region_bbox_oriented` and `ck_region_centre_within_bbox` are the whole
- * of the defence against a mis-typed corner, and `RegionService` returns them
- * as sentences an operator can act on, listed here rather than collapsed into
- * one line.
+ * **The box is a rectangle on a map and four numbers (row `X.4`, ADR 0145).** The form mounts
+ * `q-bbox-editor` for the box: a drag of the rectangle writes the four numbers, a typed number
+ * moves the rectangle, and with no map (no provider, no tiles, the vendor unreachable) it is the
+ * four numbers alone, which is what this form was before the editor existed. The editor emits only
+ * a box that is in range and the right way round, so a half-typed or upside-down corner never
+ * reaches the request and the last good box stays in force. The centre stays two plain inputs.
+ * The database's own `ck_region_bbox_oriented` and `ck_region_centre_within_bbox` are still the
+ * last defence, and `RegionService` returns them as sentences an operator can act on, listed here
+ * rather than collapsed into one line.
  *
  * **Row 10.12 — the name is per locale, not a fixed ru/uz/en triple.** A
  * region belongs to the tenant, not to a brand, so its name is edited in the
@@ -66,7 +70,7 @@ const STATUS_KEYS: Readonly<Record<string, MessageKey>> = {
  */
 @Component({
   selector: 'q-regions-page',
-  imports: [TPipe],
+  imports: [TPipe, BoundingBoxEditor],
   templateUrl: './regions-page.html',
   styleUrl: './regions-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -101,6 +105,18 @@ export class RegionsPage implements OnInit {
   protected readonly swLon = signal(68.5);
   protected readonly neLat = signal(42.0);
   protected readonly neLon = signal(70.0);
+
+  /** The box as the editor takes it; always in range and oriented, because only such a box is ever written back. */
+  protected readonly box = computed<MapBounds>(() => ({
+    southWest: { latitude: this.swLat(), longitude: this.swLon() },
+    northEast: { latitude: this.neLat(), longitude: this.neLon() },
+  }));
+
+  /** Where the editor's map opens when it has nothing better: the region's own centre. */
+  protected readonly boxCentre = computed<LatLng>(() => ({
+    latitude: this.centreLat(),
+    longitude: this.centreLon(),
+  }));
 
   async ngOnInit(): Promise<void> {
     await this.load();
@@ -146,6 +162,14 @@ export class RegionsPage implements OnInit {
 
   protected isDefault(locale: string): boolean {
     return locale === this.defaultLocale();
+  }
+
+  /** A box the editor vouches for (in range, south-west then north-east): a drag or four valid numbers. */
+  protected setBox(box: MapBounds): void {
+    this.swLat.set(box.southWest.latitude);
+    this.swLon.set(box.southWest.longitude);
+    this.neLat.set(box.northEast.latitude);
+    this.neLon.set(box.northEast.longitude);
   }
 
   protected setName(locale: string, value: string): void {

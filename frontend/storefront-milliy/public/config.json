@@ -4,7 +4,6 @@
   "brandId": "10000000-0000-0000-0000-000000000002",
   "defaultLocationId": "10000000-0000-0000-0000-000000000003",
   "channel": "STOREFRONT",
-  "yandexMapsApiKey": "99847472-f185-464c-b2cb-7b28dd285a8c",
   "brand": {
     "displayName": "HorecaOS",
     "theme": {

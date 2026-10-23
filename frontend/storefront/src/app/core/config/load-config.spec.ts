@@ -15,7 +15,6 @@ const VALID_BODY = {
   brandId: '10000000-0000-0000-0000-000000000002',
   defaultLocationId: '10000000-0000-0000-0000-000000000003',
   channel: 'STOREFRONT',
-  yandexMapsApiKey: 'a-key',
   brand: VALID_BRAND,
 };
 
@@ -35,7 +34,6 @@ describe('loadAppConfig', () => {
       brandId: '10000000-0000-0000-0000-000000000002',
       defaultLocationId: '10000000-0000-0000-0000-000000000003',
       channel: 'STOREFRONT',
-      yandexMapsApiKey: 'a-key',
       brand: VALID_BRAND,
     });
   });
@@ -48,23 +46,15 @@ describe('loadAppConfig', () => {
     expect(fetchImpl).toHaveBeenCalledWith('config.json', { cache: 'no-store' });
   });
 
-  it('defaults yandexMapsApiKey to empty string when absent', async () => {
-    const { yandexMapsApiKey: _drop, ...rest } = VALID_BODY;
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(rest));
-
-    const config = await loadAppConfig(fetchImpl);
-
-    expect(config.yandexMapsApiKey).toBe('');
-  });
-
-  it('defaults yandexMapsApiKey to empty string when not a string', async () => {
+  it('does not carry a map key: it comes from the platform, and an old config.json that still names one is ignored (ADR 0145 decision 4)', async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValue(jsonResponse({ ...VALID_BODY, yandexMapsApiKey: 42 }));
+      .mockResolvedValue(jsonResponse({ ...VALID_BODY, yandexMapsApiKey: 'an-old-shared-key' }));
 
     const config = await loadAppConfig(fetchImpl);
 
-    expect(config.yandexMapsApiKey).toBe('');
+    expect(config.yandexMapsApiKey).toBeUndefined();
+    expect(JSON.stringify(config)).not.toContain('an-old-shared-key');
   });
 
   it('leaves defaultLocationId undefined when absent', async () => {

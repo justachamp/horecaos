@@ -955,18 +955,20 @@ export const operationsPaths = {
   },
 
   /**
-   * The dispatcher's live map (ADR 0045, `OperationsCourierPositionController`,
-   * IA 3.2) — on the ADR 0031 prefix, but under its own `operations/couriers`
-   * sub-path rather than beside `dispatch`, matching the controller's own
-   * `RequestMapping`.
+   * The dispatcher's live map (ADR 0045, `OperationsCourierPositionController`, IA 3.2) — on
+   * {@link LEGACY_TENANT_PREFIX} like `streams`, because the controller is mapped at
+   * `/api/v1/tenants/{t}/brands/{b}/locations/{l}/operations/couriers`, not under `/api/v1/operations`.
+   * For a release this builder said the second and every live-map call 404'd (batch-20 audit); the
+   * literal path is pinned in `operations-paths.spec.ts` and `courier-positions-api.spec.ts`, and the
+   * conformance gate (`path-conformance.spec.ts`) resolves it against the published baseline.
    */
   courierPositions(scope: LocationScope): string {
-    return `${OPERATIONS}${tenantBrandLocation(scope)}/operations/couriers/positions`;
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/operations/couriers/positions`;
   },
 
   /** Open one courier's stored track for a stated purpose. Mutation: key required, audited. */
   courierTrackReveals(scope: LocationScope, courierId: string): string {
-    return `${OPERATIONS}${tenantBrandLocation(scope)}/operations/couriers/${encodeURIComponent(courierId)}/track-reveals`;
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/operations/couriers/${encodeURIComponent(courierId)}/track-reveals`;
   },
 
   /**
@@ -1411,6 +1413,40 @@ export const courierPaths = {
 
   adjustmentReasonArchival(tenantId: string, reasonId: string): string {
     return `${this.adjustmentReasons(tenantId)}/${encodeURIComponent(reasonId)}/archival`;
+  },
+
+  /**
+   * Preview a bonus or penalty rule against the shifts and settlement periods of the last days
+   * (`OperationsCourierRuleSimulationController`, ADR 0178). A `POST` because its body is a rule that
+   * does not exist yet; it writes nothing.
+   */
+  adjustmentRuleSimulations(tenantId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/adjustment-rule-simulations`;
+  },
+
+  /** Correct a courier's display reference or type (`PUT`, `expectedVersion` in the body). Mutation: key required. */
+  courierCorrection(tenantId: string, courierId: string): string {
+    return this.courier(tenantId, courierId);
+  },
+
+  /** End the courier's engagement (`POST`, ADR 0178). Mutation: key required. */
+  courierEngagementEnding(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/engagement-ending`;
+  },
+
+  /** Archive a courier whose balance is zero (`POST`, ADR 0178). Mutation: key required. */
+  courierArchival(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/archival`;
+  },
+
+  /** Where a courier's app access stands: never a number, never a link (`GET`, ADR 0178). */
+  courierAccess(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/access`;
+  },
+
+  /** Text the courier a link to set their own password, first sign-in or reset (`POST`, ADR 0178). Mutation: key required. */
+  courierAccessInvitations(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/access-invitations`;
   },
 
   /** Record a bonus or a penalty against one courier. Mutation: key required. */

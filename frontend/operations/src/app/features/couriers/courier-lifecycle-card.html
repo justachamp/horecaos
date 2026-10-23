@@ -1,0 +1,89 @@
+<section class="lifecycle" data-testid="courier-lifecycle">
+  <h3 class="q-caption lifecycle__heading">{{ 'couriers.lifecycle.heading' | t }}</h3>
+
+  @if (archived()) {
+    <p class="q-body-sm" data-testid="courier-lifecycle-archived">
+      {{ 'couriers.lifecycle.archived' | t }}
+    </p>
+  } @else if (mode() === 'idle') {
+    <div class="lifecycle__actions">
+      <button type="button" data-testid="courier-lifecycle-edit" (click)="open('edit')">
+        {{ 'couriers.lifecycle.edit' | t }}
+      </button>
+      @if (hasEngagement()) {
+        <button type="button" data-testid="courier-lifecycle-end" (click)="open('end')">
+          {{ 'couriers.lifecycle.end' | t }}
+        </button>
+      }
+      <button type="button" data-testid="courier-lifecycle-archive" (click)="open('archive')">
+        {{ 'couriers.lifecycle.archive' | t }}
+      </button>
+    </div>
+    <p class="q-caption lifecycle__hint">{{ 'couriers.lifecycle.endHint' | t }}</p>
+    <p class="q-caption lifecycle__hint">{{ 'couriers.lifecycle.archiveHint' | t }}</p>
+  } @else {
+    <form class="lifecycle__form" (submit)="$event.preventDefault(); submit()">
+      @if (mode() === 'edit') {
+        <label class="q-field">
+          <span class="q-caption">{{ 'couriers.lifecycle.reference' | t }}</span>
+          <input
+            type="text"
+            maxlength="32"
+            data-testid="courier-lifecycle-reference"
+            [value]="reference()"
+            (input)="reference.set($any($event.target).value)"
+          />
+        </label>
+        <label class="q-field">
+          <span class="q-caption">{{ 'couriers.lifecycle.type' | t }}</span>
+          <select
+            data-testid="courier-lifecycle-type"
+            [value]="typeId()"
+            (change)="typeId.set($any($event.target).value)"
+          >
+            @for (type of types(); track type.courierTypeId) {
+              <option [value]="type.courierTypeId">{{ type.displayName }}</option>
+            }
+          </select>
+        </label>
+      } @else if (mode() === 'end') {
+        <p class="q-body-sm">{{ 'couriers.lifecycle.confirmEnd' | t }}</p>
+      } @else {
+        <p class="q-body-sm">{{ 'couriers.lifecycle.confirmArchive' | t }}</p>
+      }
+
+      <label class="q-field">
+        <span class="q-caption">{{ 'couriers.lifecycle.reason' | t }}</span>
+        <input
+          type="text"
+          maxlength="500"
+          data-testid="courier-lifecycle-reason"
+          [value]="reason()"
+          (input)="reason.set($any($event.target).value)"
+        />
+      </label>
+
+      @if (error(); as message) {
+        <p class="q-caption lifecycle__error" data-testid="courier-lifecycle-error" role="alert">
+          {{ message }}
+        </p>
+      }
+
+      <div class="lifecycle__actions">
+        <button type="submit" data-testid="courier-lifecycle-submit" [disabled]="!canSubmit()">
+          {{
+            (mode() === 'edit'
+              ? 'couriers.lifecycle.save'
+              : mode() === 'end'
+                ? 'couriers.lifecycle.end'
+                : 'couriers.lifecycle.archive'
+            ) | t
+          }}
+        </button>
+        <button type="button" data-testid="courier-lifecycle-cancel" (click)="close()">
+          {{ 'couriers.lifecycle.cancel' | t }}
+        </button>
+      </div>
+    </form>
+  }
+</section>

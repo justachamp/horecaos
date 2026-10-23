@@ -47,6 +47,26 @@
       <p class="q-body-sm">{{ 'delivery.liveMap.denied' | t }}</p>
     </div>
   } @else {
+    <div
+      class="live-map__states"
+      role="group"
+      [attr.aria-label]="'delivery.liveMap.state.label' | t"
+      data-testid="live-map-states"
+    >
+      @for (state of workStates; track state) {
+        <button
+          type="button"
+          class="live-map__state q-caption"
+          [class.live-map__state--on]="workState() === state"
+          [attr.aria-pressed]="workState() === state"
+          (click)="selectState(state)"
+          [attr.data-testid]="'live-map-state-' + state"
+        >
+          {{ stateLabel(state) }}
+          <span class="live-map__stateCount q-tnum">{{ workStateCounts()[state] }}</span>
+        </button>
+      }
+    </div>
     @if (mapReady()) {
       <q-map-canvas
         [center]="openingCentre()"
@@ -77,9 +97,9 @@
         </tr>
       </thead>
       <tbody>
-        @for (pin of pins(); track pin.courierId) {
+        @for (pin of visiblePins(); track pin.courierId) {
           <tr data-testid="live-map-pin">
-            <td class="q-tnum">{{ pin.courierId }}</td>
+            <td class="q-tnum">{{ courierRef(pin.courierId) }}</td>
             <td class="q-tnum">{{ coordinateLabel(pin) }}</td>
             <td class="live-map__num-col q-tnum">{{ accuracyLabel(pin) }}</td>
             <td class="live-map__num-col q-tnum">{{ headingLabel(pin) }}</td>
@@ -99,9 +119,9 @@
             </td>
           </tr>
         }
-        @for (courier of withoutPin(); track courier.courierId) {
+        @for (courier of visibleWithoutPin(); track courier.courierId) {
           <tr class="live-map__coarse" data-testid="live-map-coarse">
-            <td class="q-tnum">{{ courier.courierId }}</td>
+            <td class="q-tnum">{{ courierRef(courier.courierId) }}</td>
             <td colspan="6" class="q-caption">{{ coarseReasonLabel(courier.reason) }}</td>
             <td class="q-tnum">{{ capturedAtLabel(courier.lastFixAt) }}</td>
             <td>
@@ -122,6 +142,12 @@
               <p class="q-body-sm">{{ 'delivery.liveMap.empty' | t }}</p>
             </td>
           </tr>
+        } @else if (visiblePins().length === 0 && visibleWithoutPin().length === 0) {
+          <tr>
+            <td colspan="9" class="live-map__empty" data-testid="live-map-state-empty">
+              <p class="q-body-sm">{{ 'delivery.liveMap.state.empty' | t }}</p>
+            </td>
+          </tr>
         }
       </tbody>
     </table>
@@ -131,7 +157,7 @@
     <div class="live-map__revealResult" data-testid="live-map-reveal-result">
       <div class="live-map__revealResultHeader">
         <span class="q-emphasis">{{
-          'delivery.liveMap.reveal.resultTitle' | t: { courierId: result.courierId }
+          'delivery.liveMap.reveal.resultTitle' | t: { courierId: courierRef(result.courierId) }
         }}</span>
         <button
           type="button"

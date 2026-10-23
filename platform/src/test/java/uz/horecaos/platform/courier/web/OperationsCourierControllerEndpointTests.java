@@ -7,6 +7,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -16,6 +18,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -60,6 +63,8 @@ import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 @SpringBootTest
 @AutoConfigureMockMvc
 class OperationsCourierControllerEndpointTests {
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private static final UUID TENANT = UUID.fromString("018f9c20-3000-7000-8000-0000000000d1");
     private static final UUID BRAND = UUID.fromString("018f9c20-3000-7000-8000-0000000000d2");
@@ -465,6 +470,339 @@ class OperationsCourierControllerEndpointTests {
         assertThat(event.get("changeDocument"))
                 .as("archival silently stops rule evaluation for a rule-wired reason; the audit trail says so")
                 .contains("rule");
+    }
+
+    // ----------------------------------------------- ADR 0178: correct, end and archive a courier
+
+    @Test
+    @DisplayName("a manager corrects a courier's display reference and type with the version the roster gave, "
+            + "audited, and a stale version or a taken reference is refused")
+    void aManagerCorrectsACourier() throws Exception {
+        UUID secondType = seedSecondCourierType(TENANT, "Bicycle");
+        insertCourier(UUID.randomUUID(), TENANT, COURIER_TYPE, "K-200");
+        int version = courierVersion(COURIER);
+        assertThat(rosterVersion(COURIER))
+                .as("the roster reports the version a correction sends back")
+                .isEqualTo(version);
+
+        MvcResult stale = updateCourier(ADMIN, COURIER, version + 5, "\"displayReference\":\"K-101\"");
+        assertThat(stale.getResponse().getStatus()).isEqualTo(409);
+        assertThat(JSON.readTree(stale.getResponse().getContentAsString(UTF_8))
+                        .path("code")
+                        .asText())
+                .isEqualTo("STALE_VERSION");
+
+        MvcResult taken = updateCourier(ADMIN, COURIER, version, "\"displayReference\":\"K-200\"");
+        assertThat(taken.getResponse().getStatus()).isEqualTo(409);
+        assertThat(JSON.readTree(taken.getResponse().getContentAsString(UTF_8))
+                        .path("field")
+                        .asText())
+                .isEqualTo("displayReference");
+
+        MvcResult corrected = updateCourier(
+                ADMIN, COURIER, version, "\"displayReference\":\"K-101\",\"courierTypeId\":\"" + secondType + "\"");
+        assertThat(corrected.getResponse().getStatus()).isEqualTo(200);
+        JsonNode body = JSON.readTree(corrected.getResponse().getContentAsString(UTF_8));
+        assertThat(body.path("displayReference").asText()).isEqualTo("K-101");
+        assertThat(body.path("courierTypeId").asText()).isEqualTo(secondType.toString());
+        assertThat(body.path("version").asInt()).isEqualTo(version + 1);
+
+        String change = jdbc.sql("""
+                        SELECT change_document::text FROM audit.audit_events
+                         WHERE tenant_id = :t AND action_code = 'courier.updated'
+                        """).param("t", TENANT).query(String.class).single();
+        assertThat(change).contains("K-100").contains("K-101");
+
+        assertThat(updateCourier(ADMIN, COURIER, version + 1, "").getResponse().getStatus())
+                .as("nothing to change is a validation failure, not an empty write")
+                .isEqualTo(400);
+        assertThat(updateCourier(OWNER, COURIER, version + 1, "\"displayReference\":\"K-102\"")
+                        .getResponse()
+                        .getStatus())
+                .as("an owner reads couriers and does not manage engagements")
+                .isEqualTo(403);
+        assertThat(updateCourier(OTHER_TENANT_ADMIN, COURIER, version + 1, "\"displayReference\":\"K-102\"")
+                        .getResponse()
+                        .getStatus())
+                .as("another tenant's manager cannot reach this courier")
+                .isEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("ending an engagement is refused while the courier stands on a shift, then dates it and keeps the "
+            + "courier on the roster")
+    void endingAnEngagementIsGuardedByTheOpenShift() throws Exception {
+        UUID shift = openShiftFor(COURIER);
+
+        MvcResult onShift = endEngagement(ADMIN, COURIER);
+        assertThat(onShift.getResponse().getStatus()).isEqualTo(422);
+        assertThat(JSON.readTree(onShift.getResponse().getContentAsString(UTF_8))
+                        .path("reason")
+                        .asText())
+                .isEqualTo("COURIER_HAS_OPEN_SHIFT");
+        assertThat(engagementStatus(COURIER)).isEqualTo("ACTIVE");
+
+        jdbc.sql(
+                        "UPDATE fulfillment.courier_shifts SET status = 'CLOSED', closed_at = now(), close_source = 'COURIER', paid_seconds = 0 WHERE id = :id")
+                .param("id", shift)
+                .update();
+        MvcResult ended = endEngagement(ADMIN, COURIER);
+        assertThat(ended.getResponse().getStatus()).isEqualTo(202);
+        assertThat(engagementStatus(COURIER)).isEqualTo("ENDED");
+        assertThat(jdbc.sql("SELECT status FROM fulfillment.couriers WHERE id = :id")
+                        .param("id", COURIER)
+                        .query(String.class)
+                        .single())
+                .as("ending the engagement does not archive the courier")
+                .isEqualTo("ACTIVE");
+        assertThat(auditCount("courier.engagement.ended")).isEqualTo(1);
+
+        assertThat(endEngagement(ADMIN, COURIER).getResponse().getStatus())
+                .as("there is nothing left to end")
+                .isEqualTo(409);
+        assertThat(endEngagement(OWNER, COURIER).getResponse().getStatus()).isEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("archiving needs a zero balance and no shift, ends the engagement with it, and is final")
+    void archivingNeedsAZeroBalanceAndNoShift() throws Exception {
+        seedCourierCompensationPolicy(TENANT);
+        assertThat(mvc.perform(post(couriersPath(TENANT) + "/" + COURIER + "/adjustments")
+                                .with(tokenFor(ADJUSTER))
+                                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "archive-bonus-1")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {"locationId":"%s","amountMinor":5000,"currency":"UZS",
+                                         "reasonCode":"GOODWILL_BONUS","origin":"MANUAL",
+                                         "idempotencyKey":"archive-goodwill-1","reason":"a bonus owed"}
+                                        """.formatted(LOCATION)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+
+        MvcResult owed = archiveCourier(ADMIN, COURIER);
+        assertThat(owed.getResponse().getStatus()).isEqualTo(422);
+        assertThat(JSON.readTree(owed.getResponse().getContentAsString(UTF_8))
+                        .path("reason")
+                        .asText())
+                .isEqualTo("COURIER_BALANCE_NOT_ZERO");
+        assertThat(courierStatus(COURIER)).isEqualTo("ACTIVE");
+
+        UUID leaver = UUID.randomUUID();
+        insertCourier(leaver, TENANT, COURIER_TYPE, "K-300");
+        seedActiveEngagement(leaver, TENANT);
+        UUID shift = openShiftFor(leaver);
+        MvcResult working = archiveCourier(ADMIN, leaver);
+        assertThat(JSON.readTree(working.getResponse().getContentAsString(UTF_8))
+                        .path("reason")
+                        .asText())
+                .isEqualTo("COURIER_HAS_OPEN_SHIFT");
+
+        jdbc.sql(
+                        "UPDATE fulfillment.courier_shifts SET status = 'CLOSED', closed_at = now(), close_source = 'COURIER', paid_seconds = 0 WHERE id = :id")
+                .param("id", shift)
+                .update();
+        assertThat(archiveCourier(ADMIN, leaver).getResponse().getStatus()).isEqualTo(202);
+        assertThat(courierStatus(leaver)).isEqualTo("ARCHIVED");
+        assertThat(engagementStatus(leaver)).isEqualTo("ENDED");
+        assertThat(auditCount("courier.archived")).isEqualTo(1);
+
+        assertThat(archiveCourier(ADMIN, leaver).getResponse().getStatus()).isEqualTo(409);
+        assertThat(updateCourier(ADMIN, leaver, courierVersion(leaver), "\"displayReference\":\"K-301\"")
+                        .getResponse()
+                        .getStatus())
+                .as("an archived courier is a record and is not edited")
+                .isEqualTo(409);
+        assertThat(archiveCourier(OWNER, leaver).getResponse().getStatus()).isEqualTo(403);
+    }
+
+    private MvcResult updateCourier(String subject, UUID courierId, int expectedVersion, String fields)
+            throws Exception {
+        return mvc.perform(put(couriersPath(TENANT) + "/" + courierId)
+                        .with(tokenFor(subject))
+                        .header(
+                                IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER,
+                                "update-" + courierId + "-" + expectedVersion + "-" + fields.hashCode())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedVersion\":" + expectedVersion + (fields.isEmpty() ? "" : "," + fields)
+                                + ",\"reason\":\"fixing the roster\"}"))
+                .andReturn();
+    }
+
+    private MvcResult endEngagement(String subject, UUID courierId) throws Exception {
+        return mvc.perform(post(couriersPath(TENANT) + "/" + courierId + "/engagement-ending")
+                        .with(tokenFor(subject))
+                        .header(
+                                IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER,
+                                "end-" + courierId + "-" + subject + "-" + System.nanoTime())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"left the company\"}"))
+                .andReturn();
+    }
+
+    private MvcResult archiveCourier(String subject, UUID courierId) throws Exception {
+        return mvc.perform(post(couriersPath(TENANT) + "/" + courierId + "/archival")
+                        .with(tokenFor(subject))
+                        .header(
+                                IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER,
+                                "archive-" + courierId + "-" + subject + "-" + System.nanoTime())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"left the company\"}"))
+                .andReturn();
+    }
+
+    private int courierVersion(UUID courierId) {
+        return jdbc.sql("SELECT version FROM fulfillment.couriers WHERE id = :id")
+                .param("id", courierId)
+                .query(Integer.class)
+                .single();
+    }
+
+    private int rosterVersion(UUID courierId) throws Exception {
+        MvcResult roster =
+                mvc.perform(get(couriersPath(TENANT)).with(tokenFor(ADMIN))).andReturn();
+        for (JsonNode row : JSON.readTree(roster.getResponse().getContentAsString(UTF_8))) {
+            if (courierId.toString().equals(row.path("courierId").asText())) {
+                return row.path("version").asInt();
+            }
+        }
+        throw new AssertionError("the roster does not list " + courierId);
+    }
+
+    private String courierStatus(UUID courierId) {
+        return jdbc.sql("SELECT status FROM fulfillment.couriers WHERE id = :id")
+                .param("id", courierId)
+                .query(String.class)
+                .single();
+    }
+
+    private String engagementStatus(UUID courierId) {
+        return jdbc.sql("SELECT status FROM fulfillment.courier_engagements WHERE courier_id = :id")
+                .param("id", courierId)
+                .query(String.class)
+                .single();
+    }
+
+    private long auditCount(String action) {
+        return jdbc.sql("SELECT count(*) FROM audit.audit_events WHERE tenant_id = :t AND action_code = :a")
+                .param("t", TENANT)
+                .param("a", action)
+                .query(Long.class)
+                .single();
+    }
+
+    private UUID openShiftFor(UUID courierId) {
+        UUID shift = UUID.randomUUID();
+        UUID engagement = jdbc.sql("SELECT id FROM fulfillment.courier_engagements WHERE courier_id = :c")
+                .param("c", courierId)
+                .query(UUID.class)
+                .single();
+        jdbc.sql("""
+                INSERT INTO fulfillment.courier_shifts (id, tenant_id, brand_id, location_id, courier_id,
+                    engagement_id, status, duty_state, opened_at, enforcement_mode)
+                VALUES (:id, :t, :b, :l, :c, :e, 'OPEN', 'AVAILABLE', now(), 'ADVISORY')
+                """)
+                .param("id", shift)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("l", LOCATION)
+                .param("c", courierId)
+                .param("e", engagement)
+                .update();
+        return shift;
+    }
+
+    private UUID seedSecondCourierType(UUID tenantId, String name) {
+        UUID typeId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO fulfillment.courier_types (id, tenant_id, code, display_name,
+                    vehicle_class, max_concurrent_assignments, offer_ttl_seconds, status)
+                VALUES (:id, :t, :code, :name, 'BICYCLE', 2, 60, 'ACTIVE')
+                """)
+                .param("id", typeId)
+                .param("t", tenantId)
+                .param("code", "T" + typeId.toString().substring(0, 8).toUpperCase())
+                .param("name", name)
+                .update();
+        return typeId;
+    }
+
+    // ------------------------------------------- ADR 0178 (D6): a rule needs something that reads its basis
+
+    @Test
+    @DisplayName("a rule on a basis nothing reads is refused with 422 and stores nothing, instead of never firing")
+    void aRuleOnABasisWithNoReaderIsRefused() throws Exception {
+        for (String basis : List.of("ORDER_UNDELIVERED", "ORDER_DAMAGED")) {
+            MvcResult refused =
+                    createReason("DEAD_RULE_" + basis, basis, wiredRuleFields("LTE", 1, "SHIFT", "SHIFT_CLOSE"));
+
+            assertThat(refused.getResponse().getStatus()).isEqualTo(422);
+            JsonNode problem = JSON.readTree(refused.getResponse().getContentAsString(UTF_8));
+            assertThat(problem.path("code").asText()).isEqualTo("UNPROCESSABLE_STATE");
+            assertThat(problem.path("reason").asText()).isEqualTo("BASIS_HAS_NO_EVALUATOR_READER");
+            assertThat(problem.path("outcomeBasis").asText()).isEqualTo(basis);
+            assertThat(reasonCount("DEAD_RULE_" + basis))
+                    .as("a refused rule is not stored")
+                    .isZero();
+        }
+    }
+
+    @Test
+    @DisplayName("a partial rule on a basis with no reader is refused for the missing reader, not for being partial")
+    void aPartialRuleOnABasisWithNoReaderIsRefusedAsDead() throws Exception {
+        MvcResult refused = createReason("DEAD_PARTIAL", "ORDER_DAMAGED", ",\"ruleThreshold\":3");
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(422);
+        assertThat(refused.getResponse().getContentAsString(UTF_8)).contains("BASIS_HAS_NO_EVALUATOR_READER");
+    }
+
+    @Test
+    @DisplayName("the same two bases stay available manual-only, and every basis with a reader still takes a rule")
+    void manualOnlyStaysAvailableAndWiredBasesStillTakeARule() throws Exception {
+        for (String basis : List.of("ORDER_UNDELIVERED", "ORDER_DAMAGED")) {
+            assertThat(createReason("MANUAL_" + basis, basis, "").getResponse().getStatus())
+                    .as("%s manual-only", basis)
+                    .isEqualTo(200);
+        }
+        for (String basis :
+                List.of("DELIVERED_VOLUME", "LATE_DELIVERY", "ON_TIME_RATE", "GEO_UNVERIFIED_RATE", "CASH_VARIANCE")) {
+            MvcResult wired = createReason(
+                    "WIRED_" + basis, basis, wiredRuleFields("GTE", 5, "SETTLEMENT_PERIOD", "SETTLEMENT_PERIOD_CLOSE"));
+            assertThat(wired.getResponse().getStatus())
+                    .as("%s wired: %s", basis, wired.getResponse().getContentAsString(UTF_8))
+                    .isEqualTo(200);
+            assertThat(JSON.readTree(wired.getResponse().getContentAsString(UTF_8))
+                            .path("hasRule")
+                            .asBoolean())
+                    .isTrue();
+        }
+    }
+
+    private MvcResult createReason(String code, String basis, String ruleFields) throws Exception {
+        return mvc.perform(post("/api/v1/operations/tenants/" + TENANT + "/adjustment-reasons")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "reason-" + code)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"" + code + "\",\"kind\":\"PENALTY\",\"outcomeBasis\":\"" + basis
+                                + "\",\"displayName\":\"" + code + "\"" + ruleFields + "}"))
+                .andReturn();
+    }
+
+    /** The five fields (and the currency) a request wires a rule with, written as the console writes them. */
+    private static String wiredRuleFields(String comparator, int threshold, String window, String trigger) {
+        return ",\"ruleAmountMinor\":-10000,\"ruleCurrency\":\"UZS\",\"ruleComparator\":\"" + comparator
+                + "\",\"ruleThreshold\":" + threshold + ",\"ruleWindow\":\"" + window + "\",\"ruleTrigger\":\""
+                + trigger + "\"";
+    }
+
+    private long reasonCount(String code) {
+        return jdbc.sql(
+                        "SELECT count(*) FROM fulfillment.courier_adjustment_reasons WHERE tenant_id = :t AND code = :c")
+                .param("t", TENANT)
+                .param("c", code)
+                .query(Long.class)
+                .single();
     }
 
     // --------------------------------------------------------------------- groups

@@ -1,29 +1,37 @@
 # ADR 0145: Map and geocoding provider
 
 - Decision status: Accepted
-- Implementation status: Not started — no map is drawn anywhere in the operations
-  console and no geocoder is called by the platform. What exists is the schema
-  and the seams, not a provider: `customer.addresses.coordinate_source`
-  (`NOT_GEOCODED`, `LANDMARK_ONLY`, `GEOCODER`, `CUSTOMER_PIN`, `OPERATOR_PIN`,
-  `LEGACY_UNSOURCED`, V0021) with `GEOCODER` written by nothing and refused from
-  the storefront surface; `fulfillment.regions` with the SW/NE bounding box that
-  is meant to constrain a geocoder (V0025, editable as four numbers, row `3.6b`);
-  `fulfillment.service_zone_versions.area geography(MultiPolygon, 4326)` under
-  PostGIS, which `ServiceZoneService` will accept as a polygon through the API
-  while the console draws only circles; `integration.provider_installations`
-  accepting the category `GEOCODING` (V0013) while
-  `ProviderInstallationController.secretCategoryFor` refuses to store a secret
-  for it; `GeoPoint` in `tenancy.api`; `RoadDistancePort` answering empty (the
-  subject of ADR 0147, not this record). The only live third-party map in the
-  repository is outside the platform's control: `frontend/storefront` loads the
-  Yandex Maps 2.1 script on its address screen (`locations-add`) and calls
-  `geocode-maps.yandex.ru` directly from the customer's browser
-  (`GeocodingService`, `YandexMapsService`), and saves what the customer confirms
-  as `CUSTOMER_PIN`; `frontend/storefront-milliy` carries the same two services
-  and the same key configuration with no screen calling them yet (its checkout
-  notes that creating an address "needs the geocoding/marker flow"). Both images
-  ship a browser key as a default in `docker-entrypoint.sh` and `public/config.json`. The operations
-  console, the control plane and the mobile app have no map at all.
+- Implementation status: Partial — the seams, the server and the screens are built; none has
+  met a real provider. **Server:** a provider-neutral `GeocodePort` (`suggest`, `geocode`,
+  `reverseGeocode`) in `tenancy.api`; a Yandex adapter and a controlled fake on the ADR 0007 route
+  `geo.lookup.v1` behind a circuit breaker; `GET .../map-config` and the six console lookups
+  (`geo.lookup`, brand and branch scope) on the operations surface; and, since batch 21 (2026-10-14),
+  the same `map-config` and three lookups for a customer's own session on the storefront surface
+  (`StorefrontGeocodeController`: `@CustomerOwned`, a customer must hold an account at the brand, no
+  region to choose, 60 suggestions and 20 lookups a minute per customer and a tenant ceiling, published
+  storefront surface). `GeocodingService` applies the region and its box, the limits, a thirty-day
+  response cache and the `geocode.requests` meter (dimensions `operation` and `surface`); an outage
+  is a `200` with `status = UNAVAILABLE`, and `GEOCODER` is never written as a coordinate source.
+  **Console:** the `MapProvider` seam (`LazyMapProvider` to `YandexMapProvider`, a lazy chunk, and the
+  recording `NullMapProvider`), `q-map-canvas` (pins, areas, and since batch 21 display-only lines),
+  `q-map-pin`, `q-polygon-editor`, `q-address-picker` and `q-bbox-editor` (mounted on Delivery →
+  Regions in batch 21), used by the zone and region editors, the zone import review, the branch pin,
+  New order, the customer address editor, the live map, the dispatch board (straight, labelled route
+  legs after the audited doorstep reveal), the geography report and the zone-density view.
+  **Storefronts:** `frontend/storefront`'s address screen reads the browser key from `map-config`,
+  makes its lookups through the platform and falls back to a typed `NOT_GEOCODED` address when there
+  is no provider; `frontend/storefront-milliy`'s unused direct-Yandex services are gone; the shared
+  browser key left git (all eight places, in both images, `config.json` and the environment files) and
+  `tools/checks/repo_hygiene.py` keeps it out. `tools/geo/bake_off.py` is the provider-neutral
+  200-address runner, proven over a synthetic set, and `docs/processor-register.md` exists with the
+  geocoder entered (counsel has not reviewed it). **Not done, because each needs a fact from outside
+  the repository** (`docs/runbooks/external-connections/w3-delivery-maps.md`): no environment holds a
+  server key reference, a browser key or `HORECAOS_GEO_PROVIDER=yandex`, so nothing has ever drawn a
+  real tile or called the real geocoder, and the Yandex fixtures are transcribed from documentation
+  and not captured; the golden set and the live bake-off result do not exist; the old shared browser
+  key is still live in the owner's Yandex account until it is restricted or rotated; the licence and
+  how it is paid for from Uzbekistan are unanswered; 2GIS has no adapter; and the `GEOCODER` backfill
+  is not built (no row needs it).
 - Date proposed: 2026-10-01
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (wave batch 17); Ayubkhon Abbosov (platform owner)
@@ -370,25 +378,25 @@ shows today, and checkout continues on `NOT_GEOCODED`.
 - [ ] Owner answers (or accepts the defaults for) the open inputs above.
 - [ ] Golden set and bake-off harness; recorded results kept with the ADR's
       follow-up note.
-- [ ] Geo port in the shared geo vocabulary, with `suggest` added to ADR 0015's
+- [x] Geo port in the shared geo vocabulary, with `suggest` added to ADR 0015's
       two operations; `ModularArchitectureTests` green.
-- [ ] First adapter on the ADR 0007 route machinery, with a route descriptor
+- [x] First adapter on the ADR 0007 route machinery, with a route descriptor
       under `docs/routes/` and a controlled fake.
-- [ ] Platform configuration and ADR 0028 secret reference for the server key;
+- [x] Platform configuration and ADR 0028 secret reference for the server key;
       `map-config` endpoint; metering counter.
-- [ ] The three geocode endpoints, rate limited, with the region box applied and
+- [x] The three geocode endpoints, rate limited, with the region box applied and
       checked; capability declarations settled (see Specification).
-- [ ] `MapProvider`, `q-map-canvas`, `q-map-pin`, `q-polygon-editor`,
+- [x] `MapProvider`, `q-map-canvas`, `q-map-pin`, `q-polygon-editor`,
       `q-bbox-editor`, `q-address-picker` in `frontend/operations`, lazy-loaded;
       ru / uz-latn / en strings; bundle budget unchanged.
-- [ ] Consumers, each its own change: `3.6`/`3.6c` zones and activation review,
+- [x] Consumers, each its own change: `3.6`/`3.6c` zones and activation review,
       `1.3b`/`5.2c` address pane, `10.2b` branch pin, `3.2`/`3.1` positions,
       `7.10` zone density (with a zone dimension in the reporting facts),
       `7.10a` pins (dispatcher scope, audited).
-- [ ] Storefront moves to the platform endpoints; the key defaults leave
+- [x] Storefront moves to the platform endpoints; the key defaults leave
       `docker-entrypoint.sh` and `public/config.json` in both storefronts.
-- [ ] ADR 0015 and ADR 0037 status lines updated to say the provider is chosen.
-- [ ] Add the geocoder to ADR 0034's processor register under the classes it may
+- [x] ADR 0015 and ADR 0037 status lines updated to say the provider is chosen.
+- [x] Add the geocoder to ADR 0034's processor register under the classes it may
       see.
 
 ## Exit criteria
