@@ -60,6 +60,15 @@ async function registration(): Promise<ServiceWorkerRegistration> {
   return navigator.serviceWorker.ready;
 }
 
+/**
+ * The worker's registration if this browser already has one, and nothing otherwise. Unlike
+ * {@link registration} it never installs a worker: reading or dropping a subscription is not a reason to
+ * put a service worker on the handset of a customer who never opted in.
+ */
+async function existingRegistration(): Promise<ServiceWorkerRegistration | undefined> {
+  return navigator.serviceWorker.getRegistration('/');
+}
+
 /** The real thing, used everywhere but in a spec. */
 export function browserPush(): PushBrowser {
   const supported =
@@ -74,8 +83,8 @@ export function browserPush(): PushBrowser {
     permission: () => (supported ? Notification.permission : 'unsupported'),
     requestPermission: () => Notification.requestPermission(),
     current: async () => {
-      const subscription = await (await registration()).pushManager.getSubscription();
-      return subscription === null ? null : narrow(subscription);
+      const subscription = await (await existingRegistration())?.pushManager.getSubscription();
+      return subscription == null ? null : narrow(subscription);
     },
     subscribe: async (applicationServerKey) => {
       const manager = (await registration()).pushManager;
@@ -97,7 +106,7 @@ export function browserPush(): PushBrowser {
       }
     },
     unsubscribe: async () => {
-      const subscription = await (await registration()).pushManager.getSubscription();
+      const subscription = await (await existingRegistration())?.pushManager.getSubscription();
       await subscription?.unsubscribe();
     },
   };
