@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -83,6 +84,44 @@ class JdbcStaffAccountFacts implements StaffAccountFacts {
     }
 
     private record TenantRole(UUID tenantId, String roleCode) {}
+
+    /**
+     * Reads {@code iam.roles}, which has row-level security (V0693): bound to the tenant, the
+     * session sees the tenant's own jobs and the platform's, and the predicate below keeps only the
+     * former. Unbound it would see no job at all, so the caller gets an empty answer, which
+     * {@code MfaPolicy} reads as "unknown" and asks for the factor.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Set<String>> tenantJobCapabilities(UUID tenantId, Set<String> roleCodes) {
+        if (roleCodes.isEmpty()) {
+            return Map.of();
+        }
+        rls.bindTenant(tenantId);
+        Map<String, Set<String>> byJob = new HashMap<>();
+        jdbc.sql("""
+                        SELECT r.code, rc.capability_code
+                          FROM iam.roles r
+                          LEFT JOIN iam.role_capabilities rc ON rc.role_id = r.id
+                         WHERE r.tenant_id = :tenantId
+                           AND NOT r.is_platform_defined
+                           AND r.code = ANY (CAST(:codes AS varchar[]))
+                        """)
+                .param("tenantId", tenantId)
+                .param("codes", roleCodes.toArray(String[]::new))
+                .query((resultSet, row) ->
+                        new JobCapability(resultSet.getString("code"), resultSet.getString("capability_code")))
+                .list()
+                .forEach(job -> {
+                    Set<String> carried = byJob.computeIfAbsent(job.roleCode(), code -> new HashSet<>());
+                    if (job.capabilityCode() != null) {
+                        carried.add(job.capabilityCode());
+                    }
+                });
+        return byJob;
+    }
+
+    private record JobCapability(String roleCode, @Nullable String capabilityCode) {}
 
     @Override
     public Optional<String> uiLocale(String subject) {

@@ -525,7 +525,8 @@ export const staffUzLatn: AreaMessages<typeof staffEn> = {
   'staff.mfa.policy.body':
     'Kirishda kimdan autentifikator ilovasidagi kod soʻralsin. Platforma xodimlaridan har doim soʻraladi.',
   'staff.mfa.policy.OFF': 'Hech kimdan',
-  'staff.mfa.policy.SENSITIVE_ROLES': 'Ega, administrator, moliya va brend menejeri',
+  'staff.mfa.policy.SENSITIVE_ROLES':
+    'Ega, administrator, moliya va brend menejeri, shuningdek ularning maxsus huquqlariga ega oʻzingiz yaratgan lavozim',
   'staff.mfa.policy.ALL_STAFF': 'Bu yerda ishlaydigan hammadan',
   'staff.mfa.policy.save': 'Saqlash',
   'staff.mfa.policy.saved': 'Saqlandi. Allaqachon kirganlardan keyingi kirishda soʻraladi.',

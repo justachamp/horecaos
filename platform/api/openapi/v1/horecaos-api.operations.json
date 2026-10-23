@@ -18367,20 +18367,6 @@
         },
         "type" : "object"
       },
-      "PageWouldPushItemResponse" : {
-        "properties" : {
-          "items" : {
-            "items" : {
-              "$ref" : "#/components/schemas/WouldPushItemResponse"
-            },
-            "type" : "array"
-          },
-          "nextCursor" : {
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "PaidHoldResponse" : {
         "properties" : {
           "isDefault" : {
@@ -18659,7 +18645,9 @@
       "PasswordResetRequest" : {
         "properties" : {
           "locale" : {
-            "pattern" : "uz-Latn|uz|ru|en",
+            "maxLength" : 35,
+            "minLength" : 0,
+            "pattern" : "[A-Za-z]{2,8}([-_][A-Za-z0-9]{1,8}){0,3}",
             "type" : "string"
           },
           "login" : {
@@ -30180,16 +30168,6 @@
         },
         "type" : "object"
       },
-      "TillRevisionActionRequest" : {
-        "properties" : {
-          "expectedRevision" : {
-            "format" : "int32",
-            "type" : "integer"
-          }
-        },
-        "required" : [ "expectedRevision" ],
-        "type" : "object"
-      },
       "TillRevisionNoticeView" : {
         "properties" : {
           "attemptCount" : {
@@ -30220,10 +30198,6 @@
           },
           "revisedTotalMinor" : {
             "format" : "int64",
-            "type" : "integer"
-          },
-          "revision" : {
-            "format" : "int32",
             "type" : "integer"
           },
           "source" : {
@@ -31785,31 +31759,6 @@
           "versionNumber" : {
             "format" : "int32",
             "type" : "integer"
-          }
-        },
-        "type" : "object"
-      },
-      "WouldPushItemResponse" : {
-        "properties" : {
-          "confirmedAvailable" : {
-            "type" : "boolean"
-          },
-          "dishName" : {
-            "type" : "string"
-          },
-          "externalItemReference" : {
-            "type" : "string"
-          },
-          "variantId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "wouldPushAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "wouldPushAvailable" : {
-            "type" : "boolean"
           }
         },
         "type" : "object"
@@ -37196,185 +37145,6 @@
         },
         "summary" : "This order's resolved severity, right now",
         "tags" : [ "Order lateness" ]
-      }
-    },
-    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/till-revision" : {
-      "get" : {
-        "description" : "`notice` is null when the till and the order agree (or the order was never exported before its weight was captured). An open notice carries what the till holds and what the order is worth; once closed, the latest notice is returned with its status so a screen can say what happened. `canTell` is true only while a notice is open and the binding the order was exported through has ORDER_REVISION enabled and usable: no real vendor has it today.",
-        "operationId" : "tillRevisionForOrder",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "path",
-          "name" : "brandId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "path",
-          "name" : "locationId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "path",
-          "name" : "orderId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/TillRevisionResponse"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Whether the till holds a different total than this order has, and whether the platform can tell it",
-        "tags" : [ "Order till revision" ]
-      }
-    },
-    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/till-revision/acknowledge" : {
-      "post" : {
-        "description" : "A person changed the till by hand. Closes the open notice as ACKNOWLEDGED, audited against the person. The body names the revision of the notice the person saw: 409 STALE_VERSION, with the notice left open, when the order has been weighed again since, because what they changed the till to is not the total the order is worth now. 409 NO_OPEN_NOTICE when none is open.",
-        "operationId" : "acknowledgeTillRevision",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "path",
-          "name" : "brandId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "path",
-          "name" : "locationId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "path",
-          "name" : "orderId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/TillRevisionActionRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/TillRevisionResponse"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Say the till now agrees with the order",
-        "tags" : [ "Order till revision" ]
-      }
-    },
-    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/till-revision/send" : {
-      "post" : {
-        "description" : "Only where the binding can take one (ORDER_REVISION). Sent under a key built from the notice, so a repeat is the same send. The body names the revision of the notice the operator saw: 409 STALE_VERSION, with nothing sent and nothing closed, when the order has been weighed again since. Otherwise answers 200 with the outcome in the body: a refusal, an unreachable till, an unknown outcome and a notice that moved while the till was being asked (SUPERSEDED) are ordinary answers, and in each the notice stays open with a stable failure code.",
-        "operationId" : "sendTillRevision",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "path",
-          "name" : "brandId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "path",
-          "name" : "locationId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "path",
-          "name" : "orderId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/TillRevisionActionRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/TillRevisionSendResponse"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Tell the till the order's revised total",
-        "tags" : [ "Order till revision" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/preparation-bands" : {
@@ -43537,7 +43307,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/storefront-branch-order" : {
       "get" : {
-        "description" : "storefrontSortOrder is null for a branch nobody has placed; those sort last, by name. The ETag is the version of the order, which a replacement presents in If-Match.",
+        "description" : "storefrontSortOrder is null for a branch nobody has placed; those sort last, by name.",
         "operationId" : "readStorefrontBranchOrder",
         "parameters" : [ {
           "in" : "path",
@@ -43575,7 +43345,7 @@
         "tags" : [ "Storefront branch order" ]
       },
       "put" : {
-        "description" : "Names the branches first to last. A branch of the brand that is left out goes back to unset and sorts last, so If-Match must carry the version (ETag) of the order last read: 409 STALE_VERSION when a colleague changed it since, 400 without it. 400 for a branch that is not this brand's or is named twice. The response carries the new ETag.",
+        "description" : "Names the branches first to last. A branch of the brand that is left out goes back to unset and sorts last. 400 for a branch that is not this brand's or is named twice.",
         "operationId" : "replaceStorefrontBranchOrder",
         "parameters" : [ {
           "in" : "path",
@@ -43662,7 +43432,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/telegram/mini-app-setup/menu-button" : {
       "post" : {
-        "description" : "Calls Telegram's setChatMenuButton with the label from the Telegram channel's settings and the brand's verified storefront address, then getChatMenuButton. 422 naming what is missing when the bot, the Telegram channel, the Mini App switch or the address is not there, or when Telegram refuses. A Telegram that accepts and then shows something else leaves MENU_BUTTON TODO. While Telegram still shows a Mini App button the setup no longer stands behind (the Mini App is off, or the address is not verified; MENU_BUTTON reads STALE_BUTTON) the same call sets Telegram's default button back instead, read back the same way.",
+        "description" : "Calls Telegram's setChatMenuButton with the label from the Telegram channel's settings and the brand's verified storefront address, then getChatMenuButton. 422 naming what is missing when the bot, the Telegram channel, the Mini App switch or the address is not there, or when Telegram refuses. A Telegram that accepts and then shows something else leaves MENU_BUTTON TODO.",
         "operationId" : "applyMenuButton",
         "parameters" : [ {
           "in" : "path",
@@ -49915,6 +49685,117 @@
         "tags" : [ "Order remedies" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/till-revision" : {
+      "get" : {
+        "description" : "`notice` is null when the till and the order agree (or the order was never exported before its weight was captured). An open notice carries what the till holds and what the order is worth; once closed, the latest notice is returned with its status so a screen can say what happened. `canTell` is true only while a notice is open and the binding the order was exported through has ORDER_REVISION enabled and usable: no real vendor has it today.",
+        "operationId" : "tillRevisionForOrder",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TillRevisionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether the till holds a different total than this order has, and whether the platform can tell it",
+        "tags" : [ "Order till revision" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/till-revision/acknowledge" : {
+      "post" : {
+        "description" : "A person changed the till by hand. Closes the open notice as ACKNOWLEDGED, audited against the person. 409 when no notice is open.",
+        "operationId" : "acknowledgeTillRevision",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TillRevisionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Say the till now agrees with the order",
+        "tags" : [ "Order till revision" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/till-revision/send" : {
+      "post" : {
+        "description" : "Only where the binding can take one (ORDER_REVISION). Sent under a key built from the notice, so a repeat is the same send. Answers 200 with the outcome in the body: a refusal, an unreachable till and an unknown outcome are ordinary answers, and in each the notice stays open with a stable failure code.",
+        "operationId" : "sendTillRevision",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TillRevisionSendResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Tell the till the order's revised total",
+        "tags" : [ "Order till revision" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/partner-delivery-invoices" : {
       "get" : {
         "description" : "IMPORTED (not yet matched against HorecaOS's own shipments) sorts first, largest total first. Optionally filtered to one status.",
@@ -53272,7 +53153,7 @@
         "tags" : [ "Brand switcher" ]
       },
       "post" : {
-        "description" : "The entry names the target brand and one of the tenant's website channels that sells at the target brand's branches (the pairs GET /candidates offers; any other pair is a 400); it links to that channel's verified hostname, checked on every read. A brand cannot offer itself, and the same brand and channel twice is a conflict.",
+        "description" : "The entry names the target brand and one of the tenant's website channels; it links to that channel's verified hostname, checked on every read. A brand cannot offer itself, and the same brand and channel twice is a conflict.",
         "operationId" : "addSwitcherEntry",
         "parameters" : [ {
           "in" : "path",
@@ -57152,7 +57033,7 @@
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/marketplace-propagation" : {
       "get" : {
-        "description" : "ADR 0141. mode is AUTOMATIC (the platform pushes and these counts say how many items it has not been able to confirm), MANUAL (the platform is not pushing to this marketplace: update the partner portal by hand; reason is NO_ADAPTER, INSTALLATION_INACTIVE, CHANNEL_UNRESOLVED or NO_ITEMS_TRACKED) or SUSPENDED (the reconcile switch is off) or DRY_RUN (ADR 0141 Phase 3: the binding rehearses, wouldPush counts the dishes the platform has recorded as would-be pushes and nothing has been sent; unconfirmedItems is a sample, and GET .../marketplace-propagation/{bindingId}/would-push is the whole list). incidentOpenSince is set while a stale-channel incident is open on an automatic binding and clears by itself on recovery (ADR 0180). No item names and no provider response bodies: identifiers, counts, timestamps and stable codes.",
+        "description" : "ADR 0141. mode is AUTOMATIC (the platform pushes and these counts say how many items it has not been able to confirm), MANUAL (the platform is not pushing to this marketplace: update the partner portal by hand; reason is NO_ADAPTER, INSTALLATION_INACTIVE, CHANNEL_UNRESOLVED or NO_ITEMS_TRACKED) or SUSPENDED (the reconcile switch is off) or DRY_RUN (ADR 0141 Phase 3: the binding rehearses, wouldPush counts the dishes the platform has recorded as would-be pushes and nothing has been sent). incidentOpenSince is set while a stale-channel incident is open on an automatic binding and clears by itself on recovery (ADR 0180). No item names and no provider response bodies: identifiers, counts, timestamps and stable codes.",
         "operationId" : "propagation",
         "parameters" : [ {
           "in" : "path",
@@ -57192,74 +57073,6 @@
           }
         },
         "summary" : "Per marketplace binding: pending and unconfirmed items, and since when",
-        "tags" : [ "Marketplace propagation" ]
-      }
-    },
-    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/marketplace-propagation/{bindingId}/would-push" : {
-      "get" : {
-        "description" : "ADR 0141 Phase 3, ADR 0180 Decision 3. The whole of a rehearsal's output, one decision per dish, for the operator to compare with the partner's own portal: the list behind the propagation read's wouldPush count, which is this list's size. Ordered by externalItemReference (the partner's own id for the item). Cursor-paged; cursor is the externalItemReference of the last dish seen. The dish's name is resolved through the catalog when the list is read and is absent where the dish no longer resolves; nothing but identifiers, the decision and its instant is stored. Empty while the binding is not rehearsing. 404 for a binding that is not an active marketplace binding of this branch.",
-        "operationId" : "wouldPush",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "path",
-          "name" : "brandId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "path",
-          "name" : "locationId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "path",
-          "name" : "bindingId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "cursor",
-          "required" : false,
-          "schema" : {
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
-          "name" : "limit",
-          "required" : false,
-          "schema" : {
-            "format" : "int32",
-            "type" : "integer"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/PageWouldPushItemResponse"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Every dish a dry-run marketplace binding would push, with the dish's name",
         "tags" : [ "Marketplace propagation" ]
       }
     },

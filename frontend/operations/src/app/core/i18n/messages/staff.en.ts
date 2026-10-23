@@ -514,7 +514,8 @@ export const staffEn = {
   'staff.mfa.policy.body':
     'Whom to ask for a code from an authenticator app when they sign in. Platform staff are always asked.',
   'staff.mfa.policy.OFF': 'Nobody',
-  'staff.mfa.policy.SENSITIVE_ROLES': 'Owner, administrator, finance and brand manager',
+  'staff.mfa.policy.SENSITIVE_ROLES':
+    'Owner, administrator, finance and brand manager, and any job of your own that holds their special powers',
   'staff.mfa.policy.ALL_STAFF': 'Everyone who works here',
   'staff.mfa.policy.save': 'Save',
   'staff.mfa.policy.saved': 'Saved. People already signed in are asked at their next sign-in.',

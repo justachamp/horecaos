@@ -523,7 +523,8 @@ export const staffRu: AreaMessages<typeof staffEn> = {
   'staff.mfa.policy.body':
     'У кого запрашивать код из приложения-аутентификатора при входе. Сотрудников платформы спрашивают всегда.',
   'staff.mfa.policy.OFF': 'Ни у кого',
-  'staff.mfa.policy.SENSITIVE_ROLES': 'Владелец, администратор, финансы и управляющий брендом',
+  'staff.mfa.policy.SENSITIVE_ROLES':
+    'Владелец, администратор, финансы и управляющий брендом, а также своя должность с их особыми правами',
   'staff.mfa.policy.ALL_STAFF': 'У всех сотрудников',
   'staff.mfa.policy.save': 'Сохранить',
   'staff.mfa.policy.saved': 'Сохранено. Уже вошедших спросят при следующем входе.',

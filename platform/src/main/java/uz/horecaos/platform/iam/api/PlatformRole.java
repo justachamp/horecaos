@@ -1417,7 +1417,11 @@ public enum PlatformRole {
         return this == TENANT_OWNER || this == TENANT_ADMIN || this == TENANT_FINANCE || this == BRAND_MANAGER;
     }
 
-    /** Whether the role with this code is {@link #mfaSensitive()}; an unknown code is not. */
+    /**
+     * Whether the role with this code is {@link #mfaSensitive()}; an unknown code is not. A job the
+     * company composed (ADR 0186) is not a role in this enum and is answered from what it carries,
+     * by {@link TenantJobRules#isMfaSensitive}.
+     */
     public static boolean isMfaSensitive(String roleCode) {
         return find(roleCode).map(PlatformRole::mfaSensitive).orElse(false);
     }

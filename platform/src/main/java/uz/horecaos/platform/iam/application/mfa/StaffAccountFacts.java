@@ -20,6 +20,14 @@ public interface StaffAccountFacts {
      */
     Map<UUID, Set<String>> rolesByTenant(String subject);
 
+    /**
+     * The capability codes each of these roles carries, for the ones that are the tenant's own jobs
+     * (ADR 0186); a code-owned role, or a code the tenant has no job by, is absent from the answer.
+     * A job that exists and carries nothing is present with an empty set, which a caller must not
+     * read as "carries nothing sensitive".
+     */
+    Map<String, Set<String>> tenantJobCapabilities(UUID tenantId, Set<String> roleCodes);
+
     /** Whether the subject holds an active, in-force grant of this role at any scope in the tenant. */
     boolean holdsRoleInTenant(String subject, UUID tenantId, String roleCode);
 

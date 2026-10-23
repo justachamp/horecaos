@@ -113,45 +113,56 @@ class StaffPasswordResetControllerTests {
     }
 
     /**
-     * ADR 0149, Decision 5: both consoles send the registry's tag as the reset language, so the endpoint has
-     * to accept exactly what they send. The request used to validate against {@code uz|ru|en} while the
-     * consoles sent {@code uz-Latn}, so every staff member reading the console in Uzbek was answered 400
-     * and no reset was ever created. Every console spec stubs the API, so no suite saw it.
+     * The tag the operations console actually sends, in the body it actually sends.
      *
-     * <p>Its own address, never reused: eight requests would otherwise spend the budget of MockMvc's
-     * constant {@code 127.0.0.1} that the unauthenticated-path tests above and below count on.
+     * <p>The console's {@code LOCALES} are {@code ru}, {@code uz-Latn} and {@code en} and, since
+     * ADR 0149, the page posts {@code I18n.locale()} as it is. The DTO used to accept only
+     * {@code uz|ru|en}, so every Uzbek-language operator got a 400 before the service's alias
+     * handling ran, and the only recovery path of a locked-out account was closed to them. The
+     * service decides what the platform sends in ({@code LocaleVocabulary.message}), so the
+     * boundary has to hand it any registered tag, any alias and a tag nobody has activated yet.
      */
     @Test
-    @DisplayName("asking for a reset in each language a console sends is accepted as that language, on both prefixes")
-    void everyTagAConsoleSendsIsAccepted() throws Exception {
+    @DisplayName("asking for a reset accepts every tag the consoles send, and the tag reaches the service as sent")
+    void requestingAResetAcceptsTheConsolesOwnTags() throws Exception {
+        // A caller address of this method's own: ten a minute per address is the limiter's budget, and
+        // the methods around this one spend 127.0.0.1's.
         for (String prefix : new String[] {"control-plane", "operations"}) {
-            StaffConsole console = "operations".equals(prefix) ? StaffConsole.OPERATIONS : StaffConsole.CONTROL_PLANE;
-            for (String tag : new String[] {"ru", "uz-Latn", "en", "uz"}) {
+            String address = "control-plane".equals(prefix) ? "203.0.113.20" : "203.0.113.21";
+            String[] tags = "control-plane".equals(prefix)
+                    ? new String[] {"uz-Latn"}
+                    : new String[] {"uz-Latn", "uz", "ru", "en", "kk", "en-US", "uz_UZ"};
+            for (String tag : tags) {
                 MvcResult result = mvc.perform(post("/api/v1/%s/auth/password-resets".formatted(prefix))
-                                .with(from("203.0.113.20"))
+                                .with(from(address))
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\"login\":\"cashier\",\"locale\":\"%s\"}".formatted(tag)))
+                                .content("{\"login\":\"cashier-%s\",\"locale\":\"%s\"}".formatted(tag, tag)))
                         .andReturn();
 
                 assertThat(result.getResponse().getStatus())
-                        .as("%s sending %s", prefix, tag)
+                        .as("%s with locale %s", prefix, tag)
                         .isEqualTo(202);
-                verify(resets).request(eq("cashier"), eq(console), eq(tag), anyString());
+                StaffConsole console =
+                        "control-plane".equals(prefix) ? StaffConsole.CONTROL_PLANE : StaffConsole.OPERATIONS;
+                verify(resets).request(eq("cashier-" + tag), eq(console), eq(tag), anyString());
             }
         }
     }
 
     @Test
-    @DisplayName("a language no console speaks is still refused, naming nothing about any account")
-    void anUnknownLanguageIsRefused() throws Exception {
-        MvcResult result = mvc.perform(post("/api/v1/operations/auth/password-resets")
-                        .with(from("203.0.113.21"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"login\":\"cashier\",\"locale\":\"fr\"}"))
-                .andReturn();
-
-        assertThat(result.getResponse().getStatus()).isEqualTo(400);
-        verify(resets, never()).request(anyString(), any(), anyString(), anyString());
+    @DisplayName("a locale that is not a language tag at all is still refused before the service is reached")
+    void aLocaleThatIsNotATagIsRefused() throws Exception {
+        for (String junk : new String[] {"", "<script>", "ru; DROP TABLE x", "a".repeat(40), "123"}) {
+            int status = mvc.perform(post("/api/v1/operations/auth/password-resets")
+                            .with(from("203.0.113.22"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"login\":\"cashier\",\"locale\":\"%s\"}".formatted(junk)))
+                    .andReturn()
+                    .getResponse()
+                    .getStatus();
+            assertThat(status).as("locale '%s'", junk).isEqualTo(400);
+        }
+        verify(resets, never()).request(anyString(), any(StaffConsole.class), anyString(), anyString());
     }
 
     @Test

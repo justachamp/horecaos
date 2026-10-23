@@ -84,4 +84,66 @@ class TenantJobRulesTests {
         assertThat(TenantJobRules.MAX_ACTIVE_JOBS).isEqualTo(20);
         assertThat(TenantJobRules.MAX_NAME_LENGTH).isEqualTo(80);
     }
+
+    // ------------------------------------------- the second factor for a job the company composed
+
+    @Test
+    @DisplayName(
+            "the powers that ask for a second factor include money and customer data, and not what a branch manager has")
+    void theMfaSensitivePowersAreTheOnesOnlySensitiveJobsHold() {
+        assertThat(TenantJobRules.mfaSensitive())
+                .contains(
+                        Capability.REFUND_APPROVE,
+                        Capability.CUSTOMER_PII_EXPORT,
+                        Capability.COURIER_PAYOUT_AUTHORISE,
+                        Capability.FISCAL_EVIDENCE_REVEAL,
+                        Capability.IAM_STAFF_MFA_RESET)
+                .doesNotContain(
+                        Capability.ORDER_READ,
+                        Capability.ORDER_CANCEL,
+                        Capability.REFUND_REQUEST,
+                        Capability.CUSTOMER_PII_REVEAL,
+                        Capability.IAM_GRANT_MANAGE);
+
+        Set<Capability> ordinary = EnumSet.noneOf(Capability.class);
+        Set<Capability> sensitive = EnumSet.noneOf(Capability.class);
+        for (PlatformRole role : TenantRoleCatalog.tenantVisibleRoles()) {
+            (role.mfaSensitive() ? sensitive : ordinary).addAll(role.capabilities());
+        }
+        assertThat(TenantJobRules.mfaSensitive())
+                .as("held by a sensitive job and by no ordinary one; recomputed here from the flag, not from the rule")
+                .allSatisfy(capability -> {
+                    assertThat(sensitive).contains(capability);
+                    assertThat(ordinary).doesNotContain(capability);
+                })
+                .hasSize(sensitive.size()
+                        - (int) sensitive.stream().filter(ordinary::contains).count());
+    }
+
+    @Test
+    @DisplayName(
+            "a copy of any code-owned job, less its iam.* rows, is asked for a second factor exactly as the original is")
+    void aCopyOfACodeOwnedJobIsHeldToTheOriginalsRequirement() {
+        for (PlatformRole role : TenantRoleCatalog.tenantVisibleRoles()) {
+            Set<String> composable = role.capabilities().stream()
+                    .filter(TenantJobRules::isComposable)
+                    .map(Capability::code)
+                    .collect(java.util.stream.Collectors.toSet());
+
+            assertThat(TenantJobRules.isMfaSensitive(composable))
+                    .as("a copy of %s", role.code())
+                    .isEqualTo(role.mfaSensitive());
+        }
+    }
+
+    @Test
+    @DisplayName("nothing, or a code the build does not declare, is sensitive: a short answer is not an ordinary job")
+    void anUnreadableJobIsSensitive() {
+        assertThat(TenantJobRules.isMfaSensitive(Set.of())).isTrue();
+        assertThat(TenantJobRules.isMfaSensitive(Set.of("order.read", "no.such.capability")))
+                .isTrue();
+        assertThat(TenantJobRules.isMfaSensitive(Set.of("order.read", "ORDER.CANCEL")))
+                .as("a code is looked up the way Capability.find reads it")
+                .isFalse();
+    }
 }
