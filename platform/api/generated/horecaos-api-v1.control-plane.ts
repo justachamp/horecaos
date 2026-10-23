@@ -2950,6 +2950,7 @@ export interface PolicyCoverageResponse {
   configuredAnywhere?: boolean;
   configuredScopes?: Array<PolicyResponse>;
   missingPolicyMode?: string;
+  worklist?: string;
 }
 
 export interface PolicyResponse {

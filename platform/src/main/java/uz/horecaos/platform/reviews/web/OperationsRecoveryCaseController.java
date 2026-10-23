@@ -92,7 +92,8 @@ public class OperationsRecoveryCaseController {
     @Operation(
             summary = "The brand's service-recovery cases",
             description = "Open cases most-urgent first (by resolution due time), closed ones most "
-                    + "recently closed first. Filter by state, owner, branch and where the clocks "
+                    + "recently closed first. Filter by state, owner, branch, the rating of the review "
+                    + "(minRating and maxRating, 1 to 5) and where the clocks "
                     + "stand (ON_TRACK, AT_RISK, BREACHED, or MET for a closed case in time). "
                     + "Cursor-paginated per ADR 0031. No comment and no note: they are in the drawer.")
     public Page<CaseSummaryResponse> list(
@@ -102,11 +103,20 @@ public class OperationsRecoveryCaseController {
             @RequestParam(required = false) @Nullable UUID ownerStaffMemberId,
             @RequestParam(required = false) @Nullable UUID locationId,
             @RequestParam(required = false) @Nullable SlaState slaState,
+            @RequestParam(required = false) @Nullable Integer minRating,
+            @RequestParam(required = false) @Nullable Integer maxRating,
             @RequestParam(required = false) @Nullable UUID cursor,
             @RequestParam(required = false) @Nullable Integer limit) {
         int pageSize = Page.limitOrDefault(limit);
         Listing listing = cases.list(
-                new Scope(tenantId, brandId, locationId), state, ownerStaffMemberId, slaState, cursor, pageSize);
+                new Scope(tenantId, brandId, locationId),
+                state,
+                ownerStaffMemberId,
+                slaState,
+                minRating,
+                maxRating,
+                cursor,
+                pageSize);
         return new Page<>(listing.items().stream().map(CaseSummaryResponse::of).toList(), listing.nextCursor());
     }
 
@@ -137,11 +147,20 @@ public class OperationsRecoveryCaseController {
             @RequestParam(required = false) @Nullable CaseState state,
             @RequestParam(required = false) @Nullable UUID ownerStaffMemberId,
             @RequestParam(required = false) @Nullable SlaState slaState,
+            @RequestParam(required = false) @Nullable Integer minRating,
+            @RequestParam(required = false) @Nullable Integer maxRating,
             @RequestParam(required = false) @Nullable UUID cursor,
             @RequestParam(required = false) @Nullable Integer limit) {
         int pageSize = Page.limitOrDefault(limit);
         Listing listing = cases.list(
-                Scope.location(tenantId, brandId, locationId), state, ownerStaffMemberId, slaState, cursor, pageSize);
+                Scope.location(tenantId, brandId, locationId),
+                state,
+                ownerStaffMemberId,
+                slaState,
+                minRating,
+                maxRating,
+                cursor,
+                pageSize);
         return new Page<>(listing.items().stream().map(CaseSummaryResponse::of).toList(), listing.nextCursor());
     }
 
@@ -241,6 +260,28 @@ public class OperationsRecoveryCaseController {
             @Valid @RequestBody CaseNoteRequest body) {
         UUID entryId = cases.addNote(Scope.location(tenantId, brandId, locationId), caseId, body.note(), actor());
         return ResponseEntity.status(HttpStatus.CREATED).body(new CaseNoteResponse(caseId, entryId));
+    }
+
+    @GetMapping("/locations/{locationId}/recovery-cases/{caseId}/compensation-candidates")
+    @RequiresCapability(value = Capability.RECOVERY_CASE_MANAGE, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "What this case could be linked to: the order's remedies and the customer's one-off codes",
+            description = "The picker behind the drawer's «attach». Read under the case's own capability, "
+                    + "because the order-remedy console's read needs a tenant-scope payment capability a "
+                    + "branch case worker does not hold. Lists the remedies recorded against the case's own "
+                    + "order and the one-off codes minted for its customer at its brand (shape, value, "
+                    + "expiry and the last characters of the code, never the code), each marked taken when "
+                    + "it already belongs to a case. Also returns the order and the customer, so the "
+                    + "console can open the order-remedy console and prefill the mint. The case still "
+                    + "links and never pays: choosing one goes through the compensations endpoint, which "
+                    + "verifies it again.")
+    public CompensationCandidatesResponse compensationCandidates(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID caseId) {
+        return CompensationCandidatesResponse.of(
+                cases.candidates(Scope.location(tenantId, brandId, locationId), caseId));
     }
 
     @PostMapping("/locations/{locationId}/recovery-cases/{caseId}/compensations")
@@ -408,6 +449,74 @@ public class OperationsRecoveryCaseController {
                     StaffResponse.of(entry.actor()),
                     entry.note(),
                     entry.occurredAt());
+        }
+    }
+
+    /**
+     * @param taken the remedy already belongs to a case; attaching it would be a conflict
+     * @param label the kind of remedy ({@code ORDER_REFUND}, {@code DELIVERY_FEE_REIMBURSEMENT}, ...)
+     * @param state {@code RECORDED} or {@code EXECUTED}
+     */
+    public record RemedyCandidateResponse(
+            UUID refId,
+            String label,
+            String state,
+            long amountMinor,
+            String currency,
+            Instant recordedAt,
+            boolean taken) {}
+
+    /**
+     * @param benefitType {@code PERCENTAGE_OFF_ORDER}, {@code FIXED_AMOUNT_OFF_ORDER} or {@code FREE_DELIVERY}
+     * @param value       basis points, minor units, or zero for free delivery
+     * @param codeHint    the last characters of the code, never the code
+     * @param taken       the code already belongs to a case
+     */
+    public record GrantCandidateResponse(
+            UUID grantId,
+            String benefitType,
+            long value,
+            @Nullable String currency,
+            String status,
+            String sourceType,
+            String codeHint,
+            Instant createdAt,
+            @Nullable Instant expiresAt,
+            boolean taken) {}
+
+    public record CompensationCandidatesResponse(
+            List<RemedyCandidateResponse> remedies,
+            List<GrantCandidateResponse> grants,
+            UUID orderId,
+            @Nullable UUID customerAccountId) {
+
+        static CompensationCandidatesResponse of(RecoveryCaseService.CompensationCandidates candidates) {
+            return new CompensationCandidatesResponse(
+                    candidates.remedies().stream()
+                            .map(candidate -> new RemedyCandidateResponse(
+                                    candidate.remedy().refId(),
+                                    candidate.remedy().label(),
+                                    candidate.remedy().state(),
+                                    candidate.remedy().amountMinor(),
+                                    candidate.remedy().currency(),
+                                    candidate.remedy().recordedAt(),
+                                    candidate.taken()))
+                            .toList(),
+                    candidates.grants().stream()
+                            .map(candidate -> new GrantCandidateResponse(
+                                    candidate.grant().grantId(),
+                                    candidate.grant().benefitType(),
+                                    candidate.grant().value(),
+                                    candidate.grant().currency(),
+                                    candidate.grant().status(),
+                                    candidate.grant().sourceType(),
+                                    candidate.grant().codeHint(),
+                                    candidate.grant().createdAt(),
+                                    candidate.grant().expiresAt(),
+                                    candidate.taken()))
+                            .toList(),
+                    candidates.orderId(),
+                    candidates.customerAccountId());
         }
     }
 

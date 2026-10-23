@@ -170,17 +170,76 @@
                   }
                 </select>
                 <label class="q-caption" for="compensation-ref">
-                  {{ 'customers.recovery.compensate.ref' | t }}
+                  {{ 'customers.recovery.compensate.pick' | t }}
                 </label>
-                <input
-                  id="compensation-ref"
-                  class="control"
-                  type="text"
-                  autocomplete="off"
-                  [value]="compensationRef()"
-                  (input)="compensationRef.set($any($event.target).value)"
-                  data-testid="compensation-ref"
-                />
+                @switch (candidatesState()) {
+                  @case ('loading') {
+                    <p class="q-body-sm case__muted" data-testid="compensation-loading">
+                      {{ 'customers.recovery.compensate.loading' | t }}
+                    </p>
+                  }
+                  @case ('error') {
+                    <div class="band band--error" role="alert" data-testid="compensation-error">
+                      <span class="q-body-sm">{{
+                        'customers.recovery.compensate.loadFailed' | t
+                      }}</span>
+                    </div>
+                  }
+                  @case ('ready') {
+                    @if (pickable().length === 0) {
+                      <p class="q-body-sm case__muted" data-testid="compensation-none">
+                        @if (compensationKind() === 'ORDER_REMEDY') {
+                          {{ 'customers.recovery.compensate.noneRemedy' | t }}
+                        } @else {
+                          {{ 'customers.recovery.compensate.noneGrant' | t }}
+                        }
+                      </p>
+                    } @else {
+                      <select
+                        id="compensation-ref"
+                        class="control"
+                        [value]="compensationRef()"
+                        (change)="compensationRef.set($any($event.target).value)"
+                        data-testid="compensation-ref"
+                      >
+                        <option value="">{{ 'customers.recovery.compensate.choose' | t }}</option>
+                        @for (option of pickable(); track option.id) {
+                          <option [value]="option.id" [selected]="option.id === compensationRef()">
+                            {{ option.label }}
+                          </option>
+                        }
+                      </select>
+                    }
+                  }
+                }
+                @if (compensationKind() === 'ORDER_REMEDY') {
+                  @if (canOpenRemedyConsole()) {
+                    <a
+                      class="link q-body-sm"
+                      [routerLink]="['/finance/payments']"
+                      [queryParams]="{ order: current().orderId }"
+                      data-testid="compensation-record-remedy"
+                    >
+                      {{ 'customers.recovery.compensate.recordRemedy' | t }}
+                    </a>
+                  } @else {
+                    <p
+                      class="q-caption case__muted"
+                      data-testid="compensation-record-remedy-denied"
+                    >
+                      {{ 'customers.recovery.compensate.recordRemedyDenied' | t }}
+                    </p>
+                  }
+                }
+                <button
+                  type="button"
+                  class="link q-body-sm"
+                  [disabled]="candidatesState() === 'loading'"
+                  (click)="loadCandidates()"
+                  data-testid="compensation-refresh"
+                >
+                  {{ 'customers.recovery.compensate.refresh' | t }}
+                </button>
                 <p class="q-caption case__muted">{{ 'customers.recovery.compensate.hint' | t }}</p>
                 <button
                   type="submit"
@@ -191,6 +250,139 @@
                   {{ 'customers.recovery.compensate.attach' | t }}
                 </button>
               </form>
+
+              @if (minted(); as code) {
+                <div class="band case__minted" role="status" data-testid="minted-code">
+                  <p class="q-body-sm">{{ 'customers.recovery.mint.once' | t }}</p>
+                  <code class="q-data-lg case__code" data-testid="minted-code-value">{{
+                    code.plaintextCode
+                  }}</code>
+                  <div class="case__row">
+                    <button
+                      type="button"
+                      class="secondary"
+                      (click)="copyMinted()"
+                      data-testid="minted-code-copy"
+                    >
+                      {{
+                        (copied()
+                          ? 'customers.recovery.mint.copied'
+                          : 'customers.recovery.mint.copy'
+                        ) | t
+                      }}
+                    </button>
+                    <button
+                      type="button"
+                      class="secondary"
+                      (click)="forgetMinted()"
+                      data-testid="minted-code-done"
+                    >
+                      {{ 'customers.recovery.mint.done' | t }}
+                    </button>
+                  </div>
+                </div>
+              }
+
+              @if (canMint()) {
+                <button
+                  type="button"
+                  class="secondary"
+                  [attr.aria-expanded]="mintOpen()"
+                  (click)="toggleMint()"
+                  data-testid="mint-open"
+                >
+                  {{ 'customers.recovery.mint.open' | t }}
+                </button>
+                @if (mintOpen()) {
+                  <form
+                    class="case__form"
+                    (submit)="$event.preventDefault(); mint()"
+                    data-testid="mint-form"
+                  >
+                    <h4 class="q-caption">{{ 'customers.recovery.mint.title' | t }}</h4>
+                    <label class="q-caption" for="mint-shape">
+                      {{ 'customers.recovery.mint.shape' | t }}
+                    </label>
+                    <select
+                      id="mint-shape"
+                      class="control"
+                      [value]="mintShape()"
+                      (change)="onMintShapeChange($any($event.target).value)"
+                      data-testid="mint-shape"
+                    >
+                      @for (shape of apologyShapes; track shape) {
+                        <option [value]="shape" [selected]="shape === mintShape()">
+                          {{ grantShapeKey(shape) | t }}
+                        </option>
+                      }
+                    </select>
+                    @if (mintValueNeeded()) {
+                      <label class="q-caption" for="mint-value">
+                        {{
+                          (mintShape() === 'PERCENTAGE_OFF_ORDER'
+                            ? 'customers.recovery.mint.valuePercent'
+                            : 'customers.recovery.mint.valueAmount'
+                          ) | t
+                        }}
+                      </label>
+                      <input
+                        id="mint-value"
+                        class="control"
+                        type="text"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        [value]="mintValue()"
+                        (input)="mintValue.set($any($event.target).value)"
+                        data-testid="mint-value"
+                      />
+                      @if (mintPreview(); as preview) {
+                        <p class="q-caption case__muted" data-testid="mint-preview">
+                          {{ preview }}
+                        </p>
+                      }
+                    }
+                    <label class="q-caption" for="mint-basket">
+                      {{ 'customers.recovery.mint.minBasket' | t }}
+                    </label>
+                    <input
+                      id="mint-basket"
+                      class="control"
+                      type="text"
+                      inputmode="numeric"
+                      autocomplete="off"
+                      [value]="mintMinBasket()"
+                      (input)="mintMinBasket.set($any($event.target).value)"
+                      data-testid="mint-basket"
+                    />
+                    <label class="q-caption" for="mint-days">
+                      {{ 'customers.recovery.mint.days' | t }}
+                    </label>
+                    <input
+                      id="mint-days"
+                      class="control"
+                      type="text"
+                      inputmode="numeric"
+                      autocomplete="off"
+                      [value]="mintDays()"
+                      (input)="mintDays.set($any($event.target).value)"
+                      data-testid="mint-days"
+                    />
+                    <p class="q-caption case__muted">{{ 'customers.recovery.mint.hint' | t }}</p>
+                    <button
+                      type="submit"
+                      class="primary"
+                      [disabled]="!canSubmitMint()"
+                      data-testid="mint-submit"
+                    >
+                      {{ 'customers.recovery.mint.submit' | t }}
+                    </button>
+                  </form>
+                }
+              } @else if (compensationKind() === 'BENEFIT_GRANT') {
+                <p class="q-caption case__muted" data-testid="mint-denied">
+                  {{ 'customers.recovery.mint.denied' | t }}
+                </p>
+              }
             }
           </section>
 

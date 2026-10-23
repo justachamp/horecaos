@@ -93,7 +93,22 @@ describe('PromotionEditor', () => {
     return [...select.querySelectorAll('option')].map((option) => option.value);
   }
 
-  it('offers a markup only item scope, forces it non-exclusive, and swaps its actions and group', () => {
+  it('writes a title per language into the draft, one tab at a time, and says which languages are still empty', () => {
+    typeInto(byId<HTMLInputElement>('promotion-title-ru'), 'Скидка на ланч');
+    expect(host.draft().titles).toEqual({ ru: 'Скидка на ланч' });
+
+    byId<HTMLButtonElement>('q-localized-field-group-tab-en').click();
+    fixture.detectChanges();
+    typeInto(byId<HTMLInputElement>('promotion-title-en'), 'Lunch offer');
+
+    expect(host.draft().titles).toEqual({ ru: 'Скидка на ланч', en: 'Lunch offer' });
+    expect(el.querySelectorAll('[data-testid="q-localized-field-group-complete"]').length).toBe(2);
+    expect(el.querySelectorAll('[data-testid="q-localized-field-group-incomplete"]').length).toBe(
+      1,
+    );
+  });
+
+  it('offers a markup item or order scope, forces it non-exclusive, and swaps its actions and group', () => {
     host.draft.update((d) => ({ ...d, exclusive: true }));
     fixture.detectChanges();
     choose('promotion-kind', 'MARKUP');
@@ -103,10 +118,21 @@ describe('PromotionEditor', () => {
     expect(draft.exclusive).toBe(false);
     expect(draft.stackingGroup).toBe('markup');
     expect(draft.actions.map((a) => a.type)).toEqual(['ITEM_PERCENTAGE_MARKUP']);
-    expect(optionValues(byId<HTMLSelectElement>('promotion-scope'))).toEqual(['ITEM']);
+    expect(optionValues(byId<HTMLSelectElement>('promotion-scope'))).toEqual(['ITEM', 'ORDER']);
     // A markup is never exclusive, so the box is not offered at all.
     expect(byId('promotion-exclusive')).toBeNull();
     expect(el.textContent).toContain('second person');
+  });
+
+  it('prices a service charge on the whole order: its own actions and its own group, and the note that it is off', () => {
+    choose('promotion-kind', 'MARKUP');
+    choose('promotion-scope', 'ORDER');
+
+    const draft = host.draft();
+    expect(draft.scope).toBe('ORDER');
+    expect(draft.stackingGroup).toBe('service');
+    expect(draft.actions.map((a) => a.type)).toEqual(['ORDER_PERCENTAGE_MARKUP']);
+    expect(el.textContent).toContain('switched off for every company');
   });
 
   it('moves the actions with the scope: an order percentage becomes a product one, and the group follows only its own default', () => {

@@ -293,6 +293,10 @@ public class TemplateTestSendService {
         // A name the catalogue declines is never given a sample: leaving it out makes a wording that
         // got past authoring with one fail the test send with the variable named, which is the point.
         NotificationVariableCatalog.DECLINED.forEach(defaults::remove);
+        // LOYALTY_POINTS_EXPIRING (ADR 0046, ADR 0181): the three typed values the loyalty adapter sends.
+        defaults.put("loyaltyPoints", "12 000");
+        defaults.put("loyaltyExpiresOn", "28.10.2026");
+        defaults.put("loyaltyDaysRemaining", "14");
         return defaults;
     }
 

@@ -586,6 +586,8 @@ public final class ReportingFacts {
      *
      * @param sourceKind {@code AUTOMATIC}, {@code COUPON} or {@code GRANT}
      * @param couponId   set exactly for {@code COUPON}
+     * @param promotionId null exactly for {@code GRANT}: a one-off benefit grant has no promotion behind it
+     * @param grantId    set exactly for {@code GRANT}; never the code word
      */
     public record PromotionRedemptionFact(
             UUID tenantId,
@@ -594,7 +596,7 @@ public final class ReportingFacts {
             int boundaryVersion,
             int metricCalculationVersion,
             UUID brandId,
-            UUID promotionId,
+            @Nullable UUID promotionId,
             String promotionCode,
             int definitionVersion,
             String sourceKind,
@@ -604,7 +606,8 @@ public final class ReportingFacts {
             long discountMinor,
             long markupMinor,
             String currency,
-            Instant redeemedAt) {
+            Instant redeemedAt,
+            @Nullable UUID grantId) {
 
         public PromotionRedemptionFact {
             Objects.requireNonNull(tenantId, "A fact is tenant-owned");
@@ -612,6 +615,52 @@ public final class ReportingFacts {
             if ((couponId != null) != "COUPON".equals(sourceKind)) {
                 throw new IllegalArgumentException("couponId is set exactly for a COUPON redemption");
             }
+            if ((grantId != null) != "GRANT".equals(sourceKind)) {
+                throw new IllegalArgumentException("grantId is set exactly for a GRANT redemption");
+            }
+            if ((promotionId == null) != "GRANT".equals(sourceKind)) {
+                throw new IllegalArgumentException("promotionId is empty exactly for a GRANT redemption");
+            }
+        }
+
+        /** A redemption of a promotion or a coupon: every fact that predates one-off grants. */
+        public PromotionRedemptionFact(
+                UUID tenantId,
+                UUID redemptionId,
+                LocalDate businessDate,
+                int boundaryVersion,
+                int metricCalculationVersion,
+                UUID brandId,
+                UUID promotionId,
+                String promotionCode,
+                int definitionVersion,
+                String sourceKind,
+                @Nullable UUID couponId,
+                UUID orderId,
+                @Nullable String customerSubjectHash,
+                long discountMinor,
+                long markupMinor,
+                String currency,
+                Instant redeemedAt) {
+            this(
+                    tenantId,
+                    redemptionId,
+                    businessDate,
+                    boundaryVersion,
+                    metricCalculationVersion,
+                    brandId,
+                    promotionId,
+                    promotionCode,
+                    definitionVersion,
+                    sourceKind,
+                    couponId,
+                    orderId,
+                    customerSubjectHash,
+                    discountMinor,
+                    markupMinor,
+                    currency,
+                    redeemedAt,
+                    null);
         }
     }
 

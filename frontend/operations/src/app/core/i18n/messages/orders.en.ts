@@ -1027,4 +1027,30 @@ export const ordersEn = {
   'orders.detail.print.reason.amendedOrder': 'The order was changed',
   'orders.detail.print.reason.test': 'Test',
   'orders.detail.print.reason.other': 'Something else',
+
+  'orders.detail.section.requote': 'Promotions at the checkpoint',
+  'orders.detail.requote.intro':
+    'A scheduled order keeps the price it was taken at. An hour before the promised time the platform prices the basket again and records what would be different. Nothing here changes the order: if the price would change, phone the guest or cancel the order.',
+  'orders.detail.requote.error': 'Could not load the checkpoint findings',
+  'orders.detail.requote.empty':
+    'Not checked yet. The platform checks an hour before the promised time.',
+  'orders.detail.requote.recheck': 'Check again now',
+  'orders.detail.requote.rechecking': 'Checking…',
+  'orders.detail.requote.notAwaiting':
+    'Only a scheduled order that its kitchen has not started can be checked.',
+  'orders.detail.requote.trigger.CHECKPOINT': 'Automatic check',
+  'orders.detail.requote.trigger.OPERATOR': 'Checked by hand',
+  'orders.detail.requote.outcome.UNCHANGED': 'Nothing would change',
+  'orders.detail.requote.outcome.CHANGED': 'The price would change',
+  'orders.detail.requote.outcome.NOT_PRICEABLE': 'Could not be priced again',
+  'orders.detail.requote.judgedAt': 'judged {time}',
+  'orders.detail.requote.totals': 'Held price {held}, priced again {requote}',
+  'orders.detail.requote.delta.up': '{amount} more',
+  'orders.detail.requote.delta.down': '{amount} less',
+  'orders.detail.requote.refusal': 'Reason: {code}',
+  'orders.detail.requote.change.DROPPED': 'no longer applies',
+  'orders.detail.requote.change.GAINED': 'would newly apply',
+  'orders.detail.requote.change.CHANGED': 'would give a different amount',
+  'orders.detail.requote.change.line': '{promotion}: {change} ({held} → {requote})',
+  'orders.detail.requote.promotionFallback': 'A promotion ({reference})',
 } as const;

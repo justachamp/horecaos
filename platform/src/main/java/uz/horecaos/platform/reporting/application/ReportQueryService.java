@@ -556,11 +556,37 @@ public class ReportQueryService {
     @Transactional(readOnly = true)
     public PromotionSummaryResult promotionSummary(
             UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId) {
+        return promotionSummary(tenantId, from, to, brandId, null, null);
+    }
+
+    /**
+     * The same, at the grain the {@code promo.*} metrics are registered at (ADR 0038, ADR 0140): per promotion and
+     * legal entity, optionally narrowed to one branch or one legal entity, with the metric ids it answers named in
+     * the provenance so a figure on a screen can be traced to its definition.
+     */
+    @Transactional(readOnly = true)
+    public PromotionSummaryResult promotionSummary(
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId,
+            @Nullable UUID legalEntityId) {
         validateRange(from, to);
         refuseMixedBoundaryRegime(tenantId, from, to);
         return new PromotionSummaryResult(
-                store.readPromotionSummary(tenantId, from, to, brandId),
-                provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+                store.readPromotionSummary(tenantId, from, to, brandId, locationId, legalEntityId),
+                provenance(
+                        tenantId,
+                        List.of(
+                                MetricRegistry.require("promo.redemptions.v1"),
+                                MetricRegistry.require("promo.unique_customers.v1"),
+                                MetricRegistry.require("promo.discount_som.v1"),
+                                MetricRegistry.require("promo.markup_som.v1"),
+                                MetricRegistry.require("promo.revenue_with.v1"),
+                                MetricRegistry.require("promo.avg_check_with.v1"),
+                                MetricRegistry.require("promo.avg_check_without.v1")),
+                        businessDays.boundaryFor(tenantId)));
     }
 
     /** ADR 0140 (7.9): the redemption log behind {@link #promotionSummary}, pseudonymised, newest first, bounded. */

@@ -286,6 +286,19 @@ describe('MarketingReportPage', () => {
       return host;
     }
 
+    /** Opens the promotions tab over a summary the test supplies: `render()` builds its own mocks, so this sets it after. */
+    async function openPromotionsOver(summary: PromotionSummary): Promise<HTMLElement> {
+      await render();
+      discountApi.promotionSummary.mockResolvedValue(summary);
+      const host: HTMLElement = fixture.nativeElement;
+      [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+        .find((button) => button.textContent?.includes('Promotions'))!
+        .click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+      return host;
+    }
+
     function rows(host: HTMLElement, testId: string): string[] {
       return [...host.querySelectorAll(`[data-testid="${testId}"]`)].map((row) =>
         (row.textContent ?? '').replace(/\s+/g, ' ').trim(),
@@ -354,6 +367,58 @@ describe('MarketingReportPage', () => {
       expect(cell.getAttribute('title')).toBe('k1:0123456789abcdef');
       expect(cell.textContent?.trim()).toBe('k1:0123456');
       expect(host.textContent).not.toContain('0123456789abcdef');
+    });
+
+    it("lists a customer's one-off code as its own source, with no promotion to filter the log by", async () => {
+      const host = await openPromotionsOver({
+        rows: [
+          ...PROMOTION_SUMMARY.rows,
+          {
+            brandId: 'brand-1',
+            legalEntityId: null,
+            promotionId: null,
+            promotionCode: 'GRANT:RECOVERY_CASE',
+            sourceKind: 'GRANT',
+            redemptions: 2,
+            uniqueCustomers: 2,
+            discountSom: 27_000,
+            markupSom: 0,
+            revenueWithSom: 180_000,
+            averageCheckWithSom: 90_000,
+            averageCheckWithoutSom: 70_000,
+          },
+        ],
+        provenance: PROVENANCE,
+      });
+      const grantRow = host.querySelectorAll<HTMLElement>(
+        '[data-testid="promotion-summary-row"]',
+      )[2];
+      expect(grantRow.textContent).toContain('Benefit grant');
+      const callsBefore = discountApi.promotionRedemptions.mock.calls.length;
+
+      grantRow.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(discountApi.promotionRedemptions.mock.calls.length).toBe(callsBefore);
+      expect(host.textContent).not.toContain('Redemption log for GRANT');
+    });
+
+    it('names the legal entity of each row only when the rows span more than one', async () => {
+      const single = await openPromotionsOver(PROMOTION_SUMMARY);
+      expect(single.querySelector('[data-testid="promotion-summary-entity"]')).toBeNull();
+
+      const two = await openPromotionsOver({
+        rows: [
+          { ...PROMOTION_SUMMARY.rows[0], legalEntityId: '11111111-aaaa-bbbb-cccc-000000000001' },
+          { ...PROMOTION_SUMMARY.rows[0], legalEntityId: '22222222-aaaa-bbbb-cccc-000000000002' },
+        ],
+        provenance: PROVENANCE,
+      });
+      const cells = [...two.querySelectorAll('[data-testid="promotion-summary-entity"]')].map(
+        (cell) => cell.textContent?.trim(),
+      );
+      expect(cells).toEqual(['11111111', '22222222']);
     });
 
     it('narrows the log to a clicked promotion and back to every promotion', async () => {

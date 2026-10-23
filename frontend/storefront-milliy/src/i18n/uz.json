@@ -169,6 +169,7 @@
     "offerDiscount": "Aksiya",
     "deliveryOfferNote": "Yetkazib berish chegirmasi {{amount}} hisobga olingan",
     "surchargeNote": "Ustama {{amount}} hisobga olingan",
+    "serviceChargeNote": "Xizmat haqi {{amount}} hisobga olingan",
     "giftOffer": {
       "title": "Sizni sovg'a kutmoqda",
       "choose": "Sovg'angizni tanlang",
@@ -435,6 +436,8 @@
       "codeNotActive": "Bu promokod hali faol emas.",
       "codeExpired": "Promokod muddati tugagan.",
       "codeLimitReached": "Bu promokoddan foydalanish chegarasiga yetdingiz.",
+      "codeAlreadyUsed": "Bu kod allaqachon ishlatilgan.",
+      "codeRequiresAccount": "Bu koddan foydalanish uchun hisobingizga kiring: u mijoz hisobiga berilgan.",
       "channelNotEnabled": "Bu xizmat hozircha ushbu kanalda mavjud emas.",
       "modeUnavailable": "Bu usul hozircha mavjud emas.",
       "closed": "Filial hozir yopiq.",

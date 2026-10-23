@@ -1011,4 +1011,30 @@ export const ordersRu: AreaMessages<typeof ordersEn> = {
   'orders.detail.print.reason.amendedOrder': 'Заказ изменили',
   'orders.detail.print.reason.test': 'Проверка',
   'orders.detail.print.reason.other': 'Другое',
+
+  'orders.detail.section.requote': 'Акции на контрольной точке',
+  'orders.detail.requote.intro':
+    'Предзаказ сохраняет цену, по которой он принят. За час до обещанного времени платформа считает корзину ещё раз и записывает, что изменилось бы. Здесь ничего не меняется в заказе: если цена изменилась бы, позвоните гостю или отмените заказ.',
+  'orders.detail.requote.error': 'Не удалось загрузить результаты проверки',
+  'orders.detail.requote.empty':
+    'Ещё не проверялся. Платформа проверяет за час до обещанного времени.',
+  'orders.detail.requote.recheck': 'Проверить ещё раз сейчас',
+  'orders.detail.requote.rechecking': 'Проверяем…',
+  'orders.detail.requote.notAwaiting':
+    'Проверить можно только предзаказ, который кухня ещё не начала готовить.',
+  'orders.detail.requote.trigger.CHECKPOINT': 'Автоматическая проверка',
+  'orders.detail.requote.trigger.OPERATOR': 'Проверено вручную',
+  'orders.detail.requote.outcome.UNCHANGED': 'Ничего бы не изменилось',
+  'orders.detail.requote.outcome.CHANGED': 'Цена изменилась бы',
+  'orders.detail.requote.outcome.NOT_PRICEABLE': 'Пересчитать не удалось',
+  'orders.detail.requote.judgedAt': 'на {time}',
+  'orders.detail.requote.totals': 'Цена заказа {held}, пересчёт {requote}',
+  'orders.detail.requote.delta.up': 'на {amount} больше',
+  'orders.detail.requote.delta.down': 'на {amount} меньше',
+  'orders.detail.requote.refusal': 'Причина: {code}',
+  'orders.detail.requote.change.DROPPED': 'больше не применяется',
+  'orders.detail.requote.change.GAINED': 'применилась бы заново',
+  'orders.detail.requote.change.CHANGED': 'дала бы другую сумму',
+  'orders.detail.requote.change.line': '{promotion}: {change} ({held} → {requote})',
+  'orders.detail.requote.promotionFallback': 'Акция ({reference})',
 };

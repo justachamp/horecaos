@@ -25,18 +25,13 @@ const PLACEHOLDER_TIME_ZONE = 'Asia/Tashkent';
  * 5.4 Reviews — a brand's own order reviews, filtered, read against the order
  * and the customer each one is attached to (ADR 0071).
  *
- * <p>Replaces the honest not-built page this route used to resolve to: there
- * was no review or feedback entity anywhere in the platform until this ADR.
- * What this screen deliberately is **not**: the four-dimension
- * service-recovery kanban `frontend-information-architecture.md`'s own §5.4
- * row originally described. ADR 0071 rejects that shape — see its
- * Alternatives table — because it would duplicate the order-remedy console
- * (`payments.order_remedies`, ADR 0048) that already exists for acting on a
- * bad review, and invent case-management state nobody asked to operate. This
- * is therefore a read-only, filtered list: rating, comment, order, and
- * customer, nothing more. §5.5 Feedback settings stays the honest not-built
- * stub it already was — there is nothing for a settings screen to configure
- * when this screen has no tags, no prompt timing, and no moderation.
+ * <p>This is the review list. The service-recovery board is its neighbour tab (ADR 0159, the worklist),
+ * the quality breakdown another (ADR 0159, `review-report-page.ts`), and §5.5 Feedback settings its own screen:
+ * this page stays a read-only, filtered list of rating, comment, order and customer, because ADR 0071 rejected
+ * a kanban here (see its Alternatives table; it would have duplicated the order-remedy console of ADR 0048).
+ * The IA's courier dimension, a rating of a courier and four scored dimensions are declined by ADR 0159 (open
+ * input 8; ADR 0042) and by ADR 0181: the platform answers "by meal, by operator, by delivery time" with tags,
+ * counted in the quality tab, never with a score per person.
  *
  * <p>Scoped by {@link CurrentBrand}, not `CurrentLocation`: `review.read` is a
  * `BRAND`-scope capability (ADR 0071, the same placement `REFERRAL_READ`

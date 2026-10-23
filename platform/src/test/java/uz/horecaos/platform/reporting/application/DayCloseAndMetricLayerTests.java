@@ -893,10 +893,13 @@ class DayCloseAndMetricLayerTests {
         // (w7-service-recovery) then took it to 60: clearDay gained the two review-fact deletes
         // (fact_review_tag, fact_review), fixed per close. ADR 0163 (w8-kitchen-delivery) took it to 62: one
         // more fixed source read (readSourceStationLoad, kitchen's tickets) and one more table in clearDay's
-        // fixed list. None is per refund, which is the property this assertion exists to protect.
+        // fixed list. ADR 0140 and ADR 0038 (w6-promotions-reviews-approvals) took it to 63: the redemption fact
+        // now takes the order's branch and legal entity from reporting.fact_order, one UPDATE per close
+        // (stampPromotionRedemptionGrain). None is per refund, which is the property this assertion exists to
+        // protect.
         assertThat(used)
                 .as("a busy Saturday's close should not spend a round-trip per refund")
-                .isLessThanOrEqualTo(62);
+                .isLessThanOrEqualTo(63);
     }
 
     // ----------------------------------------------------- the settle recut

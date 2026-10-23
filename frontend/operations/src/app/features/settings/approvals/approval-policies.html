@@ -1,0 +1,221 @@
+<section class="card" data-testid="approvals-who-signs">
+  <h2 class="q-subhead">{{ 'who.title' | at }}</h2>
+  <p class="q-body-sm">{{ 'who.lead' | at }}</p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm" data-testid="who-loading">{{ 'who.loading' | at }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied" data-testid="who-denied">{{ 'who.denied' | at }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert" data-testid="who-error">
+        <span class="q-body-sm">{{ loadError() ?? ('who.error' | at) }}</span>
+        <button type="button" class="q-body secondary" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      @if (notice(); as key) {
+        <p class="q-body-sm notice" role="status" data-testid="who-notice">{{ key | at }}</p>
+      }
+
+      @if (rows().length === 0) {
+        <p class="q-body-sm">{{ 'who.empty' | at }}</p>
+      } @else {
+        <table class="policies" data-testid="who-table">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'who.column.action' | at }}</th>
+              <th class="q-caption">{{ 'who.column.without' | at }}</th>
+              <th class="q-caption">{{ 'who.column.policies' | at }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track row.code) {
+              <tr [attr.data-testid]="'who-row-' + row.code" [class.blocked]="row.blocked">
+                <td class="q-body-sm">
+                  <strong>{{ row.label }}</strong>
+                  <span class="q-caption code">{{ row.code }}</span>
+                </td>
+                <td class="q-body-sm" data-testid="who-without">
+                  {{ withoutPolicyText(row.coverage.missingPolicyMode) }}
+                </td>
+                <td class="q-body-sm">
+                  @if (row.coverage.configuredScopes.length === 0) {
+                    <span class="muted">{{ 'who.none' | at }}</span>
+                  } @else {
+                    <ul class="versions">
+                      @for (version of row.coverage.configuredScopes; track version.id) {
+                        <li data-testid="who-version">
+                          <span class="q-caption scope">{{ scopeText(version) }}</span>
+                          @if (version.governsNow) {
+                            <span class="q-caption badge">{{ 'who.governsNow' | at }}</span>
+                          } @else if (startsText(version); as when) {
+                            <span class="q-caption muted">{{ when }}</span>
+                          }
+                          <span class="threshold">{{ version.thresholdDescription }}</span>
+                          <span class="q-caption muted">
+                            {{
+                              'who.requires'
+                                | at: { capability: version.requiredApproverCapability }
+                            }}
+                          </span>
+                          <button
+                            type="button"
+                            class="q-caption link"
+                            (click)="openEnd(version)"
+                            data-testid="who-end"
+                          >
+                            {{ 'who.end' | at }}
+                          </button>
+                        </li>
+                      }
+                    </ul>
+                  }
+                  <button
+                    type="button"
+                    class="q-body secondary"
+                    (click)="openPublish(row.code)"
+                    data-testid="who-publish"
+                  >
+                    {{ 'who.publish' | at }}
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+
+      @if (publishingRow(); as row) {
+        <form
+          class="form"
+          (submit)="$event.preventDefault(); publish()"
+          data-testid="who-publish-form"
+        >
+          <h3 class="q-body">{{ 'who.form.title' | at: { action: row.label } }}</h3>
+          <p class="q-caption muted" data-testid="who-form-scope">
+            {{ 'who.form.scope' | at }}: {{ targetText() }}
+          </p>
+
+          <label class="q-caption" for="who-threshold">{{ 'who.form.threshold' | at }}</label>
+          <input
+            id="who-threshold"
+            class="q-body field"
+            type="text"
+            maxlength="500"
+            [value]="threshold()"
+            (input)="threshold.set($any($event.target).value)"
+            data-testid="who-threshold"
+          />
+          <p class="q-caption muted">{{ 'who.form.threshold.hint' | at }}</p>
+
+          <label class="q-caption" for="who-capability">{{ 'who.form.capability' | at }}</label>
+          <input
+            id="who-capability"
+            class="q-body field"
+            type="text"
+            list="who-capabilities"
+            autocomplete="off"
+            [value]="capability()"
+            (input)="capability.set($any($event.target).value)"
+            data-testid="who-capability"
+          />
+          <datalist id="who-capabilities">
+            @for (suggestion of suggestions; track suggestion) {
+              <option [value]="suggestion"></option>
+            }
+          </datalist>
+          <p class="q-caption muted">{{ 'who.form.capability.hint' | at }}</p>
+
+          <label class="q-caption" for="who-valid-from">{{ 'who.form.validFrom' | at }}</label>
+          <input
+            id="who-valid-from"
+            class="q-body field"
+            type="datetime-local"
+            [value]="validFrom()"
+            (input)="validFrom.set($any($event.target).value)"
+            data-testid="who-valid-from"
+          />
+          <p class="q-caption muted">{{ 'who.form.validFrom.hint' | at }}</p>
+
+          <label class="q-caption" for="who-reason">{{ 'who.form.reason' | at }}</label>
+          <input
+            id="who-reason"
+            class="q-body field"
+            type="text"
+            maxlength="1000"
+            [value]="reason()"
+            (input)="reason.set($any($event.target).value)"
+            data-testid="who-reason"
+          />
+
+          @if (formError(); as message) {
+            <p class="q-body-sm error" role="alert" data-testid="who-form-error">{{ message }}</p>
+          }
+          <div class="form__actions">
+            <button type="button" class="q-body secondary" (click)="cancelPublish()">
+              {{ 'who.form.cancel' | at }}
+            </button>
+            <button
+              type="submit"
+              class="q-body primary"
+              [disabled]="!canPublish()"
+              data-testid="who-submit"
+            >
+              {{ 'who.form.submit' | at }}
+            </button>
+          </div>
+        </form>
+      }
+
+      @if (ending(); as version) {
+        <form class="form" (submit)="$event.preventDefault(); end()" data-testid="who-end-form">
+          <h3 class="q-body">
+            {{ 'who.end.title' | at: { action: endingRow()?.label ?? version.actionCode } }}
+          </h3>
+          <p class="q-body-sm" data-testid="who-end-warning">
+            {{
+              'who.end.warning'
+                | at
+                  : {
+                      mode: endingRow()
+                        ? withoutPolicyText(endingRow()!.coverage.missingPolicyMode)
+                        : '',
+                    }
+            }}
+          </p>
+          <label class="q-caption" for="who-end-reason">{{ 'who.form.reason' | at }}</label>
+          <input
+            id="who-end-reason"
+            class="q-body field"
+            type="text"
+            maxlength="1000"
+            [value]="endReason()"
+            (input)="endReason.set($any($event.target).value)"
+            data-testid="who-end-reason"
+          />
+          @if (formError(); as message) {
+            <p class="q-body-sm error" role="alert" data-testid="who-form-error">{{ message }}</p>
+          }
+          <div class="form__actions">
+            <button type="button" class="q-body secondary" (click)="cancelEnd()">
+              {{ 'who.form.cancel' | at }}
+            </button>
+            <button
+              type="submit"
+              class="q-body primary"
+              [disabled]="!canEnd()"
+              data-testid="who-end-submit"
+            >
+              {{ 'who.end.submit' | at }}
+            </button>
+          </div>
+        </form>
+      }
+    }
+  }
+</section>

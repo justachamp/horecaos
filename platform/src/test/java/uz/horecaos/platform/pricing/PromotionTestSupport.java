@@ -7,9 +7,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.pricing.api.AudienceMembershipPort;
 import uz.horecaos.platform.pricing.api.CustomerOrderHistoryPort;
+import uz.horecaos.platform.pricing.application.BenefitGrantEligibility;
 import uz.horecaos.platform.pricing.application.PromoCodeEligibilityService;
 import uz.horecaos.platform.pricing.application.PromotionInputResolver;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcMenuMembershipLookup;
+import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcBenefitGrantStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromotionStore;
@@ -35,15 +37,17 @@ public final class PromotionTestSupport {
             @Nullable CustomerOrderHistoryPort history,
             @Nullable AudienceMembershipPort audiences) {
         var mapper = JsonMapper.builder().build();
+        var grantStore = new JdbcBenefitGrantStore(jdbc);
         return new PromotionInputResolver(
                 promoCodeStore,
                 new JdbcPromotionStore(jdbc, mapper),
                 new JdbcPricingStore(jdbc, mapper),
-                new PromoCodeEligibilityService(promoCodeStore),
+                new PromoCodeEligibilityService(promoCodeStore, new BenefitGrantEligibility(grantStore)),
                 new JdbcMenuMembershipLookup(jdbc),
                 new JdbcLocationTimeZoneLookup(jdbc),
                 providerOf(CustomerOrderHistoryPort.class, history),
-                providerOf(AudienceMembershipPort.class, audiences));
+                providerOf(AudienceMembershipPort.class, audiences),
+                grantStore);
     }
 
     private static <T> ObjectProvider<T> providerOf(Class<T> type, @Nullable T instance) {

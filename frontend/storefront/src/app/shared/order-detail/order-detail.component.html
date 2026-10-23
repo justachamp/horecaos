@@ -178,7 +178,7 @@
         class="mt-1 flex items-center justify-between text-sm text-white"
         data-testid="discount-row"
       >
-        <span>{{ row.labelKey | t }}</span>
+        <span>{{ row.title ?? (row.labelKey | t) }}</span>
         <span>-{{ row.amount }}</span>
       </div>
     }

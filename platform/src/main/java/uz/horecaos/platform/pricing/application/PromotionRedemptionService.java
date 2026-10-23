@@ -17,6 +17,7 @@ import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.pricing.api.PromotionQueryPort;
 import uz.horecaos.platform.pricing.api.PromotionRedemptionPort;
 import uz.horecaos.platform.pricing.api.PromotionRedemptionSource;
+import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcBenefitGrantStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromotionStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromotionStore.LedgerRow;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromotionStore.NewRedemption;
@@ -60,16 +61,24 @@ public class PromotionRedemptionService
 
     private final JdbcPromotionStore store;
     private final PromotionMetrics metrics;
+    private final @Nullable JdbcBenefitGrantStore grants;
 
     /** A service nobody scrapes the counters of: every caller that predates them. */
     public PromotionRedemptionService(JdbcPromotionStore store) {
         this(store, PromotionMetrics.none());
     }
 
-    @Autowired
+    /** A service for a caller that predates one-off grants: the report has no GRANT rows to source. */
     public PromotionRedemptionService(JdbcPromotionStore store, PromotionMetrics metrics) {
+        this(store, metrics, null);
+    }
+
+    @Autowired
+    public PromotionRedemptionService(
+            JdbcPromotionStore store, PromotionMetrics metrics, @Nullable JdbcBenefitGrantStore grants) {
         this.store = store;
         this.metrics = metrics;
+        this.grants = grants;
     }
 
     @Override
@@ -248,22 +257,46 @@ public class PromotionRedemptionService
     @Override
     @Transactional(readOnly = true)
     public List<Redemption> redeemedBetween(UUID tenantId, Instant fromInclusive, Instant toExclusive) {
-        return store.redemptionFactRows(tenantId, fromInclusive, toExclusive).stream()
-                .map(row -> new Redemption(
-                        row.redemptionId(),
-                        row.brandId(),
-                        row.promotionId(),
-                        row.promotionCode(),
-                        row.definitionVersion(),
-                        Redemption.Kind.valueOf(row.sourceKind()),
-                        row.couponId(),
-                        row.orderId(),
-                        row.customerAccountId(),
-                        row.discountMinor(),
-                        row.markupMinor(),
-                        row.currency(),
-                        row.redeemedAt()))
-                .toList();
+        List<Redemption> redemptions =
+                new ArrayList<>(store.redemptionFactRows(tenantId, fromInclusive, toExclusive).stream()
+                        .map(row -> new Redemption(
+                                row.redemptionId(),
+                                row.brandId(),
+                                row.promotionId(),
+                                row.promotionCode(),
+                                row.definitionVersion(),
+                                Redemption.Kind.valueOf(row.sourceKind()),
+                                row.couponId(),
+                                row.orderId(),
+                                row.customerAccountId(),
+                                row.discountMinor(),
+                                row.markupMinor(),
+                                row.currency(),
+                                row.redeemedAt()))
+                        .toList());
+        if (grants != null) {
+            // A one-off grant has no promotion and no definition version: its redemption is the grant itself,
+            // labelled by where it came from and never by its code word.
+            grants.spentBetween(tenantId, fromInclusive, toExclusive)
+                    .forEach(spent -> redemptions.add(new Redemption(
+                            spent.grantId(),
+                            spent.brandId(),
+                            null,
+                            "GRANT:" + spent.sourceType(),
+                            1,
+                            Redemption.Kind.GRANT,
+                            null,
+                            spent.orderId(),
+                            spent.customerAccountId(),
+                            spent.discountMinor(),
+                            0L,
+                            spent.currency(),
+                            spent.redeemedAt(),
+                            spent.grantId())));
+        }
+        redemptions.sort(
+                java.util.Comparator.comparing(Redemption::redeemedAt).thenComparing(Redemption::redemptionId));
+        return redemptions;
     }
 
     // ------------------------------------------------------------------ query

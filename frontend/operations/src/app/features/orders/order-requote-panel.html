@@ -1,0 +1,75 @@
+<p class="q-caption pane__requote-intro" data-testid="order-detail-requote-intro">
+  {{ 'orders.detail.requote.intro' | t }}
+</p>
+
+@if (loading()) {
+  <p class="q-body-sm pane__state-inline">{{ 'orders.detail.loading' | t }}</p>
+} @else if (loadError()) {
+  <p class="q-body-sm pane__state-inline" role="alert" data-testid="order-detail-requote-error">
+    {{ 'orders.detail.requote.error' | t }}
+  </p>
+} @else if (findings().length === 0) {
+  <p class="q-body-sm pane__state-inline" data-testid="order-detail-requote-empty">
+    {{ 'orders.detail.requote.empty' | t }}
+  </p>
+} @else {
+  <ul class="pane__requote-list" data-testid="order-detail-requote-list">
+    @for (row of rows(); track row.id) {
+      <li
+        class="pane__requote-finding"
+        [class.pane__requote-finding--changed]="row.outcome === 'CHANGED'"
+        [attr.data-outcome]="row.outcome"
+        data-testid="order-detail-requote-finding"
+      >
+        <p class="q-body-sm pane__requote-outcome">
+          <strong>{{ outcomeLabel(row.outcome) }}</strong>
+          <span class="q-caption"> · {{ row.heading }} · {{ row.judgedAt }}</span>
+        </p>
+        @if (row.totals; as totals) {
+          <p class="q-body-sm" data-testid="order-detail-requote-totals">
+            {{ totals }}
+            @if (row.delta; as delta) {
+              <span class="pane__requote-delta" data-testid="order-detail-requote-delta">
+                ({{ delta }})
+              </span>
+            }
+          </p>
+        }
+        @if (row.refusal; as refusal) {
+          <p class="q-body-sm pane__requote-refusal" data-testid="order-detail-requote-refusal">
+            {{ refusal }}
+          </p>
+        }
+        @if (row.changes.length > 0) {
+          <ul class="pane__requote-changes">
+            @for (change of row.changes; track change.id) {
+              <li class="q-body-sm" data-testid="order-detail-requote-change">{{ change.text }}</li>
+            }
+          </ul>
+        }
+      </li>
+    }
+  </ul>
+}
+
+@if (checkError(); as message) {
+  <p
+    class="q-body-sm pane__requote-refusal"
+    role="alert"
+    data-testid="order-detail-requote-check-error"
+  >
+    {{ message }}
+  </p>
+}
+
+<button
+  type="button"
+  class="pane__reveal-link"
+  [disabled]="checking()"
+  (click)="recheck()"
+  data-testid="order-detail-requote-recheck"
+>
+  {{
+    checking() ? ('orders.detail.requote.rechecking' | t) : ('orders.detail.requote.recheck' | t)
+  }}
+</button>

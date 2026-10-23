@@ -22,6 +22,7 @@ import { InheritedField } from '../../../shared/ui/inherited-field/inherited-fie
 import { describeApiError } from '../../orders/order-errors';
 import { ConfigurationApi } from '../configuration-api';
 import { SettingsScope } from '../settings-scope';
+import { ApprovalPolicies } from './approval-policies';
 import { ApprovalTextKey, ApprovalTextPipe, approvalText } from './approvals-texts';
 
 type FieldKind = 'integer' | 'boolean';
@@ -100,16 +101,24 @@ const EXPORT_SETTABLE: readonly ConfigurationScopeType[] = ['PLATFORM', 'TENANT'
  * `TENANT_CONFIGURATION_WRITE` -- the capability that already gates every ADR 0030 value a tenant
  * authors, held by the tenant owner and the tenant administrator.
  *
- * **What this screen does not do.** A limit only decides *whether to ask*. Whether a signature is
- * then required, and which capability may give it, is the tenant's published approval policy for the
- * action (`approval.policy.manage`, the tenant owner alone, ADR 0050): without one a customer export
- * proceeds on one signature, and a promotion activation is refused until the platform floor policy
- * says otherwise. The page says so in plain words rather than letting a saved number look like a
- * control that is on.
+ * **What the limits do not do.** A limit only decides *whether to ask*. Whether a signature is then
+ * required, and which capability may give it, is the tenant's published approval policy for the action
+ * (`approval.policy.manage`, the tenant owner alone, ADR 0050): without one a customer export proceeds
+ * on one signature, and a promotion activation is refused until the platform floor policy says
+ * otherwise. The page says so in plain words rather than letting a saved number look like a control that
+ * is on -- and, since ADR 0181, the "Who signs" section below the limits ({@link ApprovalPolicies}) is
+ * where the owner publishes those policies.
  */
 @Component({
   selector: 'q-approvals-settings-page',
-  imports: [TPipe, ApprovalTextPipe, InheritedField, NgTemplateOutlet, RouterLink],
+  imports: [
+    TPipe,
+    ApprovalTextPipe,
+    InheritedField,
+    NgTemplateOutlet,
+    RouterLink,
+    ApprovalPolicies,
+  ],
   templateUrl: './approvals-settings-page.html',
   styleUrl: './approvals-settings-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

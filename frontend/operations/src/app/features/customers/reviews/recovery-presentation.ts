@@ -2,6 +2,7 @@ import { MessageKey } from '../../../core/i18n/messages.en';
 import { TimelineEntry, TimelineTone } from '../../../shared/ui/timeline';
 import { StatusTone } from '../../../shared/ui/status-pill';
 import {
+  ApologyShape,
   CaseEventKind,
   CaseOutcome,
   CaseState,
@@ -158,4 +159,50 @@ export function compensationKey(kind: CompensationKind): MessageKey {
 /** The longer wording of a compensation kind in the link form's picker. */
 export function compensateKey(kind: CompensationKind): MessageKey {
   return `customers.recovery.compensate.${kind}`;
+}
+
+/** The word for a kind of remedy recorded against an order (`RemedyType`): a code the platform sends. */
+export function remedyTypeKey(label: string): MessageKey | null {
+  switch (label) {
+    case 'ORDER_REFUND':
+      return 'customers.recovery.remedy.type.ORDER_REFUND';
+    case 'DELIVERY_FEE_REIMBURSEMENT':
+      return 'customers.recovery.remedy.type.DELIVERY_FEE_REIMBURSEMENT';
+    case 'FUTURE_DISCOUNT':
+      return 'customers.recovery.remedy.type.FUTURE_DISCOUNT';
+    default:
+      return null;
+  }
+}
+
+export function remedyStateKey(state: string): MessageKey | null {
+  switch (state) {
+    case 'RECORDED':
+      return 'customers.recovery.remedy.state.RECORDED';
+    case 'EXECUTED':
+      return 'customers.recovery.remedy.state.EXECUTED';
+    default:
+      return null;
+  }
+}
+
+/** The shape of an apology code, in the picker's and the mint form's words. */
+export function grantShapeKey(shape: ApologyShape): MessageKey {
+  return `customers.recovery.grant.shape.${shape}`;
+}
+
+/** Where a grant stands (`ACTIVE`, `REDEEMED`, `EXPIRED`, `REVOKED`); null for a status this console does not know. */
+export function grantStatusKey(status: string): MessageKey | null {
+  switch (status) {
+    case 'ACTIVE':
+      return 'customers.recovery.grant.status.ACTIVE';
+    case 'REDEEMED':
+      return 'customers.recovery.grant.status.REDEEMED';
+    case 'EXPIRED':
+      return 'customers.recovery.grant.status.EXPIRED';
+    case 'REVOKED':
+      return 'customers.recovery.grant.status.REVOKED';
+    default:
+      return null;
+  }
 }

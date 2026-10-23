@@ -305,7 +305,15 @@ public record Promotion(
              */
             ITEM_PERCENTAGE_MARKUP,
             /** ADR 0140. Operand: {@code amountMinor}, added to each matching unit. */
-            ITEM_FIXED_MARKUP
+            ITEM_FIXED_MARKUP,
+            /**
+             * ADR 0140 stage 5. Operand: {@code basisPoints}, a service charge computed on the
+             * post-discount goods subtotal and rounded half-up to whole som. Priced only while
+             * {@code pricing.order_markup.enabled} is on.
+             */
+            ORDER_PERCENTAGE_MARKUP,
+            /** ADR 0140 stage 5. Operand: {@code amountMinor}, a flat service charge on the order. */
+            ORDER_FIXED_MARKUP
         }
     }
 

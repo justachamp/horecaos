@@ -247,6 +247,8 @@ public class DayCloseService {
         // ADR 0140 (7.9): the promotion redemption fact, in the same transaction for the
         // same "a day is written whole or not at all" reason.
         derived.promotionRedemptions().forEach(store::insertPromotionRedemptionFact);
+        // ADR 0038: the redemption takes its branch and legal entity from the order's fact, written just above.
+        store.stampPromotionRedemptionGrain(tenantId, businessDate);
         // ADR 0156: closed staff shifts, in the same transaction for the same reason.
         derived.staffShifts().forEach(store::insertStaffShiftFact);
         // ADR 0159 (5.4/5.5): the review facts with the day, the case fact upserted because a case is
@@ -627,7 +629,8 @@ public class DayCloseService {
                                                 source.discountMinor(),
                                                 source.markupMinor(),
                                                 source.currency(),
-                                                source.redeemedAt()))
+                                                source.redeemedAt(),
+                                                source.grantId()))
                                 .toList();
 
         // ADR 0156: the closed shifts whose business date is this day, through the workforce port. The

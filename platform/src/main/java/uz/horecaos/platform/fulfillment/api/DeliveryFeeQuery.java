@@ -25,11 +25,14 @@ import uz.horecaos.platform.tenancy.api.GeoPoint;
  *                         rather than looked up, because the gate belongs on the
  *                         order and this module must not be the second place that
  *                         decides it
- * @param goodsSubtotalMinor the post-discount goods subtotal in minor units,
- *                         excluding the delivery fee and any service charge.
- *                         Comparing a threshold against a total that includes the
- *                         fee makes the fee oscillate: adding it crosses the
- *                         threshold, which removes it, which uncrosses it
+ * @param goodsSubtotalMinor not read by the resolver, and pricing passes zero. The zone's minimum basket
+ *                         and free-delivery threshold travel back on the resolved charge and are compared
+ *                         by {@code PricingEngine} against the post-discount goods subtotal (ADR 0037,
+ *                         steps 7 and 8), which excludes the delivery fee and any service charge:
+ *                         comparing against a total that includes the fee makes the fee oscillate, since
+ *                         adding it crosses the threshold, which removes it, which uncrosses it. A caller
+ *                         that simulates a fee for a basket (the zone editor) may still say what the basket
+ *                         is; the figure is advisory and decides nothing here
  * @param at               the instant the quote is being created, which is what
  *                         the time rules are evaluated against in the location's
  *                         own timezone

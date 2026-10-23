@@ -425,6 +425,12 @@ export const staffEn = {
     'Attaching a fiscal agent’s reference to a receipt',
   'staff.approvals.action.customerLegalHoldPlace': 'Placing a legal hold on a customer',
   'staff.approvals.action.customerLegalHoldLift': 'Lifting a legal hold from a customer',
+  'staff.approvals.action.orderingAmendmentDecrease': 'Reducing a placed order’s lines or total',
+  'staff.approvals.action.courierRunPayChange':
+    'Changing how courier pay for a multi-order run is calculated',
+  'staff.approvals.action.reportingBusinessDayBoundaryChange':
+    'Moving the business day’s start time',
+  'staff.approvals.action.iamPlatformGrantManage': 'Granting or revoking a platform-level role',
   // end: Fiscal receipt correction approval (ADR 0166)
   'staff.approvals.tab.pending': 'Waiting',
   'staff.approvals.tab.decided': 'Decided',

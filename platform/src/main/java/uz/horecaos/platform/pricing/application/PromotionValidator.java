@@ -52,8 +52,16 @@ public final class PromotionValidator {
             EnumSet.of(Action.Type.ORDER_PERCENTAGE_DISCOUNT, Action.Type.ORDER_FIXED_DISCOUNT);
     private static final Set<Action.Type> DELIVERY_ACTIONS =
             EnumSet.of(Action.Type.FREE_DELIVERY, Action.Type.REDUCED_DELIVERY);
-    private static final Set<Action.Type> MARKUP_ACTIONS =
+    private static final Set<Action.Type> ITEM_MARKUP_ACTIONS =
             EnumSet.of(Action.Type.ITEM_PERCENTAGE_MARKUP, Action.Type.ITEM_FIXED_MARKUP);
+    private static final Set<Action.Type> ORDER_MARKUP_ACTIONS =
+            EnumSet.of(Action.Type.ORDER_PERCENTAGE_MARKUP, Action.Type.ORDER_FIXED_MARKUP);
+    /** Every markup action: a discount may carry none of them. */
+    private static final Set<Action.Type> MARKUP_ACTIONS = EnumSet.of(
+            Action.Type.ITEM_PERCENTAGE_MARKUP,
+            Action.Type.ITEM_FIXED_MARKUP,
+            Action.Type.ORDER_PERCENTAGE_MARKUP,
+            Action.Type.ORDER_FIXED_MARKUP);
 
     /** The facts a definition is checked against: what exists in this tenant and brand. */
     public interface References {
@@ -101,10 +109,24 @@ public final class PromotionValidator {
 
     public static Report validate(
             @Nullable UUID selfId, PromotionDefinition definition, List<Peer> peers, References references) {
+        return validate(selfId, definition, peers, references, false);
+    }
+
+    /**
+     * @param orderMarkupEnabled whether {@code pricing.order_markup.enabled} is on (ADR 0140). While it is off an
+     *     order-level markup is refused at authoring: it could not be priced, and a promotion that validates and
+     *     does nothing is a rule somebody wrote and expected to work
+     */
+    public static Report validate(
+            @Nullable UUID selfId,
+            PromotionDefinition definition,
+            List<Peer> peers,
+            References references,
+            boolean orderMarkupEnabled) {
         List<Issue> refusals = new ArrayList<>();
         List<Issue> warnings = new ArrayList<>();
 
-        checkShape(definition, refusals);
+        checkShape(definition, refusals, orderMarkupEnabled);
         checkActions(definition, refusals, warnings, references);
         checkConditions(definition, refusals, warnings, references);
         checkWindow(definition, refusals);
@@ -134,9 +156,12 @@ public final class PromotionValidator {
         return new Report(List.copyOf(refusals), List.copyOf(warnings));
     }
 
+    /** The longest customer-facing title, matching {@code pricing.promotion_titles.title}. */
+    static final int MAX_TITLE_LENGTH = 120;
+
     // ---------------------------------------------------------------- shape
 
-    private static void checkShape(PromotionDefinition definition, List<Issue> refusals) {
+    private static void checkShape(PromotionDefinition definition, List<Issue> refusals, boolean orderMarkupEnabled) {
         if (definition.name() == null || definition.name().isBlank()) {
             refusals.add(new Issue("NAME_REQUIRED", "A promotion needs a name", null));
         }
@@ -157,6 +182,18 @@ public final class PromotionValidator {
             refusals.add(
                     new Issue("MAXIMUM_INVALID", "A maximum discount must be positive, or omitted for uncapped", null));
         }
+        // ADR 0140: the customer-facing wording is optional, and what is there must be printable.
+        definition.titles().forEach((locale, title) -> {
+            if (locale == null || !locale.matches("^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$")) {
+                refusals.add(new Issue(
+                        "TITLE_LOCALE_INVALID", "A title is written for a locale such as ru, uz-Latn or en", null));
+            } else if (title == null || title.isBlank() || title.length() > MAX_TITLE_LENGTH) {
+                refusals.add(new Issue(
+                        "TITLE_INVALID",
+                        "A title for " + locale + " must be 1-" + MAX_TITLE_LENGTH + " characters, or left out",
+                        null));
+            }
+        });
         if (definition.kind() == Promotion.Kind.MARKUP) {
             if (definition.exclusive()) {
                 refusals.add(new Issue(
@@ -170,11 +207,11 @@ public final class PromotionValidator {
                         "A markup lands on items; a delivery-scope markup does not exist",
                         null));
             }
-            if (definition.scope() == Promotion.Scope.ORDER) {
+            if (definition.scope() == Promotion.Scope.ORDER && !orderMarkupEnabled) {
                 refusals.add(new Issue(
                         "ORDER_MARKUP_NOT_AVAILABLE",
                         "An order-level markup is a service line whose fiscal and tax treatment is still an open "
-                                + "decision; only item markups can be authored",
+                                + "decision; only item markups can be authored until it is switched on",
                         null));
             }
             if (definition.requiresCoupon()) {
@@ -193,7 +230,8 @@ public final class PromotionValidator {
         }
         Set<Action.Type> allowed =
                 switch (definition.kind()) {
-                    case MARKUP -> MARKUP_ACTIONS;
+                    case MARKUP ->
+                        definition.scope() == Promotion.Scope.ORDER ? ORDER_MARKUP_ACTIONS : ITEM_MARKUP_ACTIONS;
                     case DISCOUNT ->
                         switch (definition.scope()) {
                             case ITEM -> ITEM_ACTIONS;
@@ -212,7 +250,10 @@ public final class PromotionValidator {
             }
             Map<String, Object> operands = action.operands();
             switch (action.type()) {
-                case ITEM_PERCENTAGE_DISCOUNT, ORDER_PERCENTAGE_DISCOUNT, ITEM_PERCENTAGE_MARKUP -> {
+                case ITEM_PERCENTAGE_DISCOUNT,
+                        ORDER_PERCENTAGE_DISCOUNT,
+                        ITEM_PERCENTAGE_MARKUP,
+                        ORDER_PERCENTAGE_MARKUP -> {
                     Long basisPoints = longOperand(operands, "basisPoints");
                     if (basisPoints == null || basisPoints < 1) {
                         refusals.add(new Issue(
@@ -226,7 +267,7 @@ public final class PromotionValidator {
                                 action.sequence()));
                     }
                 }
-                case ITEM_FIXED_DISCOUNT, ORDER_FIXED_DISCOUNT, ITEM_FIXED_MARKUP -> {
+                case ITEM_FIXED_DISCOUNT, ORDER_FIXED_DISCOUNT, ITEM_FIXED_MARKUP, ORDER_FIXED_MARKUP -> {
                     Long amount = longOperand(operands, "amountMinor");
                     if (amount == null || amount < 1) {
                         refusals.add(new Issue(

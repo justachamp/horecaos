@@ -123,7 +123,7 @@
         }
         @for (row of cart.discountRows(); track $index) {
           <div class="summary__row summary__row--discount" data-testid="discount-row">
-            <span>{{ row.labelKey | t }}{{ row.code ? ' ' + row.code : '' }}</span>
+            <span>{{ row.title ?? (row.labelKey | t) }}{{ row.code ? ' ' + row.code : '' }}</span>
             <span>−{{ row.amount }}</span>
           </div>
         }

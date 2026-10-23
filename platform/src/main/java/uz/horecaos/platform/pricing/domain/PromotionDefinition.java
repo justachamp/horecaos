@@ -43,10 +43,54 @@ public record PromotionDefinition(
         Promotion.LoyaltyAccrual loyaltyAccrual,
         Promotion.LoyaltyRedemption loyaltyRedemption,
         List<ConditionDefinition> conditions,
-        List<ActionDefinition> actions) {
+        List<ActionDefinition> actions,
+        Map<String, String> titles) {
+
+    /** A definition with no customer-facing title: every promotion that predates ADR 0140's titles. */
+    public PromotionDefinition(
+            String code,
+            String name,
+            Promotion.Kind kind,
+            Promotion.Scope scope,
+            String stackingGroup,
+            boolean exclusive,
+            int priority,
+            boolean requiresCoupon,
+            @Nullable Long maximumDiscountMinor,
+            String currency,
+            @Nullable Instant validFrom,
+            @Nullable Instant validUntil,
+            @Nullable Integer maximumRedemptions,
+            @Nullable Integer maximumPerCustomer,
+            Promotion.LoyaltyAccrual loyaltyAccrual,
+            Promotion.LoyaltyRedemption loyaltyRedemption,
+            List<ConditionDefinition> conditions,
+            List<ActionDefinition> actions) {
+        this(
+                code,
+                name,
+                kind,
+                scope,
+                stackingGroup,
+                exclusive,
+                priority,
+                requiresCoupon,
+                maximumDiscountMinor,
+                currency,
+                validFrom,
+                validUntil,
+                maximumRedemptions,
+                maximumPerCustomer,
+                loyaltyAccrual,
+                loyaltyRedemption,
+                conditions,
+                actions,
+                Map.of());
+    }
 
     public PromotionDefinition {
         Objects.requireNonNull(kind, "A promotion kind is required");
+        titles = titles == null ? Map.of() : Map.copyOf(titles);
         Objects.requireNonNull(scope, "A promotion scope is required");
         Objects.requireNonNull(loyaltyAccrual, "A loyalty accrual rule is required");
         Objects.requireNonNull(loyaltyRedemption, "A loyalty redemption rule is required");
@@ -146,6 +190,11 @@ public record PromotionDefinition(
             actionDocuments.add(entry);
         }
         document.put("actions", actionDocuments);
+        // Written only when there is something to say, so a definition recorded before titles existed and one
+        // authored without any serialise to the same document.
+        if (!titles.isEmpty()) {
+            document.put("titles", new TreeMap<>(titles));
+        }
         return document;
     }
 
@@ -201,6 +250,15 @@ public record PromotionDefinition(
                 Promotion.LoyaltyAccrual.valueOf((String) document.getOrDefault("loyaltyAccrual", "ACCRUE")),
                 Promotion.LoyaltyRedemption.valueOf((String) document.getOrDefault("loyaltyRedemption", "ALLOW")),
                 conditions,
-                actions);
+                actions,
+                titlesOf(document.get("titles")));
+    }
+
+    private static Map<String, String> titlesOf(@Nullable Object raw) {
+        Map<String, String> titles = new TreeMap<>();
+        if (raw instanceof Map<?, ?> map) {
+            map.forEach((locale, title) -> titles.put(String.valueOf(locale), String.valueOf(title)));
+        }
+        return titles;
     }
 }

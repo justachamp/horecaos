@@ -44,6 +44,10 @@ const SAMPLE_VALUES: Readonly<Record<string, string>> = {
   // message is sent and are never stored (ADR 0184, D21), so there is no real value to show here.
   customerName: 'Aziz',
   courierFirstName: 'Bobur',
+  // LOYALTY_POINTS_EXPIRING (ADR 0046, ADR 0181): the same three values the platform's own test send uses.
+  loyaltyPoints: '12 000',
+  loyaltyExpiresOn: '28.10.2026',
+  loyaltyDaysRemaining: '14',
 };
 
 /** The product list as the preview shows it, with or without the price after each item. */

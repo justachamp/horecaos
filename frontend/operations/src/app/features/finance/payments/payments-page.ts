@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { OrderLookupApi, OrderNumberMatchView } from '../../../core/api/order-lookup-api';
@@ -112,6 +113,8 @@ export class PaymentsPage {
   private readonly api = inject(PaymentsApi);
   private readonly orderLookup = inject(OrderLookupApi);
   private readonly evidenceApi = inject(FiscalEvidenceApi);
+  /** Optional so a host without a router (a unit test of a neighbour) still builds the page. */
+  private readonly route = inject(ActivatedRoute, { optional: true });
   protected readonly i18n = inject(I18n);
 
   /** The tenant whose order is on screen; the fiscal evidence block below the tenders reads for it. */
@@ -215,6 +218,20 @@ export class PaymentsPage {
       this.loadTotals(tenantId),
       this.loadPaymentTypes(tenantId),
     ]);
+    await this.openLinkedOrder();
+  }
+
+  /**
+   * The service-recovery drawer links here with {@code ?order=} (ADR 0159, Decision 9): the operator who needs a
+   * remedy recorded for a case lands on that order, already looked up, instead of pasting its identifier.
+   */
+  private async openLinkedOrder(): Promise<void> {
+    const orderId = this.route?.snapshot.queryParamMap.get('order')?.trim();
+    if (!orderId) {
+      return;
+    }
+    this.orderIdInput.set(orderId);
+    await this.lookup();
   }
 
   // -------------------------------------------------------------- fiscal evidence

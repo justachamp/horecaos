@@ -3,6 +3,7 @@ package uz.horecaos.platform.pricing.application;
 import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.pricing.api.PromoCodeQueryPort;
@@ -35,18 +36,51 @@ import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStor
 public class PromoCodeEligibilityService implements PromoCodeQueryPort {
 
     private final JdbcPromoCodeStore store;
+    private final @Nullable BenefitGrantEligibility grants;
 
+    /** A service for a caller that predates one-off grants: a code that is not a shared one is not found. */
     public PromoCodeEligibilityService(JdbcPromoCodeStore store) {
-        this.store = store;
+        this(store, null);
     }
 
+    @Autowired
+    public PromoCodeEligibilityService(JdbcPromoCodeStore store, @Nullable BenefitGrantEligibility grants) {
+        this.store = store;
+        this.grants = grants;
+    }
+
+    /**
+     * A shared code first, and when the code word is not one, the customer's own one-off grant (ADR 0140): the
+     * customer types one field and does not know which kind of code they were sent.
+     */
     @Override
     @Transactional(readOnly = true)
     public Eligibility check(UUID tenantId, UUID brandId, String code, @Nullable UUID customerAccountId, Instant now) {
         String normalized = JdbcPromoCodeStore.normalize(code);
         return store.findCouponByCode(tenantId, brandId, normalized)
                 .map(row -> evaluate(tenantId, row, customerAccountId, now))
-                .orElse(Eligibility.refused(Eligibility.Reason.CODE_NOT_FOUND));
+                .orElseGet(() -> grantOrNotFound(tenantId, brandId, normalized, customerAccountId, now));
+    }
+
+    private Eligibility grantOrNotFound(
+            UUID tenantId, UUID brandId, String code, @Nullable UUID customerAccountId, Instant now) {
+        if (grants == null) {
+            return Eligibility.refused(Eligibility.Reason.CODE_NOT_FOUND);
+        }
+        BenefitGrantEligibility.Verdict verdict = grants.check(tenantId, brandId, code, customerAccountId, now);
+        if (verdict.isEligible()) {
+            return Eligibility.okGrant(
+                    java.util.Objects.requireNonNull(verdict.grant()).grantId());
+        }
+        return Eligibility.refused(
+                switch (java.util.Objects.requireNonNull(verdict.reason())) {
+                    // Somebody else's grant is answered as a code that is not there: the code is a bearer secret.
+                    case CODE_NOT_FOUND, WRONG_CUSTOMER -> Eligibility.Reason.CODE_NOT_FOUND;
+                    case REQUIRES_ACCOUNT -> Eligibility.Reason.CODE_REQUIRES_ACCOUNT;
+                    case NOT_YET_ACTIVE -> Eligibility.Reason.CODE_NOT_YET_ACTIVE;
+                    case EXPIRED -> Eligibility.Reason.CODE_EXPIRED;
+                    case ALREADY_USED -> Eligibility.Reason.CODE_ALREADY_USED;
+                });
     }
 
     private Eligibility evaluate(

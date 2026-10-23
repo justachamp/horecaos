@@ -136,3 +136,20 @@
   background: var(--q-error-tint);
   color: var(--q-error-text);
 }
+
+.case__minted {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.case__code {
+  padding-block: 6px;
+  padding-inline: 10px;
+  border: 1px dashed var(--q-hairline);
+  border-radius: 6px;
+  background: var(--q-surface-1);
+  letter-spacing: 1px;
+  user-select: all;
+  overflow-wrap: anywhere;
+}

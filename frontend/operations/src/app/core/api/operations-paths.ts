@@ -42,6 +42,15 @@ export const operationsPaths = {
   },
 
   /**
+   * `GET` the checkpoint findings of a scheduled order's promotions, newest first, and `POST` a re-check
+   * (`ScheduledOrderRequoteController`, ADR 0140, row `6.1`). Reads need `ORDER_READ` at the branch and the
+   * re-check `ORDER_AMEND`; neither changes the order.
+   */
+  orderPromotionRequotes(scope: LocationScope, orderId: string): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/orders/${encodeURIComponent(orderId)}/promotion-requotes`;
+  },
+
+  /**
    * The ADR 0045 realtime push endpoint — `OperationsStreamController`, on
    * the same pre-ADR-0031 prefix `orders` above sits on, since it is mapped
    * directly under the location rather than under `/operations`. Query

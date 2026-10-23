@@ -83,6 +83,21 @@ class PricingConfigurationKeyTests {
                 .isEqualTo(50);
     }
 
+    @Test
+    @DisplayName(
+            "the order-markup switch is declared identically on both sides, off by default, and never tenant-visible")
+    void theOrderMarkupSwitchIsDarkByDefault() {
+        assertThat(registered("pricing.order_markup.enabled")).isEqualTo(PricingConfigurationKeys.ORDER_MARKUP_ENABLED);
+        assertThat(PricingConfigurationKeys.ORDER_MARKUP_ENABLED.defaultValue())
+                .as("off until finance and counsel answer how a service line is taxed (ADR 0140)")
+                .isEqualTo(false);
+        assertThat(PricingConfigurationKeys.ORDER_MARKUP_ENABLED.tenantVisible())
+                .as("a tenant has no knob for it in Settings while the answer is open")
+                .isFalse();
+        assertThat(PricingConfigurationKeys.ORDER_MARKUP_ENABLED.settableScopes())
+                .containsExactlyInAnyOrder(ScopeType.PLATFORM, ScopeType.TENANT);
+    }
+
     private static ConfigurationKey<?> registered(String code) {
         return ConfigurationKeys.require(code);
     }

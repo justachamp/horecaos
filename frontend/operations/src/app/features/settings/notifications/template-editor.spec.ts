@@ -95,6 +95,16 @@ describe('TemplateEditor', () => {
     expect(preview.textContent).toBe('Order A-1042 is ready');
   });
 
+  it('previews the loyalty expiry message with sample points, date and days (row 6.3, ADR 0181)', () => {
+    setBody(
+      '{{loyaltyPoints}} points start to lapse on {{loyaltyExpiresOn}} ({{loyaltyDaysRemaining}} days)',
+    );
+    const preview = fixture.nativeElement.querySelector(
+      '[data-testid="preview-body"]',
+    ) as HTMLElement;
+    expect(preview.textContent).toBe('12 000 points start to lapse on 28.10.2026 (14 days)');
+  });
+
   it('disables save until all three locales have text', () => {
     const save = fixture.nativeElement.querySelector(
       '[data-testid="editor-save"]',

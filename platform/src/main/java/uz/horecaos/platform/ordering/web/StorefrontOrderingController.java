@@ -16,6 +16,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -763,6 +764,9 @@ public class StorefrontOrderingController {
                             "CODE_EXPIRED",
                             "REDEMPTION_LIMIT_REACHED",
                             "PER_CUSTOMER_LIMIT_REACHED",
+                            // ADR 0140: a one-off grant already spent, or a guest presenting one.
+                            "CODE_ALREADY_USED",
+                            "CODE_REQUIRES_ACCOUNT",
                             // ADR 0158: a line a rule added that the customer may not remove or lower, or
                             // a quantity past the rule's bounds -- the basket is well formed, the rule refuses.
                             "AUTO_ADD_LINE_MANDATORY",
@@ -1191,7 +1195,7 @@ public class StorefrontOrderingController {
     }
 
     /**
-     * @param feeMinor total fees — today, always the ADR 0037 delivery charge —
+     * @param feeMinor total fees — the ADR 0037 delivery charge and, once ADR 0140's order-level markup is switched on, its service charge —
      *                 already folded into {@code totalMinor}
      * @param delivery present only for a {@code DELIVERY} cart whose destination
      *                 has been priced; absent for a {@code PICKUP} cart and for
@@ -1283,23 +1287,35 @@ public class StorefrontOrderingController {
      * be shown (ADR 0140).
      *
      * <p>Deliberately no promotion name, code or id: the operator's name for a
-     * promotion is internal, and a customer-facing title is not yet a field of the
-     * promotion. {@code source} says whether the customer asked for it by typing a
-     * code; {@code effect} says what it did to the total.
+     * promotion is internal. What the marketer wrote for the customer is {@code
+     * titles}, per locale, when there is any. {@code source} says whether the
+     * customer asked for it by typing a code; {@code effect} says what it did to
+     * the total.
      *
      * @param source      {@code AUTOMATIC} or {@code PROMO_CODE}
      * @param effect      {@code DISCOUNT} (taken off the goods, part of {@code
      *                    discountMinor}), {@code DELIVERY_DISCOUNT} (taken off the
-     *                    delivery charge, already in {@code feeMinor}) or {@code
-     *                    SURCHARGE} (added to the goods, already in the subtotal)
+     *                    delivery charge, already in {@code feeMinor}), {@code
+     *                    SURCHARGE} (added to the goods, already in the subtotal) or
+     *                    {@code SERVICE_CHARGE} (an order-level markup added after the
+     *                    discounts, already in {@code feeMinor}; dark until the fiscal
+     *                    answer, ADR 0140)
      * @param amountMinor always positive; the direction is the effect's
+     * @param titles      what the marketer wrote for the customer, by locale (ADR 0140); empty when the
+     *                    promotion has no wording, and then the entry is described by its kind of benefit.
+     *                    A client shows the entry for the language the customer reads and falls back
+     *                    to the kind of benefit for a language it has no entry for
      */
-    public record AppliedPromotionResponse(String source, String effect, long amountMinor) {
+    public record AppliedPromotionResponse(
+            String source,
+            String effect,
+            long amountMinor,
+            @Nullable Map<String, String> titles) {
 
         static List<AppliedPromotionResponse> of(AppliedPromotions promotions) {
             return promotions.applied().stream()
                     .map(entry -> new AppliedPromotionResponse(
-                            entry.source().name(), entry.effect().name(), entry.amountMinor()))
+                            entry.source().name(), entry.effect().name(), entry.amountMinor(), entry.titles()))
                     .toList();
         }
     }

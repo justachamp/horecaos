@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.ApprovalAction;
 import uz.horecaos.platform.audit.application.ApprovalPolicyService;
 import uz.horecaos.platform.audit.application.ApprovalPolicyService.PolicyCoverage;
 import uz.horecaos.platform.audit.application.ApprovalPolicyService.PolicyView;
@@ -77,7 +78,7 @@ public class ApprovalPolicyController {
             description = "Every version of each policy, newest first. An action code with no row "
                     + "here needs no second signature, which is the state every action is in "
                     + "until somebody publishes one.")
-    Page<PolicyResponse> list(
+    public Page<PolicyResponse> list(
             @PathVariable UUID tenantId,
             @RequestParam(required = false) String actionCode,
             @RequestParam(required = false, defaultValue = "false") boolean includeEnded,
@@ -98,7 +99,7 @@ public class ApprovalPolicyController {
             description = "An empty configuredScopes list is an unresolved action. Its missingPolicyMode "
                     + "states whether it currently proceeds on one signature or is refused until a "
                     + "policy is authored. A scoped row is not presented as tenant-wide coverage.")
-    List<PolicyCoverageResponse> coverage(@PathVariable UUID tenantId) {
+    public List<PolicyCoverageResponse> coverage(@PathVariable UUID tenantId) {
         Instant now = clock.instant();
         return policies.coverage(tenantId).stream()
                 .map(coverage -> PolicyCoverageResponse.of(coverage, now))
@@ -112,7 +113,8 @@ public class ApprovalPolicyController {
             description = "Never an edit. The previous open version is closed at the instant this "
                     + "one starts, so what an earlier approver was shown stays readable and the "
                     + "version snapshotted onto their request still means what it said.")
-    ResponseEntity<PolicyResponse> author(@PathVariable UUID tenantId, @Valid @RequestBody AuthorPolicyRequest body) {
+    public ResponseEntity<PolicyResponse> author(
+            @PathVariable UUID tenantId, @Valid @RequestBody AuthorPolicyRequest body) {
 
         PolicyView published = policies.author(new ApprovalPolicyService.NewPolicyVersion(
                 scope(tenantId, body),
@@ -140,7 +142,7 @@ public class ApprovalPolicyController {
                     + "follow it, which turns the control off from the scheduled date onwards. To "
                     + "call off a scheduled change, publish the threshold you want as a new "
                     + "version.")
-    PolicyResponse endDate(
+    public PolicyResponse endDate(
             @PathVariable UUID tenantId, @PathVariable UUID policyId, @Valid @RequestBody EndPolicyRequest body) {
 
         return PolicyResponse.of(
@@ -270,9 +272,15 @@ public class ApprovalPolicyController {
         }
     }
 
+    /**
+     * @param worklist {@code TENANT} for an action the tenant's own approvers decide, {@code PLATFORM} for one
+     *     HorecaOS decides about a tenant (its activation, its wallet): a console offers to publish a policy
+     *     for the first kind only
+     */
     public record PolicyCoverageResponse(
             String actionCode,
             String missingPolicyMode,
+            String worklist,
             boolean configuredAnywhere,
             List<PolicyResponse> configuredScopes) {
 
@@ -280,6 +288,9 @@ public class ApprovalPolicyController {
             return new PolicyCoverageResponse(
                     coverage.actionCode(),
                     coverage.missingPolicyMode().name(),
+                    ApprovalAction.find(coverage.actionCode())
+                            .map(action -> action.worklist().name())
+                            .orElse(ApprovalAction.Worklist.TENANT.name()),
                     coverage.configuredAnywhere(),
                     coverage.configuredScopes().stream()
                             .map(view -> PolicyResponse.of(view, now))

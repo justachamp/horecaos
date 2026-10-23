@@ -38,6 +38,7 @@ import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
+import uz.horecaos.platform.support.ApprovalWorklistProof;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
@@ -89,6 +90,9 @@ class OperationsCourierControllerEndpointTests {
     private static final String OTHER_TENANT_ADMIN = "018f9c20-4000-7000-8000-0000000000f4";
     private static final String REVEALER = "018f9c20-4000-7000-8000-0000000000f5";
     private static final String ADJUSTER = "018f9c20-4000-7000-8000-0000000000f6";
+
+    /** Holds courier.adjustment.approve and approval.decide: the second signature on a penalty (row 9.4). */
+    private static final String FINANCE = "018f9c20-4000-7000-8000-0000000000f9";
 
     // T17: the real PlatformRole bundles the roster surface is granted to
     // (LOCATION_MANAGER at LOCATION, COURIER_DISPATCHER at BRAND) — distinct
@@ -335,6 +339,89 @@ class OperationsCourierControllerEndpointTests {
         assertThat(storedOrigin)
                 .as("origin=RULE in the request body never reaches the ledger")
                 .isEqualTo("MANUAL");
+    }
+
+    /**
+     * Row 9.4, ADR 0042, ADR 0181: a manual penalty is fail-closed and no migration seeds a floor for it, so until
+     * the tenant publishes a policy it cannot be levied at all. This is the loop the console's "Who signs" section
+     * closes: the owner publishes the policy over the operations route, the penalty then waits on the worklist the
+     * console reads, a second person decides it over the route the console calls, and only then does the same
+     * request write the ledger entry.
+     */
+    @Test
+    void aManualPenaltyIsRefusedUntilTheOwnerPublishesItsPolicyThenWaitsForASecondPerson() throws Exception {
+        seedCourierCompensationPolicy(TENANT);
+        seedAdjustmentReason(TENANT, "LATE_PENALTY", "PENALTY", "DELIVERED_VOLUME");
+        grant(FINANCE, PlatformRole.TENANT_FINANCE, TENANT);
+        String penalty = """
+                {"locationId":"%s","amountMinor":-30000,"currency":"UZS",
+                 "reasonCode":"LATE_PENALTY","origin":"MANUAL",
+                 "idempotencyKey":"penalty-proof-1","reason":"three late deliveries this week"}
+                """.formatted(LOCATION);
+
+        MvcResult refused = mvc.perform(post(couriersPath(TENANT) + "/" + COURIER + "/adjustments")
+                        .with(tokenFor(ADJUSTER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "penalty-http-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(penalty))
+                .andReturn();
+        assertThat(refused.getResponse().getContentAsString())
+                .as("no policy exists, so the tenant cannot levy a manual penalty at all")
+                .contains("APPROVAL_POLICY_REQUIRED");
+        assertThat(penaltyEntries()).isZero();
+
+        ApprovalWorklistProof.publishPolicy(
+                mvc,
+                TENANT,
+                tokenFor(OWNER),
+                "courier.adjustment.create.manual-penalty",
+                "courier.adjustment.approve",
+                "policy-penalty-1");
+
+        MvcResult waiting = mvc.perform(post(couriersPath(TENANT) + "/" + COURIER + "/adjustments")
+                        .with(tokenFor(ADJUSTER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "penalty-http-2")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(penalty))
+                .andReturn();
+        assertThat(waiting.getResponse().getStatus()).isEqualTo(200);
+        assertThat(waiting.getResponse().getContentAsString())
+                .as("a manual penalty is never written on the first call")
+                .contains("\"written\":false");
+        assertThat(penaltyEntries()).isZero();
+
+        tools.jackson.databind.JsonNode entry = ApprovalWorklistProof.listed(
+                mvc, TENANT, tokenFor(FINANCE), "courier.adjustment.create.manual-penalty");
+        assertThat(entry.get("requiredApproverCapability").asString()).isEqualTo("courier.adjustment.approve");
+        assertThat(entry.get("mayDecide").asBoolean()).isTrue();
+
+        assertThat(ApprovalWorklistProof.approve(
+                        mvc,
+                        TENANT,
+                        tokenFor(FINANCE),
+                        UUID.fromString(entry.get("id").asString()),
+                        "decide-penalty-1"))
+                .isEqualTo("APPROVED");
+
+        MvcResult written = mvc.perform(post(couriersPath(TENANT) + "/" + COURIER + "/adjustments")
+                        .with(tokenFor(ADJUSTER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "penalty-http-3")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(penalty))
+                .andReturn();
+        assertThat(written.getResponse().getContentAsString()).contains("\"written\":true");
+        assertThat(penaltyEntries()).isOne();
+    }
+
+    private long penaltyEntries() {
+        return jdbc.sql("""
+                SELECT count(*) FROM fulfillment.courier_ledger_entries
+                 WHERE tenant_id = :tenantId AND courier_id = :courierId AND reason_code = 'LATE_PENALTY'
+                """)
+                .param("tenantId", TENANT)
+                .param("courierId", COURIER)
+                .query(Long.class)
+                .single();
     }
 
     @Test

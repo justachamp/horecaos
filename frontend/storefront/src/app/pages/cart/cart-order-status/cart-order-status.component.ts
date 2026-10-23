@@ -9,7 +9,7 @@ import { MenuService } from '../../../services/menu.service';
 import { AnalyticsInjector } from '../../../core/analytics/analytics-injector';
 import { pushEcommerceEvent } from '../../../core/analytics/ecommerce-events';
 import { money, toMajorUnits } from '../../../core/money/money';
-import { LangService } from '../../../services/lang.service';
+import { LangService, platformTag } from '../../../services/lang.service';
 import {
   discountRowsFor,
   noteRowsFor,
@@ -234,8 +234,11 @@ export class CartOrderStatusComponent implements OnInit, OnDestroy {
   /** ADR 0140: one row per kind of discount, with the platform's own amount. */
   discountRows(): readonly PromotionRow[] {
     const order = this.order();
-    return discountRowsFor(order?.promotions, this.priceOf(order?.discount), (minor) =>
-      this.formatPrice(minor),
+    return discountRowsFor(
+      order?.promotions,
+      this.priceOf(order?.discount),
+      (minor) => this.formatPrice(minor),
+      platformTag(this.lang.langId()),
     );
   }
 

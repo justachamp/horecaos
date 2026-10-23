@@ -398,6 +398,9 @@ export class MarketingReportPage {
    * tenant, and the lookup is authorized where the redemption happened.
    */
   protected async showCustomer(row: PromotionRedemptionRow): Promise<void> {
+    if (row.promotionId === null) {
+      return;
+    }
     const current = this.revealOf(row);
     if (current?.kind === 'loading' || current?.kind === 'account' || current?.kind === 'guest') {
       return;
@@ -436,12 +439,26 @@ export class MarketingReportPage {
   }
 
   protected selectPromotion(row: PromotionSummaryRow | null): void {
+    if (row !== null && row.promotionId === null) {
+      // A customer's one-off code has no promotion to filter the log by.
+      return;
+    }
     this.promoSelected.set(row);
     void this.loadPromotionLog();
   }
 
   protected retryPromotions(): void {
     void this.loadPromotions();
+  }
+
+  /** Whether the rows span more than one legal entity, which is when a row has to say whose money it is. */
+  protected showsEntities(): boolean {
+    return new Set(this.promoSummary().map((row) => row.legalEntityId ?? null)).size > 1;
+  }
+
+  /** A short reference to the entity: the platform's id, never a name this report was not given. */
+  protected entityRef(id: string | null | undefined): string {
+    return id ? id.slice(0, 8) : '—';
   }
 
   protected sourceLabelKey(kind: string): PromotionTextKey {

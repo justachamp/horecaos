@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.RowCallbackHandler;
@@ -349,6 +350,28 @@ public class JdbcRecoveryCaseStore {
             Instant now,
             @Nullable CaseRow cursorKey,
             int limit) {
+        return list(
+                tenantId, brandId, locationId, state, ownerStaffMemberId, slaState, null, null, now, cursorKey, limit);
+    }
+
+    /**
+     * As above, narrowed to the cases about reviews rated {@code minRating} to {@code maxRating} stars
+     * (either may be null for no bound): the IA's «filters by rating», on the rating the case's own
+     * review carries.
+     */
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public List<Listed> list(
+            UUID tenantId,
+            UUID brandId,
+            @Nullable UUID locationId,
+            @Nullable CaseState state,
+            @Nullable UUID ownerStaffMemberId,
+            @Nullable SlaState slaState,
+            @Nullable Integer minRating,
+            @Nullable Integer maxRating,
+            Instant now,
+            @Nullable CaseRow cursorKey,
+            int limit) {
         boolean closedOrder = state != null && state.terminal();
         boolean unbounded = cursorKey == null;
         String order = closedOrder ? "c.closed_at DESC, c.id DESC" : "c.resolution_due_at, c.id";
@@ -364,6 +387,8 @@ public class JdbcRecoveryCaseStore {
                    AND (CAST(:state AS varchar) IS NULL OR c.state = :state)
                    AND (CAST(:owner AS uuid) IS NULL OR c.owner_staff_member_id = :owner)
                    AND (CAST(:sla AS varchar) IS NULL OR (%s) = :sla)
+                   AND (CAST(:minRating AS integer) IS NULL OR r.rating >= :minRating)
+                   AND (CAST(:maxRating AS integer) IS NULL OR r.rating <= :maxRating)
                    AND (:unbounded OR %s)
                  ORDER BY %s
                  LIMIT :limit
@@ -375,6 +400,8 @@ public class JdbcRecoveryCaseStore {
                 .param("state", state == null ? null : state.name())
                 .param("owner", ownerStaffMemberId)
                 .param("sla", slaState == null ? null : slaState.name())
+                .param("minRating", minRating)
+                .param("maxRating", maxRating)
                 .param("unbounded", unbounded)
                 .param("keyTime", keyTime == null ? null : utc(keyTime))
                 .param("keyId", cursorKey == null ? null : cursorKey.id().toString())
@@ -506,6 +533,25 @@ public class JdbcRecoveryCaseStore {
                         rs.getObject("review_id", UUID.class),
                         new CaseLink(rs.getObject("id", UUID.class), CaseState.valueOf(rs.getString("state")))));
         return links;
+    }
+
+    /**
+     * Of these compensations, the ones already linked to a case (any case of the tenant): a compensation belongs
+     * to at most one, so a picker shows the rest as taken instead of offering them to a conflict.
+     */
+    public Set<UUID> linkedRefs(UUID tenantId, CompensationKind kind, Collection<UUID> refIds) {
+        if (refIds.isEmpty()) {
+            return Set.of();
+        }
+        return new java.util.HashSet<>(jdbc.sql("""
+                SELECT ref_id FROM reviews.recovery_case_compensations
+                 WHERE tenant_id = :tenantId AND kind = :kind AND ref_id IN (:refIds)
+                """)
+                .param("tenantId", tenantId)
+                .param("kind", kind.name())
+                .param("refIds", refIds)
+                .query(UUID.class)
+                .list());
     }
 
     public boolean hasCompensation(UUID tenantId, UUID caseId) {

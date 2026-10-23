@@ -138,9 +138,64 @@ public class JdbcPricingStore {
         return prices;
     }
 
+    /**
+     * The customer-facing titles (ADR 0140) of these promotions, per promotion and locale. A promotion with no
+     * title is absent. Read by the storefront description, which hands the whole map to the client: the client
+     * knows which locale the customer reads, and a title it has no entry for falls back to the kind of benefit.
+     */
+    public Map<UUID, Map<String, String>> promotionTitles(UUID tenantId, java.util.Collection<UUID> promotionIds) {
+        if (promotionIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Map<String, String>> found = new HashMap<>();
+        jdbc.sql("""
+                SELECT promotion_id, locale, title FROM pricing.promotion_titles
+                WHERE tenant_id = :tenantId AND promotion_id = ANY(:ids) ORDER BY promotion_id, locale
+                """)
+                .param("tenantId", tenantId)
+                .param("ids", promotionIds.toArray(UUID[]::new))
+                .query((row, number) -> {
+                    found.computeIfAbsent(row.getObject("promotion_id", UUID.class), k -> new java.util.TreeMap<>())
+                            .put(row.getString("locale"), row.getString("title"));
+                    return 0;
+                })
+                .list();
+        return found;
+    }
+
     /** Which of these variants have an active price anywhere in the brand. */
     public Set<UUID> pricedVariants(UUID tenantId, UUID brandId, Set<UUID> variantIds, Instant at) {
         return pricedAnywhere(tenantId, brandId, "VARIANT", variantIds, at);
+    }
+
+    /**
+     * The dearest current unit price any of these variants has in any active price book of the brand,
+     * or 0 when none of them is priced (ADR 0140: the value an approval threshold judges a gift by).
+     *
+     * <p>The highest rather than the price of one book, because a gift is not tied to the channel or
+     * the branch it will be redeemed at: the approval judges the most the promotion could give away.
+     */
+    public long highestVariantPrice(UUID tenantId, UUID brandId, Set<UUID> variantIds, Instant at) {
+        if (variantIds.isEmpty()) {
+            return 0L;
+        }
+        Long highest = jdbc.sql("""
+                SELECT max(p.amount_minor)
+                FROM pricing.prices p
+                JOIN pricing.price_books pb ON pb.id = p.price_book_id
+                WHERE p.tenant_id = :tenantId AND p.brand_id = :brandId
+                  AND p.priceable_type = 'VARIANT' AND p.priceable_id = ANY(:ids)
+                  AND pb.status = 'ACTIVE'
+                  AND p.valid_from <= :at AND (p.valid_until IS NULL OR p.valid_until > :at)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("ids", variantIds.toArray(UUID[]::new))
+                .param("at", OffsetDateTime.ofInstant(at, ZoneOffset.UTC))
+                .query(Long.class)
+                .optional()
+                .orElse(null);
+        return highest == null ? 0L : highest;
     }
 
     /**

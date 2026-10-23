@@ -39,6 +39,26 @@
       <span class="q-caption editor__hint">{{ 'editor.code.hint' | pt }}</span>
     </label>
 
+    <div class="q-field" data-testid="promotion-titles">
+      <span class="q-caption">{{ 'editor.title' | pt }}</span>
+      <q-localized-field-group
+        [locales]="titleLocales"
+        [activeLocale]="titleLocale()"
+        [defaultLocale]="titleLocales[0]"
+        [completeness]="titleCompleteness()"
+        [localeLabels]="titleLabels()"
+        (activeLocaleChange)="titleLocale.set($event)"
+      />
+      <input
+        type="text"
+        [attr.maxlength]="titleLimit"
+        [value]="draft().titles[titleLocale()] ?? ''"
+        (input)="setTitle(titleLocale(), $any($event.target).value)"
+        [attr.data-testid]="'promotion-title-' + titleLocale()"
+      />
+      <span class="q-caption editor__hint">{{ 'editor.title.hint' | pt }}</span>
+    </div>
+
     <div class="editor__row">
       <label class="q-field">
         <span class="q-caption">{{ 'editor.kind' | pt }}</span>

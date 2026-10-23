@@ -393,7 +393,7 @@ export const marketingEn = {
   'marketing.loyalty.accrual.form.lotLifetime': 'Points expire after, days',
   'marketing.loyalty.accrual.form.expiryWarning': 'Warn before expiry, days',
   'marketing.loyalty.accrual.form.expiryWarning.hint':
-    'How many days ahead a lot counts as "about to expire" — the message that would use this is not built yet (ADR 0046).',
+    'How many days ahead a lot counts as "about to expire". The customer is told once a day, in one message that covers every lot inside the window, using your LOYALTY_POINTS_EXPIRING wording. Until that wording is written and activated in Notifications, nothing is sent (ADR 0046).',
 
   'marketing.loyalty.redemption.title': 'Redemption',
   'marketing.loyalty.redemption.hint':

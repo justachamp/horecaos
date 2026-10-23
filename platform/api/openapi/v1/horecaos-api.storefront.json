@@ -206,6 +206,12 @@
           },
           "source" : {
             "type" : "string"
+          },
+          "titles" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           }
         },
         "type" : "object"

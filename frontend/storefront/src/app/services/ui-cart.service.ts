@@ -243,6 +243,7 @@ export class UiCartService {
       this.priced()?.appliedPromotions,
       this.priced()?.discountMinor ?? 0,
       (minor) => this.formatPrice(minor),
+      platformTag(this.lang.langId()),
     );
   });
 

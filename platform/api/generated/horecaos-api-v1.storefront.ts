@@ -80,6 +80,7 @@ export interface AppliedPromotionResponse {
   amountMinor?: number;
   effect?: string;
   source?: string;
+  titles?: { [key: string]: string };
 }
 
 export interface Apply {

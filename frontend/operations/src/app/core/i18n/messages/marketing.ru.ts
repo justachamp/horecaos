@@ -397,7 +397,7 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.loyalty.accrual.form.lotLifetime': 'Баллы сгорают через, дней',
   'marketing.loyalty.accrual.form.expiryWarning': 'Предупреждать за, дней до сгорания',
   'marketing.loyalty.accrual.form.expiryWarning.hint':
-    'За сколько дней партия баллов считается «скоро сгорит» — само уведомление об этом ещё не реализовано (ADR 0046).',
+    'За сколько дней партия баллов считается «скоро сгорит». Клиент получает одно сообщение в день, в нём все партии из этого окна, по вашему тексту LOYALTY_POINTS_EXPIRING. Пока этот текст не написан и не включён в разделе «Уведомления», ничего не отправляется (ADR 0046).',
 
   'marketing.loyalty.redemption.title': 'Списание',
   'marketing.loyalty.redemption.hint':
