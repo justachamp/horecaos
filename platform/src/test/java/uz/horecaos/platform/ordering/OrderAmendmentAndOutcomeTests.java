@@ -3110,6 +3110,25 @@ class OrderAmendmentAndOutcomeTests {
     }
 
     @Test
+    @DisplayName("an amended cash tender is compared with the cash still owed after the points, not with the total")
+    void anAmendedCashTenderIsComparedWithTheMoneyLeg() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+        UUID orderId = orderIdOf(placeOrderRedeeming("idem-tender-amend", 10_000L));
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().totalMinor())
+                .as("the premise: 100 000 on the order, 10 000 of it points, so 90 000 is owed in cash")
+                .isEqualTo(100_000L);
+
+        var enough = amend("k-tender-enough", OrderAmendmentService.AmendmentCommand.cashTendered(90_000L));
+        var shortOfTheCash = amend("k-tender-short", OrderAmendmentService.AmendmentCommand.cashTendered(89_999L));
+
+        assertThat(enough.warnings())
+                .as("90 000 covers the 90 000 still owed, though it is short of the 100 000 total")
+                .doesNotContain("CASH_TENDERED_INSUFFICIENT");
+        assertThat(shortOfTheCash.warnings()).contains("CASH_TENDERED_INSUFFICIENT");
+    }
+
+    @Test
     @DisplayName("the callback flag is raised and resolved by the same command, recording who cleared it")
     void theCallbackFlagRecordsWhoResolvedIt() {
         UUID orderId = orderIdOf(placeOrder("idem-1"));

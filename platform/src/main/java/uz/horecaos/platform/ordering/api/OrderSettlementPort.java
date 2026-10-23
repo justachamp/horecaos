@@ -162,6 +162,31 @@ public interface OrderSettlementPort {
     }
 
     /**
+     * The points the customer has given up against this order: the settlement's balance tenders that are held or
+     * settled (ADR 0046, ADR 0185). Zero for an order with no settlement or no redemption, and for one whose points
+     * went back to the customer.
+     *
+     * <p>Read, never derived, because the order total <em>includes</em> this amount: an 80 000 order paid 10 000 in
+     * points is 70 000 in money. Anything that reasons about cash against the order, such as the change an operator
+     * hands back or whether the cash tendered covers what is owed, subtracts it ({@link #cashToCollectMinor}). An
+     * unwired port answers zero, which is the order total, as it always was.
+     */
+    default long balanceHeldMinor(UUID tenantId, UUID orderId) {
+        return 0L;
+    }
+
+    /**
+     * What the customer still owes in money for an order of {@code totalMinor}: the total less the points they spent
+     * (ADR 0185). The one place that subtraction is written, so the change due on the detail pane, the printed slip
+     * and the {@code CASH_TENDERED_INSUFFICIENT} notice cannot disagree about it.
+     *
+     * @param totalMinor the order total the caller is reasoning about, which on an amendment is the amended total
+     */
+    default long cashToCollectMinor(UUID tenantId, UUID orderId, long totalMinor) {
+        return Math.max(0L, Math.subtractExact(totalMinor, balanceHeldMinor(tenantId, orderId)));
+    }
+
+    /**
      * What re-planning the money leg answered.
      *
      * @param moneyDueMinor what the new method is to collect; meaningful only when {@code status} is {@code REPLANNED}

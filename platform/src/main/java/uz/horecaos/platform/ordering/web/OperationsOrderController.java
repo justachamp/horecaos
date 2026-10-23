@@ -939,7 +939,9 @@ public class OperationsOrderController {
                         // ADR 0169: whether this brand has the removal path on, so the console offers "remove a
                         // line" and a lowered quantity only where the server will carry them out. Asked only of
                         // an order that can still be amended.
-                        !detail.order().status().terminal() && amendments.lineRemovalEnabled(detail.order())));
+                        !detail.order().status().terminal() && amendments.lineRemovalEnabled(detail.order()),
+                        // ADR 0185: «Сдача» is reckoned against the cash still owed after the points, not the total.
+                        orderQuery.cashToCollectFor(tenantId, detail.order())));
     }
 
     @GetMapping("/{orderId}/revisions")
@@ -3563,10 +3565,13 @@ public class OperationsOrderController {
     /**
      * One order in full, as the branch's detail screen renders it.
      *
-     * @param changeDueMinor {@code tendered − total}, recomputed on every read and
-     *                       never stored. It is an operational hint: no money has
-     *                       moved, and storing it would make a figure that is only
-     *                       true until the next amendment look like a payment
+     * @param changeDueMinor {@code tendered − cash still owed}, recomputed on every read and
+     *                       never stored. The cash still owed is the order total less
+     *                       the points the customer spent (ADR 0185), so on an order
+     *                       paid part in points it is not the total. It is an
+     *                       operational hint: no money has moved, and storing it
+     *                       would make a figure that is only true until the next
+     *                       amendment look like a payment
      * @param outcome        present only once the order has ended
      * @param customer       orders.md §3.7-§3.8: name in full, phone masked,
      *                       guest-vs-account, and presence flags for the
@@ -3628,7 +3633,8 @@ public class OperationsOrderController {
                 StaffDirectory staffDirectory,
                 Map<UUID, BigDecimal> portionSteps,
                 Map<UUID, OrderMarkService.LineMarking> marking,
-                boolean lineRemovalEnabled) {
+                boolean lineRemovalEnabled,
+                long cashToCollectMinor) {
             var order = detail.order();
             String createdByName = displayNameOf(
                     staffDirectory, order.tenantId(), order.createdByActorType(), order.createdByActorId());
@@ -3664,7 +3670,7 @@ public class OperationsOrderController {
                     order.cashTenderedExpectedMinor(),
                     order.cashTenderedExpectedMinor() == null
                             ? null
-                            : order.cashTenderedExpectedMinor() - order.totalMinor(),
+                            : order.cashTenderedExpectedMinor() - cashToCollectMinor,
                     outcomeRow == null ? null : OutcomeResponse.of(outcomeRow),
                     CustomerResponse.of(detail.customer()),
                     lineRemovalEnabled);

@@ -252,6 +252,13 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
         settleWhenMoneyArrives(tenantId, orderId, CaptureTiming.ON_HANDOVER, actor);
     }
 
+    /** ADR 0185: see {@link OrderSettlementService#balanceHeldMinor}. */
+    @Override
+    @Transactional(readOnly = true)
+    public long balanceHeldMinor(UUID tenantId, UUID orderId) {
+        return settlements.balanceHeldMinor(tenantId, orderId);
+    }
+
     /** ADR 0137: see {@link OrderSettlementService#restateTotal}. */
     @Override
     @Transactional

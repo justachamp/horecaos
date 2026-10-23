@@ -692,7 +692,7 @@ public class OrderAmendmentService {
                 .orElseThrow(
                         () -> new AmendmentNotPermittedException("The amendment settled while it was being applied"));
 
-        List<String> warnings = warningsFor(order, patch);
+        List<String> warnings = warningsFor(order, patch, totalMinor);
 
         events.publishEvent(new OrderAmendmentApplied(
                 UUID.randomUUID(),
@@ -2333,14 +2333,21 @@ public class OrderAmendmentService {
     /**
      * What the operator should be told but not blocked by.
      *
-     * <p>ADR 0039: change-due short of the total raises
+     * <p>ADR 0039: change-due short of what the customer owes in cash raises
      * {@code CASH_TENDERED_INSUFFICIENT}, which the operator acknowledges rather
      * than being refused — the customer can hand over more, and a hard refusal
      * here would stop an order over a figure that is a hint rather than money.
+     *
+     * <p>What they owe in cash is the amended total less the points they spent
+     * (ADR 0185), the same figure order entry compares the tender with, and not
+     * the total: an 80 000 order paid 10 000 in points is covered by 70 000.
+     *
+     * @param totalMinor the order's total once this amendment has applied
      */
-    private List<String> warningsFor(OrderRow order, OrderFieldPatch patch) {
+    private List<String> warningsFor(OrderRow order, OrderFieldPatch patch, long totalMinor) {
         List<String> warnings = new ArrayList<>();
-        if (patch.cashTenderedExpectedMinor() != null && patch.cashTenderedExpectedMinor() < order.totalMinor()) {
+        if (patch.cashTenderedExpectedMinor() != null
+                && patch.cashTenderedExpectedMinor() < removals.cashToCollectMinor(order, totalMinor)) {
             warnings.add("CASH_TENDERED_INSUFFICIENT");
         }
         return warnings;

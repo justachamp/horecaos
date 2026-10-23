@@ -494,6 +494,23 @@ public class OrderSettlementService implements CashDueLookupPort {
         return moved ? OptionalLong.of(newMoney) : OptionalLong.empty();
     }
 
+    /**
+     * The points held or settled against the order (ADR 0185): the same tenders {@link #cashDueMinor(UUID, UUID,
+     * String)} subtracts from the total, so the cash a courier is told to collect and the change an operator reads
+     * back are the same money. Zero when the order has no settlement.
+     */
+    @Transactional(readOnly = true)
+    public long balanceHeldMinor(UUID tenantId, UUID orderId) {
+        return store.findSettlement(tenantId, orderId)
+                .map(settlement -> store.tendersOf(tenantId, settlement.id()).stream()
+                        .filter(TenderRow::settlesFromBalance)
+                        .filter(tender ->
+                                tender.status() == TenderStatus.RESERVED || tender.status() == TenderStatus.SETTLED)
+                        .mapToLong(TenderRow::amountMinor)
+                        .reduce(0L, Math::addExact))
+                .orElse(0L);
+    }
+
     /** The figure the courier app is shown, snapshotted onto the ADR 0014 assignment. */
     @Transactional(readOnly = true)
     public long cashDueMinor(UUID tenantId, UUID orderId, String cashMethodCode) {
