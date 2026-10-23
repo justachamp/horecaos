@@ -95,6 +95,7 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
+import uz.horecaos.platform.support.RecordingDutySessions;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
 import uz.horecaos.platform.tenancy.api.PolicyResolver;
@@ -136,6 +137,7 @@ class CourierCompensationTests {
 
     private CourierEngagementService engagements;
     private CourierShiftService shifts;
+    private final RecordingDutySessions dutySessions = new RecordingDutySessions();
     private CourierLedgerService ledger;
     private CourierAccrualService accruals;
     private CourierSettlementService settlement;
@@ -256,6 +258,7 @@ class CourierCompensationTests {
                 protection,
                 audit,
                 adjustmentRules,
+                dutySessions,
                 clock);
         accruals = new CourierAccrualService(
                 ledgerStore,
@@ -803,6 +806,54 @@ class CourierCompensationTests {
                 .orElseThrow();
         assertThat(closed.status()).isEqualTo(ShiftStatus.AWAITING_APPROVAL);
         assertThat(closed.closeReasonCode()).isEqualTo("END_OF_SERVICE");
+    }
+
+    @Test
+    @DisplayName("a shift tells its duty session about every break and about its own end, whoever ends it (ADR 0045)")
+    void aShiftTellsItsDutySession() {
+        ShiftRow first = shifts.open(new CourierShiftService.OpenShift(
+                TENANT, BRAND, branch, courierId, ShiftActor.COURIER, courier(), "on shift", null, UZS));
+
+        shifts.startBreak(TENANT, first.id(), ShiftActor.COURIER, courier(), "lunch");
+        assertThat(dutySessions.breaksStarted)
+                .as("a break pauses collection, so the session is told in the same transaction")
+                .containsExactly(courierId);
+        assertThat(dutySessions.breaksEnded).isEmpty();
+
+        shifts.endBreak(TENANT, first.id(), ShiftActor.COURIER, courier(), "back");
+        assertThat(dutySessions.breaksEnded).containsExactly(courierId);
+
+        shifts.close(new CourierShiftService.CloseShift(
+                TENANT, first.id(), ShiftActor.COURIER, courier(), null, "done for the day", null, UZS));
+        assertThat(dutySessions.ended)
+                .as("the courier closing their own shift ends their session under their own capability")
+                .singleElement()
+                .satisfies(ended -> {
+                    assertThat(ended.courierId()).isEqualTo(courierId);
+                    assertThat(ended.capabilityUsed()).isEqualTo("courier.shift.open");
+                });
+
+        ShiftRow second = shifts.open(new CourierShiftService.OpenShift(
+                TENANT, BRAND, branch, courierId, ShiftActor.COURIER, courier(), "on shift again", null, UZS));
+        shifts.close(new CourierShiftService.CloseShift(
+                TENANT, second.id(), ShiftActor.MANAGER, manager(), "END_OF_SERVICE", "closing up", null, UZS));
+        assertThat(dutySessions.ended)
+                .as("a manager ending service ends the session too: collection must not outlive the shift")
+                .hasSize(2)
+                .last()
+                .satisfies(ended -> assertThat(ended.capabilityUsed()).isEqualTo("courier.shift.approve"));
+
+        ShiftRow third = shifts.open(new CourierShiftService.OpenShift(
+                TENANT, BRAND, branch, courierId, ShiftActor.COURIER, courier(), "forgot to close", null, UZS));
+        clock.set(NOON.plus(Duration.ofHours(30)));
+        shifts.autoCloseStale(Duration.ofHours(12), UZS);
+        assertThat(shiftStore.findShift(TENANT, third.id()).orElseThrow().status())
+                .isEqualTo(ShiftStatus.AUTO_CLOSED);
+        assertThat(dutySessions.ended)
+                .as("a shift the sweeper closes overnight must not leave a courier tracked at home")
+                .hasSize(3)
+                .last()
+                .satisfies(ended -> assertThat(ended.capabilityUsed()).isEqualTo("courier-shift-auto-close"));
     }
 
     // ------------------------------------------------------- policy (§3.9)

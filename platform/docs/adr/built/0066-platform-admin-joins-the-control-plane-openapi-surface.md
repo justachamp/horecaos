@@ -155,3 +155,11 @@ passes; `make openapi-client-check` reports zero drift.
   question open)
 - ADR 0024 — Legacy data migration, cutover, and retirement
 - ADR 0021 — SaaS plans, entitlements, and usage metering
+
+## Status addition (2026-10-14)
+
+This record left `courier` folded into `operations` "until a courier frontend is proposed".
+[ADR 0179](../partial/0179-the-courier-client.md) proposes and builds it, and moves
+`/api/v1/courier/**` to its own `courier` group on the same reasoning this record used for
+`platform-admin`, with the same check first: `frontend/operations` was grepped for every moved
+path and operation id and calls none of them.

@@ -1,0 +1,56 @@
+<section class="page">
+  <h1 class="q-title">{{ 'profile.title' | t }}</h1>
+
+  <div class="card">
+    <h2 class="q-emphasis">{{ 'profile.account' | t }}</h2>
+    <dl>
+      @if (auth.claims(); as claims) {
+        @if (claims.name) {
+          <div>
+            <dt class="q-caption">{{ 'profile.name' | t }}</dt>
+            <dd class="q-body">{{ claims.name }}</dd>
+          </div>
+        }
+        @if (claims.username) {
+          <div>
+            <dt class="q-caption">{{ 'profile.username' | t }}</dt>
+            <dd class="q-body">{{ claims.username }}</dd>
+          </div>
+        }
+      }
+      @if (store.profile(); as profile) {
+        <div>
+          <dt class="q-caption">{{ 'profile.reference' | t }}</dt>
+          <dd class="q-body q-tnum">{{ profile.displayReference }}</dd>
+        </div>
+      }
+    </dl>
+  </div>
+
+  <div class="card">
+    <h2 class="q-emphasis">{{ 'profile.language' | t }}</h2>
+    <div class="languages" role="radiogroup" [attr.aria-label]="'profile.language' | t">
+      @for (locale of locales; track locale.code) {
+        <button
+          type="button"
+          role="radio"
+          class="btn secondary"
+          [attr.aria-checked]="locale.code === i18n.locale()"
+          [class.selected]="locale.code === i18n.locale()"
+          (click)="choose(locale.code)"
+        >
+          {{ locale.label }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="q-emphasis">{{ 'profile.app' | t }}</h2>
+    <p class="q-body-sm">{{ 'profile.version' | t: { version: version } }}</p>
+  </div>
+
+  <button type="button" class="btn secondary" (click)="signOut()">
+    {{ 'common.signOut' | t }}
+  </button>
+</section>

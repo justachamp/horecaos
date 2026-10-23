@@ -5,8 +5,8 @@ What it is for
 --------------
 A fast local shortcut: check only the files you changed before pushing, without prettier
 walking the whole tree. CI does not call it. Every app's `src/` tree is prettier-clean, so CI
-runs the plain `npm run format:check` for all four (`operations`, `storefront`,
-`storefront-milliy`, and `control-plane`, which was the last one on a changed-files ratchet
+runs the plain `npm run format:check` for every app (`operations`, `storefront`,
+`storefront-milliy`, `courier`, and `control-plane`, which was the last one on a changed-files ratchet
 until it was reformatted in one commit). The script remains for the local case and its own
 tests (`test_format_changed.py`, which also pins how ci.yml wires the lint and format steps).
 

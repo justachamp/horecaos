@@ -51,6 +51,7 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
+import uz.horecaos.platform.support.RecordingDutySessions;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
 import uz.horecaos.platform.tenancy.api.PolicyResolver;
@@ -178,6 +179,7 @@ class PlannedShiftServiceTests {
                 protection,
                 audit,
                 adjustmentRules,
+                new RecordingDutySessions(),
                 clock);
         plannedShifts = new PlannedShiftService(rosterStore, courierStore, shiftStore, audit, clock);
 

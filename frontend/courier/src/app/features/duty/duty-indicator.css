@@ -1,0 +1,35 @@
+:host {
+  display: block;
+  /* The host is what sticks: a sticky child would stick only within its own parent, which is as tall as the bar. */
+  position: sticky;
+  top: calc(56px + env(safe-area-inset-top));
+  z-index: 9;
+}
+
+.indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.indicator.ok {
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+}
+
+.indicator.warn {
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}
+
+.dot {
+  inline-size: 10px;
+  block-size: 10px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}

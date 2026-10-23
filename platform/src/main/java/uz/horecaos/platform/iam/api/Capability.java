@@ -1898,6 +1898,34 @@ public enum Capability {
     COURIER_DELIVERY_LOCATION_REVEAL("courier.delivery.location.reveal", "courier", "delivery.location.reveal"),
 
     /**
+     * ADR 0179: a courier reading their own record -- who the platform says they are, the branches
+     * they are bound to, the shift they have open. The first call the courier app makes after
+     * signing in, so it can tell a courier from an account that merely signed in.
+     *
+     * <p>Held by the courier over their own record only, like the shift capabilities above: the
+     * handler resolves the courier from the signed token subject and the tenant, and an account
+     * that is nobody's courier is answered as one that does not exist. A manager reads the same
+     * facts, branch by branch, through the roster under {@link #COURIER_READ}. Never granted to a
+     * manager.
+     */
+    COURIER_SELF_READ("courier.self.read", "courier", "self.read"),
+
+    /**
+     * ADR 0045 and ADR 0179: a courier opening and closing their own duty session and sending
+     * their own observations from their own handset, and recording that they were shown the
+     * transparency notice that must precede both.
+     *
+     * <p>Not {@link #COURIER_DUTY_MANAGE}, which is the staff capability to open or close a
+     * session on a courier's behalf at a location scope. ADR 0045 said that when the courier
+     * principal arrived the courier's own path would be a second controller with its own
+     * declaration rather than a widening of the first, and this is that declaration: a manager
+     * who held it could cause a self-employed person to be tracked, which is the arrangement the
+     * whole telemetry design exists to prevent. Held by the courier over their own record only,
+     * and in no role bundle.
+     */
+    COURIER_TELEMETRY("courier.telemetry", "courier", "telemetry"),
+
+    /**
      * ADR 0042: approving a shift's hours, and closing somebody else's shift.
      *
      * <p>A manager's half of the shift. Closing is here because ending service

@@ -129,13 +129,13 @@ Specific to the current phase ([ADR 0055](docs/adr/meta/0055-greenfield-launch-s
   `make format` before committing rather than hand-formatting; Error Prone and
   NullAway compile-time findings are warnings today, not build failures, but
   are not therefore noise.
-- **The OpenAPI contract is five documents, not one**
+- **The OpenAPI contract is six documents, not one**
   ([ADR 0057](docs/adr/built/0057-openapi-per-surface-document-groups.md)): the
   full v1 baseline plus one per surface group (`storefront`, `control-plane`,
-  `operations`, `providers`). A new controller lands under an existing group's
+  `operations`, `providers`, `courier`). A new controller lands under an existing group's
   path prefix or needs a new `OpenApiSurface` constant —
   `everyPublishedPathBelongsToExactlyOneSurfaceGroup` fails the build either
-  way if it is missed. Run `make openapi-baseline` for all five together.
+  way if it is missed. Run `make openapi-baseline` for all six together.
 - **A Flyway "next free" number is only free in the worktree that computed it.**
   Parallel agent sessions in sibling git worktrees (`.worktrees/*`) branch from
   the same commit and each sees the same highest `V*`. Check every active

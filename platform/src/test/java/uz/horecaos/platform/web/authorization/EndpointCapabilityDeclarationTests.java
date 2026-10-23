@@ -281,7 +281,8 @@ class EndpointCapabilityDeclarationTests {
                     || isAutoAddSimulationEndpoint(handler)
                     || isCourierRuleSimulationEndpoint(handler)
                     || isGeocodeLookupEndpoint(handler)
-                    || isPrintPreviewEndpoint(handler)) {
+                    || isPrintPreviewEndpoint(handler)
+                    || isCourierObservationBatchEndpoint(handler)) {
                 continue;
             }
             if (!declaresReplayProtection(handler)) {
@@ -847,6 +848,43 @@ class EndpointCapabilityDeclarationTests {
      */
     private static boolean isContentCounterEndpoint(Method handler) {
         return pathOf(handler).equals("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/events");
+    }
+
+    /**
+     * Whether this endpoint is the courier's own observation batch (ADR 0045, ADR 0179): the one
+     * exemption from ADR 0031's mandatory {@code Idempotency-Key} that ADR 0045 names, "here and
+     * nowhere else".
+     *
+     * <p>A handset posts it every ten seconds, six rows a minute per courier in the idempotency table for
+     * no benefit, because the track is idempotent on its own natural key (the one-minute window,
+     * {@code ON CONFLICT} replace). It is not {@code @NaturallyIdempotent}, which this class reserves for
+     * a partner binding, so the exemption is spelled here, on the exact path, and the other half of the
+     * bargain is held by {@link #theCourierObservationBatchStillDeclaresItsOwnAuthorization}: it is
+     * exempt from replay protection <em>only</em>, never from an authorization decision.
+     */
+    private static boolean isCourierObservationBatchEndpoint(Method handler) {
+        return pathOf(handler)
+                .equals("/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}"
+                        + "/telemetry/observations");
+    }
+
+    @Test
+    void theCourierObservationBatchStillDeclaresItsOwnAuthorization() {
+        List<Method> batch = allControllerMethods().stream()
+                .filter(EndpointCapabilityDeclarationTests::isCourierObservationBatchEndpoint)
+                .toList();
+
+        assertThat(batch)
+                .as("a scan finding nothing here would pass however the endpoint was weakened")
+                .hasSize(1);
+        CourierSelfAuthorized declaration = batch.get(0).getAnnotation(CourierSelfAuthorized.class);
+        assertThat(declaration)
+                .as("the batch is exempt from the Idempotency-Key, never from deciding who may post it")
+                .isNotNull();
+        assertThat(declaration.value()).isEqualTo(uz.horecaos.platform.iam.api.Capability.COURIER_TELEMETRY);
+        assertThat(authorizationDeclarationCount(batch.get(0)))
+                .as("one strategy, so a staff capability cannot be added beside it")
+                .isEqualTo(1);
     }
 
     /**

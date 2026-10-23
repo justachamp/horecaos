@@ -1,0 +1,67 @@
+<div class="card">
+  <h2 class="q-emphasis">{{ 'duty.title' | t }}</h2>
+  <p class="q-body">{{ 'duty.explain' | t }}</p>
+
+  <div class="notice warning limit">
+    <p class="q-emphasis">{{ 'duty.limit.title' | t }}</p>
+    <p class="q-body-sm">{{ 'duty.limit.body' | t }}</p>
+  </div>
+
+  @if (duty.onDuty()) {
+    <p class="q-subhead" role="status">{{ 'duty.on' | t }}</p>
+    @switch (duty.wakeLock()) {
+      @case ('held') {
+        <p class="q-body-sm muted">{{ 'duty.wakeLock.held' | t }}</p>
+      }
+      @case ('refused') {
+        <p class="notice warning">{{ 'duty.wakeLock.refused' | t }}</p>
+      }
+      @case ('released') {
+        <p class="q-body-sm muted">{{ 'duty.wakeLock.released' | t }}</p>
+      }
+    }
+    @switch (duty.locationProblem()) {
+      @case ('denied') {
+        <p class="notice error" role="alert">{{ 'duty.location.denied' | t }}</p>
+      }
+      @case ('unavailable') {
+        <p class="notice warning">{{ 'duty.location.unavailable' | t }}</p>
+      }
+      @case ('timeout') {
+        <p class="notice warning">{{ 'duty.location.unavailable' | t }}</p>
+      }
+      @case ('unsupported') {
+        <p class="notice error" role="alert">{{ 'duty.location.denied' | t }}</p>
+      }
+    }
+    <button type="button" class="btn secondary" [disabled]="duty.busy()" (click)="duty.goOffDuty()">
+      {{ 'duty.goOff' | t }}
+    </button>
+  } @else {
+    <p class="q-body muted">{{ 'duty.off' | t }}</p>
+    @if (duty.endedByPlatform()) {
+      <p class="notice warning" role="status">{{ 'duty.endedByPlatform' | t }}</p>
+    }
+    @if (duty.awaitingNotice()) {
+      <p class="notice warning">{{ 'duty.awaitingNotice' | t }}</p>
+      <a class="btn" routerLink="/notice">{{ 'duty.notice.link' | t }}</a>
+    } @else if (profile.shiftBranch() === null) {
+      <p class="q-body">{{ 'duty.noShift' | t }}</p>
+    } @else if (!notice.acknowledged()) {
+      <p class="q-body">{{ 'duty.notice.required' | t }}</p>
+      <a class="btn" routerLink="/notice">{{ 'duty.notice.link' | t }}</a>
+    } @else {
+      <button type="button" class="btn" [disabled]="duty.busy()" (click)="duty.goOnDuty()">
+        {{ 'duty.goOn' | t }}
+      </button>
+    }
+  }
+
+  @if (errorText(); as text) {
+    <p class="notice error" role="alert">{{ text }}</p>
+  }
+
+  @if (notice.acknowledged()) {
+    <a class="textlink q-body-sm" routerLink="/notice">{{ 'duty.notice.link' | t }}</a>
+  }
+</div>

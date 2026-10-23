@@ -1,0 +1,11 @@
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.back {
+  color: var(--q-primary);
+}
+
+.textlink {
+  color: var(--q-primary);
+}

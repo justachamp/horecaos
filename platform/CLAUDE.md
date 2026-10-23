@@ -87,11 +87,11 @@ Spring JDBC with explicit SQL — **no ORM**), Kafka 4.3, Keycloak 26.7, S3-comp
   same highest `V*`; two agents can claim `V0098` independently and only find out at
   merge. Check every active worktree's `db/migration/` (`git worktree list`, then
   look), not just your own, before naming a new migration.
-- **The OpenAPI baseline is five documents, not one** (ADR 0057): the full v1 contract
-  plus `storefront`/`control-plane`/`operations`/`providers` groups, each with its own
+- **The OpenAPI baseline is six documents, not one** (ADR 0057, ADR 0179): the full v1 contract
+  plus `storefront`/`control-plane`/`operations`/`providers`/`courier` groups, each with its own
   checked-in baseline and generated client. `make openapi-baseline` and
-  `make openapi-client-check` cover all five — a change that regenerates only the full
-  document leaves four stale.
+  `make openapi-client-check` cover all six — a change that regenerates only the full
+  document leaves five stale.
 - **A `computed()` never re-evaluates just because wall-clock time passed.** It
   memoizes on its signal dependencies and reruns only when one changes; nothing
   drives it on a timer. The storefront's session token expiry is deliberately a plain

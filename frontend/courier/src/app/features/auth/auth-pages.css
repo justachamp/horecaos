@@ -1,0 +1,8 @@
+.auth {
+  align-items: flex-start;
+  padding-top: 48px;
+}
+
+.auth .btn {
+  align-self: stretch;
+}

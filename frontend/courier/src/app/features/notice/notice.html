@@ -1,0 +1,45 @@
+<section class="page">
+  <h1 class="q-title">{{ 'notice.title' | t }}</h1>
+
+  @if (notice.isDraft) {
+    <p class="notice warning" role="note">{{ 'notice.draft' | t }}</p>
+  }
+  <p class="q-caption muted">{{ 'notice.version' | t: { version: notice.version } }}</p>
+
+  <p class="q-body">{{ 'notice.intro' | t }}</p>
+
+  <div class="card">
+    <h2 class="q-emphasis">{{ 'notice.collected.title' | t }}</h2>
+    <p class="q-body">{{ 'notice.collected.body' | t }}</p>
+  </div>
+  <div class="card">
+    <h2 class="q-emphasis">{{ 'notice.when.title' | t }}</h2>
+    <p class="q-body">{{ 'notice.when.body' | t }}</p>
+    <p class="q-body-sm muted">{{ 'notice.limit' | t }}</p>
+  </div>
+  <div class="card">
+    <h2 class="q-emphasis">{{ 'notice.who.title' | t }}</h2>
+    <p class="q-body">{{ 'notice.who.body' | t }}</p>
+  </div>
+  <div class="card">
+    <h2 class="q-emphasis">{{ 'notice.keep.title' | t }}</h2>
+    <p class="q-body">{{ 'notice.keep.body' | t }}</p>
+  </div>
+  <div class="card">
+    <h2 class="q-emphasis">{{ 'notice.pay.title' | t }}</h2>
+    <p class="q-body">{{ 'notice.pay.body' | t }}</p>
+  </div>
+
+  @if (errorText(); as text) {
+    <p class="notice error" role="alert">{{ text }}</p>
+  }
+
+  @if (notice.acknowledged()) {
+    <p class="notice" role="status">{{ 'notice.accepted' | t }}</p>
+    <a class="btn" routerLink="/shift">{{ 'notice.back' | t }}</a>
+  } @else {
+    <button type="button" class="btn" [disabled]="notice.busy()" (click)="accept()">
+      {{ 'notice.accept' | t }}
+    </button>
+  }
+</section>
