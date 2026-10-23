@@ -58,7 +58,7 @@
 
 .table th,
 .table td {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   border-bottom: 1px solid var(--q-hairline);
 }
@@ -132,7 +132,7 @@
 }
 
 .hintLink {
-  margin-left: 6px;
+  margin-inline-start: 6px;
   color: var(--q-primary);
   text-decoration: none;
 }
@@ -212,16 +212,16 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 8px;
-  padding-left: 12px;
-  border-left: 2px solid var(--q-hairline);
+  padding-inline-start: 12px;
+  border-inline-start: 2px solid var(--q-hairline);
 }
 
 .timeline li[data-event='SEND_FAILED'] {
-  border-left-color: var(--q-error);
+  border-inline-start-color: var(--q-error);
 }
 
 .timeline li[data-event='ACCEPTED'] {
-  border-left-color: var(--q-success);
+  border-inline-start-color: var(--q-success);
 }
 
 .timeline .when {

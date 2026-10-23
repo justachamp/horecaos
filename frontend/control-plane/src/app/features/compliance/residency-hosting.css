@@ -62,7 +62,7 @@
 
 .table th,
 .table td {
-  text-align: left;
+  text-align: start;
   padding: 10px 12px;
   border-bottom: 1px solid var(--q-hairline);
 }
@@ -108,5 +108,5 @@ button:disabled {
 }
 
 .table button + button {
-  margin-left: 6px;
+  margin-inline-start: 6px;
 }

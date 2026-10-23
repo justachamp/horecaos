@@ -48,7 +48,7 @@
 
 .table th,
 .table td {
-  text-align: left;
+  text-align: start;
   padding: 10px 12px;
   border-bottom: 1px solid var(--q-hairline);
 }
@@ -109,12 +109,12 @@
 .drawer {
   position: fixed;
   top: 0;
-  right: 0;
+  inset-inline-end: 0;
   bottom: 0;
   width: 420px;
   max-width: 90vw;
   background: var(--q-canvas);
-  border-left: 1px solid var(--q-hairline);
+  border-inline-start: 1px solid var(--q-hairline);
   padding: 24px;
   overflow-y: auto;
   z-index: 31;

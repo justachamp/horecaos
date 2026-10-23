@@ -11,7 +11,7 @@
 
 .skip {
   position: absolute;
-  left: -9999px;
+  inset-inline-start: -9999px;
   background: var(--q-canvas);
   color: var(--q-primary);
   padding: 8px 12px;
@@ -19,7 +19,7 @@
 }
 
 .skip:focus {
-  left: 8px;
+  inset-inline-start: 8px;
   top: 8px;
 }
 
@@ -85,7 +85,7 @@ li.rail-group:first-child {
   text-decoration: none;
   /* A transparent border of the same width as the active one, so selecting a
      section does not shift its label three pixels to the right. */
-  border-left: 3px solid transparent;
+  border-inline-start: 3px solid transparent;
   transition: background var(--q-dur-base) var(--q-ease-productive);
 }
 
@@ -97,7 +97,7 @@ li.rail-group:first-child {
 .rail-link.active {
   background: #262626;
   color: var(--q-inverse-ink);
-  border-left-color: var(--q-primary);
+  border-inline-start-color: var(--q-primary);
 }
 
 .rail-foot {
@@ -149,7 +149,7 @@ li.rail-group:first-child {
 }
 
 .topbar-right {
-  margin-left: auto;
+  margin-inline-start: auto;
   display: flex;
   align-items: center;
   gap: 16px;
