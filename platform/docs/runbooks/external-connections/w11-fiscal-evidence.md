@@ -71,6 +71,11 @@ and it is correct under either answer. When Payme answers, narrow it: `FORM` if 
 operator sends payment links or QR codes (a link cannot carry `detail`, so `FORM` alone loses the receipt on every
 link), `CHECK` if only the pre-flight is read. This wave decides nothing about the default.
 
+**A browser rule to check at the edge.** The form is submitted by the storefront page to the Payme checkout host. If an
+edge ever sets a Content-Security-Policy `form-action` directive, it must allow that host, or the browser refuses the POST
+silently. None is set in this repository today (a search of both storefronts and `platform/infra` finds no
+Content-Security-Policy); the host is per environment (the approved provider environment's checkout host).
+
 **How to prove it.** With a Payme test cashbox that has fiscalisation switched on and a tenant whose dish is
 classified: place an order paid by Payme and open the checkout; Payme's cabinet must show the same lines and total as
 the order. Then read what Payme recorded through `SetFiscalData` (the document turns `ISSUED` with the sign and link).

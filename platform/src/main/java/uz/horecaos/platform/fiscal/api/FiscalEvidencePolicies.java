@@ -19,6 +19,8 @@ import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
  */
 public final class FiscalEvidencePolicies {
 
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(FiscalEvidencePolicies.class);
+
     /**
      * How long a legal entity's fiscal evidence is kept. Seven years, ADR 0029's provisional period
      * for the {@code FINANCIAL} class and above the five-year floor the provider notes cite.
@@ -86,6 +88,13 @@ public final class FiscalEvidencePolicies {
                     .map(ResolvedPolicy::document)
                     .orElseGet(FiscalEvidenceRetention::platformDefault);
         } catch (RuntimeException unreadable) {
+            // Loudly, and with identifiers only: a policy nobody can read is a configuration fault somebody must
+            // fix, and silence would turn it into a tenant whose evidence quietly follows the default.
+            LOG.error(
+                    "The {} policy at scope {} is unreadable; the platform default applies.",
+                    EVIDENCE_RETENTION.code(),
+                    scope.type(),
+                    unreadable);
             return FiscalEvidenceRetention.platformDefault();
         }
     }
