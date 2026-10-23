@@ -115,7 +115,9 @@ public final class LoyaltyConfigurationKeys {
      * Whether syncing a customer's balance with the tenant's own till needs the customer's consent (ADR 0171, open input 4).
      * Off: counsel's accepted default is that it does not, since no customer data is sent to the till. On: a customer whose
      * consent for {@link #POS_SYNC_CONSENT_PURPOSE} is absent or withheld is not matched and appears in the reconciliation
-     * report as {@code NOT_CONSENTED}. Built dark so that a "yes" from counsel is a configuration flip and not a release.
+     * report as {@code NOT_CONSENTED}; one already paired is suspended on the next pass, whether the key was off when they
+     * were paired or they withdraw later, and syncs again when they consent or the key is turned off. Built dark so that a
+     * "yes" from counsel is a configuration flip and not a release.
      */
     public static final ConfigurationKey<Boolean> POS_SYNC_REQUIRE_CONSENT = ConfigurationKey.of(
                     POS_SYNC_REQUIRE_CONSENT_CODE, Boolean.class)

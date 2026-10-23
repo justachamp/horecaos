@@ -117,6 +117,17 @@ public class JdbcPosBalanceSyncStore {
                 .list();
     }
 
+    /** Pairings that are not syncing: suspended by a person, or by the consent gate (which marks its own with an open or carried NOT_CONSENTED). */
+    public List<StateRow> suspendedStates(UUID tenantId, UUID bindingId) {
+        return jdbc.sql("SELECT " + STATE_COLUMNS + " FROM loyalty.pos_balance_sync_state"
+                        + " WHERE tenant_id = :tenantId AND binding_id = :bindingId AND status = 'SUSPENDED'"
+                        + " ORDER BY created_at, id")
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .query(JdbcPosBalanceSyncStore::toState)
+                .list();
+    }
+
     public long countMatched(UUID tenantId, UUID bindingId) {
         Long count = jdbc.sql("SELECT count(*) FROM loyalty.pos_balance_sync_state"
                         + " WHERE tenant_id = :tenantId AND binding_id = :bindingId AND status = 'MATCHED'")

@@ -101,7 +101,11 @@ ceiling row for `clopos` with its evidence, and then section 3's steps 3 and 4 a
 platform writes a number against the till's own customer id). The gate that would apply if counsel says otherwise is
 built and dark: `loyalty.pos_sync.require_consent` (default off, settable at platform, tenant or brand). Switched on, a
 till customer whose platform account has not granted the purpose `loyalty.pos_sync` is not paired and appears in the
-reconciliation report as `NOT_CONSENTED`; absence counts as withheld. Proved by `LoyaltyPosSyncStagingTests`.
+reconciliation report as `NOT_CONSENTED`; absence counts as withheld. A customer who was already paired is held to it too:
+the next pass of any kind suspends their pairing (nothing is pulled, pushed or compared for them, and `NOT_CONSENTED` is
+opened), whether the key was off when they were paired or they withdraw later, and the pairing comes back by itself when they
+consent or the key is turned off again. Accepting the till's or the platform's number on an open difference is refused for a
+customer without consent as well. Proved by `LoyaltyPosSyncStagingTests`.
 
 **What the owner supplies.** Counsel's yes or no.
 
@@ -110,5 +114,6 @@ becomes a consent type with the code `loyalty.pos_sync` (a default consent type 
 row to every existing tenant, as V0543 did for `review.public_display`), the storefront asks for it, and then the key is set
 for the tenants that need it.
 
-**Prove it.** With the key on, run *Reconcile now*: a customer who has not consented is listed `NOT_CONSENTED` and not paired;
-after they consent the next pass pairs them and the difference closes.
+**Prove it.** With the key on, run *Reconcile now*: a customer who has not consented is listed `NOT_CONSENTED` and not paired
+(or, if they were paired before the key was turned on, suspended); after they consent the next pass pairs them or brings the
+pairing back, and the difference closes.

@@ -356,6 +356,8 @@ public class PosBalanceSyncService {
         String status = "SUCCEEDED";
         String failure = null;
         try {
+            // Before anything reads or writes the till: a pairing without consent syncs in no mode and no kind of pass.
+            enforceConsent(tenantId, brandId, binding, runId);
             if (kind != RunKind.PUSH) {
                 match(tenantId, brandId, binding, runId, counts);
             }
@@ -472,6 +474,131 @@ public class PosBalanceSyncService {
                 return;
             }
         }
+    }
+
+    /**
+     * The consent gate, applied to the pairings that already exist (ADR 0171, open input 4).
+     *
+     * <p>{@code matchOne} asks for consent only when a till customer is first paired, so on its own the key would stop
+     * nobody who was paired while it was off, nor anybody who withdraws afterwards. Pull, push and compare all read the
+     * matched pairings, so this is the one place the gate is held for them: every pass, of every kind, first moves a
+     * matched pairing without a granted consent to {@code SUSPENDED} -- which every one of those reads already skips --
+     * and opens {@code NOT_CONSENTED} for it, then brings back a pairing <em>this gate</em> suspended once the customer
+     * consents or the key is off again. A pairing a person suspended carries no {@code NOT_CONSENTED} and is left alone.
+     *
+     * <p>The report row is opened before the status moves and closed after it moves back, so a failure between the two
+     * leaves a visible row and a pass that repeats the step, never a silent suspension that nothing would lift.
+     */
+    private void enforceConsent(UUID tenantId, UUID brandId, SyncBinding binding, UUID runId) {
+        UUID bindingId = binding.bindingId();
+        boolean required = requiresConsent(tenantId, brandId);
+        for (StateRow state : store.suspendedStates(tenantId, bindingId)) {
+            if (!suspendedByConsentGate(tenantId, bindingId, state)) {
+                continue;
+            }
+            if (required && !consentedLoyaltyAccount(tenantId, brandId, state.accountId())) {
+                continue;
+            }
+            Instant now = clock.instant();
+            store.setStateStatus(tenantId, state.id(), "MATCHED", now);
+            conditionEnded(
+                    tenantId,
+                    bindingId,
+                    "NOT_CONSENTED",
+                    Subject.TILL_CUSTOMER,
+                    state.accountId(),
+                    state.externalCustomerId(),
+                    required ? "The customer has consented" : "Consent is no longer required for the till sync");
+            recordConsentTransition(
+                    "loyalty.pos_sync.consent_resumed",
+                    tenantId,
+                    brandId,
+                    bindingId,
+                    runId,
+                    state,
+                    "SUSPENDED",
+                    "MATCHED",
+                    "The customer's balance syncs with the till again",
+                    now);
+        }
+        if (!required) {
+            return;
+        }
+        for (StateRow state : store.matchedStates(tenantId, bindingId)) {
+            if (consentedLoyaltyAccount(tenantId, brandId, state.accountId())) {
+                continue;
+            }
+            tillCustomerDifference(
+                    tenantId,
+                    brandId,
+                    bindingId,
+                    runId,
+                    "NOT_CONSENTED",
+                    state.accountId(),
+                    state.externalCustomerId());
+            Instant now = clock.instant();
+            store.setStateStatus(tenantId, state.id(), "SUSPENDED", now);
+            recordConsentTransition(
+                    "loyalty.pos_sync.consent_suspended",
+                    tenantId,
+                    brandId,
+                    bindingId,
+                    runId,
+                    state,
+                    "MATCHED",
+                    "SUSPENDED",
+                    "The customer has no granted consent for the till sync, so their balance is no longer synced",
+                    now);
+        }
+    }
+
+    /** A suspension the consent gate made: its report row (open, or carried by a person) is still there. */
+    private boolean suspendedByConsentGate(UUID tenantId, UUID bindingId, StateRow state) {
+        return store.findOpen(
+                                tenantId,
+                                bindingId,
+                                "NOT_CONSENTED",
+                                Subject.TILL_CUSTOMER,
+                                state.accountId(),
+                                state.externalCustomerId())
+                        .isPresent()
+                || store.findCarried(
+                                tenantId,
+                                bindingId,
+                                "NOT_CONSENTED",
+                                Subject.TILL_CUSTOMER,
+                                state.accountId(),
+                                state.externalCustomerId())
+                        .isPresent();
+    }
+
+    private void recordConsentTransition(
+            String action,
+            UUID tenantId,
+            UUID brandId,
+            UUID bindingId,
+            UUID runId,
+            StateRow state,
+            String from,
+            String to,
+            String because,
+            Instant now) {
+        audit.record(AuditFact.of(action, AuditClass.BUSINESS)
+                .by(ActorRef.service(PosSyncMovementImporter.actorOf(bindingId)))
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("LoyaltyAccount", state.accountId())
+                .because(because)
+                .changed(ChangeDocuments.diff(Map.of("status", from), Map.of("status", to)))
+                .correlatedBy(runId.toString())
+                .occurredAt(now)
+                .build());
+    }
+
+    /** Whether the customer behind a loyalty account granted the sync's purpose at this brand; no account is no consent. */
+    private boolean consentedLoyaltyAccount(UUID tenantId, UUID brandId, UUID loyaltyAccountId) {
+        return loyalty.findAccountById(tenantId, loyaltyAccountId)
+                .map(account -> consented(tenantId, brandId, account.customerAccountId()))
+                .orElse(false);
     }
 
     private boolean requiresConsent(UUID tenantId, UUID brandId) {
@@ -960,6 +1087,7 @@ public class PosBalanceSyncService {
             throw ApiException.staleVersion(expectedVersion, discrepancy.version());
         }
         requireAllowed(discrepancy, resolution);
+        requireConsentToTouchTill(tenantId, brandId, discrepancy, resolution);
 
         UUID approvalId = null;
         ApprovalOutcome outcome = null;
@@ -1012,6 +1140,26 @@ public class PosBalanceSyncService {
         DiscrepancyRow settled = store.findDiscrepancy(tenantId, discrepancyId).orElse(discrepancy);
         return new ResolutionResult(
                 settled, true, outcome == null ? "NOT_REQUIRED" : approvalLabel(outcome), approvalId);
+    }
+
+    /**
+     * Accepting the till's number reads the till for the customer and accepting the platform's writes to it, so with the
+     * consent gate on neither is done for a customer who has not consented: the same rule the passes keep, held for the
+     * one path that does not go through them. The difference stays open; a person can still absorb or suspend it.
+     */
+    private void requireConsentToTouchTill(
+            UUID tenantId, UUID brandId, DiscrepancyRow discrepancy, Resolution resolution) {
+        boolean touchesTill = (resolution == Resolution.ACCEPT_TILL || resolution == Resolution.ACCEPT_PLATFORM)
+                && !"CREDIT_HELD".equals(discrepancy.kind());
+        if (!touchesTill || discrepancy.accountId() == null || !requiresConsent(tenantId, brandId)) {
+            return;
+        }
+        if (!consentedLoyaltyAccount(tenantId, brandId, discrepancy.accountId())) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "This customer has not consented to the till sync, so the till is not read or written for them",
+                    Map.of("reason", "NOT_CONSENTED"));
+        }
     }
 
     private ApprovalOutcome acceptTill(
