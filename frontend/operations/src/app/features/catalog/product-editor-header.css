@@ -47,5 +47,5 @@
   background: var(--q-surface-1);
   border-radius: var(--q-radius);
   font-size: var(--q-type-caption);
-  margin-left: 8px;
+  margin-inline-start: 8px;
 }

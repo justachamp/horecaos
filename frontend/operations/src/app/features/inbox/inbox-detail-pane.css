@@ -22,7 +22,7 @@
 }
 
 .pane__notice-dismiss {
-  margin-left: auto;
+  margin-inline-start: auto;
   border: none;
   background: transparent;
   color: inherit;
@@ -175,7 +175,7 @@
 .pane__message--assistant {
   align-self: flex-start;
   background: var(--q-surface-1);
-  border-left: 3px solid var(--q-primary);
+  border-inline-start: 3px solid var(--q-primary);
 }
 
 .pane__assistant-banner {
@@ -220,7 +220,7 @@
 
 .pane__why-facts {
   margin: 2px 0 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
 }
 
 .pane__why-cited,

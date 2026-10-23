@@ -50,13 +50,13 @@ table[chart-table] {
 table[chart-table] th,
 table[chart-table] td {
   padding: 4px 8px;
-  text-align: right;
+  text-align: end;
   border-bottom: 1px solid var(--q-hairline);
   font-variant-numeric: tabular-nums;
 }
 
 table[chart-table] th[scope='row'] {
-  text-align: left;
+  text-align: start;
   font-weight: 400;
   color: var(--q-ink-muted);
 }

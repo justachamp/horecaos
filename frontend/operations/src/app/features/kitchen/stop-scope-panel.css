@@ -18,7 +18,7 @@
 }
 
 .scope-panel__close {
-  margin-left: auto;
+  margin-inline-start: auto;
   border: none;
   background: none;
   cursor: pointer;

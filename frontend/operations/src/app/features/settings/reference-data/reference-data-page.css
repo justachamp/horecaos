@@ -31,7 +31,7 @@
 }
 
 .table thead th {
-  text-align: left;
+  text-align: start;
   color: var(--q-ink-muted);
   padding: 8px 10px;
   border-bottom: 1px solid var(--q-hairline);
@@ -221,7 +221,7 @@
 
 .matrix th:first-child,
 .matrix td:first-child {
-  text-align: left;
+  text-align: start;
 }
 
 .matrix__cell input {

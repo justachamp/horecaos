@@ -74,7 +74,7 @@
   flex-direction: column;
   gap: 8px;
   font-size: var(--q-type-body-lg);
-  text-align: left;
+  text-align: start;
 }
 
 .device-shell__field input {

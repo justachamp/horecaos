@@ -26,7 +26,7 @@
 }
 
 .pane__notice-dismiss {
-  margin-left: auto;
+  margin-inline-start: auto;
   border: none;
   background: transparent;
   color: inherit;
@@ -76,7 +76,7 @@
 
 .pane__warnings-list {
   margin: 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
 }
 
 /* ---- header (§3.3) ------------------------------------------------------ */
@@ -147,7 +147,7 @@
 }
 
 .pane__lines-table th {
-  text-align: left;
+  text-align: start;
   font-size: var(--q-type-caption);
   font-weight: 400;
   color: var(--q-ink-subtle);
@@ -163,7 +163,7 @@
 }
 
 .pane__num-col {
-  text-align: right;
+  text-align: end;
 }
 
 .pane__reveal-link {
@@ -206,7 +206,7 @@
 }
 
 .pane__guest-badge {
-  margin-left: 6px;
+  margin-inline-start: 6px;
   padding: 1px 6px;
   border: 1px solid var(--q-hairline);
   font-size: var(--q-type-caption-sm);

@@ -86,7 +86,7 @@
 
 .today__error-ref {
   color: var(--q-error-text);
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .today__error-retry {
@@ -204,7 +204,7 @@
 }
 
 .branch-table th {
-  text-align: left;
+  text-align: start;
   padding: 4px 8px;
   color: var(--q-ink-subtle);
   font-size: var(--q-type-caption);
@@ -229,7 +229,7 @@
 }
 
 .branch-table__num-col {
-  text-align: right;
+  text-align: end;
 }
 
 .today__partial {

@@ -70,7 +70,7 @@
   align-items: center;
   padding: 0 12px;
   border-bottom: 1px solid var(--q-hairline);
-  border-right: 1px solid var(--q-hairline);
+  border-inline-end: 1px solid var(--q-hairline);
   outline: none;
   overflow: hidden;
   white-space: nowrap;

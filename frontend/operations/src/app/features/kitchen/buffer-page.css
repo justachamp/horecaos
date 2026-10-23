@@ -42,7 +42,7 @@
 }
 
 .buffer__table th {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
@@ -58,7 +58,7 @@
 
 .chip {
   display: inline-block;
-  margin-left: 8px;
+  margin-inline-start: 8px;
   padding: 2px 6px;
   background: var(--q-surface-1);
   border-radius: var(--q-radius);
@@ -70,7 +70,7 @@
 }
 
 .buffer__actions {
-  text-align: right;
+  text-align: end;
 }
 
 .buffer__release {
@@ -89,7 +89,7 @@
 }
 
 .buffer__edit {
-  margin-left: 8px;
+  margin-inline-start: 8px;
   padding: 4px 12px;
   border: 1px solid var(--q-hairline);
   background: var(--q-canvas);

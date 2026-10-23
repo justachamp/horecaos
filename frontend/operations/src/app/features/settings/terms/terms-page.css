@@ -73,7 +73,7 @@ q-rich-text {
 
 /* Row 10.12: the brand's default language, marked beside its label. */
 .locale-default-marker {
-  margin-left: 6px;
+  margin-inline-start: 6px;
   font-size: 0.85em;
   text-transform: uppercase;
   color: var(--q-ink-muted);
@@ -132,7 +132,7 @@ q-rich-text {
 }
 
 .table thead th {
-  text-align: left;
+  text-align: start;
   color: var(--q-ink-muted);
   padding: 8px 12px;
   border-bottom: 1px solid var(--q-hairline);

@@ -113,7 +113,7 @@
 
 .call-centre__recent-orders ul {
   margin: 4px 0 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
 }
 
 .call-centre__log {
@@ -123,7 +123,7 @@
 
 .call-centre__log th,
 .call-centre__log td {
-  text-align: left;
+  text-align: start;
   padding: 6px 8px;
   border-bottom: 1px solid var(--q-hairline);
 }

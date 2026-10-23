@@ -15,7 +15,7 @@
 }
 
 .table thead th {
-  text-align: left;
+  text-align: start;
   color: var(--q-ink-muted);
   padding: 10px 14px;
   border-bottom: 1px solid var(--q-hairline);
@@ -69,7 +69,7 @@
 
 .detail__column ul {
   margin: 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
 }
 
 .detail__muted {
@@ -154,7 +154,7 @@
 }
 
 .chip--own {
-  margin-left: 8px;
+  margin-inline-start: 8px;
   border-color: var(--q-primary);
   color: var(--q-primary);
 }

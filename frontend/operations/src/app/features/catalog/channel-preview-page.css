@@ -108,11 +108,11 @@
   padding: 6px 12px;
   background: var(--q-surface-1);
   border-radius: var(--q-radius);
-  border-left: 3px solid transparent;
+  border-inline-start: 3px solid transparent;
 }
 
 .preview__finding--blocker {
-  border-left-color: var(--q-error);
+  border-inline-start-color: var(--q-error);
 }
 
 .preview__finding-main {

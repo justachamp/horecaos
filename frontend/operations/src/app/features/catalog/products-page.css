@@ -36,7 +36,7 @@
 }
 
 .tab__count {
-  margin-left: 4px;
+  margin-inline-start: 4px;
   color: var(--q-ink-subtle);
 }
 
@@ -86,9 +86,9 @@
 }
 
 .products__rail--warning {
-  border-left: 3px solid var(--q-warning);
-  padding-left: 8px;
-  margin-left: -11px;
+  border-inline-start: 3px solid var(--q-warning);
+  padding-inline-start: 8px;
+  margin-inline-start: -11px;
 }
 
 .product-row__caption {

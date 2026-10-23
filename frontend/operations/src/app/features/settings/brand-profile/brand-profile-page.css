@@ -67,7 +67,7 @@
 }
 
 .default-badge {
-  margin-left: 8px;
+  margin-inline-start: 8px;
   padding: 1px 8px;
   border-radius: 999px;
   background: var(--q-surface-1);
@@ -141,7 +141,7 @@ select.field {
 }
 
 .locale-grid th {
-  text-align: left;
+  text-align: start;
   padding: 4px 8px;
   color: var(--q-ink-muted);
 }

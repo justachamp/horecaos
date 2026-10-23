@@ -16,7 +16,7 @@
   border: none;
   border-bottom: 2px solid transparent;
   padding: 8px 4px;
-  margin-right: 20px;
+  margin-inline-end: 20px;
   color: var(--q-ink-muted);
   cursor: pointer;
   font: inherit;
@@ -116,7 +116,7 @@
 }
 
 .table thead th {
-  text-align: left;
+  text-align: start;
   color: var(--q-ink-muted);
   padding: 10px 16px;
   border-bottom: 1px solid var(--q-hairline);
@@ -168,7 +168,7 @@
 }
 
 .row-menu {
-  text-align: right;
+  text-align: end;
   white-space: nowrap;
 }
 
@@ -186,7 +186,7 @@
   width: 120px;
   height: 28px;
   padding: 2px 8px;
-  margin-right: 4px;
+  margin-inline-end: 4px;
 }
 
 .locale-chip {

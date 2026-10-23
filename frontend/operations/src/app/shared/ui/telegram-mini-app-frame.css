@@ -18,6 +18,7 @@
 .q-telegram-mini-app-frame__notch {
   position: absolute;
   top: 10px;
+  /* physical-ok: notch centred by translateX(-50%), the same in either direction */
   left: 50%;
   transform: translateX(-50%);
   width: 84px;

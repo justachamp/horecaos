@@ -108,7 +108,7 @@
 .reservations__panel {
   width: 320px;
   flex: none;
-  border-left: 1px solid var(--q-hairline);
+  border-inline-start: 1px solid var(--q-hairline);
   padding: 16px;
   overflow: auto;
 }

@@ -103,7 +103,7 @@
 }
 
 .forecast__table th {
-  text-align: right;
+  text-align: end;
   padding: 6px 12px;
   color: var(--q-ink-muted);
   border-bottom: 1px solid var(--q-hairline);
@@ -111,12 +111,12 @@
 
 .forecast__table th:first-child,
 .forecast__table td:first-child {
-  text-align: left;
+  text-align: start;
 }
 
 .forecast__table td {
   padding: 6px 12px;
-  text-align: right;
+  text-align: end;
   border-bottom: 1px solid var(--q-hairline);
 }
 
@@ -150,7 +150,7 @@
   height: 32px;
   padding: 0 12px;
   border: none;
-  border-right: 1px solid var(--q-hairline);
+  border-inline-end: 1px solid var(--q-hairline);
   background: var(--q-canvas);
   color: var(--q-ink);
   cursor: pointer;
@@ -158,7 +158,7 @@
 }
 
 .forecast__segment:last-child {
-  border-right: none;
+  border-inline-end: none;
 }
 
 .forecast__segment--active {

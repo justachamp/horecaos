@@ -83,7 +83,7 @@
 .segment {
   padding: 4px 10px;
   border: none;
-  border-right: 1px solid var(--q-warning);
+  border-inline-end: 1px solid var(--q-warning);
   background: var(--q-canvas);
   color: var(--q-ink-muted);
   font-size: var(--q-type-body-xs);
@@ -91,7 +91,7 @@
 }
 
 .segment:last-child {
-  border-right: none;
+  border-inline-end: none;
 }
 
 .segment--active {

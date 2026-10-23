@@ -1,6 +1,6 @@
 .pane {
-  border-left: 1px solid var(--q-hairline);
-  padding-left: 24px;
+  border-inline-start: 1px solid var(--q-hairline);
+  padding-inline-start: 24px;
 }
 
 .pane h2 {
@@ -37,7 +37,7 @@
   border: none;
   border-bottom: 2px solid transparent;
   padding: 8px 4px;
-  margin-right: 16px;
+  margin-inline-end: 16px;
   color: var(--q-ink-muted);
   cursor: pointer;
   font: inherit;
@@ -80,7 +80,7 @@
 }
 
 .grid th {
-  text-align: left;
+  text-align: start;
   color: var(--q-ink-muted);
   padding: 6px 8px;
   border-bottom: 1px solid var(--q-hairline);
@@ -269,7 +269,7 @@ textarea.field {
 .merge-candidate {
   display: block;
   width: 100%;
-  text-align: left;
+  text-align: start;
   padding: 8px 10px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);

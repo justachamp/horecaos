@@ -16,7 +16,7 @@
   border: none;
   border-bottom: 2px solid transparent;
   padding: 8px 4px;
-  margin-right: 20px;
+  margin-inline-end: 20px;
   color: var(--q-ink-muted);
   cursor: pointer;
   font: inherit;
@@ -118,7 +118,7 @@
 }
 
 .table thead th {
-  text-align: left;
+  text-align: start;
   color: var(--q-ink-muted);
   padding: 10px 16px;
   border-bottom: 1px solid var(--q-hairline);
@@ -132,7 +132,7 @@
 .status-badge {
   display: inline-block;
   padding: 2px 8px;
-  margin-left: 8px;
+  margin-inline-start: 8px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   color: var(--q-ink-muted);

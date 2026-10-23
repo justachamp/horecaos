@@ -71,7 +71,7 @@
 
 .automations__runs-table th,
 .automations__runs-table td {
-  text-align: left;
+  text-align: start;
   padding: 6px 8px;
   border-bottom: 1px solid var(--q-hairline);
   font-size: var(--q-type-body-sm);
@@ -188,7 +188,7 @@
 }
 
 .automations__code {
-  margin-left: 6px;
+  margin-inline-start: 6px;
   color: var(--q-ink-subtle);
 }
 

@@ -39,7 +39,7 @@ q-root {
 /* Skip link. Eleven rail entries stand between a keyboard user and the queue. */
 .q-skip-link {
   position: absolute;
-  left: -9999px;
+  inset-inline-start: -9999px;
   top: 0;
   z-index: 100;
   padding: 8px 16px;
@@ -48,7 +48,7 @@ q-root {
 }
 
 .q-skip-link:focus {
-  left: 0;
+  inset-inline-start: 0;
 }
 
 /* Machine data is monospace throughout: order numbers, phones, amounts,

@@ -8,7 +8,7 @@
   width: 80px;
   height: 32px;
   padding: 0 8px;
-  text-align: right;
+  text-align: end;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   background: var(--q-canvas);

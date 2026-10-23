@@ -48,7 +48,7 @@
 .override__order {
   position: absolute;
   top: 4px;
-  left: 4px;
+  inset-inline-start: 4px;
   min-width: 20px;
   padding: 0 4px;
   background: var(--q-primary);

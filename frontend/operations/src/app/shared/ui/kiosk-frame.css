@@ -25,6 +25,7 @@
 .q-kiosk-frame__stand {
   position: absolute;
   bottom: 6px;
+  /* physical-ok: stand centred by translateX(-50%), the same in either direction */
   left: 50%;
   transform: translateX(-50%);
   width: 40px;

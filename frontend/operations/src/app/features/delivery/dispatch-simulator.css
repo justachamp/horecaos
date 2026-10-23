@@ -81,7 +81,7 @@
 
 .sim__problems ul {
   margin: 4px 0 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
 }
 
 .sim__result {
@@ -111,7 +111,7 @@
 .sim__trace,
 .sim__list {
   margin: 0;
-  padding-left: 20px;
+  padding-inline-start: 20px;
 }
 
 .sim__trace li {

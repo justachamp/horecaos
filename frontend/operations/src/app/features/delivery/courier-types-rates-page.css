@@ -31,7 +31,7 @@
 }
 
 .rates__table th {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
@@ -45,11 +45,11 @@
 }
 
 .rates__num-col {
-  text-align: right;
+  text-align: end;
 }
 
 .rates__actions {
-  text-align: right;
+  text-align: end;
 }
 
 .rates__activate {
@@ -176,7 +176,7 @@
   border-radius: var(--q-radius);
   cursor: pointer;
   font-size: var(--q-type-caption);
-  margin-left: 6px;
+  margin-inline-start: 6px;
 }
 
 .rates__link-button {
@@ -186,7 +186,7 @@
   cursor: pointer;
   font-size: var(--q-type-caption);
   padding: 4px 0;
-  text-align: left;
+  text-align: start;
 }
 
 .rates__component-list {

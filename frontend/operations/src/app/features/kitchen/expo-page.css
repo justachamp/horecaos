@@ -108,7 +108,7 @@
 }
 
 .ticket__items th {
-  text-align: left;
+  text-align: start;
   padding: 6px 12px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
@@ -123,7 +123,7 @@
 }
 
 .expo__num-col {
-  text-align: right;
+  text-align: end;
 }
 
 .ticket__rollup {
@@ -180,7 +180,7 @@
 }
 
 .ticket__item--component td:first-child {
-  padding-left: 20px;
+  padding-inline-start: 20px;
 }
 
 .expo__intake {

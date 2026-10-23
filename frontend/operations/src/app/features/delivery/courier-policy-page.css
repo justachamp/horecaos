@@ -74,7 +74,7 @@
 }
 
 .policy__inherited {
-  margin-left: 8px;
+  margin-inline-start: 8px;
   font-weight: 400;
   color: var(--q-ink-subtle);
 }

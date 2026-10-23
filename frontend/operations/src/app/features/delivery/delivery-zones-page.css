@@ -45,7 +45,7 @@
 }
 
 .zones__table th {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
@@ -79,7 +79,7 @@
 }
 
 .zones__action-col {
-  text-align: right;
+  text-align: end;
 }
 
 .zones__action-col button {
@@ -195,7 +195,7 @@
 }
 
 .zone-versions th {
-  text-align: left;
+  text-align: start;
   padding: 4px 8px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
@@ -211,7 +211,7 @@
    this marker is the only place the console says so, so it is legible rather
    than decorative. */
 .status-badge--free {
-  margin-left: 6px;
+  margin-inline-start: 6px;
   background: var(--q-success-tint);
   color: var(--q-success-text);
 }
@@ -223,7 +223,7 @@
 
 .dialog__problems {
   margin: 0 0 8px;
-  padding-left: 18px;
+  padding-inline-start: 18px;
   color: var(--q-error-text);
 }
 

@@ -70,7 +70,7 @@
 }
 
 .drafts__table th {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
@@ -84,11 +84,11 @@
 }
 
 .drafts__num-col {
-  text-align: right;
+  text-align: end;
 }
 
 .drafts__actions {
-  text-align: right;
+  text-align: end;
 }
 
 .status-badge {

@@ -60,7 +60,7 @@
 .q-steps__connector {
   position: absolute;
   top: 4px;
-  left: 50%;
+  inset-inline-start: 50%;
   width: 100%;
   height: 2px;
   background: var(--q-hairline);

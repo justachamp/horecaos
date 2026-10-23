@@ -29,7 +29,7 @@
 }
 
 .tariffs__table th {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
@@ -64,16 +64,16 @@
 .tariff-bands td {
   padding: 4px 10px;
   font-size: var(--q-type-body-xs);
-  text-align: right;
+  text-align: end;
 }
 
 .tariff-bands th:first-child,
 .tariff-bands td:first-child {
-  text-align: left;
+  text-align: start;
 }
 
 .tariffs__action-col {
-  text-align: right;
+  text-align: end;
 }
 
 .tariffs__action-col button,
@@ -88,7 +88,7 @@
 }
 
 .tariffs__action-col button + button {
-  margin-left: 6px;
+  margin-inline-start: 6px;
 }
 
 .status-badge {
@@ -236,6 +236,6 @@
 .dialog__problems,
 .tariffs__problems {
   margin: 0 0 8px;
-  padding-left: 18px;
+  padding-inline-start: 18px;
   color: var(--q-error-text);
 }

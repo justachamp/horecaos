@@ -58,7 +58,7 @@
 }
 
 .table thead th {
-  text-align: left;
+  text-align: start;
   color: var(--q-ink-muted);
   padding: 8px 12px;
   border-bottom: 1px solid var(--q-hairline);
@@ -70,7 +70,7 @@
 }
 
 .num {
-  text-align: right;
+  text-align: end;
 }
 
 .empty {
@@ -118,7 +118,7 @@
 }
 
 .actions {
-  text-align: right;
+  text-align: end;
 }
 
 .statement-row.void {
@@ -138,7 +138,7 @@
 }
 
 .statement-lines .inner-table thead th {
-  text-align: left;
+  text-align: start;
   color: var(--q-ink-muted);
 }
 
@@ -158,7 +158,7 @@
 .quantity-input {
   width: 56px;
   height: 36px;
-  margin-right: 8px;
+  margin-inline-end: 8px;
   padding: 0 8px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
