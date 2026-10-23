@@ -695,12 +695,8 @@ export const settingsPaths = {
     return `${TENANT}/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/notification-templates`;
   },
 
-  notificationTemplate(scope: LocationScope, templateId: string): string {
-    return `${this.notificationTemplates(scope)}/${enc(templateId)}`;
-  },
-
   notificationTemplateVersions(scope: LocationScope, templateId: string): string {
-    return `${this.notificationTemplate(scope, templateId)}/versions`;
+    return `${settingsPaths.notificationTemplates(scope)}/${enc(templateId)}/versions`;
   },
 
   notificationTemplateVersion(

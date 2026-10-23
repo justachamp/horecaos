@@ -22,9 +22,8 @@ const TEMPLATES = '/api/v1/tenants/t1/brands/b1/notification-templates';
  * every call while every suite was green.
  */
 describe('settingsPaths: notification templates (ADR 0020, row 10.9a)', () => {
-  it('builds the template collection and one template on the /api/v1/tenants surface', () => {
+  it('builds the template collection on the /api/v1/tenants surface', () => {
     expect(settingsPaths.notificationTemplates(SCOPE)).toBe(TEMPLATES);
-    expect(settingsPaths.notificationTemplate(SCOPE, 'tp1')).toBe(`${TEMPLATES}/tp1`);
   });
 
   it('builds versions, one version, its activation and its test send', () => {
@@ -71,7 +70,9 @@ describe('settingsPaths: notification templates (ADR 0020, row 10.9a)', () => {
   });
 
   it('encodes every segment, so an id cannot escape its place in the path', () => {
-    expect(settingsPaths.notificationTemplate(SCOPE, 'a/b')).toBe(`${TEMPLATES}/a%2Fb`);
+    expect(settingsPaths.notificationTemplateVersions(SCOPE, 'a/b')).toBe(
+      `${TEMPLATES}/a%2Fb/versions`,
+    );
     expect(
       settingsPaths.notificationTemplates({ tenantId: 't 1', brandId: 'b/1', locationId: 'l1' }),
     ).toBe('/api/v1/tenants/t%201/brands/b%2F1/notification-templates');

@@ -96,7 +96,6 @@ const EXEMPT: Readonly<Record<string, Exemption>> = {
   'loyalty-paths.loyaltyPolicyPaths.base': 'PREFIX',
   'referral-paths.referralPaths.base': 'PREFIX',
   'settings-paths.settingsPaths.channelSetup': 'PREFIX',
-  'settings-paths.settingsPaths.notificationTemplate': 'PREFIX',
   'settings-paths.settingsPaths.notificationRouting': 'PREFIX',
   'geo-paths.geoPaths.lookup': 'PLACEHOLDER',
   'lead-paths.leadPaths.assignment': 'REACH',
