@@ -207,8 +207,10 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
      * order as it stands now, and an order amended, refunded or reclassified since can no longer be built; the
      * read-back that finds the receipt sits behind the submission, so a refusal here would never look, the block
      * would be restated as «nothing was sent», and the tax authority would hold a receipt the platform never
-     * records. The read is made before the refusal is returned. A document never sent is not asked: there is
-     * nothing for the provider to hold.
+     * records. The read is made before the refusal is returned. A document still {@code PENDING} was never claimed,
+     * so there is nothing for the provider to hold and it is not asked; a first attempt through the sweeper has
+     * already been claimed ({@code SUBMITTED}) when the bridge sees it, and costs the same single extra read the
+     * adapter's own read-back before a resubmission costs.
      */
     private Outcome unlessAlreadyHeld(FiscalDocument document, ProviderBinding binding, Outcome refusal) {
         if (document.status() == FiscalStatus.PENDING) {
