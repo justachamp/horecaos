@@ -330,7 +330,7 @@ class AggregatorOrderIntakeServiceTests {
     }
 
     @Test
-    @DisplayName("an entry of unmapped items alone asks the resolver nothing, and a replay asks nothing either")
+    @DisplayName("an entry of unmapped items alone asks the resolver nothing")
     void anEntryWithNothingMappedAsksNothing() {
         var command = new AggregatorOrderIntakeService.Command(
                 TENANT,
@@ -350,14 +350,52 @@ class AggregatorOrderIntakeServiceTests {
                 null,
                 null);
 
-        service.create(command);
+        var result = service.create(command);
+
+        assertThat(result.replayed()).isFalse();
         assertThat(availabilityQuestions).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a replay of an entry with a mapped dish answers from the stored order: the resolver is asked "
+            + "once, for the first entry, and never again")
+    void aReplayAsksTheResolverNothing() {
+        var command = new AggregatorOrderIntakeService.Command(
+                TENANT,
+                BRAND,
+                LOCATION,
+                "UZUM-TEZKOR",
+                "YE-STOP-3",
+                List.of(new AggregatorOrderIntakeService.Line(variantId, "Osh", 2, 25_000, "sku-osh")),
+                "UZS",
+                50_000,
+                0,
+                0,
+                50_000,
+                "idem-aggregator-stopped-3",
+                "operator-subject-7",
+                null,
+                null,
+                null);
+
+        var first = service.create(command);
+        assertThat(first.replayed()).isFalse();
+        assertThat(availabilityQuestions)
+                .as("a mapped dish is a question, so the replay below has something to not ask")
+                .hasSize(1);
 
         var replay = service.create(command);
+
         assertThat(replay.replayed()).isTrue();
+        assertThat(replay.orderId()).as("the order the first entry made").isEqualTo(first.orderId());
         assertThat(availabilityQuestions)
-                .as("a replay answers from the stored order")
-                .isEmpty();
+                .as("a retried entry costs no resolver round trip, and a resolver outage cannot fail a harmless replay")
+                .hasSize(1);
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.orders WHERE idempotency_key = :key")
+                        .param("key", "idem-aggregator-stopped-3")
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
     }
 
     @Test
