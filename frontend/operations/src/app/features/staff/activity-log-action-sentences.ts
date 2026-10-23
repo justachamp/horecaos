@@ -300,6 +300,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Тег изменён',
       'uz-Latn': 'Teg oʻzgartirildi',
     },
+    'courier.telemetry_notice.acknowledged': {
+      en: 'A courier acknowledged the location notice',
+      ru: 'Курьер подтвердил уведомление о геолокации',
+      'uz-Latn': 'Kuryer geolokatsiya haqidagi ogohlantirishni tasdiqladi',
+    },
+    'courier.updated': {
+      en: 'A courier’s details were corrected',
+      ru: 'Данные курьера исправлены',
+      'uz-Latn': 'Kuryer maʻlumotlari tuzatildi',
+    },
     'inventory.stock.disposed': {
       en: 'Stock put back or written off after a sale',
       ru: 'Остаток возвращён на склад или списан после продажи',
@@ -835,6 +845,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Курьер заявитель удалено',
       'uz-Latn': 'Kuryer nomzod oʻchirildi',
     },
+    'courier.archived': {
+      en: 'A courier was archived',
+      ru: 'Курьер перенесён в архив',
+      'uz-Latn': 'Kuryer arxivga olindi',
+    },
     'courier.branch.bound': {
       en: 'Courier branch bound',
       ru: 'Курьер филиал привязано',
@@ -879,6 +894,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Courier confirmed the cash collected',
       ru: 'Курьер подтвердил полученные наличные',
       'uz-Latn': 'Kuryer olingan naqd pulni tasdiqladi',
+    },
+    'courier.engagement.ended': {
+      en: 'A courier’s engagement was ended',
+      ru: 'Сотрудничество с курьером завершено',
+      'uz-Latn': 'Kuryer bilan hamkorlik tugatildi',
     },
     'courier.engagement.opened': {
       en: 'Courier engagement opened',

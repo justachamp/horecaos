@@ -1278,7 +1278,7 @@ export class CustomersApi {
   ): Promise<CorrectionResult> {
     return firstValueFrom(
       this.api.put<typeof body, CorrectionResult>(
-        operationsPaths.customerCorrection(scope, accountId, 'display-name'),
+        operationsPaths.customerCorrectionDisplayName(scope, accountId),
         command(body),
         { expectedVersion },
       ),
@@ -1294,7 +1294,7 @@ export class CustomersApi {
   ): Promise<CorrectionResult> {
     return firstValueFrom(
       this.api.put<typeof body, CorrectionResult>(
-        operationsPaths.customerCorrection(scope, accountId, 'date-of-birth'),
+        operationsPaths.customerCorrectionDateOfBirth(scope, accountId),
         command(body),
         { expectedVersion },
       ),
@@ -1310,11 +1310,7 @@ export class CustomersApi {
   ): Promise<CorrectionResult> {
     return firstValueFrom(
       this.api.put<typeof body, CorrectionResult>(
-        operationsPaths.customerCorrection(
-          scope,
-          accountId,
-          `contact-points/${encodeURIComponent(contactPointId)}`,
-        ),
+        operationsPaths.customerCorrectionContactPoint(scope, accountId, contactPointId),
         command(body),
       ),
     );
@@ -1330,11 +1326,7 @@ export class CustomersApi {
   ): Promise<CorrectionResult> {
     return firstValueFrom(
       this.api.put<typeof body, CorrectionResult>(
-        operationsPaths.customerCorrection(
-          scope,
-          accountId,
-          `addresses/${encodeURIComponent(addressId)}`,
-        ),
+        operationsPaths.customerCorrectionAddress(scope, accountId, addressId),
         command(body),
         { expectedVersion },
       ),

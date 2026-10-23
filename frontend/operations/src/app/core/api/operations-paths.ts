@@ -1362,14 +1362,28 @@ export const operationsPaths = {
     return `${this.customer(scope, accountId)}/corrections`;
   },
 
-  /** `PUT` a correction against evidence: `display-name`, `date-of-birth`, `contact-points/{id}`, `addresses/{id}`. */
-  customerCorrection(scope: LocationScope, accountId: string, subjectPath: string): string {
-    return `${this.customerCorrections(scope, accountId)}/${subjectPath}`;
+  /** `PUT` a correction of the customer's name against evidence (`CustomerCorrectionController`). */
+  customerCorrectionDisplayName(scope: LocationScope, accountId: string): string {
+    return `${this.customerCorrections(scope, accountId)}/display-name`;
   },
 
-  /** `GET` every data-subject request across the tenant: erasure, export and correction (Settings 10.11). */
-  customerPrivacyRequests(scope: LocationScope): string {
-    return `${OPERATIONS}${tenant(scope)}/customers/privacy-requests`;
+  /** `PUT` a correction of the date of birth against evidence. */
+  customerCorrectionDateOfBirth(scope: LocationScope, accountId: string): string {
+    return `${this.customerCorrections(scope, accountId)}/date-of-birth`;
+  },
+
+  /** `PUT` a correction of one contact point against evidence. */
+  customerCorrectionContactPoint(
+    scope: LocationScope,
+    accountId: string,
+    contactPointId: string,
+  ): string {
+    return `${this.customerCorrections(scope, accountId)}/contact-points/${encodeURIComponent(contactPointId)}`;
+  },
+
+  /** `PUT` a correction of one saved address against evidence. */
+  customerCorrectionAddress(scope: LocationScope, accountId: string, addressId: string): string {
+    return `${this.customerCorrections(scope, accountId)}/addresses/${encodeURIComponent(addressId)}`;
   },
 } as const;
 

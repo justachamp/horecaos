@@ -550,7 +550,7 @@ describe('NotificationsPage', () => {
       fixture.detectChanges();
     }
 
-    it('offers four classes: a SECURITY template cannot be authored (D19)', () => {
+    it('offers five classes, a courier dispatch among them: a SECURITY template cannot be authored (D19)', () => {
       openCreate();
       const options = Array.from(
         (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
@@ -563,6 +563,7 @@ describe('NotificationsPage', () => {
         'TRANSACTIONAL_OPTIONAL',
         'MARKETING',
         'OPERATIONS_ALERT',
+        'COURIER_DISPATCH',
       ]);
       expect(options).not.toContain('SECURITY');
     });

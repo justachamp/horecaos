@@ -54,7 +54,9 @@ describe('template list severity (settings.md 10.9, Tab 1)', () => {
   });
 
   it('does not count a missing language against a channel nothing is sent on', () => {
-    expect(severityOf(template({ channel: 'EMAIL', versionLocales: ['ru'] }))).toBe(3);
+    // SMS, Telegram, email and push are all wired now (ADR 0182); the platform still declares a messaging-app
+    // channel with no adapter, which is what this rule is about.
+    expect(severityOf(template({ channel: 'MESSAGING_APP', versionLocales: ['ru'] }))).toBe(3);
   });
 
   it('names the languages the shown version lacks', () => {

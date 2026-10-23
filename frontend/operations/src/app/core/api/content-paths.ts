@@ -17,6 +17,11 @@ function base(scope: BrandScope): string {
   return `${TENANT}/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/content`;
 }
 
+/** The prefix of the brand switcher's routes; it is not a route itself, so it is not one of the builders. */
+function brandSwitcherBase(scope: BrandScope): string {
+  return `${base(scope)}/brand-switcher`;
+}
+
 export const contentPaths = {
   items(scope: BrandScope): string {
     return `${base(scope)}/items`;
@@ -96,12 +101,8 @@ export const contentPaths = {
   },
 
   /** `BrandSwitcherController` (row 6.8): the brand's way to its sibling brands' storefronts. */
-  brandSwitcher(scope: BrandScope): string {
-    return `${base(scope)}/brand-switcher`;
-  },
-
   switcherEntries(scope: BrandScope): string {
-    return `${this.brandSwitcher(scope)}/entries`;
+    return `${brandSwitcherBase(scope)}/entries`;
   },
 
   switcherEntry(scope: BrandScope, entryId: string): string {
@@ -110,11 +111,11 @@ export const contentPaths = {
 
   /** The sibling brands and website channels an entry can name. */
   switcherCandidates(scope: BrandScope): string {
-    return `${this.brandSwitcher(scope)}/candidates`;
+    return `${brandSwitcherBase(scope)}/candidates`;
   },
 
   switcherOrder(scope: BrandScope): string {
-    return `${this.brandSwitcher(scope)}/order`;
+    return `${brandSwitcherBase(scope)}/order`;
   },
 
   /**

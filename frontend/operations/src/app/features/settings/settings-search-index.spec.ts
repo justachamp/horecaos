@@ -92,7 +92,7 @@ describe('the settings search index', () => {
     expect(Object.keys(CONFIGURATION_KEY_ROUTES).sort()).toEqual(
       Object.keys(SETTING_ENTRIES).sort(),
     );
-    expect(CONFIGURATION_KEY_ROUTES['ordering.vat_rate_percent']).toBe('order-policy');
+    expect(CONFIGURATION_KEY_ROUTES['ordering.minimum_order_amount_minor']).toBe('order-policy');
     expect(CONFIGURATION_KEY_ROUTES['delivery.out_of_zone_policy']).toBe(
       '/delivery/courier-policy',
     );

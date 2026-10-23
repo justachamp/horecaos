@@ -11,14 +11,15 @@ import { I18n } from '../../core/i18n/i18n';
 import { ConfigurationApi } from '../../features/settings/configuration-api';
 import { CommandPalette } from './command-palette';
 
-const VAT: ConfigurationKeyView = {
-  code: 'ordering.vat_rate_percent',
-  valueType: 'BigDecimal',
-  defaultValue: '12',
-  settableScopes: ['PLATFORM', 'TENANT', 'BRAND'],
+/** A key a screen sets (the VAT rate was one until ADR 0177 retired it, so this stands in for any routed key). */
+const LATE: ConfigurationKeyView = {
+  code: 'ordering.late_order_threshold_minutes',
+  valueType: 'Integer',
+  defaultValue: 10,
+  settableScopes: ['PLATFORM', 'TENANT', 'BRAND', 'LOCATION'],
   owningModule: 'ordering',
   explicitNullTerminates: false,
-  description: 'The VAT rate applied at checkout, as a percentage.',
+  description: 'Minutes past the promise at which an order shows as late.',
 };
 
 describe('CommandPalette', () => {
@@ -42,7 +43,7 @@ describe('CommandPalette', () => {
         'KITCHEN_TICKET_READ',
       ],
     );
-    const keys = options.keys ?? [VAT];
+    const keys = options.keys ?? [LATE];
     const placements = options.placements ?? { keys: [], policies: [] };
     api = {
       keys:
@@ -162,7 +163,7 @@ describe('CommandPalette', () => {
       placements: {
         keys: [
           {
-            keyCode: VAT.code,
+            keyCode: LATE.code,
             placements: [
               {
                 scopeType: 'BRAND',
@@ -185,10 +186,10 @@ describe('CommandPalette', () => {
     });
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
 
-    type('vat');
+    type('late-order');
 
-    const row = rows().find((candidate) => candidate.textContent?.includes('VAT rate'));
-    expect(row?.textContent).toContain('set: brand “Rayhon” (12%)');
+    const row = rows().find((candidate) => candidate.textContent?.includes('Late-order threshold'));
+    expect(row?.textContent).toContain('set: brand “Rayhon” (12 min)');
     expect(row?.textContent).toContain('Setting');
     row?.click();
     expect(navigate).toHaveBeenCalledWith(['/settings', 'order-policy'], {
@@ -199,10 +200,10 @@ describe('CommandPalette', () => {
   it('does not read the settings for someone who may not read the configuration, and still serves the rest', async () => {
     await render({ held: ['ORDER_READ'] });
 
-    type('vat');
+    type('late-order');
 
     expect(api.keys).not.toHaveBeenCalled();
-    expect(labels()).not.toContain('VAT rate');
+    expect(labels()).not.toContain('Late-order threshold');
   });
 
   it('keeps working when the settings cannot be read', async () => {
