@@ -97,6 +97,9 @@ public class LegalHoldService {
      */
     @Transactional
     public Result place(UUID tenantId, UUID accountId, Reason reason, String note, ActorRef actor) {
+        // Before anything of the account is read: an erasure that started first finishes first, and one that starts
+        // while this transaction is open waits for it and finds the hold (JdbcLegalHoldStore#lockHoldDecision).
+        holds.lockHoldDecision(tenantId, accountId);
         if (!accounts.accountExists(tenantId, accountId)) {
             throw new CustomerErasureService.AccountNotFoundException();
         }

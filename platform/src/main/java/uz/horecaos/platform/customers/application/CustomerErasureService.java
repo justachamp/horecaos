@@ -301,6 +301,12 @@ public class CustomerErasureService {
         // ADR 0029: refuse while a legal hold stands or a module reports something open (an order on its way, a
         // service-recovery case). Checked before the request leaves PENDING, so a refusal changes nothing and the
         // same request can be executed once whatever was in the way is gone.
+        //
+        // The check and the erasure are one decision, so a hold being placed must not slip in between them: the lock
+        // makes a placement that started first commit first (and be seen below), and one that starts now wait until
+        // this transaction ends (JdbcLegalHoldStore#lockHoldDecision). Taken after the cheap refusals above, which
+        // need no lock, and before the first read that decides.
+        holds.lockHoldDecision(tenantId, accountId);
         List<Block> blocks = collectBlocks(tenantId, accountId);
         if (!blocks.isEmpty()) {
             throw new ErasureBlockedException(blocks);
