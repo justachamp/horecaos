@@ -156,6 +156,15 @@ final class ExportInventoryExemptions {
                         + " the links are in marketing.marketing_sends and the consent she gave and withdrew is in"
                         + " customer.consent_decisions, both exported.");
 
+        // ------------------------------------------------------------------ the till
+        REASONS.put(
+                "integration.pos_order_exports",
+                "The tenant's record that an order was sent to its till and what came of each attempt: a state, a count,"
+                        + " the provider's order id and a fingerprint of the lines. The one personal value on the row is a"
+                        + " digest of the order's telephone number, which the customers section already hands her whole; a"
+                        + " one-way copy of a value she is given adds nothing, and an erasure replaces it. What she bought is on"
+                        + " the order (ordering.orders).");
+
         // ------------------------------------------------------------------ ordering, pricing, reporting
         REASONS.put(
                 "ordering.order_line_marks",
