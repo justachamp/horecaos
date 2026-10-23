@@ -1,0 +1,13 @@
+<div class="address-pin-editor" data-testid="address-pin-editor">
+  <p class="q-caption address-pin-editor__note" data-testid="address-pin-editor-note">
+    {{ 'orders.newOrder.address.pinOnlyNote' | t }}
+  </p>
+  <q-map-pin
+    [position]="pin()"
+    [center]="center()"
+    [region]="region()?.bounds ?? null"
+    [removable]="false"
+    [label]="label()"
+    (positionChange)="onMoved($event)"
+  />
+</div>

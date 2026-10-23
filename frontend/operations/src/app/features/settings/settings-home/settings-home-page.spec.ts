@@ -24,14 +24,14 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
-const VAT_RATE_KEY: ConfigurationKeyView = {
-  code: 'ordering.vat_rate_percent',
-  valueType: 'BigDecimal',
-  defaultValue: '12',
+const MINIMUM_ORDER_KEY: ConfigurationKeyView = {
+  code: 'ordering.minimum_order_amount_minor',
+  valueType: 'Long',
+  defaultValue: '0',
   settableScopes: ['TENANT', 'BRAND'],
   owningModule: 'ordering',
   explicitNullTerminates: false,
-  description: 'The VAT rate applied at checkout, as a percentage.',
+  description: 'The smallest order total accepted for pickup and dine-in, in minor units.',
 };
 
 /** A key `CONFIGURATION_KEY_ROUTES` names no screen for — must never appear as a search result. */
@@ -52,7 +52,7 @@ const WORKING_SCOPE = { tenantId: TENANT_ID, brandId: 'b1', locationId: 'l1' };
 
 async function render(
   readiness: Partial<ReadinessApi>,
-  configurationKeys: readonly ConfigurationKeyView[] = [VAT_RATE_KEY, UNROUTED_KEY],
+  configurationKeys: readonly ConfigurationKeyView[] = [MINIMUM_ORDER_KEY, UNROUTED_KEY],
   placements: ConfigurationPlacementsView | 'unreadable' = NO_PLACEMENTS,
 ): Promise<ComponentFixture<SettingsHomePage>> {
   await TestBed.configureTestingModule({
@@ -933,10 +933,10 @@ describe('SettingsHomePage', () => {
   it('offers a matching configuration key in the combobox, but not one no screen sets', async () => {
     const fixture = await render({ validate: () => Promise.resolve(PASSING) });
 
-    type(fixture, 'vat');
+    type(fixture, 'minimum');
 
     expect(options(fixture).map(column)).toEqual([
-      ['VAT rate', 'Selling → Order policy', 'not set · default 12% · brand and above only'],
+      ['Minimum order amount', 'Selling → Order policy', 'not set · default 0 · brand and above only'],
     ]);
     type(fixture, 'enforcement');
     expect(options(fixture)).toEqual([]);
@@ -945,7 +945,7 @@ describe('SettingsHomePage', () => {
   it('finds a key by its code too, for an operator who has read it in a ticket', async () => {
     const fixture = await render({ validate: () => Promise.resolve(PASSING) });
 
-    type(fixture, 'ordering.vat_rate');
+    type(fixture, 'ordering.minimum_order');
 
     expect(options(fixture)).toHaveLength(1);
   });
@@ -1048,7 +1048,7 @@ describe('SettingsHomePage', () => {
     const fixture = await render({ validate: () => Promise.resolve(PASSING) });
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
 
-    type(fixture, 'vat');
+    type(fixture, 'minimum');
     options(fixture)[0].click();
     fixture.detectChanges();
 

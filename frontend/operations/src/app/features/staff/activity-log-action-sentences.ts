@@ -1005,6 +1005,21 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Данные клиента исправлены на основании подтверждения',
       'uz-Latn': 'Mijoz maʻlumotlari dalil asosida tuzatildi',
     },
+    'customer.address.captured': {
+      en: 'Operator saved a delivery address for a customer',
+      ru: 'Оператор сохранил адрес доставки клиента',
+      'uz-Latn': 'Operator mijoz uchun yetkazib berish manzilini saqladi',
+    },
+    'customer.address.listed_masked': {
+      en: 'Operator read a customer’s saved addresses (masked)',
+      ru: 'Оператор просмотрел сохранённые адреса клиента (с маской)',
+      'uz-Latn': 'Operator mijozning saqlangan manzillarini koʻrdi (niqoblangan)',
+    },
+    'customer.address.pin_set': {
+      en: 'Operator placed the pin of a saved address',
+      ru: 'Оператор поставил точку на карте для сохранённого адреса',
+      'uz-Latn': 'Operator saqlangan manzil uchun xaritada nuqta belgiladi',
+    },
     'customer.blacklist.revealed': {
       en: 'Customer blacklist revealed',
       ru: 'Клиент чёрный список раскрыто',

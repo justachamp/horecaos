@@ -246,6 +246,46 @@ class PlatformRoleTests {
                 .isTrue();
     }
 
+    /**
+     * ADR 0177: a phone-order operator gives a delivery address through a capability of its own,
+     * held by exactly the two roles of the New order screen and the three that already hold
+     * {@code CUSTOMER_MANAGE} -- and by nobody else, above all not by a role that could reveal a
+     * raw address for another reason.
+     */
+    @Test
+    void theDeliveryAddressOfAPhoneOrderIsHeldByTheScreensOwnPersonaAndTheTenantRolesAndNobodyElse() {
+        assertThat(Arrays.stream(PlatformRole.values())
+                        .filter(role -> role != PlatformRole.PLATFORM_ADMIN)
+                        .filter(role -> role.grants(Capability.CUSTOMER_ADDRESS_CAPTURE))
+                        .toList())
+                .containsExactlyInAnyOrder(
+                        PlatformRole.TENANT_OWNER,
+                        PlatformRole.TENANT_ADMIN,
+                        PlatformRole.SUPPORT_AGENT,
+                        PlatformRole.LOCATION_MANAGER,
+                        PlatformRole.LOCATION_STAFF);
+        assertThat(PlatformRole.LOCATION_STAFF.grants(Capability.CUSTOMER_PII_REVEAL))
+                .as("giving an address must not be a way round the masked lookup card (ADR 0039)")
+                .isFalse();
+        assertThat(PlatformRole.LOCATION_STAFF.grants(Capability.CUSTOMER_MANAGE))
+                .as("nor a way to blacklist, merge or edit anybody")
+                .isFalse();
+        assertThat(PlatformRole.LOCATION_STAFF.scopeType()).isEqualTo(ScopeType.LOCATION);
+    }
+
+    @Test
+    void everyRoleThatManagesCustomersCanAlsoCaptureTheirAddress() {
+        for (PlatformRole role : PlatformRole.values()) {
+            if (role.grants(Capability.CUSTOMER_MANAGE)) {
+                assertThat(role.grants(Capability.CUSTOMER_ADDRESS_CAPTURE))
+                        .as("%s manages customers, so narrowing the address routes to the new capability must "
+                                        .formatted(role)
+                                + "not take away what it could already do")
+                        .isTrue();
+            }
+        }
+    }
+
     @Test
     void platformSupportCanReadButNeverMutate() {
         Set<Capability> mutations = EnumSet.of(

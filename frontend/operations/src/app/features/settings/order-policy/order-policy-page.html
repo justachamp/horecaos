@@ -25,7 +25,22 @@
             <dt class="q-caption">{{ 'settings.orderPolicy.field.mode' | t }}</dt>
             <dd class="q-body">{{ modeLabel(current.mode) }}</dd>
           </div>
-          @if (current.mode === 'RESTAURANT_APPROVAL') {
+          @if (current.mode === 'AUTO_CONFIRM') {
+            @if (current.approvalChannel === 'NONE') {
+              <div class="field">
+                <dt class="q-caption">{{ 'settings.orderPolicy.holdBack.title' | t }}</dt>
+                <dd class="q-body-sm hint" data-testid="hold-back-none">
+                  {{ 'settings.orderPolicy.holdBack.none' | t }}
+                </dd>
+              </div>
+            } @else {
+              <div class="field">
+                <dt class="q-caption">{{ 'settings.orderPolicy.holdBack.title' | t }}</dt>
+                <dd class="q-body-sm hint">{{ 'settings.orderPolicy.holdBack.hint' | t }}</dd>
+              </div>
+            }
+          }
+          @if (current.mode === 'RESTAURANT_APPROVAL' || current.approvalChannel !== 'NONE') {
             <div class="field">
               <dt class="q-caption">{{ 'settings.orderPolicy.field.approvalChannel' | t }}</dt>
               <dd class="q-body">{{ approvalChannelLabel(current.approvalChannel) }}</dd>
@@ -63,7 +78,7 @@
           id="policy-mode"
           class="q-body field"
           [value]="draftMode()"
-          (change)="draftMode.set($any($event.target).value)"
+          (change)="onModeChange($any($event.target).value)"
         >
           <option value="AUTO_CONFIRM">{{ 'settings.orderPolicy.mode.AUTO_CONFIRM' | t }}</option>
           <option value="RESTAURANT_APPROVAL">
@@ -71,7 +86,13 @@
           </option>
         </select>
 
-        @if (draftMode() === 'RESTAURANT_APPROVAL') {
+        @if (draftMode() === 'AUTO_CONFIRM') {
+          <p class="q-caption hint" data-testid="hold-back-hint">
+            {{ 'settings.orderPolicy.holdBack.hint' | t }}
+          </p>
+        }
+
+        @if (draftMode() === 'RESTAURANT_APPROVAL' || draftMode() === 'AUTO_CONFIRM') {
           <label class="q-caption" for="policy-approval-channel">{{
             'settings.orderPolicy.field.approvalChannel' | t
           }}</label>
@@ -79,16 +100,20 @@
             id="policy-approval-channel"
             class="q-body field"
             [value]="draftApprovalChannel()"
-            (change)="draftApprovalChannel.set($any($event.target).value)"
+            (change)="onApprovalChannelChange($any($event.target).value)"
           >
-            <option value="NONE">{{ 'settings.orderPolicy.approvalChannel.NONE' | t }}</option>
+            @if (draftMode() === 'AUTO_CONFIRM') {
+              <option value="NONE">{{ 'settings.orderPolicy.approvalChannel.NONE' | t }}</option>
+            }
             <option value="HORECAOS_OPERATIONS">
               {{ 'settings.orderPolicy.approvalChannel.HORECAOS_OPERATIONS' | t }}
             </option>
             <option value="POS">{{ 'settings.orderPolicy.approvalChannel.POS' | t }}</option>
             <option value="EITHER">{{ 'settings.orderPolicy.approvalChannel.EITHER' | t }}</option>
           </select>
+        }
 
+        @if (draftHasApprovalPath()) {
           <label class="q-caption" for="policy-timeout">{{
             'settings.orderPolicy.field.timeoutSeconds' | t
           }}</label>
@@ -214,6 +239,11 @@
         *ngTemplateOutlet="fieldEditor; context: { fields: card3Fields }"
       ></ng-container>
     </div>
+    @if (!gatesCanHold()) {
+      <p class="q-caption hint warning" data-testid="gates-no-path">
+        {{ 'settings.orderPolicy.gates.noPath' | t }}
+      </p>
+    }
   </section>
 
   <section class="card">
@@ -232,6 +262,16 @@
         *ngTemplateOutlet="fieldEditor; context: { fields: card5Fields }"
       ></ng-container>
     </div>
+  </section>
+
+  <section class="card">
+    <h2 class="q-subhead">{{ 'settings.orderPolicy.neighbours.title' | t }}</h2>
+    <q-order-policy-neighbours-card
+      [tenantId]="tenantId()"
+      [scopeType]="scope.level()"
+      [brandId]="scope.brandId()"
+      [locationId]="scope.locationId()"
+    />
   </section>
 }
 

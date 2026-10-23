@@ -1,6 +1,5 @@
 package uz.horecaos.platform.ordering.api;
 
-import java.math.BigDecimal;
 import java.util.Set;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.domain.OrderLatenessDocument;
@@ -18,16 +17,18 @@ import uz.horecaos.platform.tenancy.api.PolicyKey;
  * hours) by 4x, harmlessly while the key was dead and not harmlessly the
  * moment it was wired without correcting the default.
  *
- * <p>Wave P46 (gap map row {@code 10.3b}, settings.md §10.3 cards 2–5) adds
- * the eleven that follow. Every one of them is registered so it can be
- * authored and inherited through {@code OperationsConfigurationController} —
- * none of them has a consumer yet. ADR 0002 (acceptance), ADR 0019 (order
- * lifecycle), ADR 0037 (delivery routing) and ADR 0018 (promotions) each own
- * a slice of what these values mean; wiring a reader for one is that ADR's
- * work, not this wave's. Registering the key first, with a default that
- * changes nothing until a reader exists, is what lets settings.md's five
- * cards stop rendering "not built" one field at a time instead of all at
- * once.
+ * <p>Wave P46 (gap map row {@code 10.3b}, settings.md §10.3 cards 2–5) registered thirteen keys so
+ * they could be authored and inherited through {@code OperationsConfigurationController} before
+ * anything read them. ADR 0177 (batch 21) closes that: five of them (the business day's start hour, the
+ * average and maximum order minutes, the VAT rate and the routing poll interval) are <strong>retired</strong>
+ * -- each has a neighbour that already owns the behaviour (the reporting calendar, the preparation bands,
+ * the dated tax profiles, the dispatch rules) and none had a reader -- and every key that remains is read:
+ * the minimum order amount by {@code CheckoutEligibilityGuard}, the lateness scalars by {@code
+ * OrderLatenessPolicyService}, the two auto-accept gates by {@code AutoAcceptGate} at checkout, the
+ * pre-order branch selection by {@code BranchResolutionQueryService}, and the three operator-order toggles
+ * by {@code OperatorOrderingService}. A key's default is the value that preserves behaviour: a registered
+ * default is never read as a tenant's choice (ADR 0150 decision 2).
+ *
  * <p>And, since ADR 0109 (Settings 10.11): how long an abandoned cart —
  * one that expired without becoming an order — is kept before {@code
  * CartRetentionSweeper} deletes it outright. A different question from the
@@ -63,69 +64,6 @@ public final class OrderingConfigurationKeys {
             .ownedBy("ordering")
             .tenantVisible()
             .describedAs("Minutes an untouched cart stays active before expiring.")
-            .build();
-
-    /** Card 2 (Тайминги и SLA): the local hour the business day is considered to start. */
-    public static final String BUSINESS_DAY_START_HOUR_CODE = "ordering.business_day_start_hour";
-
-    /**
-     * The local hour (0–23) a trading day starts, for whichever report or
-     * screen needs to group orders by "today" rather than by the calendar
-     * date — settings.md §10.3 card 2, ADR 0043's own open question about a
-     * business day crossing midnight. 6 (06:00): before most HoReCa venues
-     * open, so a late-night order after midnight still counts against the
-     * previous trading day rather than starting a new one an hour later.
-     */
-    public static final ConfigurationKey<Integer> BUSINESS_DAY_START_HOUR = ConfigurationKey.of(
-                    BUSINESS_DAY_START_HOUR_CODE, Integer.class)
-            .defaultValue(6)
-            .ownedBy("ordering")
-            .tenantVisible()
-            .describedAs("The local hour (0-23) a trading day is considered to start.")
-            .build();
-
-    /** Card 2: the expected time from acceptance to ready, in minutes. */
-    public static final String AVERAGE_ORDER_MINUTES_CODE = "ordering.average_order_minutes";
-
-    /**
-     * Minutes an order is expected to take from acceptance to ready — the
-     * figure a kitchen display or an ETA quote would read, once one reads
-     * this key. 30: a common full-service estimate; a quick-service branch
-     * overrides it narrower at LOCATION scope.
-     *
-     * <p>Still read by nothing (ADR 0150 decision 5): it overlaps the
-     * preparation bands that already produce the promise, and the order-policy
-     * card says so beside the field («Пока не применяется») until a record names a
-     * reader or removes it.
-     */
-    public static final ConfigurationKey<Integer> AVERAGE_ORDER_MINUTES = ConfigurationKey.of(
-                    AVERAGE_ORDER_MINUTES_CODE, Integer.class)
-            .defaultValue(30)
-            .ownedBy("ordering")
-            .tenantVisible()
-            .describedAs("Minutes an order is expected to take from acceptance to ready.")
-            .build();
-
-    /** Card 2: the outer bound before an order is unambiguously overdue. */
-    public static final String MAXIMUM_ORDER_MINUTES_CODE = "ordering.maximum_order_minutes";
-
-    /**
-     * Minutes beyond which an order is unambiguously overdue — settings.md
-     * §10.3 card 2 lists it beside the late threshold because a queue might want
-     * a "getting late" colour and a "this is late" colour.
-     *
-     * <p>Still read by nothing (ADR 0150 decision 5): it would be a fourth
-     * severity beyond {@code BLOCKED}, {@code LATE} and {@code AT_RISK}, which
-     * orders.md §2.7 does not have and which needs a design for its tier. The
-     * order-policy card says so beside the field («Пока не применяется») until a
-     * record names a reader or removes it.
-     */
-    public static final ConfigurationKey<Integer> MAXIMUM_ORDER_MINUTES = ConfigurationKey.of(
-                    MAXIMUM_ORDER_MINUTES_CODE, Integer.class)
-            .defaultValue(60)
-            .ownedBy("ordering")
-            .tenantVisible()
-            .describedAs("Minutes beyond which an order is unambiguously overdue.")
             .build();
 
     /** Card 2: "Заказ опаздывает с" — the single most-used value on the order board. */
@@ -283,39 +221,6 @@ public final class OrderingConfigurationKeys {
                     + "Delivery's own minimum comes from the service zone, not this key.")
             .build();
 
-    /** Card 2: the VAT rate applied at checkout and on the fiscal receipt. */
-    public static final String VAT_RATE_PERCENT_CODE = "ordering.vat_rate_percent";
-
-    /**
-     * The VAT rate, as a percentage (0–100). 12: Uzbekistan's standard rate.
-     * A location whose legal entity carries a different registration
-     * overrides it at LOCATION scope.
-     */
-    public static final ConfigurationKey<BigDecimal> VAT_RATE_PERCENT = ConfigurationKey.of(
-                    VAT_RATE_PERCENT_CODE, BigDecimal.class)
-            .defaultValue(new BigDecimal("12"))
-            .ownedBy("ordering")
-            .tenantVisible()
-            .describedAs("The VAT rate applied at checkout, as a percentage.")
-            .build();
-
-    /** Card 2: "Интервал опроса маршрутизации" — ADR 0037's routing port. */
-    public static final String ROUTING_POLL_INTERVAL_MINUTES_CODE = "ordering.routing_poll_interval_minutes";
-
-    /**
-     * Minutes between polls of the ADR 0037 routing port while a delivery
-     * order waits for a courier assignment decision. 2: frequent enough that
-     * a dispatcher does not perceive a stall, far enough apart that polling
-     * itself is not the load.
-     */
-    public static final ConfigurationKey<Integer> ROUTING_POLL_INTERVAL_MINUTES = ConfigurationKey.of(
-                    ROUTING_POLL_INTERVAL_MINUTES_CODE, Integer.class)
-            .defaultValue(2)
-            .ownedBy("ordering")
-            .tenantVisible()
-            .describedAs("Minutes between polls of the routing port while a delivery order awaits assignment.")
-            .build();
-
     /** Card 4: "Подбор филиала для предзаказа вне рабочего времени." */
     public static final String PREORDER_BRANCH_RESOLUTION_CODE = "ordering.preorder_branch_resolution";
 
@@ -341,16 +246,62 @@ public final class OrderingConfigurationKeys {
     /**
      * Whether a call-centre operator hand-entering an order (settings.md
      * §10.3 card 5, ADR 0036's {@code CALL_CENTRE} channel) may apply an
-     * ADR 0018 promo code. Off by default: a discount a customer did not ask
-     * for, applied by whoever answers the phone, is an abuse surface a
-     * tenant opts into rather than one it is defaulted into.
+     * ADR 0018 promo code.
+     *
+     * <p><strong>On by default (ADR 0177 decision 5), and read.</strong>
+     * {@code OperatorOrderingService#fillAndPrice} -- which placing and quoting
+     * an operator-keyed order both go through -- refuses a promo code with
+     * {@code OPERATOR_PROMO_CODE_NOT_ALLOWED} when this resolves to {@code false}.
+     * The registered default was {@code false} while nothing read the key, and
+     * operators have applied promo codes since row {@code 1.3e}; a reader that
+     * honoured that default would have locked every tenant out of something its
+     * operators do today. A tenant that wants the lock sets {@code false}: a
+     * discount a customer did not ask for, applied by whoever answers the phone,
+     * is an abuse surface a tenant opts <em>out</em> of here, not into.
      */
     public static final ConfigurationKey<Boolean> OPERATOR_PROMO_CODE_ALLOWED = ConfigurationKey.of(
                     OPERATOR_PROMO_CODE_ALLOWED_CODE, Boolean.class)
-            .defaultValue(false)
+            .defaultValue(true)
             .ownedBy("ordering")
             .tenantVisible()
             .describedAs("Whether an operator hand-entering an order may apply a promo code.")
+            .build();
+
+    /** Card 5: «Оператор может отметить «перезвонить клиенту»». */
+    public static final String OPERATOR_CALLBACK_FLAG_ALLOWED_CODE = "ordering.operator_callback_flag_allowed";
+
+    /**
+     * Whether an operator may raise «Перезвонить клиенту» on an order as she keys it in (ADR 0039's
+     * callback flag, raised before this key only by the {@code SET_CALLBACK_REQUESTED} amendment
+     * after the order existed). On by default: the flag only asks a person to ring the customer
+     * back, so allowing it changes nothing a tenant did not already do through the amendment.
+     * {@code OperatorOrderingService} refuses {@code callbackRequested: true} on an operator order
+     * with {@code OPERATOR_CALLBACK_NOT_ALLOWED} when this resolves to {@code false}.
+     */
+    public static final ConfigurationKey<Boolean> OPERATOR_CALLBACK_FLAG_ALLOWED = ConfigurationKey.of(
+                    OPERATOR_CALLBACK_FLAG_ALLOWED_CODE, Boolean.class)
+            .defaultValue(true)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("Whether an operator keying in an order may flag it «call the customer back».")
+            .build();
+
+    /** Card 5: «Оператор вводит, сколько клиент передаст наличными (сдача)». */
+    public static final String OPERATOR_CHANGE_DUE_ALLOWED_CODE = "ordering.operator_change_due_allowed";
+
+    /**
+     * Whether an operator may record the cash the customer will hand over, so «Сдача» is on the
+     * order from its first read (row {@code 1.3e}). On by default, because the field exists and is
+     * used; {@code OperatorOrderingService} refuses a {@code cashTenderedMinor} on an operator order
+     * with {@code OPERATOR_CHANGE_DUE_NOT_ALLOWED} when this resolves to {@code false}, and the screen
+     * hides the field.
+     */
+    public static final ConfigurationKey<Boolean> OPERATOR_CHANGE_DUE_ALLOWED = ConfigurationKey.of(
+                    OPERATOR_CHANGE_DUE_ALLOWED_CODE, Boolean.class)
+            .defaultValue(true)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("Whether an operator keying in a cash order may record the cash tendered (change due).")
             .build();
 
     /**
@@ -367,17 +318,19 @@ public final class OrderingConfigurationKeys {
      * wiring this key changes nothing for a tenant that has not narrowed it:
      * {@code AUTO_CONFIRM} today has no channel filter at all.
      *
-     * <p>Registered, not yet read: {@code OrderAcceptancePolicyService}
-     * still auto-confirms every channel when the mode says to. A reader
-     * belongs to ADR 0002/0030's own follow-up, not this wave.
+     * <p>Read at checkout (ADR 0177 decision 3) by {@code AutoAcceptGate}: under {@code
+     * AUTO_CONFIRM}, an order on a channel outside the list is not auto-confirmed but follows the
+     * acceptance document's own approval channel, timeout and timeout action. It does not apply to
+     * a marketplace or aggregator order, which arrives already accepted by the aggregator and
+     * bypasses checkout.
      */
     public static final ConfigurationKey<String> AUTO_ACCEPT_ELIGIBLE_CHANNELS = ConfigurationKey.of(
                     AUTO_ACCEPT_ELIGIBLE_CHANNELS_CODE, String.class)
             .defaultValue("ALL")
             .ownedBy("ordering")
             .tenantVisible()
-            .describedAs("\"ALL\", or a comma-separated list of sales channel codes eligible for "
-                    + "auto-accept. Not yet enforced.")
+            .describedAs("\"ALL\", or a comma-separated list of sales channel codes eligible for auto-accept; "
+                    + "an order on any other channel waits for the approval path of the acceptance policy.")
             .build();
 
     /** Card 1's other Delever-comparison gap: the anti-fraud gate. */
@@ -387,8 +340,9 @@ public final class OrderingConfigurationKeys {
      * How many prior successful orders a customer needs before {@code
      * AUTO_CONFIRM} applies to them at all — an anti-fraud gate, not a
      * convenience, per settings.md §10.3's own Delever comparison. 0 (no
-     * gate) preserves today's behaviour; registered for the same
-     * not-yet-read reason as {@link #AUTO_ACCEPT_ELIGIBLE_CHANNELS}.
+     * gate) preserves today's behaviour. Read at checkout by {@code AutoAcceptGate} (ADR 0177
+     * decision 3) against the customer's {@code COMPLETED} orders in the brand; a guest counts
+     * as none, and an order below the minimum follows the acceptance document's own approval path.
      */
     public static final ConfigurationKey<Integer> AUTO_ACCEPT_MIN_PRIOR_ORDERS = ConfigurationKey.of(
                     AUTO_ACCEPT_MIN_PRIOR_ORDERS_CODE, Integer.class)
@@ -396,7 +350,7 @@ public final class OrderingConfigurationKeys {
             .ownedBy("ordering")
             .tenantVisible()
             .describedAs("Prior successful orders a customer needs before auto-accept applies to "
-                    + "them. 0 means no gate. Not yet enforced.")
+                    + "them. 0 means no gate; a new customer's order waits for the approval path instead.")
             .build();
 
     /**

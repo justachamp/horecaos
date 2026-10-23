@@ -28,13 +28,25 @@
   requirement) rather than `RECEIVED` — a manual entry has no accept/reject
   step left to take — and `DeliveryPlanner#planFor` is called directly,
   opening the same plan and sourcing job a native order's confirmation opens
-  through `DeliveryPlanTrigger`. `PICKUP` is unchanged. Not built: `POST
-  .../orders/aggregator-entries`'s own frontend form beyond a minimal
-  totals/lines entry (no line-level tax entry, no aggregator binding
-  picker beyond the tenant's own configured `AGGREGATOR` channels); no
-  `ordering.order_external_pricing` or `order_handover_challenges` row is
-  written for a manual entry regardless of fulfilment mode (see
-  Consequences and the two open inputs below, both still open).
+  through `DeliveryPlanTrigger`. `PICKUP` is unchanged. **Proved over HTTP**
+  (batch 21, `OperationsAggregatorEntryHttpTests`): the New order screen's own
+  JSON through the production controller, the four primitive money fields
+  among it; `ORDER_PLACE` at `LOCATION` as the refusal; one order under a
+  replayed `Idempotency-Key`, and a `409` for a different body under it; the
+  order found by the board's `reference` and `origin` filters and left out of
+  the own-channel mix; and a `DELIVERY` entry recorded by a `LOCATION_STAFF`
+  operator against an address given through ADR 0177's location-scoped route.
+  The information architecture's row names creating the order, not settling
+  it, and creation works. Not built: `POST .../orders/aggregator-entries`'s
+  own frontend form beyond a minimal totals/lines entry (no line-level tax
+  entry, no aggregator binding picker beyond the tenant's own configured
+  `AGGREGATOR` channels); no `ordering.order_external_pricing` or
+  `order_handover_challenges` row is written for a manual entry regardless of
+  fulfilment mode (see Consequences and the two open inputs below, both still
+  open). The settlement evidence is **finance's answer** and the connection is
+  recorded in `docs/runbooks/external-connections/w2-order-entry-policy.md`:
+  nothing in `src/main` reads `order_external_pricing` (only the automated
+  marketplace intake writes it), so a row written now would be write-only.
 - Date proposed: 2026-09-14
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction
@@ -216,8 +228,12 @@ capability grant removes the whole surface with no data migration.
       through `CustomerAddressBook`, snapshots it, writes the order
       `CONFIRMED`, and opens a plan through `DeliveryPlanner#planFor` — still
       no `order_external_pricing`/`order_handover_challenges` row, see below
+- [x] A both-ends HTTP test of `POST .../orders/aggregator-entries` through the
+      production controller (batch 21, `OperationsAggregatorEntryHttpTests`)
 - [ ] `order_external_pricing`/settlement evidence for a manual entry, of
       either fulfilment mode (open input above)
+      — waits on finance's answer, an external fact (ADR 0177, the runbook
+      `w2-order-entry-policy.md`); not built, because nothing reads the table
 
 ## Exit criteria
 

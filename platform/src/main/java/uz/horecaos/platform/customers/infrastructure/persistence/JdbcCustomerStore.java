@@ -1067,6 +1067,47 @@ public class JdbcCustomerStore {
                 .update();
     }
 
+    /**
+     * Moves only the point of one address, and says where it came from, under an expected version.
+     *
+     * <p>The row's encrypted lines are not touched, which is the whole of why a role that may not
+     * read them (ADR 0177) can still be asked to place a pin: the point and its source are two
+     * clear columns, and V0021's equivalence between them is kept because the source written here
+     * is {@code OPERATOR_PIN}, which requires a point.
+     *
+     * @return rows written: 1, or 0 when the address is not this account's active address or has
+     *         moved on from {@code expectedVersion}
+     */
+    public int updateAddressPoint(
+            UUID tenantId,
+            UUID accountId,
+            UUID addressId,
+            int expectedVersion,
+            double latitude,
+            double longitude,
+            String coordinateSource,
+            Instant now) {
+        return jdbc.sql("""
+                UPDATE customer.addresses
+                SET latitude = :latitude,
+                    longitude = :longitude,
+                    coordinate_source = :coordinateSource,
+                    version = version + 1,
+                    updated_at = :now
+                WHERE tenant_id = :tenantId AND customer_account_id = :accountId
+                  AND id = :addressId AND status = 'ACTIVE' AND version = :expectedVersion
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("addressId", addressId)
+                .param("expectedVersion", expectedVersion)
+                .param("latitude", latitude)
+                .param("longitude", longitude)
+                .param("coordinateSource", coordinateSource)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .update();
+    }
+
     private static final String SELECT_ADDRESS = """
             SELECT id, label, encrypted_fields, delivery_instructions_encrypted,
                    latitude, longitude, coordinate_source, version
@@ -1245,6 +1286,28 @@ public class JdbcCustomerStore {
                 """)
                         .param("id", accountId)
                         .param("tenantId", tenantId)
+                        .query(Long.class)
+                        .single()
+                > 0;
+    }
+
+    /**
+     * Whether an active account of this tenant may be served from this brand: a tenant-shared
+     * account (no identity partition) is every brand's, a brand-isolated one belongs to its own
+     * brand only (ADR 0002, {@code tenant.customer_identity_policies}).
+     *
+     * <p>A predicate and never a comparison after a load, so an account of another brand is
+     * indistinguishable from one that does not exist.
+     */
+    public boolean accountVisibleToBrand(UUID tenantId, UUID brandId, UUID accountId) {
+        return jdbc.sql("""
+                SELECT count(*) FROM customer.customer_accounts
+                WHERE id = :id AND tenant_id = :tenantId AND status = 'ACTIVE'
+                  AND (identity_partition_brand_id IS NULL OR identity_partition_brand_id = :brandId)
+                """)
+                        .param("id", accountId)
+                        .param("tenantId", tenantId)
+                        .param("brandId", brandId)
                         .query(Long.class)
                         .single()
                 > 0;

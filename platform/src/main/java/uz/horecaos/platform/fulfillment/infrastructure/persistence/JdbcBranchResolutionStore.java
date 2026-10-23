@@ -40,7 +40,8 @@ public class JdbcBranchResolutionStore {
         return jdbc.sql("""
                 SELECT DISTINCT ON (b.location_id)
                        b.location_id, l.display_name,
-                       v.zone_id, v.version, v.priority, v.area_sq_meters
+                       v.zone_id, v.version, v.priority, v.area_sq_meters,
+                       l.latitude AS location_latitude, l.longitude AS location_longitude
                   FROM fulfillment.service_zone_versions v
                   JOIN fulfillment.zone_location_bindings b
                     ON b.tenant_id = v.tenant_id AND b.zone_id = v.zone_id
@@ -68,7 +69,10 @@ public class JdbcBranchResolutionStore {
                         row.getObject("zone_id", UUID.class),
                         row.getInt("version"),
                         row.getInt("priority"),
-                        row.getDouble("area_sq_meters")))
+                        row.getDouble("area_sq_meters"),
+                        // getDouble answers 0.0 for a SQL NULL, and 0,0 is a real point: read as objects.
+                        row.getObject("location_latitude", Double.class),
+                        row.getObject("location_longitude", Double.class)))
                 .list();
     }
 

@@ -1,5 +1,7 @@
 package uz.horecaos.platform.ordering.application;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import org.springframework.context.ApplicationEventPublisher;
 import tools.jackson.databind.ObjectMapper;
@@ -69,6 +71,72 @@ public final class CheckoutServiceTestFactory {
             CommentPresetLookup commentPresets,
             PromotionRedemptionPort promotions,
             PromotionQueryPort promotionQuery) {
+        return create(
+                carts,
+                orders,
+                attempts,
+                cartService,
+                channels,
+                serviceability,
+                capacity,
+                quotes,
+                inventory,
+                promoCodes,
+                catalog,
+                tenancy,
+                acceptancePolicies,
+                inventoryProcess,
+                paymentProcess,
+                migrationOwnership,
+                payments,
+                settlements,
+                protection,
+                objectMapper,
+                events,
+                clock,
+                blacklist,
+                configuration,
+                saleWindows,
+                commentPresets,
+                promotions,
+                promotionQuery,
+                new SimpleMeterRegistry());
+    }
+
+    /**
+     * The same assembly with the registry the auto-accept gate counts into (ADR 0177) handed in, so a
+     * test can read what the gate says about an order it could not hold.
+     */
+    public static CheckoutService create(
+            JdbcCartStore carts,
+            JdbcOrderStore orders,
+            JdbcCheckoutAttemptStore attempts,
+            CartService cartService,
+            SalesChannelLookup channels,
+            ServiceabilityResolver serviceability,
+            LocationCapacityPort capacity,
+            QuoteAcceptancePort quotes,
+            InventoryReservationPort inventory,
+            PromoCodeRedemptionPort promoCodes,
+            OrderCatalogSnapshot catalog,
+            OrderingTenantContext tenancy,
+            OrderAcceptancePolicyService acceptancePolicies,
+            OrderInventoryProcess inventoryProcess,
+            OrderPaymentProcess paymentProcess,
+            MigrationOwnershipPort migrationOwnership,
+            PaymentIntentPort payments,
+            OrderSettlementPort settlements,
+            FieldProtection protection,
+            ObjectMapper objectMapper,
+            ApplicationEventPublisher events,
+            Clock clock,
+            CustomerBlacklistPort blacklist,
+            ConfigurationResolver configuration,
+            CartSaleWindowRules saleWindows,
+            CommentPresetLookup commentPresets,
+            PromotionRedemptionPort promotions,
+            PromotionQueryPort promotionQuery,
+            MeterRegistry autoAcceptMeters) {
         return new CheckoutService(
                 new CheckoutAttemptLedger(attempts, orders, carts, payments, settlements),
                 new CheckoutEligibilityGuard(
@@ -97,7 +165,8 @@ public final class CheckoutServiceTestFactory {
                         objectMapper,
                         payments,
                         events,
-                        commentPresets),
+                        commentPresets,
+                        new AutoAcceptGate(configuration, orders, autoAcceptMeters)),
                 new CheckoutSettlementStep(settlements, payments),
                 new CheckoutProgressionStep(orders, inventoryProcess, paymentProcess, events),
                 clock);

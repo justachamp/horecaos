@@ -518,7 +518,7 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.field.notifyCustomer': 'Kutish paytida mijozga xabar berish',
   'settings.orderPolicy.mode.AUTO_CONFIRM': 'Avtomatik tasdiqlash',
   'settings.orderPolicy.mode.RESTAURANT_APPROVAL': 'Restoran tasdiqlashi',
-  'settings.orderPolicy.approvalChannel.NONE': 'Hech kim (avtomatik tasdiqlashda ishlatilmaydi)',
+  'settings.orderPolicy.approvalChannel.NONE': 'Hech kim (har bir buyurtma avtomatik tasdiqlanadi)',
   'settings.orderPolicy.approvalChannel.HORECAOS_OPERATIONS': 'HorecaOS operatsiyalari',
   'settings.orderPolicy.approvalChannel.POS': 'POS',
   'settings.orderPolicy.approvalChannel.EITHER': 'Ikkalasidan biri',
@@ -537,11 +537,6 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.dispatchSummary.link': 'Dispetcherlik qoidalarini ochish',
   'settings.orderPolicy.card4.title': 'Shartlar',
   'settings.orderPolicy.card5.title': 'Operator tomonidan buyurtma kiritish',
-  'settings.orderPolicy.field.businessDayStartHour': 'Ish kuni boshlanishi (soat)',
-  'settings.orderPolicy.field.averageOrderMinutes': 'Oʻrtacha buyurtma vaqti (daqiqa)',
-  'settings.orderPolicy.field.maximumOrderMinutes': 'Maksimal buyurtma vaqti (daqiqa)',
-  'settings.orderPolicy.notApplied.hint':
-    'Hozircha qoʻllanilmaydi: bu qiymatni hech narsa oʻqimaydi, shuning uchun uni oʻzgartirish hech narsani oʻzgartirmaydi.',
   'settings.orderPolicy.field.lateOrderThresholdMinutes':
     'Belgilangan vaqti yoʻq buyurtma kechikadi (daqiqa)',
   'settings.orderPolicy.lateOrderThresholdMinutes.hint':
@@ -560,12 +555,9 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.field.minimumOrderAmount': 'Buyurtmaning eng kam summasi',
   'settings.orderPolicy.minimumOrderAmount.hint':
     'Faqat oʻzi olib ketish va zalda — yetkazib berishning oʻz minimal summasi xizmat zonasida belgilanadi.',
-  'settings.orderPolicy.field.vatRatePercent': 'QQS stavkasi (%)',
-  'settings.orderPolicy.field.routingPollIntervalMinutes':
-    'Marshrutlashni soʻrash intervali (daqiqa)',
   'settings.orderPolicy.field.autoAcceptEligibleChannels': 'Avtomatik qabul uchun kanallar',
   'settings.orderPolicy.autoAcceptEligibleChannels.hint':
-    '"ALL" yoki sotuv kanali kodlarining vergul bilan ajratilgan roʻyxati. Hali qoʻllanilmaydi.',
+    '"ALL" yoki sotuv kanali kodlarining vergul bilan ajratilgan roʻyxati. Boshqa kanaldagi buyurtma oʻzi tasdiqlanmaydi: u yuqoridagi «Buyurtmani qabul qilish»da belgilangan yoʻl boʻyicha kutadi.',
   'settings.orderPolicy.field.autoAcceptMinPriorOrders':
     'Oldingi muvaffaqiyatli buyurtmalar minimumi',
   'settings.orderPolicy.field.preorderBranchResolution': 'Oldindan buyurtma uchun filial tanlash',
@@ -573,6 +565,68 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.preorderBranchResolution.BY_OPENING_TIME': 'Eng tez ochiladigan',
   'settings.orderPolicy.field.operatorPromoCodeAllowed': 'Operator promokod kiritishi mumkin',
   'settings.orderPolicy.revertReason': 'Meros qiymatga qaytarildi',
+  'settings.orderPolicy.holdBack.title': 'Avtomatik qabul darvozasi ushlab qoladigan buyurtmalar',
+  'settings.orderPolicy.holdBack.hint':
+    'Avtomatik tasdiqlashda quyidagi «Avtomatlashtirish»dagi darvoza ushlab qolgan buyurtma (roʻyxatda yoʻq kanal yoki yakunlangan buyurtmalari kam mijoz) shu odamni shuncha vaqt kutadi, soʻng vaqt tugagandagi amal bajariladi. «Kim tasdiqlaydi»ni «Hech kim» qoldiring — darvozalar hech narsani ushlab qolmaydi.',
+  'settings.orderPolicy.holdBack.none':
+    'Ushlab qolingan buyurtmalar uchun yoʻl yoʻq: quyidagi «Avtomatlashtirish»dagi darvozalar buyurtmani ushlab qola olmaydi.',
+  'settings.orderPolicy.autoAcceptMinPriorOrders.hint':
+    'Bu brendda yakunlangan buyurtmalari bundan kam mijoz qaror kutadi; mehmon buyurtmasi yoʻq deb hisoblanadi. 0 — cheklov yoʻq.',
+  'settings.orderPolicy.gates.noPath':
+    'Yuqoridagi «Buyurtmani qabul qilish»da ushlab qolingan buyurtmani tasdiqlaydigan hech kim yoʻq, shuning uchun bu darvozalar hech narsani ushlab qola olmaydi: bunday buyurtma baribir tasdiqlanadi. Avval u yerda kim tasdiqlashini tanlang.',
+  'settings.orderPolicy.preorderBranchResolution.hint':
+    'Oldindan buyurtma birorta ham nomzod filial ochiq boʻlmagan vaqtga berilganda qoʻllanadi. Oʻzi olib ketishda masofa oʻlchanadigan mijoz manzili yoʻq, shuning uchun u uchun «eng yaqin» oʻrniga «tezroq ochiladigan» olinadi.',
+  'settings.orderPolicy.field.operatorCallbackFlagAllowed':
+    'Operator buyurtmaga «mijozga qayta qoʻngʻiroq qilish» belgisini qoʻya oladi',
+  'settings.orderPolicy.field.operatorChangeDueAllowed':
+    'Operator mijoz beradigan naqd pulni yoza oladi',
+  'settings.orderPolicy.operatorPromoCodeAllowed.hint':
+    'Oʻchirilganda operator buyurtmasidagi promokod rad etiladi — narx hisoblanganda ham, buyurtma berilganda ham.',
+  'settings.orderPolicy.operatorCallbackFlagAllowed.hint':
+    'Oʻchirilganda «Yangi buyurtma» ekrani belgini yashiradi, server esa belgini rad etadi.',
+  'settings.orderPolicy.operatorChangeDueAllowed.hint':
+    'Oʻchirilganda «Yangi buyurtma» ekrani qaytim hisobini yashiradi, server esa naqd summani rad etadi.',
+  'settings.orderPolicy.neighbours.title': 'Boshqa joyda turadigan sozlamalar',
+  'settings.orderPolicy.neighbours.lead':
+    'Bular ham buyurtmaga taʻsir qiladi, lekin har birining oʻz ekrani bor. Hozir amal qilayotgani koʻrsatilgan; oʻzgartirish uchun ekranni oching.',
+  'settings.orderPolicy.neighbours.open': 'Ochish',
+  'settings.orderPolicy.neighbours.loading': 'Yuklanmoqda…',
+  'settings.orderPolicy.neighbours.unreadable': 'Koʻrsatilmadi: rolingiz uni oʻqiy olmaydi',
+  'settings.orderPolicy.neighbours.distanceMode.label': 'Yetkazib berish qanday oʻlchanadi',
+  'settings.orderPolicy.neighbours.distanceMode.RADIUS': 'Toʻgʻri chiziqda (standart tarif)',
+  'settings.orderPolicy.neighbours.distanceMode.ROAD': 'Yoʻl boʻyicha (standart tarif)',
+  'settings.orderPolicy.neighbours.distanceMode.none':
+    'Bu brend uchun amaldagi standart tarif yoʻq',
+  'settings.orderPolicy.neighbours.branchLimit.label':
+    'Filial bir vaqtda nechta buyurtma qabul qiladi',
+  'settings.orderPolicy.neighbours.branchLimit.value': '{count}',
+  'settings.orderPolicy.neighbours.branchLimit.none': 'Cheklov yoʻq',
+  'settings.orderPolicy.neighbours.branchLimit.perBranch':
+    'Har bir filial uchun alohida belgilanadi — chegarasini koʻrish uchun yuqoridagi panelda filialni tanlang.',
+  'settings.orderPolicy.neighbours.outOfZone.label':
+    'Hech bir yetkazib berish zonasiga kirmaydigan manzil',
+  'settings.orderPolicy.neighbours.outOfZone.REJECT': 'Rad etish',
+  'settings.orderPolicy.neighbours.outOfZone.OFFER_PICKUP': 'Oʻzi olib ketishni taklif qilish',
+  'settings.orderPolicy.neighbours.outOfZone.MANUAL_REVIEW': 'Qoʻlda tekshirishga qoldirish',
+  'settings.orderPolicy.neighbours.outOfZone.notApplied':
+    'Hozircha qoʻllanilmaydi: yetkazib berish narxini hisoblash bunday manzilni bu yerda nima tanlangan boʻlishidan qatʻiy nazar baribir rad etadi.',
+  'settings.orderPolicy.neighbours.courierVisibility.label': 'Kuryer nimani koʻradi',
+  'settings.orderPolicy.neighbours.courierVisibility.READY_ONLY':
+    'Faqat oshxona tayyorlab boʻlgan buyurtmalarni',
+  'settings.orderPolicy.neighbours.courierVisibility.ANY':
+    'Hali tayyorlanayotgan buyurtmalarni ham',
+  'settings.orderPolicy.neighbours.paidHold.label': 'Oshxona toʻlovni kutadi',
+  'settings.orderPolicy.neighbours.paidHold.SHADOW': 'Sinov: faqat nimani ushlab qolishini sanaydi',
+  'settings.orderPolicy.neighbours.paidHold.HOLD_UNTIL_PAID':
+    'Toʻlanmagan buyurtmani ushlab turadi',
+  'settings.orderPolicy.neighbours.paidHold.OFF': 'Oʻchiq',
+  'settings.orderPolicy.neighbours.callCentre.label': 'Call-markaz kanali',
+  'settings.orderPolicy.neighbours.callCentre.none': 'Faol call-markaz kanali yoʻq',
+  'settings.orderPolicy.neighbours.callCentre.value':
+    'Toʻlov usullari: {payments} · buyurtma turlari: {modes}',
+  'settings.orderPolicy.neighbours.mode.PICKUP': 'Oʻzi olib ketish',
+  'settings.orderPolicy.neighbours.mode.DELIVERY': 'Yetkazib berish',
+  'settings.orderPolicy.neighbours.mode.DINE_IN': 'Zalda',
 
   // Rows X.39 / 10.3b — ordering.lateness hujjati tahrirlovchisi
   'settings.latenessPolicy.title': 'Buyurtma qachon kechikkan hisoblanadi',

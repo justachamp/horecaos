@@ -11,7 +11,7 @@ import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
 import { Toasts } from '../../../shared/ui/toast';
 import { addressEditorFakes } from '../../customers/address-editor-fakes.testing';
-import { CustomersApi, RevealedCustomerAddress } from '../../customers/customers-api';
+import { CustomersApi } from '../../customers/customers-api';
 import { ChannelView, SalesChannelsApi } from '../../settings/sales-channels/sales-channels-api';
 import { ReservationsApi } from '../reservations-api';
 import { SessionView, TableSessionsApi } from '../table-sessions-api';
@@ -19,6 +19,7 @@ import {
   BranchCandidate,
   BranchOverrideReason,
   CustomerLookupCandidate,
+  MaskedCustomerAddress,
   NewOrderApi,
   OperatorRedemptionOffer,
   OrderQuote,
@@ -205,12 +206,18 @@ function overrideReason(overrides: Partial<BranchOverrideReason> = {}): BranchOv
   };
 }
 
-function address(overrides: Partial<RevealedCustomerAddress> = {}): RevealedCustomerAddress {
+/**
+ * A saved address as the New order pane receives it (ADR 0177): masked. There is no `fields`,
+ * no entrance, no flat, no landmark and no delivery instructions to put here, because the server
+ * sends this screen's persona none of them.
+ */
+function address(overrides: Partial<MaskedCustomerAddress> = {}): MaskedCustomerAddress {
   return {
     id: 'addr-1',
     label: 'Home',
-    fields: { line1: 'Amir Temur 1', city: 'Tashkent', district: 'Yunusabad' },
-    deliveryInstructions: null,
+    street: 'Amir Temur',
+    city: 'Tashkent',
+    district: 'Yunusabad',
     latitude: null,
     longitude: null,
     coordinateSource: 'NOT_GEOCODED',
@@ -246,6 +253,13 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
+/** The address-pane mocks (ADR 0177), passed through `render`'s second argument. */
+interface AddressPaneMocks {
+  capturedAddresses: ReturnType<typeof vi.fn>;
+  captureAddress: ReturnType<typeof vi.fn>;
+  placeAddressPin: ReturnType<typeof vi.fn>;
+}
+
 describe('NewOrderPage', () => {
   let fixture: ComponentFixture<NewOrderPage>;
   let newOrderApi: {
@@ -261,13 +275,16 @@ describe('NewOrderPage', () => {
     branchOverrideReasons: ReturnType<typeof vi.fn>;
     aggregatorEntry: ReturnType<typeof vi.fn>;
     recordCallProvenance: ReturnType<typeof vi.fn>;
+    /** ADR 0177: what the branch lets an operator do while keying an order in. */
+    entryPolicy: ReturnType<typeof vi.fn>;
+    /** ADR 0177: the masked list, the add and the pin, which `LOCATION_STAFF` is granted. */
+    capturedAddresses: ReturnType<typeof vi.fn>;
+    captureAddress: ReturnType<typeof vi.fn>;
+    placeAddressPin: ReturnType<typeof vi.fn>;
   };
   let customersApi: {
     create: ReturnType<typeof vi.fn>;
     ordersPageAtLocation: ReturnType<typeof vi.fn>;
-    revealAddresses: ReturnType<typeof vi.fn>;
-    addAddress: ReturnType<typeof vi.fn>;
-    updateAddress: ReturnType<typeof vi.fn>;
     reorderPlan: ReturnType<typeof vi.fn>;
     /** Row 5.2d: the reorder deep link's own bootstrap read — no default resolution, only the tests that set query params call it. */
     profile: ReturnType<typeof vi.fn>;
@@ -296,7 +313,7 @@ describe('NewOrderPage', () => {
 
   async function render(
     overrides: Partial<typeof newOrderApi> = {},
-    customersOverrides: Partial<typeof customersApi> = {},
+    customersOverrides: Partial<typeof customersApi> & Partial<AddressPaneMocks> = {},
     channels: readonly ChannelView[] = [],
     matrices: { paymentMethods: Record<string, boolean> } = { paymentMethods: {} },
     queryParams: Readonly<Record<string, string>> = {},
@@ -341,17 +358,32 @@ describe('NewOrderPage', () => {
       branchOverrideReasons: vi.fn().mockResolvedValue([overrideReason()]),
       aggregatorEntry: vi.fn(),
       recordCallProvenance: vi.fn().mockResolvedValue(undefined),
+      // ADR 0177: the second argument of `render` also carries the address-pane mocks, which live on
+      // NewOrderApi since the pane stopped using the tenant-scoped customer routes.
+      entryPolicy: vi.fn().mockResolvedValue({
+        promoCodeAllowed: true,
+        callbackFlagAllowed: true,
+        changeDueAllowed: true,
+      }),
+      capturedAddresses: vi.fn().mockResolvedValue([]),
+      captureAddress: vi.fn().mockResolvedValue('addr-new'),
+      placeAddressPin: vi.fn().mockResolvedValue(address()),
       ...overrides,
+    };
+    const { capturedAddresses, captureAddress, placeAddressPin, ...customersOnly } =
+      customersOverrides;
+    newOrderApi = {
+      ...newOrderApi,
+      ...(capturedAddresses ? { capturedAddresses } : {}),
+      ...(captureAddress ? { captureAddress } : {}),
+      ...(placeAddressPin ? { placeAddressPin } : {}),
     };
     customersApi = {
       create: vi.fn(),
       ordersPageAtLocation: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
-      revealAddresses: vi.fn().mockResolvedValue([]),
-      addAddress: vi.fn().mockResolvedValue({ id: 'addr-new' }),
-      updateAddress: vi.fn().mockResolvedValue(undefined),
       reorderPlan: vi.fn().mockResolvedValue(null),
       profile: vi.fn().mockRejectedValue(new Error('no reorder deep link in this test')),
-      ...customersOverrides,
+      ...customersOnly,
     };
     toastShow = vi.fn().mockReturnValue(0);
     sessionsApi = {
@@ -429,6 +461,98 @@ describe('NewOrderPage', () => {
     expect(host.querySelector('[data-testid="new-order-mode-dine-in"]')).toBeNull();
     expect(host.querySelector('[data-testid="new-order-mode-delivery"]')).not.toBeNull();
     expect(fixture.componentInstance['fulfillmentMode']()).toBe('DELIVERY');
+  });
+
+  // -------------------------------------------- ADR 0177: what the branch lets an operator do
+
+  async function startPolicyBasket(): Promise<void> {
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  }
+
+  const placed: PlaceOrderResult = {
+    orderId: 'order-1',
+    publicOrderNumber: '#0001',
+    status: 'CONFIRMED',
+    version: 1,
+    outcome: 'PLACED',
+    warnings: [],
+  };
+
+  it('shows the promo code, the call-back flag and the cash tendered while the branch allows them', async () => {
+    await render();
+    await startPolicyBasket();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(newOrderApi.entryPolicy).toHaveBeenCalledWith(SCOPE);
+    expect(host.querySelector('[data-testid="new-order-promo-code"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="new-order-callback"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="new-order-cash-tendered"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="new-order-promo-code-off"]')).toBeNull();
+  });
+
+  it('hides each control the branch has turned off, says why for the promo code, and sends none of them', async () => {
+    const placeOrder = vi.fn().mockResolvedValue(placed);
+    await render({
+      placeOrder,
+      entryPolicy: vi.fn().mockResolvedValue({
+        promoCodeAllowed: false,
+        callbackFlagAllowed: false,
+        changeDueAllowed: false,
+      }),
+    });
+    vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    await startPolicyBasket();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="new-order-promo-code"]')).toBeNull();
+    expect(host.querySelector('[data-testid="new-order-promo-code-off"]')?.textContent).toContain(
+      'cannot be applied',
+    );
+    expect(host.querySelector('[data-testid="new-order-callback"]')).toBeNull();
+    expect(host.querySelector('[data-testid="new-order-cash-tendered"]')).toBeNull();
+
+    // Whatever was typed before the read came back is not sent either.
+    fixture.componentInstance['promoCode'].set('TENPERCENT');
+    fixture.componentInstance['cashTenderedMinor'].set(60_000);
+    fixture.componentInstance['callbackRequested'].set(true);
+    await fixture.componentInstance['submit']();
+
+    const [, request] = placeOrder.mock.calls[0];
+    expect(request.promoCode).toBeNull();
+    expect(request.cashTenderedMinor).toBeNull();
+    expect(request.callbackRequested).toBeUndefined();
+  });
+
+  it('raises the call-back flag on the order only when the operator ticked it', async () => {
+    const placeOrder = vi.fn().mockResolvedValue(placed);
+    await render({ placeOrder });
+    vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    await startPolicyBasket();
+
+    await fixture.componentInstance['submit']();
+    expect(placeOrder.mock.calls[0][1].callbackRequested, 'not ticked: not sent').toBeUndefined();
+
+    const box = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="new-order-callback"]',
+    ) as HTMLInputElement;
+    box.checked = true;
+    box.dispatchEvent(new Event('change'));
+    await fixture.componentInstance['submit']();
+
+    expect(placeOrder.mock.calls[1][1].callbackRequested).toBe(true);
+  });
+
+  it('keeps showing everything, and lets the server refuse, when the policy cannot be read', async () => {
+    await render({ entryPolicy: vi.fn().mockRejectedValue(new Error('403')) });
+    await startPolicyBasket();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="new-order-promo-code"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="new-order-callback"]')).not.toBeNull();
   });
 
   // ------------------------------------------------------------------ search
@@ -687,7 +811,7 @@ describe('NewOrderPage', () => {
     });
     await render(
       { placeOrder },
-      { revealAddresses: vi.fn().mockResolvedValue([address({ id: 'addr-9' })]) },
+      { capturedAddresses: vi.fn().mockResolvedValue([address({ id: 'addr-9' })]) },
     );
     vi.spyOn(router, 'navigate').mockResolvedValue(true);
 
@@ -711,10 +835,10 @@ describe('NewOrderPage', () => {
   // --------------------------------------- row 1.3b (ADR 0145): a map and a search in the pane
 
   async function openDeliveryPane(
-    addresses: readonly RevealedCustomerAddress[],
-    customers: Partial<typeof customersApi> = {},
+    addresses: readonly MaskedCustomerAddress[],
+    customers: Partial<typeof customersApi> & Partial<AddressPaneMocks> = {},
   ): Promise<HTMLElement> {
-    await render({}, { revealAddresses: vi.fn().mockResolvedValue(addresses), ...customers });
+    await render({}, { capturedAddresses: vi.fn().mockResolvedValue(addresses), ...customers });
     fixture.componentInstance['selectCandidate'](candidate());
     fixture.componentInstance['setFulfillmentMode']('DELIVERY');
     await flushMicrotasks();
@@ -754,8 +878,8 @@ describe('NewOrderPage', () => {
     typeInto(host, 'q-map-pin-longitude', '69.2');
     await fillAndSave(host, 'new-order-address-save');
 
-    expect(customersApi.addAddress).toHaveBeenCalledTimes(1);
-    const [scope, accountId, request] = customersApi.addAddress.mock.calls[0];
+    expect(newOrderApi.captureAddress).toHaveBeenCalledTimes(1);
+    const [scope, accountId, request] = newOrderApi.captureAddress.mock.calls[0];
     expect(scope).toEqual(SCOPE);
     expect(accountId).toBe('acct-1');
     expect(request.latitude).toBe(41.3);
@@ -788,7 +912,7 @@ describe('NewOrderPage', () => {
     save.click();
     await flushMicrotasks();
 
-    expect(customersApi.addAddress).not.toHaveBeenCalled();
+    expect(newOrderApi.captureAddress).not.toHaveBeenCalled();
   });
 
   it('shows where a located address is on a map that cannot be edited, and offers to correct it', async () => {
@@ -820,23 +944,20 @@ describe('NewOrderPage', () => {
     typeInto(host, 'q-map-pin-longitude', '69.2');
     await fillAndSave(host, 'new-order-address-edit-save');
 
-    expect(customersApi.updateAddress).toHaveBeenCalledTimes(1);
-    const [scope, accountId, addressId, request, version] =
-      customersApi.updateAddress.mock.calls[0];
+    expect(newOrderApi.placeAddressPin).toHaveBeenCalledTimes(1);
+    const [scope, accountId, addressId, pin, version] = newOrderApi.placeAddressPin.mock.calls[0];
     expect(scope).toEqual(SCOPE);
     expect(accountId).toBe('acct-1');
     expect(addressId).toBe('addr-7');
     expect(version).toBe(5);
-    expect(request.latitude).toBe(41.3);
-    expect(request.coordinateSource).toBe('OPERATOR_PIN');
-    expect(request.fields.line1).toBe('Amir Temur 1');
+    expect(pin).toEqual({ latitude: 41.3, longitude: 69.2 });
     expect(fixture.componentInstance['editingAddressId']()).toBeNull();
     expect(fixture.componentInstance['selectedAddressId']()).toBe('addr-7');
   });
 
   it('shows the refusal, and keeps the editor open, when another operator changed the address first', async () => {
     const host = await openDeliveryPane([address({ id: 'addr-7', version: 5 })]);
-    customersApi.updateAddress.mockRejectedValue(
+    newOrderApi.placeAddressPin.mockRejectedValue(
       new ApiError(ApiErrorCode.STALE_VERSION, 409, null, null),
     );
     (byTestId(host, 'new-order-address-edit-pin') as HTMLButtonElement).click();
@@ -851,9 +972,93 @@ describe('NewOrderPage', () => {
     expect(host.querySelector('.new-order__error')).not.toBeNull();
   });
 
+  // ------------------------------------- ADR 0177: the persona the screen is for can give an address
+
+  it('lists the customer’s addresses through the masked read the persona is granted', async () => {
+    const host = await openDeliveryPane([
+      address({ id: 'addr-1', label: 'Home', street: 'Amir Temur', district: 'Yunusabad' }),
+    ]);
+
+    expect(newOrderApi.capturedAddresses).toHaveBeenCalledWith(SCOPE, 'acct-1');
+    const option = byTestId(host, 'new-order-address-option');
+    expect(option?.textContent).toContain('Home');
+    expect(option?.textContent).toContain('Amir Temur');
+    expect(option?.textContent).toContain('Yunusabad');
+    expect(byTestId(host, 'new-order-address-denied')).toBeNull();
+    expect(fixture.componentInstance['selectedAddressId']()).toBe('addr-1');
+  });
+
+  it('corrects a saved address with a pin editor, not a text editor it could not fill in', async () => {
+    const host = await openDeliveryPane([address({ id: 'addr-7', version: 5 })]);
+
+    (byTestId(host, 'new-order-address-edit-pin') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(byTestId(host, 'address-pin-editor')).not.toBeNull();
+    expect(byTestId(host, 'address-pin-editor-note')?.textContent).toContain('not the house');
+    expect(byTestId(host, 'customer-address-editor')).toBeNull();
+    expect(byTestId(host, 'q-address-street')).toBeNull();
+    expect(byTestId(host, 'q-address-flat')).toBeNull();
+  });
+
+  it('saves a pin only when one is placed and it is not where the address already has it', async () => {
+    const host = await openDeliveryPane([
+      address({
+        id: 'addr-7',
+        version: 5,
+        latitude: 41.3,
+        longitude: 69.2,
+        coordinateSource: 'OPERATOR_PIN',
+      }),
+    ]);
+    (byTestId(host, 'new-order-address-edit-pin') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const save = byTestId(host, 'new-order-address-edit-save') as HTMLButtonElement;
+
+    expect(save.disabled).toBe(true);
+
+    typeInto(host, 'q-map-pin-latitude', '41.35');
+    typeInto(host, 'q-map-pin-longitude', '69.25');
+    fixture.detectChanges();
+    expect(save.disabled).toBe(false);
+
+    await fillAndSave(host, 'new-order-address-edit-save');
+    expect(newOrderApi.placeAddressPin).toHaveBeenCalledWith(
+      SCOPE,
+      'acct-1',
+      'addr-7',
+      { latitude: 41.35, longitude: 69.25 },
+      5,
+    );
+  });
+
+  it('says so, and does not pretend the list is empty, for a role that holds neither grant', async () => {
+    const host = await openDeliveryPane([], {
+      capturedAddresses: vi
+        .fn()
+        .mockRejectedValue(
+          new ApiError(
+            ApiErrorCode.INSUFFICIENT_CAPABILITY,
+            403,
+            { requiredCapability: 'customer.address.capture' } as never,
+            null,
+          ),
+        ),
+    });
+
+    expect(byTestId(host, 'new-order-address-denied')?.textContent).toContain(
+      'delivery-address permission',
+    );
+    expect(byTestId(host, 'new-order-address-add')).toBeNull();
+  });
+
   it('a delivery order with no address selected cannot be submitted', async () => {
     const placeOrder = vi.fn();
-    await render({ placeOrder }, { revealAddresses: vi.fn().mockResolvedValue([]) });
+    await render({ placeOrder }, { capturedAddresses: vi.fn().mockResolvedValue([]) });
 
     fixture.componentInstance['selectCandidate'](candidate());
     fixture.componentInstance['setFulfillmentMode']('DELIVERY');
@@ -867,8 +1072,8 @@ describe('NewOrderPage', () => {
   });
 
   it('the inline add form saves LANDMARK_ONLY when a landmark is given, and NOT_GEOCODED otherwise', async () => {
-    const addAddress = vi.fn().mockResolvedValue({ id: 'addr-new' });
-    const host = await openDeliveryPane([], { addAddress });
+    const captureAddress = vi.fn().mockResolvedValue('addr-new');
+    const host = await openDeliveryPane([], { captureAddress });
 
     (byTestId(host, 'new-order-address-add') as HTMLButtonElement).click();
     fixture.detectChanges();
@@ -880,7 +1085,7 @@ describe('NewOrderPage', () => {
     typeInto(host, 'q-address-landmark', 'Рядом с аптекой');
     await fillAndSave(host, 'new-order-address-save');
 
-    expect(addAddress).toHaveBeenCalledWith(
+    expect(captureAddress).toHaveBeenCalledWith(
       SCOPE,
       'acct-1',
       expect.objectContaining({
@@ -891,7 +1096,7 @@ describe('NewOrderPage', () => {
     );
     expect(fixture.componentInstance['selectedAddressId']()).toBe('addr-new');
 
-    addAddress.mockClear();
+    captureAddress.mockClear();
     (byTestId(host, 'new-order-address-add') as HTMLButtonElement).click();
     fixture.detectChanges();
     await flushMicrotasks();
@@ -901,7 +1106,7 @@ describe('NewOrderPage', () => {
     typeInto(host, 'address-editor-district', 'Mirzo Ulugbek');
     await fillAndSave(host, 'new-order-address-save');
 
-    expect(addAddress).toHaveBeenCalledWith(
+    expect(captureAddress).toHaveBeenCalledWith(
       SCOPE,
       'acct-1',
       expect.objectContaining({
@@ -917,7 +1122,13 @@ describe('NewOrderPage', () => {
   it('resolves branches for PICKUP immediately, with no point', async () => {
     await render();
 
-    expect(newOrderApi.resolveBranches).toHaveBeenCalledWith(SCOPE, 'PICKUP', null, 'call-centre');
+    expect(newOrderApi.resolveBranches).toHaveBeenCalledWith(
+      SCOPE,
+      'PICKUP',
+      null,
+      'call-centre',
+      null,
+    );
   });
 
   it('renders every candidate with its load, marks the proposed one, and defaults the selection to it', async () => {
@@ -980,7 +1191,7 @@ describe('NewOrderPage', () => {
     await render(
       { resolveBranches },
       {
-        revealAddresses: vi
+        capturedAddresses: vi
           .fn()
           .mockResolvedValue([address({ latitude: 41.31, longitude: 69.28 })]),
       },
@@ -997,12 +1208,16 @@ describe('NewOrderPage', () => {
       'DELIVERY',
       { lat: 41.31, lon: 69.28 },
       'call-centre',
+      null,
     );
   });
 
   it('a DELIVERY address with no coordinate resolves nothing and keeps the operator’s own branch as the fallback', async () => {
     const resolveBranches = vi.fn();
-    await render({ resolveBranches }, { revealAddresses: vi.fn().mockResolvedValue([address()]) });
+    await render(
+      { resolveBranches },
+      { capturedAddresses: vi.fn().mockResolvedValue([address()]) },
+    );
     resolveBranches.mockClear();
     fixture.componentInstance['selectCandidate'](candidate());
     fixture.componentInstance['setFulfillmentMode']('DELIVERY');
@@ -1145,7 +1360,7 @@ describe('NewOrderPage', () => {
     const placeOrder = vi.fn().mockRejectedValue(refusal);
     await render(
       { placeOrder },
-      { revealAddresses: vi.fn().mockResolvedValue([address({ id: 'addr-9' })]) },
+      { capturedAddresses: vi.fn().mockResolvedValue([address({ id: 'addr-9' })]) },
     );
 
     fixture.componentInstance['selectCandidate'](candidate());
@@ -1171,7 +1386,7 @@ describe('NewOrderPage', () => {
     const placeOrder = vi.fn().mockRejectedValue(refusal);
     await render(
       { placeOrder },
-      { revealAddresses: vi.fn().mockResolvedValue([address({ id: 'addr-9' })]) },
+      { capturedAddresses: vi.fn().mockResolvedValue([address({ id: 'addr-9' })]) },
     );
 
     fixture.componentInstance['selectCandidate'](candidate());
@@ -1333,7 +1548,7 @@ describe('NewOrderPage', () => {
     await render(
       {},
       {
-        revealAddresses: vi
+        capturedAddresses: vi
           .fn()
           .mockResolvedValue([address({ id: 'addr-geo', latitude: 41.31, longitude: 69.28 })]),
       },
@@ -1371,7 +1586,7 @@ describe('NewOrderPage', () => {
   it('shows no delivery fee preview for an address with no coordinate', async () => {
     await render(
       {},
-      { revealAddresses: vi.fn().mockResolvedValue([address({ id: 'addr-blind' })]) },
+      { capturedAddresses: vi.fn().mockResolvedValue([address({ id: 'addr-blind' })]) },
     );
     fixture.componentInstance['selectCandidate'](candidate());
     fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
@@ -1463,6 +1678,75 @@ describe('NewOrderPage', () => {
     const [, request] = placeOrder.mock.calls[0];
     expect(request.requestedFor).toBe(new Date('2099-06-01T15:00').toISOString());
     expect(request.overrideOutOfHours).toBe(false);
+  });
+
+  // ---------------------- ADR 0177: the pre-order is resolved at the time it is promised for
+
+  it('asks the branch resolver about the promised time, and re-asks when the operator changes it', async () => {
+    await render();
+    fixture.componentInstance['selectCandidate'](candidate());
+    await flushMicrotasks();
+    expect(newOrderApi.resolveBranches).toHaveBeenLastCalledWith(
+      SCOPE,
+      'PICKUP',
+      null,
+      'call-centre',
+      null,
+    );
+
+    fixture.componentInstance['togglePreOrder']();
+    fixture.componentInstance['setRequestedForLocal']('2099-06-01T15:00');
+    fixture.detectChanges();
+    await flushMicrotasks();
+
+    expect(newOrderApi.resolveBranches).toHaveBeenLastCalledWith(
+      SCOPE,
+      'PICKUP',
+      null,
+      'call-centre',
+      new Date('2099-06-01T15:00').toISOString(),
+    );
+
+    fixture.componentInstance['setRequestedForLocal']('2099-06-02T09:30');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    expect(newOrderApi.resolveBranches).toHaveBeenLastCalledWith(
+      SCOPE,
+      'PICKUP',
+      null,
+      'call-centre',
+      new Date('2099-06-02T09:30').toISOString(),
+    );
+  });
+
+  it('asks about now again once the pre-order is switched off, and never about a time in the past', async () => {
+    await render();
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['togglePreOrder']();
+    fixture.componentInstance['setRequestedForLocal']('2020-01-01T10:00');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    expect(newOrderApi.resolveBranches).toHaveBeenLastCalledWith(
+      SCOPE,
+      'PICKUP',
+      null,
+      'call-centre',
+      null,
+    );
+
+    fixture.componentInstance['setRequestedForLocal']('2099-06-01T15:00');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.componentInstance['togglePreOrder']();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    expect(newOrderApi.resolveBranches).toHaveBeenLastCalledWith(
+      SCOPE,
+      'PICKUP',
+      null,
+      'call-centre',
+      null,
+    );
   });
 
   it('cannot submit a pre-order with no time chosen', async () => {
@@ -1803,7 +2087,7 @@ describe('NewOrderPage', () => {
     });
     await render(
       { aggregatorEntry },
-      { revealAddresses: vi.fn().mockResolvedValue([address({ id: 'addr-9' })]) },
+      { capturedAddresses: vi.fn().mockResolvedValue([address({ id: 'addr-9' })]) },
       [
         {
           id: 'chan-agg',
@@ -2994,7 +3278,7 @@ describe('NewOrderPage', () => {
           discounts: [],
         }),
       );
-      await render({ quote }, { revealAddresses: vi.fn().mockResolvedValue([addressWithPoint]) });
+      await render({ quote }, { capturedAddresses: vi.fn().mockResolvedValue([addressWithPoint]) });
       await startBasket();
       fixture.componentInstance['setFulfillmentMode']('DELIVERY');
       fixture.detectChanges();
@@ -3032,7 +3316,7 @@ describe('NewOrderPage', () => {
           discounts: [],
         }),
       );
-      await render({ quote }, { revealAddresses: vi.fn().mockResolvedValue([addressWithPoint]) });
+      await render({ quote }, { capturedAddresses: vi.fn().mockResolvedValue([addressWithPoint]) });
       await startBasket();
       fixture.componentInstance['setFulfillmentMode']('DELIVERY');
       fixture.detectChanges();
@@ -3062,7 +3346,7 @@ describe('NewOrderPage', () => {
           discounts: [],
         }),
       );
-      await render({ quote }, { revealAddresses: vi.fn().mockResolvedValue([addressWithPoint]) });
+      await render({ quote }, { capturedAddresses: vi.fn().mockResolvedValue([addressWithPoint]) });
       await startBasket();
       fixture.componentInstance['setFulfillmentMode']('DELIVERY');
       fixture.detectChanges();

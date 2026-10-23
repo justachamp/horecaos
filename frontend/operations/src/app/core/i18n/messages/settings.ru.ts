@@ -514,7 +514,7 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.field.notifyCustomer': 'Сообщать клиенту, пока заказ ждёт',
   'settings.orderPolicy.mode.AUTO_CONFIRM': 'Автоподтверждение',
   'settings.orderPolicy.mode.RESTAURANT_APPROVAL': 'Подтверждение рестораном',
-  'settings.orderPolicy.approvalChannel.NONE': 'Никто (не используется при автоподтверждении)',
+  'settings.orderPolicy.approvalChannel.NONE': 'Никто (каждый заказ подтверждается автоматически)',
   'settings.orderPolicy.approvalChannel.HORECAOS_OPERATIONS': 'Операции HorecaOS',
   'settings.orderPolicy.approvalChannel.POS': 'POS',
   'settings.orderPolicy.approvalChannel.EITHER': 'Любой из них',
@@ -533,11 +533,6 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.dispatchSummary.link': 'Открыть правила диспетчеризации',
   'settings.orderPolicy.card4.title': 'Условия',
   'settings.orderPolicy.card5.title': 'Оформление заказа оператором',
-  'settings.orderPolicy.field.businessDayStartHour': 'Начало торгового дня (час)',
-  'settings.orderPolicy.field.averageOrderMinutes': 'Среднее время заказа (минуты)',
-  'settings.orderPolicy.field.maximumOrderMinutes': 'Максимальное время заказа (минуты)',
-  'settings.orderPolicy.notApplied.hint':
-    'Пока не применяется: это значение нигде не используется, поэтому его изменение ничего не меняет.',
   'settings.orderPolicy.field.lateOrderThresholdMinutes':
     'Заказ без обещанного времени опаздывает через (минуты)',
   'settings.orderPolicy.lateOrderThresholdMinutes.hint':
@@ -555,17 +550,75 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.field.minimumOrderAmount': 'Минимальная сумма заказа',
   'settings.orderPolicy.minimumOrderAmount.hint':
     'Только самовывоз и зал — у доставки свой минимум, задаётся в зоне обслуживания.',
-  'settings.orderPolicy.field.vatRatePercent': 'Ставка НДС (%)',
-  'settings.orderPolicy.field.routingPollIntervalMinutes': 'Интервал опроса маршрутизации (минуты)',
   'settings.orderPolicy.field.autoAcceptEligibleChannels': 'Каналы, доступные для автоприёма',
   'settings.orderPolicy.autoAcceptEligibleChannels.hint':
-    '«ALL» либо список кодов каналов продаж через запятую. Пока не применяется.',
+    '«ALL» либо коды каналов продаж через запятую. Заказ с любого другого канала сам не подтверждается: он ждёт по пути, заданному выше в «Приёме заказа».',
   'settings.orderPolicy.field.autoAcceptMinPriorOrders': 'Минимум предыдущих успешных заказов',
   'settings.orderPolicy.field.preorderBranchResolution': 'Подбор филиала для предзаказа',
   'settings.orderPolicy.preorderBranchResolution.BY_DISTANCE': 'Ближайший филиал',
   'settings.orderPolicy.preorderBranchResolution.BY_OPENING_TIME': 'Скорее всех откроется',
   'settings.orderPolicy.field.operatorPromoCodeAllowed': 'Оператор может вводить промокод',
   'settings.orderPolicy.revertReason': 'Возврат к унаследованному значению',
+  'settings.orderPolicy.holdBack.title': 'Заказы, которые задерживает ворота автоприёма',
+  'settings.orderPolicy.holdBack.hint':
+    'При автоподтверждении заказ, который задерживает ворота из «Автоматизации» ниже (канал не из списка или клиент с малым числом завершённых заказов), ждёт этого человека столько времени, а потом срабатывает действие по тайм-ауту. Оставьте «Кто подтверждает» — «Никто», и ворота ничего не задержат.',
+  'settings.orderPolicy.holdBack.none':
+    'Пути для задержанных заказов нет: ворота в «Автоматизации» ниже не могут задержать заказ.',
+  'settings.orderPolicy.autoAcceptMinPriorOrders.hint':
+    'Клиент с меньшим числом завершённых заказов в этом бренде ждёт решения; гость считается клиентом без заказов. 0 — без ограничения.',
+  'settings.orderPolicy.gates.noPath':
+    'В «Приёме заказа» выше некому подтверждать задержанный заказ, поэтому эти ворота ничего не задержат: такой заказ всё равно подтверждается. Сначала выберите там, кто подтверждает.',
+  'settings.orderPolicy.preorderBranchResolution.hint':
+    'Применяется, когда предзаказ оформлен на время, в которое не открыт ни один подходящий филиал. У самовывоза нет адреса клиента, от которого можно мерить, поэтому «ближайший» для него заменяется на «скорее всех откроется».',
+  'settings.orderPolicy.field.operatorCallbackFlagAllowed':
+    'Оператор может пометить заказ «перезвонить клиенту»',
+  'settings.orderPolicy.field.operatorChangeDueAllowed':
+    'Оператор может записать, сколько наличных передаст клиент',
+  'settings.orderPolicy.operatorPromoCodeAllowed.hint':
+    'Если выключено, промокод в заказе оператора отклоняется — и при расчёте цены, и при оформлении.',
+  'settings.orderPolicy.operatorCallbackFlagAllowed.hint':
+    'Если выключено, экран «Новый заказ» скрывает флажок, а сервер отклоняет пометку.',
+  'settings.orderPolicy.operatorChangeDueAllowed.hint':
+    'Если выключено, экран «Новый заказ» скрывает расчёт сдачи, а сервер отклоняет сумму наличных.',
+  'settings.orderPolicy.neighbours.title': 'Настройки, которые живут в других местах',
+  'settings.orderPolicy.neighbours.lead':
+    'Они тоже влияют на заказ, но у каждой свой экран. Показано то, что действует сейчас; чтобы изменить, откройте экран.',
+  'settings.orderPolicy.neighbours.open': 'Открыть',
+  'settings.orderPolicy.neighbours.loading': 'Загрузка…',
+  'settings.orderPolicy.neighbours.unreadable': 'Не показано: вашей роли недоступно чтение',
+  'settings.orderPolicy.neighbours.distanceMode.label': 'Как измеряется доставка',
+  'settings.orderPolicy.neighbours.distanceMode.RADIUS': 'По прямой (стандартный тариф)',
+  'settings.orderPolicy.neighbours.distanceMode.ROAD': 'По дороге (стандартный тариф)',
+  'settings.orderPolicy.neighbours.distanceMode.none':
+    'Для этого бренда нет действующего стандартного тарифа',
+  'settings.orderPolicy.neighbours.branchLimit.label':
+    'Сколько заказов филиал принимает одновременно',
+  'settings.orderPolicy.neighbours.branchLimit.value': '{count}',
+  'settings.orderPolicy.neighbours.branchLimit.none': 'Без ограничения',
+  'settings.orderPolicy.neighbours.branchLimit.perBranch':
+    'Задаётся для каждого филиала отдельно — выберите филиал в панели выше, чтобы увидеть его предел.',
+  'settings.orderPolicy.neighbours.outOfZone.label': 'Адрес вне всех зон доставки',
+  'settings.orderPolicy.neighbours.outOfZone.REJECT': 'Отклонить',
+  'settings.orderPolicy.neighbours.outOfZone.OFFER_PICKUP': 'Предложить самовывоз',
+  'settings.orderPolicy.neighbours.outOfZone.MANUAL_REVIEW': 'Передать на ручную проверку',
+  'settings.orderPolicy.neighbours.outOfZone.notApplied':
+    'Пока не применяется: расчёт стоимости доставки по-прежнему отклоняет такой адрес, что бы тут ни было выбрано.',
+  'settings.orderPolicy.neighbours.courierVisibility.label': 'Что видит курьер',
+  'settings.orderPolicy.neighbours.courierVisibility.READY_ONLY':
+    'Только заказы, которые кухня уже приготовила',
+  'settings.orderPolicy.neighbours.courierVisibility.ANY': 'Также заказы, которые ещё готовятся',
+  'settings.orderPolicy.neighbours.paidHold.label': 'Кухня ждёт оплаты',
+  'settings.orderPolicy.neighbours.paidHold.SHADOW':
+    'Пробный режим: только считает, что задержала бы',
+  'settings.orderPolicy.neighbours.paidHold.HOLD_UNTIL_PAID': 'Задерживает неоплаченный заказ',
+  'settings.orderPolicy.neighbours.paidHold.OFF': 'Выключено',
+  'settings.orderPolicy.neighbours.callCentre.label': 'Канал колл-центра',
+  'settings.orderPolicy.neighbours.callCentre.none': 'Активного канала колл-центра нет',
+  'settings.orderPolicy.neighbours.callCentre.value':
+    'Способов оплаты: {payments} · типы заказа: {modes}',
+  'settings.orderPolicy.neighbours.mode.PICKUP': 'Самовывоз',
+  'settings.orderPolicy.neighbours.mode.DELIVERY': 'Доставка',
+  'settings.orderPolicy.neighbours.mode.DINE_IN': 'В зале',
 
   // Rows X.39 / 10.3b — редактор документа ordering.lateness
   'settings.latenessPolicy.title': 'Когда заказ считается опаздывающим',

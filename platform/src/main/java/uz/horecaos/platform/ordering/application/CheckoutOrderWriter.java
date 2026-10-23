@@ -70,6 +70,7 @@ class CheckoutOrderWriter {
     private final PaymentIntentPort payments;
     private final ApplicationEventPublisher events;
     private final CommentPresetLookup commentPresets;
+    private final AutoAcceptGate autoAccept;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     CheckoutOrderWriter(
@@ -82,7 +83,8 @@ class CheckoutOrderWriter {
             ObjectMapper objectMapper,
             PaymentIntentPort payments,
             ApplicationEventPublisher events,
-            CommentPresetLookup commentPresets) {
+            CommentPresetLookup commentPresets,
+            AutoAcceptGate autoAccept) {
         this.orders = orders;
         this.acceptancePolicies = acceptancePolicies;
         this.tenancy = tenancy;
@@ -93,19 +95,24 @@ class CheckoutOrderWriter {
         this.payments = payments;
         this.events = events;
         this.commentPresets = commentPresets;
+        this.autoAccept = autoAccept;
     }
 
     /**
      * @param paymentFirst whether ADR 0013's capture timing requires the money
      *     before confirmation, decided here because the answer also picks the
      *     order's opening payment projection
+     * @param holdReasonCode why an {@code AUTO_CONFIRM} policy did not confirm this order (ADR 0177:
+     *     an auto-accept gate held it back), or null for an order accepted as its mode says; the
+     *     reason the checkout transition records
      */
     record Written(
             String publicNumber,
             OrderAcceptancePolicyService.Effective policy,
             boolean approvalRequired,
             @Nullable Instant approvalDeadline,
-            boolean paymentFirst) {
+            boolean paymentFirst,
+            @Nullable String holdReasonCode) {
 
         Written {
             if (approvalRequired != (approvalDeadline != null)) {
@@ -123,7 +130,24 @@ class CheckoutOrderWriter {
         String paymentMethodCode = Objects.requireNonNull(command.paymentMethodCode());
 
         var policy = acceptancePolicies.resolve(command.tenantId(), command.brandId(), cart.locationId());
-        boolean approvalRequired = policy.policy().mode() == AcceptanceMode.RESTAURANT_APPROVAL;
+        // ADR 0177: under AUTO_CONFIRM an auto-accept gate (channel, prior orders) can hold the order
+        // back, and a held order follows the document's own approval path. Its mode snapshot says
+        // what actually governed it -- RESTAURANT_APPROVAL -- which is what ck_order_approval_deadline
+        // requires of an order with a deadline; the pinned policy is unchanged.
+        AutoAcceptGate.Decision gate = autoAccept.decide(
+                command.tenantId(),
+                command.brandId(),
+                cart.locationId(),
+                channel.code(),
+                cart.customerAccountId(),
+                policy.policy());
+        String holdReasonCode =
+                gate instanceof AutoAcceptGate.Held held ? held.reason().reasonCode() : null;
+        boolean approvalRequired =
+                policy.policy().mode() == AcceptanceMode.RESTAURANT_APPROVAL || holdReasonCode != null;
+        AcceptanceMode effectiveMode = approvalRequired
+                ? AcceptanceMode.RESTAURANT_APPROVAL
+                : policy.policy().mode();
         Instant approvalDeadline = approvalRequired ? now.plus(policy.policy().approvalTimeout()) : null;
 
         String publicNumber = allocateNumber(command.tenantId(), cart.locationId(), now);
@@ -147,7 +171,7 @@ class CheckoutOrderWriter {
                 cart.customerAccountId(),
                 cart.guestReferenceHash(),
                 cart.fulfillmentMode(),
-                policy.policy().mode().name(),
+                effectiveMode.name(),
                 policy.policyId(),
                 policy.policyVersion(),
                 policy.policy().approvalChannel().name(),
@@ -243,7 +267,9 @@ class CheckoutOrderWriter {
                 channel.code(),
                 publicNumber,
                 cart.fulfillmentMode().name(),
-                policy.policy().mode().name(),
+                // What governed this order, which is the row's snapshot above: an order an auto-accept gate
+                // held back is RESTAURANT_APPROVAL here whatever the pinned policy says (ADR 0177).
+                effectiveMode.name(),
                 policy.policyId(),
                 policy.policyVersion(),
                 OrderStatus.RECEIVED.name(),
@@ -252,7 +278,7 @@ class CheckoutOrderWriter {
                 quote.totalMinor(),
                 quote.lines().size()));
 
-        return new Written(publicNumber, policy, approvalRequired, approvalDeadline, paymentFirst);
+        return new Written(publicNumber, policy, approvalRequired, approvalDeadline, paymentFirst, holdReasonCode);
     }
 
     /**

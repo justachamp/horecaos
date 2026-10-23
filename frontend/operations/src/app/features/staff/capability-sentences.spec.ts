@@ -52,6 +52,7 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
   'courier.registration.verify',
   'courier.settlement.close',
   'courier.shift.approve',
+  'customer.address.capture',
   'customer.import',
   'customer.manage',
   'customer.pii.reveal',

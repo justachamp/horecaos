@@ -777,6 +777,9 @@ export const ordersRu: AreaMessages<typeof ordersEn> = {
   'orders.newOrder.order.branchOverrideReasonPlaceholder': 'Выберите причину',
   'orders.newOrder.order.branchOverrideNote': 'Комментарий',
   'orders.newOrder.order.promoCode': 'Промокод',
+  'orders.newOrder.order.promoCodeOff':
+    'Промокод нельзя применить к заказу, который вводит оператор (выключено в «Политике заказов»).',
+  'orders.newOrder.order.callback': 'Перезвонить клиенту',
   'orders.newOrder.order.cashTendered': 'Сдача с',
   'orders.newOrder.order.changeDue': 'Сдача',
   'orders.newOrder.points.title': 'Оплата баллами',
@@ -811,11 +814,14 @@ export const ordersRu: AreaMessages<typeof ordersEn> = {
   // wave P14: §5.4 адресная панель (строка 1.3b)
   'orders.newOrder.address.title': 'Адрес',
   'orders.newOrder.address.loading': 'Загрузка адресов…',
-  'orders.newOrder.address.denied': 'Нет доступа к сохранённым адресам клиента',
+  'orders.newOrder.address.denied':
+    'Вашей роли недоступен ввод адреса доставки этого клиента (нужно право на адрес доставки)',
   'orders.newOrder.address.empty': 'Сохранённых адресов нет',
   'orders.newOrder.address.add': '+ Новый адрес',
   'orders.newOrder.address.notLocated':
-    'У этого адреса ещё нет метки на карте, доставка не может быть рассчитана — карта и метка пока не реализованы. Выберите другой адрес или уточните по телефону.',
+    'У этого адреса ещё нет метки на карте, доставка не может быть рассчитана. Поставьте метку ниже или выберите другой адрес.',
+  'orders.newOrder.address.pinOnlyNote':
+    'Вы видите улицу, но не дом и квартиру: они остаются у курьера. Метка меняет только место, куда поедет курьер, а не текст адреса.',
   'orders.newOrder.address.notServiceable': 'Этот адрес вне зоны доставки этого филиала',
   'orders.newOrder.address.recipientName': 'Получатель',
   'orders.newOrder.address.recipientPhone': 'Телефон получателя',

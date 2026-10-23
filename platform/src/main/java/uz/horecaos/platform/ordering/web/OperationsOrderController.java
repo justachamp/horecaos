@@ -531,8 +531,8 @@ public class OperationsOrderController {
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @Valid @RequestBody BranchResolutionRequest body) {
-        BranchResolution resolution =
-                branchResolution.resolve(tenantId, brandId, body.fulfillmentMode(), body.point(), body.channelCode());
+        BranchResolution resolution = branchResolution.resolve(
+                tenantId, brandId, body.fulfillmentMode(), body.point(), body.channelCode(), body.requestedFor());
         return ResponseEntity.ok(BranchResolutionResponse.of(resolution));
     }
 
@@ -1992,9 +1992,12 @@ public class OperationsOrderController {
             // refuses a missing primitive -- and optional; zero or absent redeems nothing.
             @Nullable @PositiveOrZero Long redeemFromBalanceMinor,
             // The operator's confirmation that the customer agreed. Required when points are to be spent.
-            @Nullable Boolean operatorAttestsCustomerAgreement) {
+            @Nullable Boolean operatorAttestsCustomerAgreement,
+            // ADR 0177: «Перезвонить клиенту» raised while the order is keyed in, boxed (Jackson 3 refuses a
+            // missing primitive) and refused with OPERATOR_CALLBACK_NOT_ALLOWED where the location turned it off.
+            @Nullable Boolean callbackRequested) {
 
-        /** A request that redeems nothing: every client that predates ADR 0185. */
+        /** A request that redeems nothing and raises no callback flag: every client that predates ADR 0185. */
         public PlaceOrderRequest(
                 UUID customerAccountId,
                 String channelCode,
@@ -2027,6 +2030,7 @@ public class OperationsOrderController {
                     dineInSessionId,
                     cashTenderedMinor,
                     declinedAutoAddRuleIds,
+                    null,
                     null,
                     null);
         }
@@ -2062,6 +2066,7 @@ public class OperationsOrderController {
                     overrideNote,
                     dineInSessionId,
                     cashTenderedMinor,
+                    null,
                     null);
         }
 
@@ -2072,7 +2077,15 @@ public class OperationsOrderController {
          */
         OperatorOrderingService.PlaceOrderCommand toPricingCommand(
                 UUID tenantId, UUID brandId, UUID locationId, String idempotencyKey, String operatorSubject) {
-            return build(tenantId, brandId, locationId, idempotencyKey, operatorSubject, 0L, false);
+            return build(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    idempotencyKey,
+                    operatorSubject,
+                    0L,
+                    false,
+                    Boolean.TRUE.equals(callbackRequested));
         }
 
         /** The command this request is, with the operator and the key the endpoint knows and the body does not. */
@@ -2085,7 +2098,8 @@ public class OperationsOrderController {
                     idempotencyKey,
                     operatorSubject,
                     redeemFromBalanceMinor == null ? 0L : redeemFromBalanceMinor,
-                    Boolean.TRUE.equals(operatorAttestsCustomerAgreement));
+                    Boolean.TRUE.equals(operatorAttestsCustomerAgreement),
+                    Boolean.TRUE.equals(callbackRequested));
         }
 
         private OperatorOrderingService.PlaceOrderCommand build(
@@ -2095,7 +2109,8 @@ public class OperationsOrderController {
                 String idempotencyKey,
                 String operatorSubject,
                 long redeemMinor,
-                boolean attested) {
+                boolean attested,
+                boolean callback) {
             return new OperatorOrderingService.PlaceOrderCommand(
                     tenantId,
                     brandId,
@@ -2119,7 +2134,8 @@ public class OperationsOrderController {
                     cashTenderedMinor,
                     declinedAutoAddRuleIds == null ? List.of() : declinedAutoAddRuleIds,
                     redeemMinor,
-                    attested);
+                    attested,
+                    callback);
         }
     }
 
@@ -3097,11 +3113,22 @@ public class OperationsOrderController {
      * @param point null for PICKUP, required for DELIVERY — refused
      *              (VALIDATION_FAILED) by {@code BranchResolutionQueryService}
      *              when absent on a DELIVERY request
+     * @param requestedFor ADR 0177: the «Позже» time of a pre-order, or absent for an order for now.
+     *              The branches are asked whether they are open, and whether a zone binds, at that
+     *              instant, and when none is open then {@code ordering.preorder_branch_resolution}
+     *              ranks the closed ones
      */
     public record BranchResolutionRequest(
             @NotNull FulfillmentMode fulfillmentMode,
             @Nullable @Valid GeoPoint point,
-            @NotBlank String channelCode) {}
+            @NotBlank String channelCode,
+            @Nullable Instant requestedFor) {
+
+        /** A resolution for now: every client that predates the pre-order reader (ADR 0177). */
+        public BranchResolutionRequest(FulfillmentMode fulfillmentMode, @Nullable GeoPoint point, String channelCode) {
+            this(fulfillmentMode, point, channelCode, null);
+        }
+    }
 
     /**
      * One candidate branch — ranked by zone match for DELIVERY, by current
@@ -3123,7 +3150,10 @@ public class OperationsOrderController {
             long activeOrderCount,
             @Nullable UUID zoneId,
             @Nullable Integer zonePriority,
-            @Nullable Double zoneAreaSquareMeters) {
+            @Nullable Double zoneAreaSquareMeters,
+            @Nullable Instant nextAvailableAt,
+            boolean acceptsScheduledOrders,
+            @Nullable Double distanceMeters) {
 
         static BranchCandidateResponse of(BranchCandidate candidate) {
             return new BranchCandidateResponse(
@@ -3135,7 +3165,10 @@ public class OperationsOrderController {
                     candidate.activeOrderCount(),
                     candidate.zoneId(),
                     candidate.zonePriority(),
-                    candidate.zoneAreaSquareMeters());
+                    candidate.zoneAreaSquareMeters(),
+                    candidate.nextAvailableAt(),
+                    candidate.acceptsScheduledOrders(),
+                    candidate.distanceMeters());
         }
     }
 

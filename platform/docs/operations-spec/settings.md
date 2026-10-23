@@ -478,9 +478,13 @@ visible and most valuable.
 | Требовать причину отказа | boolean | `document.rejectionReasonRequired` |
 | Сообщать клиенту, пока заказ ждёт | boolean | `document.notifyCustomerWhilePending` |
 
-The form enforces the record's own invariants *as affordances*, not as errors: choosing
-`AUTO_CONFIRM` collapses the other four fields rather than letting the user fill them and then
-rejecting the save. The 30 s–30 min bound is a slider with the ends labelled.
+The form enforces the record's own invariants *as affordances*, not as errors. Choosing
+`AUTO_CONFIRM` starts with **Кто подтверждает = «Никто»** and shows no timeout: every order is
+confirmed on its own and no gate can hold one. Picking a channel under `AUTO_CONFIRM` is the
+**hold-back path** (ADR 0177): it names who confirms an order that a Card 3 gate holds back, how
+long they have (30 s–30 min, offered at 300 s, the same bound restaurant approval has), and what
+happens when nobody decides. The 30 s–30 min bound is validated, not merely hinted: a path whose
+timeout is outside it cannot be published, because a held order waits on that deadline.
 
 Version banner and draft→diff→activate per §1.3. `Активировать` is confirmed with the sentence
 *«Новые заказы в филиале Чиланзар будут подтверждаться вручную. Уже принятые заказы не
@@ -488,28 +492,42 @@ Version banner and draft→diff→activate per §1.3. `Активировать`
 
 **Delever comparison.** Delever has *Автопринятие заказа* as a toggle plus a channel list plus a
 minimum-prior-successful-orders gate. HorecaOS's mode/channel/timeout/timeout-action model is richer
-and versioned, but is missing two things Delever has and this screen should carry:
+and versioned, and carries both of the things Delever has (**built**, ADR 0177 decision 3). They are
+not fields of this document but two scalars on Card 3, authored and inherited like the rest, and read
+at checkout:
 
-- **Auto-accept restricted to a set of channels** — *not built.* The document needs an
-  `eligibleChannelIds` field; ADR 0002/0030 own it. Without it a tenant cannot say "auto-accept the
-  bot, hand-check the aggregator", which every one of them wants.
-- **Minimum prior successful orders before auto-accept applies** — *not built.* It is an
-  anti-fraud gate, not a convenience, and it is cheap.
+- **Auto-accept restricted to a set of channels** — `ordering.auto_accept_eligible_channels`, «ALL»
+  or a list of channel codes: "auto-accept the bot, hand-check the aggregator".
+- **Minimum prior successful orders before auto-accept applies** — `ordering.auto_accept_min_prior_orders`,
+  the anti-fraud gate: completed orders of the customer at this brand; a guest counts as none.
+
+An order a gate holds back is not auto-confirmed: it follows this card's own channel, timeout and
+timeout action (the hold-back path above), is `AWAITING_APPROVAL`, and says why in its history
+(`AUTO_ACCEPT_HELD_CHANNEL`, `AUTO_ACCEPT_HELD_PRIOR_ORDERS`). A gate set while this card names
+nobody can hold nothing — such an order is confirmed anyway, counted, and the page says so beside
+the gates. The gates do not apply to a marketplace or aggregator order, which arrives already
+accepted (ADR 0040).
 
 ### Card 2 — Тайминги и SLA
 
 | Field | Type | Source |
 |---|---|---|
-| Начало и конец рабочего дня | two local times | **not built** — needs a config key; ADR 0043 depends on it (a business day that crosses midnight is an open question the matrix names) |
-| Среднее время заказа | minutes | stored and inherited, read by nothing (ADR 0150 decision 5); the field says «Пока не применяется» |
-| Максимальное время заказа | minutes | stored and inherited, read by nothing (ADR 0150 decision 5); the field says «Пока не применяется» |
-| Заказ без обещанного времени опаздывает через (was «Заказ опаздывает с») | minutes | **built** (ADR 0150): `ordering.late_order_threshold_minutes`, default 45 = the `ordering.lateness` platform default. The tenant-wide default for the no-promise fallback of every fulfilment mode whose document sets none of its own, when set anywhere in the chain; measured from `created_at`, and nothing for an order that carries a promise. Delever's «the single most-used value on the order board», kept where it is meaningful. The two fields above it say «Пока не применяется» |
+| ~~Начало и конец рабочего дня~~ | — | **retired** (ADR 0177): the business day is the reporting calendar's (`reporting.business_day_policies`, §10.10, ADR 0043/0107); a second key beside it would be a second answer to "which business day", and nothing read it |
+| ~~Среднее время заказа~~ | — | **retired** (ADR 0177): the promise comes from the preparation bands (ADR 0036, §10.2) and nothing read the key |
+| ~~Максимальное время заказа~~ | — | **retired** (ADR 0177): it would have been a fourth lateness severity beyond `BLOCKED`/`LATE`/`AT_RISK` that orders.md §2.7 does not have, and nothing read it |
+| ~~Ставка НДС~~ | — | **retired** (ADR 0177): VAT is `pricing.tax_profiles` with `valid_from`/`valid_until` (§4.8a); a flat percentage here never reached a receipt |
+| Заказ без обещанного времени опаздывает через (was «Заказ опаздывает с») | minutes | **built** (ADR 0150): `ordering.late_order_threshold_minutes`, default 45 = the `ordering.lateness` platform default. The tenant-wide default for the no-promise fallback of every fulfilment mode whose document sets none of its own, when set anywhere in the chain; measured from `created_at`, and nothing for an order that carries a promise. Delever's «the single most-used value on the order board», kept where it is meaningful |
 | Предупреждать до обещанного времени | minutes | **built** (batch 15, row `X.39`): `ordering.at_risk_before_minutes`, default 5 = the `ordering.lateness` platform default. Since wave 16 the *default* at-risk window of every fulfilment mode whose `ordering.lateness` document sets none of its own (a window a mode carries wins), when set anywhere in the chain; both boards read the result |
 | Когда заказ считается опаздывающим (доставка / самовывоз / зал) | per mode: warn-before, grace, no-promise fallback | **built** (wave 16, rows `X.39`/`10.3b`): the `ordering.lateness` policy document, edited on its own card under this table with the same `q-inherited-field` control (TENANT / BRAND / LOCATION, versioned, `expectedVersion` checked, a required reason). A blank warn-before window takes the at-risk field above, else the platform's five minutes; a blank no-promise fallback takes the late-order field above, else the platform's forty-five (ADR 0150); the grace is the document's. No «revert to inherited» — a published version is not withdrawn. See orders.md §2.7 |
 | Цвет индикатора опоздания | colour | **built** (batch 15, row `X.39`): `ordering.late_colour`, blank = the design-system red. `#rrggbb` validated at write and again where served; the card warns under the swatch below WCAG AA 4.5:1 against the page, a card and the late and at-risk row tints. Repaints only a `LATE` order (orders.md §2.7) |
 | Минимальная сумма заказа | money UZS | overlaps `fulfillment.service_zone_versions.min_basket_minor` — **decide once**: the zone value wins for delivery, this one applies to pickup and dine-in. Say so in the helper text |
-| Расчёт дистанции | `RADIUS` / `ROAD` | `fulfillment.delivery_tariffs.distance_mode` — **per tariff, not global.** Shown here read-only with a link to 3.7, because Delever's global toggle is the worse design and HorecaOS already decided against it (ADR 0037) |
-| Интервал опроса маршрутизации | minutes | **not built**, ADR 0037 routing port |
+| Расчёт дистанции | `RADIUS` / `ROAD` | `fulfillment.delivery_tariffs.distance_mode` — **per tariff, not global.** **Built** (ADR 0177) as a read-only echo in the «Settings that live elsewhere» card at the foot of the page, naming the standard tariff's mode, with a link to 3.7, because Delever's global toggle is the worse design and HorecaOS already decided against it (ADR 0037) |
+| ~~Интервал опроса маршрутизации~~ | — | **retired** (ADR 0177): the sourcing scheduler's poll is a deploy property and the dispatch rules (§3.8, ADR 0142) own the behaviour; nothing read the key |
+
+The five retired rows were registered by wave P46 so they could be authored before anything read them,
+and ADR 0150 decision 5 left them "either given a reader by a record that names one, or removed". ADR
+0177 removed them: the keys, their stored values (V0653), their strings and their fields. The page
+therefore has no setting that changes nothing.
 
 Lateness must be modelled as a computed **overlay**, never as an order status (IA Part 4,
 `StatusPill extensions`). This card sets the threshold; nothing here creates a state.
@@ -526,16 +544,21 @@ provider-agnostic rule engine. This card therefore shows a read-only summary of 
 currently in force for the scope, with a link. Reason: Delever duplicates near-identical config
 inside five provider pages and consequently cannot express provider fallback at all.
 
+What it does carry are the two **auto-accept gates** of Card 1's Delever comparison
+(`ordering.auto_accept_eligible_channels`, `ordering.auto_accept_min_prior_orders`; **built**, ADR 0177
+decision 3), read at checkout at the order's location, with a notice when Card 1 names nobody to hold
+an order for. The channel list is validated against the tenant's real channels when it is written.
+
 ### Card 4 — Условия
 
 | Field | Source |
 |---|---|
-| Ограничение по количеству заказов на филиал | `tenant.location_service_state.max_concurrent_orders` — echoed here read-only, edited in 10.2 |
+| Ограничение по количеству заказов на филиал | `tenant.location_service_state.max_concurrent_orders` — **built** (ADR 0177) as a read-only echo for the branch the bar is on (it is a per-branch setting with no batched read, so above the branch level the row says where it is set), edited in 10.2 |
 | Не принимать заказы из других зон доставки | `CATCHMENT` zone enforcement — **the resolver behaviour is built**: `DeliveryFeeResolver` already refuses an address outside a branch's `CATCHMENT`-role zone (`OUTSIDE_CATCHMENT`) rather than matching nothing. There is no separate on/off setting because there does not need to be one — a brand with no `CATCHMENT` zone enforces nothing. What is missing is that zone authoring itself is control-plane only (see brands-and-locations.md §9), so this row has nothing to link to from here yet |
-| Что делать с адресом вне зоны | `REJECT` / `OFFER_PICKUP` / `MANUAL_REVIEW` | `delivery.out_of_zone_policy`, ADR 0030 key — **not built** |
-| Подбор филиала для предзаказа вне рабочего времени | `по расстоянию` / `по времени открытия` | **not built**, config key |
-| Показывать курьеру и кухне только оплаченные заказы | boolean | **not built**, ADR 0042 |
-| Кто принимает первым | `курьер` / `филиал` | **not built.** This one is design-forcing, not configuration: it reorders the lifecycle. The matrix flags it, and ADR 0019's state machine must carry it as a parameter or refuse it |
+| Что делать с адресом вне зоны | `REJECT` / `OFFER_PICKUP` / `MANUAL_REVIEW` | `delivery.out_of_zone_policy`, ADR 0030 key — registered and edited in 10.13; **echoed here** (ADR 0177) with its own caveat, «Пока не применяется»: the delivery fee resolver does not read the key yet (`DeliveryConfigurationKeys`) |
+| Подбор филиала для предзаказа вне рабочего времени | `по расстоянию` / `по времени открытия` | **built** (ADR 0177): `ordering.preorder_branch_resolution`, read for the whole brand by the operator's branch resolver at the **promised** time. A branch open then is a candidate like any other; when none is, the closed ones are ranked by distance to the delivery point or by when they open, branches that take no pre-order into a closed slot last. A pickup has no customer point, so «по расстоянию» there is «по времени открытия» (the field says so) |
+| Показывать курьеру и кухне только оплаченные заказы | boolean | `kitchen` paid-only hold, ADR 0168 (§2.2) — **echoed here** (ADR 0177), edited on the kitchen buffer screen; the courier's side of it, «only kitchen-ready orders» (`kitchenReadyOnly` of the courier policy, §10.13), is echoed beside it and edited on the courier policy screen |
+| ~~Кто принимает первым~~ | ~~`курьер` / `филиал`~~ | **declined** (ADR 0177 decision 4): orders are branch-first. The setting would reorder the lifecycle, ADR 0019 said to carry it as a parameter or refuse it, and this refuses it, as ADR 0165 struck the deposit. No screen offers it and the matrix's line is withdrawn. Revisit when a signed tenant needs courier-first dispatch |
 
 ### Card 5 — Оформление заказа оператором
 
@@ -544,11 +567,11 @@ channel; ADR 0036 agrees — `CALL_CENTRE` is a `system_type`.
 
 | Field | Source |
 |---|---|
-| Доступные способы оплаты | `tenant.channel_payment_methods` for the `CALL_CENTRE` channel — edited in 10.4, echoed here |
+| Доступные способы оплаты | `tenant.channel_payment_methods` for the `CALL_CENTRE` channel — edited in 10.4, **echoed here** (ADR 0177) with the channel's order types |
 | Доступные типы получения | `tenant.channel_fulfillment_modes` for that channel |
-| Оператор может отметить «клиент просит перезвонить» | `ordering.orders.callback_requested` — ADR 0039, **not built** |
-| Оператор может вводить промокод | **not built**, config key; ADR 0018 promotions |
-| Показывать поле «сдача с» | `ordering.orders.cash_tendered_expected_minor` — ADR 0039, **not built** |
+| Оператор может отметить «клиент просит перезвонить» | `ordering.operator_callback_flag_allowed` (default on) — **built** (ADR 0177): `ordering.orders.callback_requested` is raised while the order is keyed in; refused with `OPERATOR_CALLBACK_NOT_ALLOWED` where off |
+| Оператор может вводить промокод | `ordering.operator_promo_code_allowed` (default **on**, flipped from the registered `false` because operators have applied codes since row 1.3e and nothing read the key) — **built**: refused with `OPERATOR_PROMO_CODE_NOT_ALLOWED` on the quote and on the order where off |
+| Показывать поле «сдача с» | `ordering.operator_change_due_allowed` (default on) — **built**: `ordering.orders.cash_tendered_expected_minor` at creation; refused with `OPERATOR_CHANGE_DUE_NOT_ALLOWED` where off |
 
 ### Resolved-for preview
 
@@ -1595,8 +1618,8 @@ Named precisely, with the owning decision. Everything not listed here is built a
 |---|---|
 | `payments.payment_methods.provider_installation_id` and `.contract_reference`; a localized-name texts table | ADR 0038 — the table itself, `code`, `responsibility`, `settles_from_balance` and the foreign key from `channel_payment_methods.payment_method_code` are built (V0042, V0175); see §10.6 |
 | `delivery.out_of_zone_policy` as a registered ADR 0030 key | ADR 0037 + ADR 0030 |
-| Order-policy config keys with no declaration today: business-day start/end, average order time, maximum order time, late threshold, late indicator colour, minimum order sum, routing poll interval, pre-order branch resolution rule, operator promo-code permission | ADR 0030 registry (`ConfigurationKeys`), content owned by ADR 0002 / 0019 / 0037 |
-| Auto-accept eligible-channel set and minimum-prior-successful-orders gate on the acceptance policy document | ADR 0002 + ADR 0030 |
+| ~~Order-policy config keys with no declaration today~~ — all declared, and every one that remains is read (ADR 0150, ADR 0177); five that nothing read were retired: business-day start/end, average order time, maximum order time, VAT rate, routing poll interval. Originally listed: business-day start/end, average order time, maximum order time, late threshold, late indicator colour, minimum order sum, routing poll interval, pre-order branch resolution rule, operator promo-code permission | ADR 0030 registry (`ConfigurationKeys`), content owned by ADR 0002 / 0019 / 0037 |
+| ~~Auto-accept eligible-channel set and minimum-prior-successful-orders gate on the acceptance policy document~~ — built as two scalars read at checkout, with the document carrying the hold-back path (ADR 0177 decision 3) | ADR 0002 + ADR 0030 |
 | An operations-facing resolution-trace endpoint for the §1.2 origin chip | `ConfigurationController` does the work; it sits on `/api/v1/control-plane/...`, not `/api/v1/operations/...` |
 | `payments.payment_method_entity_bindings`, fiscal-responsibility validation at method activation, bulk fiscal-classification assignment, and the three `CatalogValidator` rules becoming publication errors rather than warnings | ADR 0038 |
 | Provider template moderation state and the send block it implies | ADR 0020 — the rest of the `notifications` schema and template authoring are built; see §10.9 |
@@ -1628,8 +1651,8 @@ Named precisely, with the owning decision. Everything not listed here is built a
 | Courier policy settings: billing mode, shift enforcement, ready-only visibility, address-before-accept, post-delivery payment check, acceptance SLA, max concurrent orders, GPS radii | ADR 0042, Proposed |
 | ~~Business calendar, business-day boundary that may cross midnight, weekend definition~~ — built wave P37, `BusinessCalendarController`, §10.10. Delever's forecast-window default (09:00→09:00) is still an open product question the matrix records | ADR 0043 |
 | ~~Tenant-configurable SLA bucket boundaries, versioned~~ — declined, not deferred: ADR 0043 fixes the buckets platform-side. Corrected wave P37, ADR 0107; a read-only version card is built (§10.10) | ADR 0043 |
-| `ordering.orders.callback_requested`, `cash_tendered_expected_minor` | ADR 0039 |
-| Courier-first vs branch-first acceptance ordering — **design-forcing, not configuration**: it reorders the lifecycle and ADR 0019's state machine must carry it as a parameter or refuse it | ADR 0019 |
+| ~~`ordering.orders.callback_requested`, `cash_tendered_expected_minor`~~ — both columns exist (V0029) and both are now settable while an order is keyed in, behind Card 5's two toggles (ADR 0177) | ADR 0039 |
+| ~~Courier-first vs branch-first acceptance ordering~~ — declined: orders are branch-first (ADR 0177 decision 4), the way ADR 0019 said to settle it ("carry it as a parameter or refuse it") | ADR 0019 |
 | Retention schedules, consent state definitions, DSAR request handling | ADR 0029 |
 | **A print capability port on ADR 0011, and a decision that owns printing and receipt presentation at all.** Nothing owns it today | new ADR |
 

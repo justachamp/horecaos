@@ -515,7 +515,7 @@ export const settingsEn = {
   'settings.orderPolicy.field.notifyCustomer': 'Tell the customer while it waits',
   'settings.orderPolicy.mode.AUTO_CONFIRM': 'Auto-confirm',
   'settings.orderPolicy.mode.RESTAURANT_APPROVAL': 'Restaurant approval',
-  'settings.orderPolicy.approvalChannel.NONE': 'Nobody (unused when auto-confirming)',
+  'settings.orderPolicy.approvalChannel.NONE': 'Nobody (every order is confirmed automatically)',
   'settings.orderPolicy.approvalChannel.HORECAOS_OPERATIONS': 'HorecaOS operations',
   'settings.orderPolicy.approvalChannel.POS': 'POS',
   'settings.orderPolicy.approvalChannel.EITHER': 'Either',
@@ -534,11 +534,6 @@ export const settingsEn = {
   'settings.orderPolicy.dispatchSummary.link': 'Open the dispatch rules',
   'settings.orderPolicy.card4.title': 'Conditions',
   'settings.orderPolicy.card5.title': 'Operator order entry',
-  'settings.orderPolicy.field.businessDayStartHour': 'Business day starts at (hour)',
-  'settings.orderPolicy.field.averageOrderMinutes': 'Average order time (minutes)',
-  'settings.orderPolicy.field.maximumOrderMinutes': 'Maximum order time (minutes)',
-  'settings.orderPolicy.notApplied.hint':
-    'Not applied yet: nothing reads this number, so changing it changes nothing.',
   'settings.orderPolicy.field.lateOrderThresholdMinutes':
     'An order with no promised time is late after (minutes)',
   'settings.orderPolicy.lateOrderThresholdMinutes.hint':
@@ -556,17 +551,72 @@ export const settingsEn = {
   'settings.orderPolicy.field.minimumOrderAmount': 'Minimum order sum',
   'settings.orderPolicy.minimumOrderAmount.hint':
     'Pickup and dine-in only — delivery keeps its own minimum, set on the service zone.',
-  'settings.orderPolicy.field.vatRatePercent': 'VAT rate (%)',
-  'settings.orderPolicy.field.routingPollIntervalMinutes': 'Routing poll interval (minutes)',
   'settings.orderPolicy.field.autoAcceptEligibleChannels': 'Auto-accept eligible channels',
   'settings.orderPolicy.autoAcceptEligibleChannels.hint':
-    '"ALL", or a comma-separated list of sales channel codes. Not yet enforced.',
+    '"ALL", or sales channel codes separated by commas. An order on any other channel is not confirmed by itself: it waits on the path set in Order acceptance above.',
   'settings.orderPolicy.field.autoAcceptMinPriorOrders': 'Minimum prior successful orders',
   'settings.orderPolicy.field.preorderBranchResolution': 'Pre-order branch selection',
   'settings.orderPolicy.preorderBranchResolution.BY_DISTANCE': 'Nearest branch',
   'settings.orderPolicy.preorderBranchResolution.BY_OPENING_TIME': 'Soonest to open',
   'settings.orderPolicy.field.operatorPromoCodeAllowed': 'Operator may apply a promo code',
   'settings.orderPolicy.revertReason': 'Reverted to the inherited value',
+  'settings.orderPolicy.holdBack.title': 'Orders an auto-accept gate holds back',
+  'settings.orderPolicy.holdBack.hint':
+    'Under auto-confirm, an order that a gate in Automation below holds back (a channel not on its list, or a customer with too few completed orders) waits for this person, for this long, and then the timeout action happens. Leave “Who confirms” as Nobody and the gates can hold nothing.',
+  'settings.orderPolicy.holdBack.none':
+    'No path for held-back orders: the gates in Automation below cannot hold an order.',
+  'settings.orderPolicy.autoAcceptMinPriorOrders.hint':
+    'A customer with fewer completed orders at this brand than this waits for a decision; a guest counts as having none. 0 means no gate.',
+  'settings.orderPolicy.gates.noPath':
+    'Order acceptance above has nobody to hold an order for, so these gates cannot hold anything: such an order is confirmed anyway. Choose who confirms there first.',
+  'settings.orderPolicy.preorderBranchResolution.hint':
+    'Used when a pre-order is placed for a time when no candidate branch is open. A pickup order has no customer address to measure from, so “nearest” falls back to “soonest to open” for it.',
+  'settings.orderPolicy.field.operatorCallbackFlagAllowed':
+    'Operator may flag an order “call the customer back”',
+  'settings.orderPolicy.field.operatorChangeDueAllowed':
+    'Operator may record the cash the customer will hand over',
+  'settings.orderPolicy.operatorPromoCodeAllowed.hint':
+    'When off, a promo code on an operator order is refused, both when it is priced and when it is placed.',
+  'settings.orderPolicy.operatorCallbackFlagAllowed.hint':
+    'When off, the New order screen hides the checkbox and the server refuses the flag.',
+  'settings.orderPolicy.operatorChangeDueAllowed.hint':
+    'When off, the New order screen hides the change calculation and the server refuses a cash amount.',
+  'settings.orderPolicy.neighbours.title': 'Settings that live elsewhere',
+  'settings.orderPolicy.neighbours.lead':
+    'These shape an order too, but each is set on its own screen. What is shown is what is in force; open the screen to change it.',
+  'settings.orderPolicy.neighbours.open': 'Open',
+  'settings.orderPolicy.neighbours.loading': 'Loading…',
+  'settings.orderPolicy.neighbours.unreadable': 'Not shown: your role cannot read it',
+  'settings.orderPolicy.neighbours.distanceMode.label': 'How a delivery is measured',
+  'settings.orderPolicy.neighbours.distanceMode.RADIUS': 'In a straight line (the standard tariff)',
+  'settings.orderPolicy.neighbours.distanceMode.ROAD': 'By road (the standard tariff)',
+  'settings.orderPolicy.neighbours.distanceMode.none': 'No standard tariff in force for this brand',
+  'settings.orderPolicy.neighbours.branchLimit.label': 'Most orders a branch takes at once',
+  'settings.orderPolicy.neighbours.branchLimit.value': '{count}',
+  'settings.orderPolicy.neighbours.branchLimit.none': 'No limit',
+  'settings.orderPolicy.neighbours.branchLimit.perBranch':
+    'Set for each branch separately — choose a branch in the bar above to see its limit.',
+  'settings.orderPolicy.neighbours.outOfZone.label': 'An address outside every delivery zone',
+  'settings.orderPolicy.neighbours.outOfZone.REJECT': 'Reject',
+  'settings.orderPolicy.neighbours.outOfZone.OFFER_PICKUP': 'Offer pickup instead',
+  'settings.orderPolicy.neighbours.outOfZone.MANUAL_REVIEW': 'Hold for manual review',
+  'settings.orderPolicy.neighbours.outOfZone.notApplied':
+    'Not applied yet: the delivery fee calculation still refuses such an address whatever this says.',
+  'settings.orderPolicy.neighbours.courierVisibility.label': 'What a courier sees',
+  'settings.orderPolicy.neighbours.courierVisibility.READY_ONLY':
+    'Only orders the kitchen has finished',
+  'settings.orderPolicy.neighbours.courierVisibility.ANY': 'Also orders still being cooked',
+  'settings.orderPolicy.neighbours.paidHold.label': 'Kitchen waits for payment',
+  'settings.orderPolicy.neighbours.paidHold.SHADOW': 'Trial: only counts what it would hold',
+  'settings.orderPolicy.neighbours.paidHold.HOLD_UNTIL_PAID': 'Holds an unpaid order',
+  'settings.orderPolicy.neighbours.paidHold.OFF': 'Off',
+  'settings.orderPolicy.neighbours.callCentre.label': 'The call-centre channel',
+  'settings.orderPolicy.neighbours.callCentre.none': 'No active call-centre channel',
+  'settings.orderPolicy.neighbours.callCentre.value':
+    '{payments} payment methods · order types: {modes}',
+  'settings.orderPolicy.neighbours.mode.PICKUP': 'Pickup',
+  'settings.orderPolicy.neighbours.mode.DELIVERY': 'Delivery',
+  'settings.orderPolicy.neighbours.mode.DINE_IN': 'Dine-in',
 
   // Rows X.39 / 10.3b — the ordering.lateness document's editor
   'settings.latenessPolicy.title': 'When an order counts as late',

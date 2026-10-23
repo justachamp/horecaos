@@ -44,17 +44,14 @@ export interface SettingEntry {
  * this file to the registry, so a key added to the platform cannot be left out of «Find a setting» by silence.
  */
 export const SETTING_ENTRIES = {
-  'ordering.business_day_start_hour': { route: 'order-policy', unit: 'hour' },
-  'ordering.average_order_minutes': { route: 'order-policy', unit: 'minutes' },
-  'ordering.maximum_order_minutes': { route: 'order-policy', unit: 'minutes' },
   'ordering.late_order_threshold_minutes': { route: 'order-policy', unit: 'minutes' },
   'ordering.at_risk_before_minutes': { route: 'order-policy', unit: 'minutes' },
   'ordering.late_colour': { route: 'order-policy', unit: 'text' },
   'ordering.minimum_order_amount_minor': { route: 'order-policy', unit: 'money' },
-  'ordering.vat_rate_percent': { route: 'order-policy', unit: 'percent' },
-  'ordering.routing_poll_interval_minutes': { route: 'order-policy', unit: 'minutes' },
   'ordering.preorder_branch_resolution': { route: 'order-policy', unit: 'text' },
   'ordering.operator_promo_code_allowed': { route: 'order-policy', unit: 'toggle' },
+  'ordering.operator_callback_flag_allowed': { route: 'order-policy', unit: 'toggle' },
+  'ordering.operator_change_due_allowed': { route: 'order-policy', unit: 'toggle' },
   'ordering.auto_accept_eligible_channels': { route: 'order-policy', unit: 'text' },
   'ordering.auto_accept_min_prior_orders': { route: 'order-policy', unit: 'count' },
   'catalog.use_stock_logic': { route: 'catalog', unit: 'toggle' },
