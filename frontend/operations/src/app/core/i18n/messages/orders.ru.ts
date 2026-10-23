@@ -252,10 +252,14 @@ export const ordersRu: AreaMessages<typeof ordersEn> = {
   'orders.tillRevision.send': 'Отправить новую сумму в кассу',
   'orders.tillRevision.sending': 'Отправляем…',
   'orders.tillRevision.acknowledge': 'Я изменил сумму в кассе',
+  'orders.tillRevision.askManager':
+    'Попросите управляющего филиала изменить сумму в кассе и подтвердить здесь: вы видите это уведомление, но не можете его закрыть.',
   'orders.tillRevision.failed': 'Последняя попытка сообщить кассе не удалась.',
   'orders.tillRevision.told': 'Новая сумма отправлена в кассу.',
   'orders.tillRevision.acknowledged': 'Принято: сумма в кассе исправлена вручную.',
   'orders.tillRevision.unreadable': 'Не удалось проверить, совпадает ли касса с заказом.',
+  'orders.tillRevision.stale':
+    'Пока вы смотрели, заказ взвесили ещё раз, и сумма изменилась. Ничего не отправлено и не закрыто: проверьте новую сумму.',
   'orders.tillRevision.outcome.NO_OPEN_NOTICE': 'Менять нечего: касса и заказ уже совпадают.',
   'orders.tillRevision.outcome.NOT_AVAILABLE':
     'Этой кассе нельзя отправить новую сумму отсюда. Измените её вручную и подтвердите.',
@@ -265,6 +269,8 @@ export const ordersRu: AreaMessages<typeof ordersEn> = {
     'Не удалось связаться с кассой. Повторите или измените сумму вручную.',
   'orders.tillRevision.outcome.UNCERTAIN':
     'Касса могла принять новую сумму, а могла и нет. Проверьте её, прежде чем отправлять снова.',
+  'orders.tillRevision.outcome.SUPERSEDED':
+    'Кассе отправили прежнюю сумму, но за это время заказ взвесили ещё раз. Проверьте новую сумму, затем отправьте её в кассу снова или измените вручную.',
   'orders.detail.lines.snapshotNotice': 'Названия и цены зафиксированы на момент оформления.',
   'orders.detail.lines.note.hidden': '💬 есть комментарий',
   'orders.detail.lines.note.empty': 'нет комментария',

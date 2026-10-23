@@ -22,28 +22,34 @@
         {{ text }}
       </p>
     }
-    <div class="till-revision__actions">
-      @if (view()?.canTell) {
+    @if (mayResolve()) {
+      <div class="till-revision__actions">
+        @if (view()?.canTell) {
+          <button
+            type="button"
+            class="till-revision__send q-body-sm"
+            [disabled]="busy()"
+            (click)="send()"
+            data-testid="till-revision-send"
+          >
+            {{ (busy() ? 'orders.tillRevision.sending' : 'orders.tillRevision.send') | t }}
+          </button>
+        }
         <button
           type="button"
-          class="till-revision__send q-body-sm"
+          class="till-revision__acknowledge q-body-sm"
           [disabled]="busy()"
-          (click)="send()"
-          data-testid="till-revision-send"
+          (click)="acknowledge()"
+          data-testid="till-revision-acknowledge"
         >
-          {{ (busy() ? 'orders.tillRevision.sending' : 'orders.tillRevision.send') | t }}
+          {{ 'orders.tillRevision.acknowledge' | t }}
         </button>
-      }
-      <button
-        type="button"
-        class="till-revision__acknowledge q-body-sm"
-        [disabled]="busy()"
-        (click)="acknowledge()"
-        data-testid="till-revision-acknowledge"
-      >
-        {{ 'orders.tillRevision.acknowledge' | t }}
-      </button>
-    </div>
+      </div>
+    } @else {
+      <p class="q-caption till-revision__ask-manager" data-testid="till-revision-ask-manager">
+        {{ 'orders.tillRevision.askManager' | t }}
+      </p>
+    }
   </section>
 } @else if (justClosed(); as closed) {
   <p class="q-caption till-revision__closed" role="status" data-testid="till-revision-closed">

@@ -3,7 +3,8 @@ import { firstValueFrom, tap } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { IntentCommandRegistry } from '../../core/api/idempotency';
-import { TenantScope, posPaths } from '../../core/api/pos-paths';
+import { LocationScope } from '../../core/api/operations-paths';
+import { posPaths } from '../../core/api/pos-paths';
 
 /** `OpenAPI`: `OPEN` until the till was told or a person changed it; `TOLD` and `ACKNOWLEDGED` are the two ways it ends. */
 export type TillRevisionStatus = 'OPEN' | 'TOLD' | 'ACKNOWLEDGED';
@@ -11,6 +12,11 @@ export type TillRevisionStatus = 'OPEN' | 'TOLD' | 'ACKNOWLEDGED';
 /** Mirrors `OrderPosRevisionController.NoticeView`: money and codes only, never a customer or a line. */
 export interface TillRevisionNotice {
   readonly noticeId: string;
+  /**
+   * The order revision whose total the till does not hold. It moves when the order is weighed again, so it is
+   * what an action quotes: the platform closes the notice the operator looked at and refuses one that moved.
+   */
+  readonly revision: number;
   readonly status: TillRevisionStatus;
   /** What moved the total: `CATCHWEIGHT`, a captured weight. */
   readonly source: string;
@@ -38,7 +44,18 @@ export interface TillRevisionView {
 
 /** Mirrors `PosOrderRevisionService.Outcome`. */
 export type TillRevisionSendOutcome =
-  'TOLD' | 'NO_OPEN_NOTICE' | 'NOT_AVAILABLE' | 'REJECTED' | 'RETRYABLE' | 'UNCERTAIN';
+  | 'TOLD'
+  | 'NO_OPEN_NOTICE'
+  | 'NOT_AVAILABLE'
+  | 'REJECTED'
+  | 'RETRYABLE'
+  | 'UNCERTAIN'
+  | 'SUPERSEDED';
+
+/** The body of both actions: the revision of the notice the operator saw (`STALE_VERSION` when it has moved). */
+interface TillRevisionAction {
+  readonly expectedRevision: number;
+}
 
 /** Mirrors `OrderPosRevisionController.SendResponse`. Always a `200`: a refusal is an ordinary answer. */
 export interface TillRevisionSendResult {
@@ -60,34 +77,46 @@ export interface TillRevisionSendResult {
 @Injectable({ providedIn: 'root' })
 export class TillRevisionApi {
   private readonly api = inject(ApiClient);
-  private readonly intents = new IntentCommandRegistry<Record<string, never>>();
+  private readonly intents = new IntentCommandRegistry<TillRevisionAction>();
 
-  async forOrder(scope: TenantScope, orderId: string): Promise<TillRevisionView> {
+  async forOrder(scope: LocationScope, orderId: string): Promise<TillRevisionView> {
     const result = await firstValueFrom(
       this.api.get<TillRevisionView>(posPaths.orderTillRevision(scope, orderId)),
     );
     return result.value;
   }
 
-  send(scope: TenantScope, orderId: string): Promise<TillRevisionSendResult> {
+  /**
+   * Tells the till the total of the notice the operator saw. A changed revision is a different intent, so it
+   * gets a fresh key: replaying the answer to the old one would tell the till the old amount.
+   */
+  send(
+    scope: LocationScope,
+    orderId: string,
+    expectedRevision: number,
+  ): Promise<TillRevisionSendResult> {
     const id = `send:${orderId}`;
     return firstValueFrom(
       this.api
-        .post<Record<string, never>, TillRevisionSendResult>(
+        .post<TillRevisionAction, TillRevisionSendResult>(
           posPaths.orderTillRevisionSend(scope, orderId),
-          this.intents.next(id, {}),
+          this.intents.next(id, { expectedRevision }),
         )
         .pipe(tap(() => this.intents.forget(id))),
     );
   }
 
-  acknowledge(scope: TenantScope, orderId: string): Promise<TillRevisionView> {
+  acknowledge(
+    scope: LocationScope,
+    orderId: string,
+    expectedRevision: number,
+  ): Promise<TillRevisionView> {
     const id = `acknowledge:${orderId}`;
     return firstValueFrom(
       this.api
-        .post<Record<string, never>, TillRevisionView>(
+        .post<TillRevisionAction, TillRevisionView>(
           posPaths.orderTillRevisionAcknowledge(scope, orderId),
-          this.intents.next(id, {}),
+          this.intents.next(id, { expectedRevision }),
         )
         .pipe(tap(() => this.intents.forget(id))),
     );

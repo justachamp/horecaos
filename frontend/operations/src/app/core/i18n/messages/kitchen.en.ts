@@ -234,6 +234,18 @@ export const kitchenEn = {
   'kitchen.stopList.propagation.inSync': '{name}: in sync',
   'kitchen.stopList.propagation.dryRun':
     '{name}: dry run — {count} items would be sent, nothing has been sent. Compare with the partner portal before going live',
+  'kitchen.stopList.propagation.dryRun.show': 'Show the {count} dishes',
+  'kitchen.stopList.propagation.dryRun.hide': 'Hide the list of {count} dishes',
+  'kitchen.stopList.propagation.dryRun.loading': 'Loading…',
+  'kitchen.stopList.propagation.dryRun.more': 'Show more',
+  'kitchen.stopList.propagation.dryRun.failed': 'Could not load the list. Try again.',
+  'kitchen.stopList.propagation.dryRun.available': 'would be set to available',
+  'kitchen.stopList.propagation.dryRun.stopped': 'would be set to stopped',
+  'kitchen.stopList.propagation.dryRun.unnamed': 'A dish that is no longer in the menu',
+  'kitchen.stopList.propagation.dryRun.reference': 'Partner item {reference}',
+  'kitchen.stopList.propagation.dryRun.partnerUnknown': 'what the partner holds is not known',
+  'kitchen.stopList.propagation.dryRun.partnerAvailable': 'last known at the partner: available',
+  'kitchen.stopList.propagation.dryRun.partnerStopped': 'last known at the partner: stopped',
   'kitchen.stopList.propagation.incident':
     '{name}: the partner has not confirmed since {since}. This stays open until it does, and closes by itself.',
 

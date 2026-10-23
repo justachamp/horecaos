@@ -107,14 +107,21 @@ public class TillRevisionNoticeService implements TillRevisionNotices {
 
     @Override
     @Transactional
-    public boolean markTold(UUID tenantId, UUID noticeId, String actor, Instant at) {
-        return store.resolve(tenantId, noticeId, "TOLD", actor, at);
+    public boolean markTold(UUID tenantId, UUID noticeId, int revision, String actor, Instant at) {
+        return store.resolve(tenantId, noticeId, revision, "TOLD", actor, at);
     }
 
     @Override
     @Transactional
-    public boolean markAcknowledged(UUID tenantId, UUID noticeId, String actor, Instant at) {
-        return store.resolve(tenantId, noticeId, "ACKNOWLEDGED", actor, at);
+    public boolean markAcknowledged(UUID tenantId, UUID noticeId, int revision, String actor, Instant at) {
+        return store.resolve(tenantId, noticeId, revision, "ACKNOWLEDGED", actor, at);
+    }
+
+    @Override
+    @Transactional
+    public boolean recordTold(
+            UUID tenantId, UUID noticeId, int toldRevision, long toldTotalMinor, String actor, Instant at) {
+        return store.recordToldBeforeItMoved(tenantId, noticeId, toldRevision, toldTotalMinor, actor, at);
     }
 
     @Override

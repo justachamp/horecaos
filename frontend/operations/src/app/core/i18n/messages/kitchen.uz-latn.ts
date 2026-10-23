@@ -239,6 +239,18 @@ export const kitchenUzLatn: AreaMessages<typeof kitchenEn> = {
   'kitchen.stopList.propagation.inSync': '{name}: sinxronlashgan',
   'kitchen.stopList.propagation.dryRun':
     '{name}: sinov rejimi — {count} ta pozitsiya yuborilgan boʻlardi, hech narsa yuborilmadi. Yoqishdan oldin hamkor kabineti bilan solishtiring',
+  'kitchen.stopList.propagation.dryRun.show': 'Barcha taomlarni koʻrsatish: {count}',
+  'kitchen.stopList.propagation.dryRun.hide': '{count} ta taom roʻyxatini yashirish',
+  'kitchen.stopList.propagation.dryRun.loading': 'Yuklanmoqda…',
+  'kitchen.stopList.propagation.dryRun.more': 'Yana koʻrsatish',
+  'kitchen.stopList.propagation.dryRun.failed': 'Roʻyxatni yuklab boʻlmadi. Qayta urinib koʻring.',
+  'kitchen.stopList.propagation.dryRun.available': 'mavjud qilib qoʻyilardi',
+  'kitchen.stopList.propagation.dryRun.stopped': 'stopga qoʻyilardi',
+  'kitchen.stopList.propagation.dryRun.unnamed': 'Menyuda endi yoʻq taom',
+  'kitchen.stopList.propagation.dryRun.reference': 'Hamkor pozitsiyasi {reference}',
+  'kitchen.stopList.propagation.dryRun.partnerUnknown': 'hamkorda hozir nima borligi nomaʻlum',
+  'kitchen.stopList.propagation.dryRun.partnerAvailable': 'hamkorda maʻlum: mavjud',
+  'kitchen.stopList.propagation.dryRun.partnerStopped': 'hamkorda maʻlum: stopda',
   'kitchen.stopList.propagation.incident':
     '{name}: hamkor {since} dan beri tasdiqlamayapti. U tasdiqlamaguncha bu ochiq qoladi va oʻzi yopiladi.',
 

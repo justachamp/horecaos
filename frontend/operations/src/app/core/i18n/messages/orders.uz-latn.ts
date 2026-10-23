@@ -254,10 +254,14 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   'orders.tillRevision.send': 'Yangi summani kassaga yuborish',
   'orders.tillRevision.sending': 'Yuborilmoqda…',
   'orders.tillRevision.acknowledge': 'Kassadagi summani oʻzgartirdim',
+  'orders.tillRevision.askManager':
+    'Filial boshqaruvchisidan kassadagi summani oʻzgartirib, shu yerda tasdiqlashini soʻrang: siz bu xabarni koʻrasiz, lekin yopa olmaysiz.',
   'orders.tillRevision.failed': 'Kassaga xabar berishning oxirgi urinishi oʻtmadi.',
   'orders.tillRevision.told': 'Yangi summa kassaga yuborildi.',
   'orders.tillRevision.acknowledged': 'Qayd etildi: kassadagi summa qoʻlda tuzatildi.',
   'orders.tillRevision.unreadable': 'Kassa buyurtmaga mos kelishini tekshirib boʻlmadi.',
+  'orders.tillRevision.stale':
+    'Siz qarab turganingizda buyurtma yana tortildi va summa oʻzgardi. Hech narsa yuborilmadi va yopilmadi: yangi summani tekshiring.',
   'orders.tillRevision.outcome.NO_OPEN_NOTICE':
     'Oʻzgartiradigan narsa yoʻq: kassa va buyurtma mos.',
   'orders.tillRevision.outcome.NOT_AVAILABLE':
@@ -268,6 +272,8 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
     'Kassaga ulanib boʻlmadi. Qayta urining yoki qoʻlda oʻzgartiring.',
   'orders.tillRevision.outcome.UNCERTAIN':
     'Kassa yangi summani qabul qilgan boʻlishi ham, qilmagan boʻlishi ham mumkin. Qayta yuborishdan oldin tekshiring.',
+  'orders.tillRevision.outcome.SUPERSEDED':
+    'Kassaga oldingi summa yuborildi, ammo shu orada buyurtma yana tortildi. Yangi summani tekshiring, soʻng kassaga qayta yuboring yoki qoʻlda oʻzgartiring.',
   'orders.detail.lines.snapshotNotice': 'Nomlar va narxlar buyurtma berilgan paytda qayd etilgan.',
   'orders.detail.lines.note.hidden': '💬 izoh bor',
   'orders.detail.lines.note.empty': 'izoh yoʻq',

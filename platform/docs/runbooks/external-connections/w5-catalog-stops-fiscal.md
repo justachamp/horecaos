@@ -25,9 +25,10 @@ system is stated as unconnected, never reported as working (ADR 0011). Nothing b
 - **Connect on the day.** One class per provider implementing `MarketplaceAvailabilityAdapter` (providerType,
   `availabilityCall`, `interpret` mapping the vendor's "no such item" to `PushConclusion.UNKNOWN_ITEM`), beside
   the fake; a note under `docs/providers/<aggregator>.md`; then the Phase 3 week: set
-  `marketplace.availability.dry_run` for one branch, compare the propagation read's would-push list with the
-  partner portal for a week, turn it off. The adapter registers itself; nothing else changes.
-- **Prove the connection.** With the adapter registered, the same binding that read `MANUAL` reads `AUTOMATIC`. Set `marketplace.availability.dry_run` for one branch (a platform administrator, location scope) and stop a dish: the partner's sandbox receives nothing and the propagation read's would-push list names the dish. After the week, switch the key off and stop the dish again: the partner's own portal shows it stopped within one reconciler tick, the binding's item reads `IN_SYNC`, and `FakeAggregatorHttpProviderTests`' shape is repeated against a recorded sandbox exchange in the new adapter's contract test (ADR 0007).
+  `marketplace.availability.dry_run` for one branch, compare the whole would-push list (the stop list's banner offers it as «Show the N dishes»; it is
+  `GET .../inventory/marketplace-propagation/{bindingId}/would-push`, every dish by name and the partner's own item
+  reference, not the twenty-item sample of the propagation read) with the partner portal for a week, turn it off. The adapter registers itself; nothing else changes.
+- **Prove the connection.** With the adapter registered, the same binding that read `MANUAL` reads `AUTOMATIC`. Set `marketplace.availability.dry_run` for one branch (a platform administrator, location scope) and stop a dish: the partner's sandbox receives nothing and the would-push list names the dish. After the week, switch the key off and stop the dish again: the partner's own portal shows it stopped within one reconciler tick, the binding's item reads `IN_SYNC`, and `FakeAggregatorHttpProviderTests`' shape is repeated against a recorded sandbox exchange in the new adapter's contract test (ADR 0007).
 
 ## 2. How a payment provider or a fiscal terminal writes a fractional quantity (row 4.2c, ADR 0137)
 

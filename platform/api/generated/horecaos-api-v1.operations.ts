@@ -5834,6 +5834,11 @@ export interface PageSupportSessionView {
   nextCursor?: string;
 }
 
+export interface PageWouldPushItemResponse {
+  items?: Array<WouldPushItemResponse>;
+  nextCursor?: string;
+}
+
 export interface PaidHoldResponse {
   isDefault?: boolean;
   levels?: Array<Level>;
@@ -9585,6 +9590,10 @@ export interface TicketResponse {
   version?: number;
 }
 
+export interface TillRevisionActionRequest {
+  expectedRevision: number;
+}
+
 export interface TillRevisionNoticeView {
   attemptCount?: number;
   currency?: string;
@@ -9594,6 +9603,7 @@ export interface TillRevisionNoticeView {
   openedAt?: string;
   resolvedAt?: string;
   revisedTotalMinor?: number;
+  revision?: number;
   source?: string;
   status?: string;
   tillTotalMinor?: number;
@@ -10084,6 +10094,15 @@ export interface WordingResponse {
   versionNumber?: number;
 }
 
+export interface WouldPushItemResponse {
+  confirmedAvailable?: boolean;
+  dishName?: string;
+  externalItemReference?: string;
+  variantId?: string;
+  wouldPushAt?: string;
+  wouldPushAvailable?: boolean;
+}
+
 export interface ZoneDensityResponse {
   provenance?: ProvenanceResponse;
   zones?: Array<ZoneDensityRowResponse>;
@@ -10279,6 +10298,9 @@ export interface Operations {
   "delivery": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/delivery"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": OrderDeliveryResponse } };
   "externalCourier": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/external-courier"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } }; body: ExternalCourierRequest }; responses: { "200": ExternalCourierResponse } };
   "severity": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/lateness"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": OrderLatenessResponse } };
+  "tillRevisionForOrder": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/till-revision"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": TillRevisionResponse } };
+  "acknowledgeTillRevision": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/till-revision/acknowledge"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } }; body: TillRevisionActionRequest }; responses: { "200": TillRevisionResponse } };
+  "sendTillRevision": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/till-revision/send"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } }; body: TillRevisionActionRequest }; responses: { "200": TillRevisionSendResponse } };
   "replacePreparationBands": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/preparation-bands"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BandsRequest }; responses: { "200": unknown } };
   "listForLocation": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/recovery-cases"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { cursor?: string; limit?: number; maxRating?: number; minRating?: number; ownerStaffMemberId?: string; slaState?: "ON_TRACK" | "AT_RISK" | "BREACHED" | "MET"; state?: "NEW" | "IN_PROGRESS" | "RESOLVED" | "CLOSED_UNRESOLVED" } } }; responses: { "200": PageCaseSummaryResponse } };
   "open_3": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/recovery-cases"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: OpenCaseRequest }; responses: { "200": CaseMutationResponse } };
@@ -10543,9 +10565,6 @@ export interface Operations {
   "push": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/pos-export/push"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: OrderPosExportControllerPushRequest }; responses: { "200": PushResultResponse } };
   "recordRefund": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/refunds"; request: { parameters: { path: { orderId: string; tenantId: string } }; body: RefundRequest }; responses: { "200": RemedyResponse } };
   "remediesOfOrder": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/remedies"; request: { parameters: { path: { orderId: string; tenantId: string } } }; responses: { "200": Array<RemedyResponse> } };
-  "tillRevisionForOrder": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/till-revision"; request: { parameters: { path: { orderId: string; tenantId: string } } }; responses: { "200": TillRevisionResponse } };
-  "acknowledgeTillRevision": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/till-revision/acknowledge"; request: { parameters: { path: { orderId: string; tenantId: string } } }; responses: { "200": TillRevisionResponse } };
-  "sendTillRevision": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/till-revision/send"; request: { parameters: { path: { orderId: string; tenantId: string } } }; responses: { "200": TillRevisionSendResponse } };
   "partnerInvoices": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/partner-delivery-invoices"; request: { parameters: { path: { tenantId: string }; query: { limit?: number; status?: string } } }; responses: { "200": Array<PartnerInvoiceResponse> } };
   "importInvoice": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/partner-delivery-invoices"; request: { parameters: { path: { tenantId: string } }; body: ImportInvoiceRequest }; responses: { "200": { [key: string]: string } } };
   "partnerInvoiceDetail": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/partner-delivery-invoices/{invoiceId}"; request: { parameters: { path: { invoiceId: string; tenantId: string } } }; responses: { "200": PartnerInvoiceDetailResponse } };
@@ -10702,6 +10721,7 @@ export interface Operations {
   "checkAvailability": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/availability"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channel?: string; variantIds: Array<string> } } }; responses: { "200": AvailabilityDecision } };
   "backfillLocationListing": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/listing-backfill"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": InventoryControllerBackfillResponse } };
   "propagation": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/marketplace-propagation"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": PropagationResponse } };
+  "wouldPush": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/marketplace-propagation/{bindingId}/would-push"; request: { parameters: { path: { bindingId: string; brandId: string; locationId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PageWouldPushItemResponse } };
   "listPositions": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/positions"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<StockPositionResponse> } };
   "listVariant": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/stock-items"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: ListVariantRequest }; responses: { "200": StockItemResponse } };
   "listAtLocation": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/stops"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { activeOnly?: boolean; cursor?: string; limit?: number; scope?: "LOCATION" | "BRAND" | "MENU" | "CHANNEL" | "TERMINAL"; source?: "OPERATOR" | "BOT" | "POS" | "KITCHEN_DEVICE" | "RULE"; variantId?: string } } }; responses: { "200": PageStopResponse } };

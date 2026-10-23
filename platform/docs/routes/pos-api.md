@@ -70,12 +70,18 @@ update the secret, then re-enable the binding.
 
 `PosAdapter#reviseExportedOrder(context, externalOrderId, revision)` tells a vendor that an order it holds is
 now worth a different total. It is **not** part of an export's retry or reconcile logic: it runs when a person
-presses «Send the new total to the till» on a revised-total notice (`POST .../orders/{id}/till-revision/send`),
-under the key `till-revision:{noticeId}:{revision}`, outside any transaction, and only when the binding the
+presses «Send the new total to the till» on a revised-total notice (`POST
+/api/v1/operations/tenants/{t}/brands/{b}/locations/{l}/orders/{id}/till-revision/send`, checked at the branch: the
+branch manager holds `pos.export.resolve` there and the floor holds only `pos.export.read`), under the key `till-revision:{noticeId}:{revision}`, outside any transaction, and only when the binding the
 order was exported through has `ORDER_REVISION` enabled and usable. The default is not-supported, every vendor
 starts unassessed (the binding trigger refuses an unassessed capability), and Clopos is recorded unsupported:
 `PUT /orders/{id}` accepts only `IGNORE` and a line count is an integer (Q10). A refusal, an unreachable till
 and an unknown outcome leave the notice open with a stable code and never the vendor's words.
+
+Both actions name the notice the person looked at (`expectedRevision`, the `revision` the read returns): a notice
+that a second weighing has moved since is refused `409 STALE_VERSION` with nothing sent and nothing closed, and a
+notice that moves while the vendor is being asked stays open as `SUPERSEDED`, carrying the amount the till took as
+what the till holds.
 
 ## Rollout
 

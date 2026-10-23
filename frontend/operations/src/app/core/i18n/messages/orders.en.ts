@@ -253,10 +253,14 @@ export const ordersEn = {
   'orders.tillRevision.send': 'Send the new total to the till',
   'orders.tillRevision.sending': 'Sending…',
   'orders.tillRevision.acknowledge': 'I changed the till',
+  'orders.tillRevision.askManager':
+    'Ask the branch manager to change the till and say so here: you can see this notice but not close it.',
   'orders.tillRevision.failed': 'The last try to tell the till did not go through.',
   'orders.tillRevision.told': 'The till was sent the new total.',
   'orders.tillRevision.acknowledged': 'Noted: the till was changed by hand.',
   'orders.tillRevision.unreadable': 'Could not check whether the till agrees with this order.',
+  'orders.tillRevision.stale':
+    'The order was weighed again while you were looking, so the total changed. Nothing was sent or closed: check the new total.',
   'orders.tillRevision.outcome.NO_OPEN_NOTICE':
     'Nothing to change: the till and the order already agree.',
   'orders.tillRevision.outcome.NOT_AVAILABLE':
@@ -267,6 +271,8 @@ export const ordersEn = {
     'The till could not be reached. Try again, or change it by hand.',
   'orders.tillRevision.outcome.UNCERTAIN':
     'The till may or may not have the new total. Check it before sending again.',
+  'orders.tillRevision.outcome.SUPERSEDED':
+    'The till was sent the total as it stood, but the order was weighed again meanwhile. Check the new total, then tell the till again or change it by hand.',
   'orders.detail.lines.snapshotNotice':
     'Names and prices are fixed at the moment the order was placed.',
   'orders.detail.lines.note.hidden': '💬 has a note',

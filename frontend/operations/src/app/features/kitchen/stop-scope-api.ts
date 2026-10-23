@@ -144,6 +144,27 @@ export interface PropagationBinding {
   readonly incidentOpenSince?: string | null;
 }
 
+/** Mirrors `MarketplacePropagationController.WouldPushItemResponse`: one decision of a dry run. */
+export interface WouldPushItem {
+  readonly variantId: string;
+  /** The dish's name, resolved when the list is read; null when the dish no longer resolves. */
+  readonly dishName?: string | null;
+  /** The partner's own reference for the item, to find it in their portal. */
+  readonly externalItemReference: string;
+  /** What the platform would have set the dish to. */
+  readonly wouldPushAvailable: boolean;
+  readonly wouldPushAt: string;
+  /** What the platform last knew the partner to hold; null when it has never been told or asked. */
+  readonly confirmedAvailable?: boolean | null;
+}
+
+/** One cursor page of a dry run's decisions. */
+export interface WouldPushPage {
+  readonly items: readonly WouldPushItem[];
+  /** Null on the last page. */
+  readonly nextCursor: string | null;
+}
+
 interface PropagationResponse {
   readonly bindings?: readonly PropagationBinding[];
 }
@@ -217,6 +238,28 @@ export class StopsApi {
       reasons: Array.isArray(body.reasons) ? body.reasons : [],
       stops: Array.isArray(body.stops) ? body.stops : [],
       stopsConsulted: body.stopsConsulted !== false,
+    };
+  }
+
+  /**
+   * Every dish a dry-run binding would push, a page at a time (ADR 0180 Decision 3): the banner's count is the
+   * size of this list, and the manager compares it with the partner's portal. Tolerates a body without items.
+   */
+  async wouldPush(
+    scope: LocationScope,
+    bindingId: string,
+    cursor?: string | null,
+  ): Promise<WouldPushPage> {
+    const result = await firstValueFrom(
+      this.api.get<Partial<WouldPushPage>>(
+        operationsPaths.inventoryMarketplaceWouldPush(scope, bindingId),
+        { params: cursor ? { cursor } : {} },
+      ),
+    );
+    const body = result.value ?? {};
+    return {
+      items: Array.isArray(body.items) ? body.items : [],
+      nextCursor: body.nextCursor ?? null,
     };
   }
 

@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
-import { PropagationBinding, StopsApi } from './stop-scope-api';
+import { PropagationBinding, StopsApi, WouldPushItem, WouldPushPage } from './stop-scope-api';
 import { StopPropagationBanner } from './stop-propagation-banner';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
@@ -26,6 +26,22 @@ function binding(overrides: Partial<PropagationBinding>): PropagationBinding {
   };
 }
 
+function decision(overrides: Partial<WouldPushItem>): WouldPushItem {
+  return {
+    variantId: 'v-1',
+    dishName: 'Plov',
+    externalItemReference: 'ext-001',
+    wouldPushAvailable: true,
+    wouldPushAt: '2026-10-20T08:00:00Z',
+    confirmedAvailable: null,
+    ...overrides,
+  };
+}
+
+function page(items: readonly WouldPushItem[], nextCursor: string | null = null): WouldPushPage {
+  return { items, nextCursor };
+}
+
 async function settle(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -42,7 +58,10 @@ class Host {
 describe('StopPropagationBanner (ADR 0141)', () => {
   let fixture: ComponentFixture<Host>;
 
-  async function render(propagation: ReturnType<typeof vi.fn>): Promise<HTMLElement> {
+  async function render(
+    propagation: ReturnType<typeof vi.fn>,
+    wouldPush: ReturnType<typeof vi.fn> = vi.fn(),
+  ): Promise<HTMLElement> {
     await TestBed.configureTestingModule({
       imports: [Host],
       providers: [
@@ -53,7 +72,7 @@ describe('StopPropagationBanner (ADR 0141)', () => {
             ensureLoaded: () => Promise.resolve(),
           },
         },
-        { provide: StopsApi, useValue: { propagation } },
+        { provide: StopsApi, useValue: { propagation, wouldPush } },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -140,6 +159,126 @@ describe('StopPropagationBanner (ADR 0141)', () => {
     expect(host.querySelector('[data-mode="DRY_RUN"]')?.className).toContain(
       'propagation__line--attention',
     );
+  });
+
+  describe('the whole list of a dry run (ADR 0180 Decision 3)', () => {
+    const dryRun = (wouldPush: number) =>
+      vi.fn().mockResolvedValue([
+        binding({
+          mode: 'DRY_RUN',
+          displayName: 'Uzum Tezkor',
+          unconfirmed: wouldPush,
+          wouldPush,
+        }),
+      ]);
+
+    function items(host: HTMLElement): string[] {
+      return [...host.querySelectorAll('[data-testid="stop-propagation-would-push-item"]')].map(
+        (item) => (item.textContent ?? '').replace(/\s+/g, ' ').trim(),
+      );
+    }
+
+    async function click(host: HTMLElement, testId: string): Promise<void> {
+      host.querySelector<HTMLElement>(`[data-testid="${testId}"]`)?.click();
+      fixture.detectChanges();
+      await settle();
+      fixture.detectChanges();
+    }
+
+    it('offers the list beside the count and shows every dish by name, with what it would be set to', async () => {
+      const wouldPush = vi.fn().mockResolvedValue(
+        page([
+          decision({
+            dishName: 'Plov',
+            externalItemReference: 'ext-001',
+            wouldPushAvailable: false,
+          }),
+          decision({
+            variantId: 'v-2',
+            dishName: 'Samsa',
+            externalItemReference: 'ext-002',
+            confirmedAvailable: true,
+          }),
+        ]),
+      );
+      const host = await render(dryRun(2), wouldPush);
+      expect(items(host)).toEqual([]);
+      expect(host.querySelector('[data-testid="stop-propagation-would-push"]')).toBeNull();
+      expect(
+        host.querySelector('[data-testid="stop-propagation-would-push-toggle"]')?.textContent,
+      ).toContain('Show the 2 dishes');
+
+      await click(host, 'stop-propagation-would-push-toggle');
+
+      expect(wouldPush).toHaveBeenCalledWith(SCOPE, 'b-1', undefined);
+      const rows = items(host);
+      expect(rows).toHaveLength(2);
+      expect(rows[0]).toContain('Plov');
+      expect(rows[0]).toContain('would be set to stopped');
+      expect(rows[0]).toContain('Partner item ext-001');
+      expect(rows[0]).toContain('what the partner holds is not known');
+      expect(rows[1]).toContain('Samsa');
+      expect(rows[1]).toContain('would be set to available');
+      expect(rows[1]).toContain('last known at the partner: available');
+    });
+
+    it('pages: a further page is asked for with the cursor and appended, and the button goes with the last page', async () => {
+      const wouldPush = vi
+        .fn()
+        .mockResolvedValueOnce(page([decision({ externalItemReference: 'ext-001' })], 'ext-001'))
+        .mockResolvedValueOnce(
+          page([
+            decision({ variantId: 'v-2', dishName: 'Samsa', externalItemReference: 'ext-002' }),
+          ]),
+        );
+      const host = await render(dryRun(2), wouldPush);
+      await click(host, 'stop-propagation-would-push-toggle');
+      expect(items(host)).toHaveLength(1);
+
+      await click(host, 'stop-propagation-would-push-more');
+
+      expect(wouldPush).toHaveBeenLastCalledWith(SCOPE, 'b-1', 'ext-001');
+      expect(items(host).map((row) => row.split(' ')[0])).toEqual(['Plov', 'Samsa']);
+      expect(host.querySelector('[data-testid="stop-propagation-would-push-more"]')).toBeNull();
+    });
+
+    it('names a dish that no longer resolves by what it is and still shows the partner reference', async () => {
+      const host = await render(
+        dryRun(1),
+        vi
+          .fn()
+          .mockResolvedValue(page([decision({ dishName: null, externalItemReference: 'ext-9' })])),
+      );
+
+      await click(host, 'stop-propagation-would-push-toggle');
+
+      expect(items(host)[0]).toContain('A dish that is no longer in the menu');
+      expect(items(host)[0]).toContain('Partner item ext-9');
+    });
+
+    it('says the list could not be loaded, and closes with the same button', async () => {
+      const host = await render(dryRun(2), vi.fn().mockRejectedValue(new Error('offline')));
+
+      await click(host, 'stop-propagation-would-push-toggle');
+
+      expect(
+        host.querySelector('[data-testid="stop-propagation-would-push-failed"]'),
+      ).not.toBeNull();
+
+      await click(host, 'stop-propagation-would-push-toggle');
+      expect(host.querySelector('[data-testid="stop-propagation-would-push"]')).toBeNull();
+    });
+
+    it('offers no list for a binding that is not rehearsing or has nothing recorded', async () => {
+      const live = await render(
+        vi.fn().mockResolvedValue([binding({ pending: 3, unconfirmed: 3 })]),
+      );
+      expect(live.querySelector('[data-testid="stop-propagation-would-push-toggle"]')).toBeNull();
+      TestBed.resetTestingModule();
+
+      const empty = await render(dryRun(0));
+      expect(empty.querySelector('[data-testid="stop-propagation-would-push-toggle"]')).toBeNull();
+    });
   });
 
   it('keeps an open stale-channel incident in view beside the count, and shows none once it has closed', async () => {

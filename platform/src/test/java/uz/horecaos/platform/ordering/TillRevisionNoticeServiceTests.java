@@ -143,9 +143,9 @@ class TillRevisionNoticeServiceTests {
         moved(2, 215_000, 208_000, T0);
         Notice first = service.openFor(TENANT, order).orElseThrow();
 
-        assertThat(service.markTold(TENANT, first.id(), "operator-1", T0.plusSeconds(30)))
+        assertThat(service.markTold(TENANT, first.id(), first.revision(), "operator-1", T0.plusSeconds(30)))
                 .isTrue();
-        assertThat(service.markAcknowledged(TENANT, first.id(), "operator-2", T0.plusSeconds(31)))
+        assertThat(service.markAcknowledged(TENANT, first.id(), first.revision(), "operator-2", T0.plusSeconds(31)))
                 .as("a notice already closed is not closed again")
                 .isFalse();
         Notice told = service.latestFor(TENANT, order).orElseThrow();
@@ -163,6 +163,92 @@ class TillRevisionNoticeServiceTests {
     }
 
     @Test
+    @DisplayName("a notice is closed only as the revision the caller acted on: one weighed again since stays open, "
+            + "and the same click on the newer revision closes it")
+    void aNoticeThatMovedIsNotClosedAsTheOldRevision() {
+        moved(2, 215_000, 208_000, T0);
+        Notice seen = service.openFor(TENANT, order).orElseThrow();
+        moved(3, 208_000, 203_000, T0.plusSeconds(10));
+
+        assertThat(service.markTold(TENANT, seen.id(), seen.revision(), "operator-1", T0.plusSeconds(20)))
+                .as("told the 208 000 that revision 2 said")
+                .isFalse();
+        assertThat(service.markAcknowledged(TENANT, seen.id(), seen.revision(), "operator-1", T0.plusSeconds(21)))
+                .as("confirmed the till against the 208 000 that revision 2 said")
+                .isFalse();
+        Notice still = service.openFor(TENANT, order).orElseThrow();
+        assertThat(still.status()).isEqualTo("OPEN");
+        assertThat(still.revision()).isEqualTo(3);
+        assertThat(still.revisedTotalMinor()).isEqualTo(203_000);
+        assertThat(still.resolvedAt()).isNull();
+
+        assertThat(service.markAcknowledged(TENANT, still.id(), still.revision(), "operator-1", T0.plusSeconds(30)))
+                .isTrue();
+        assertThat(service.latestFor(TENANT, order).orElseThrow().status()).isEqualTo("ACKNOWLEDGED");
+    }
+
+    @Test
+    @DisplayName("an amount the till took for an older revision becomes what the till holds, and the notice stays "
+            + "open for the newer total")
+    void aTellingOfAnOlderRevisionUpdatesWhatTheTillHolds() {
+        moved(2, 215_000, 208_000, T0);
+        Notice seen = service.openFor(TENANT, order).orElseThrow();
+        moved(3, 208_000, 203_000, T0.plusSeconds(10));
+
+        assertThat(service.recordTold(
+                        TENANT, seen.id(), seen.revision(), seen.revisedTotalMinor(), "operator-1", T0.plusSeconds(20)))
+                .isTrue();
+
+        Notice open = service.openFor(TENANT, order).orElseThrow();
+        assertThat(open.status()).isEqualTo("OPEN");
+        assertThat(open.tillTotalMinor()).as("the till took 208 000").isEqualTo(208_000);
+        assertThat(open.revisedTotalMinor()).isEqualTo(203_000);
+        assertThat(open.deltaMinor()).isEqualTo(-5_000);
+        assertThat(open.revision()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("if the newer total is the very amount the till took there is nothing left to correct: told")
+    void aTellingThatLandsOnTheNewerTotalClosesTheNotice() {
+        moved(2, 215_000, 208_000, T0);
+        Notice seen = service.openFor(TENANT, order).orElseThrow();
+        moved(3, 208_000, 209_000, T0.plusSeconds(10));
+        moved(4, 209_000, 208_000, T0.plusSeconds(20));
+        Notice newer = service.latestFor(TENANT, order).orElseThrow();
+        assertThat(newer.status())
+                .as("revision 4 is back at what revision 2 said, not what the till holds")
+                .isEqualTo("OPEN");
+
+        assertThat(service.recordTold(TENANT, seen.id(), seen.revision(), 208_000, "operator-1", T0.plusSeconds(30)))
+                .isTrue();
+
+        Notice told = service.latestFor(TENANT, order).orElseThrow();
+        assertThat(told.status()).isEqualTo("TOLD");
+        assertThat(told.resolvedAt()).isEqualTo(T0.plusSeconds(30));
+        assertThat(service.openFor(TENANT, order)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("recording an older telling touches nothing that is closed, or that is not newer than what was told")
+    void anOlderTellingOnlyTouchesANewerOpenNotice() {
+        moved(2, 215_000, 208_000, T0);
+        Notice only = service.openFor(TENANT, order).orElseThrow();
+
+        assertThat(service.recordTold(TENANT, only.id(), only.revision(), 208_000, "operator-1", T0.plusSeconds(5)))
+                .as("the same revision is closed by markTold, not by this")
+                .isFalse();
+        assertThat(service.openFor(TENANT, order).orElseThrow().tillTotalMinor())
+                .isEqualTo(215_000);
+
+        service.markAcknowledged(TENANT, only.id(), only.revision(), "operator-1", T0.plusSeconds(10));
+        assertThat(service.recordTold(TENANT, only.id(), 1, 100_000, "operator-1", T0.plusSeconds(20)))
+                .as("a closed notice is not touched")
+                .isFalse();
+        assertThat(service.latestFor(TENANT, order).orElseThrow().tillTotalMinor())
+                .isEqualTo(215_000);
+    }
+
+    @Test
     @DisplayName("a failed try is counted with its code, and only while the notice is open")
     void failedAttemptsAreCountedWhileOpen() {
         moved(2, 215_000, 208_000, T0);
@@ -175,7 +261,7 @@ class TillRevisionNoticeServiceTests {
         assertThat(after.attemptCount()).isEqualTo(2);
         assertThat(after.lastFailureCode()).isEqualTo("UNCERTAIN");
 
-        service.markAcknowledged(TENANT, open.id(), "operator-1", T0.plusSeconds(20));
+        service.markAcknowledged(TENANT, open.id(), open.revision(), "operator-1", T0.plusSeconds(20));
         service.recordFailedAttempt(TENANT, open.id(), "PROVIDER_REJECTED", T0.plusSeconds(30));
         assertThat(service.latestFor(TENANT, order).orElseThrow().attemptCount())
                 .as("a closed notice is not touched by a late failure")

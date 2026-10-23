@@ -1039,6 +1039,13 @@ public enum PlatformRole {
                     // in particular.
                     CONVERSATION_INBOX_MANAGE,
                     INTEGRATION_FAILURE_READ,
+                    // ADR 0137, ADR 0180: the branch's till and the branch's pass. A weighed total that
+                    // moves an order the till already holds is announced to the branch chat and shown on
+                    // the pass, so the person at the branch sees it and closes it. Held at the branch: the
+                    // till-revision routes are branch routes; the tenant-level POS export routes still ask
+                    // for the capability at TENANT scope, which this grant does not reach.
+                    POS_EXPORT_READ,
+                    POS_EXPORT_RESOLVE,
                     REPORTING_READ,
                     // T14/ADR 0134: the branch's own stop-list call (OFFERING_MANAGE
                     // above) is exactly what an AX/CZ classification informs.
@@ -1096,6 +1103,10 @@ public enum PlatformRole {
                     // a kitchen cooks, so neither belongs on this bundle.
                     KITCHEN_TICKET_READ,
                     KITCHEN_DISPLAY_READ,
+                    // ADR 0137, ADR 0180: the pass sees that the till still holds a different total than the
+                    // weighed one, so somebody tells the manager. Reading only: the person who weighs does
+                    // not decide that the till was changed or tell the vendor (POS_EXPORT_RESOLVE).
+                    POS_EXPORT_READ,
                     // ADR 0154: a cashier reprints a receipt, and that is the whole of what the floor does with a
                     // printer.
                     PRINT_REPRINT,

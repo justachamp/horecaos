@@ -17,6 +17,49 @@
   revise an order; the wording of the accuracy line; the provider encoding of a fractional receipt
   quantity (wave `w11`); the Committee's official IKPU/MXIK file. Nothing here has been run against a
   real aggregator, till or provider, and the local seed script has been syntax-checked but not walked.
+  Corrected 2026-10-23 (Implementation status; review fix `fix21-e-catalog-stops-fiscal`): the route
+  table in the Specification gave the till-revision routes at tenant scope, and that is not what is
+  built or what could work. They are branch routes, `GET|POST
+  /api/v1/operations/tenants/{t}/brands/{b}/locations/{l}/orders/{o}/till-revision[/send|/acknowledge]`,
+  checked at `LOCATION` scope (`OrderPosRevisionController`, which answers 404 for an order of another
+  branch), because the banner sits on the pass and the order detail of a branch and the people there hold
+  no tenant-scope grant. `pos.export.read` is held by `LOCATION_MANAGER` and `LOCATION_STAFF` and
+  `pos.export.resolve` by `LOCATION_MANAGER` (`PlatformRole`), beside the owner and the administrator at
+  tenant scope; the tenant-level POS export routes are unchanged and a branch grant does not reach them.
+  The console draws the banner only for an operator who holds `pos.export.read`, and offers the two ways to
+  close the notice only to one who holds `pos.export.resolve`.
+  Corrected 2026-10-23 (Implementation status, same review fix): Decision 3 says the operator compares
+  "a list of decisions, one per dish" with the partner's portal, but the only read that exposed them was
+  the propagation read's `unconfirmedItems`, capped at 20 and naming a dish by variant id alone, so a
+  branch of sixty dishes could not be compared from the product. `GET
+  /api/v1/tenants/{t}/brands/{b}/locations/{l}/inventory/marketplace-propagation/{bindingId}/would-push`
+  (`MarketplacePropagationController.wouldPush`, `inventory.read` at the branch, 404 for a binding that is
+  not an active marketplace binding of that branch) now lists every decision, cursor-paged by the
+  partner's item reference, with the dish's name resolved when the list is read; its size is the
+  `wouldPush` count, both built from one predicate (`JdbcMarketplaceAvailabilityStore.wouldPushPredicate`).
+  The stop list's banner offers it beside the count. Leaving the dry run clears the recorded decisions
+  (`forgetConfirmations`), and the items of a binding that is not rehearsing no longer carry them.
+  Corrected 2026-10-23 (Implementation status, same review fix): the route table's two till-revision POSTs
+  took no body and closed whichever notice was open when the request landed, so a second weighing
+  between the operator's look and their click had them confirm, or tell the till, a total they never saw.
+  Both now carry `expectedRevision`, the `revision` the read returns for the notice on screen, and answer
+  `409 STALE_VERSION` (nothing sent, nothing closed) when the open notice has moved. A notice is closed only
+  as the revision acted on (`JdbcTillRevisionNoticeStore.resolve`). If the order is weighed again while the
+  till is being asked, the till keeps what it was told, the newer notice stays open carrying that as what the
+  till holds, and the send answers the new outcome `SUPERSEDED` (`PosOrderRevisionService.told`).
+  Corrected 2026-10-23 (Implementation status, same review fix): the Specification's Events paragraph says
+  `CatalogDraftChanged` goes out "one per transaction however many writes it holds". That is not what the
+  code does, and a consumer sized from it would be wrong by the size of the batch. What is built: the fact
+  is appended to the outbox by `CatalogOutboxEventListener.append` (`BEFORE_COMMIT`) once for each fact the
+  authoring service publishes, and `CatalogDraftSignal.alreadySaid` drops a fact only when it is identical
+  to one that same authoring service instance already published in the same transaction (same tenant,
+  brand, entity type, entity, change and channel). Distinct entities are distinct facts, so a `REPLACE`-mode
+  bulk classification of N nodes (`CatalogAuthoringService.bulkClassify` through `classify`) is N facts, one
+  per node, plus one batch fact with no `entityId`; creating a product is two facts (the product's
+  `CREATED` and its default variant's `CLASSIFIED`); and the four authoring services each keep their own
+  memory. The sentence to rely on is: one fact per distinct entity and change, per authoring service, per
+  transaction. All of them are keyed by brand, so a bulk write is a burst on one partition, and a consumer
+  that re-projects a channel's menu must coalesce a burst itself. Pinned by `CatalogDraftSignalTests`.
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: proposed by Claude (batch 21, wave `w5-catalog-stops-fiscal`); Ayubkhon Abbosov

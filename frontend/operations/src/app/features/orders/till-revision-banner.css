@@ -24,6 +24,7 @@
 .till-revision__failure,
 .till-revision__message,
 .till-revision__closed,
+.till-revision__ask-manager,
 .till-revision__unreadable {
   margin: 0;
   color: var(--q-ink-muted);
