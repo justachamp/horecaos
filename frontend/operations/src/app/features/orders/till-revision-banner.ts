@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 
 import { LocationScope } from '../../core/api/operations-paths';
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
@@ -45,6 +46,7 @@ const OUTCOME_MESSAGES: Readonly<Record<string, MessageKey>> = {
 export class TillRevisionBanner {
   private readonly api = inject(TillRevisionApi);
   private readonly i18n = inject(I18n);
+  private readonly capabilities = inject(SessionCapabilities);
 
   readonly scope = input.required<LocationScope>();
   readonly orderId = input.required<string>();
@@ -57,6 +59,15 @@ export class TillRevisionBanner {
   protected readonly unreadable = signal(false);
   /** How the notice just ended in this session, so the operator sees the answer to the click they made. */
   protected readonly justClosed = signal<'TOLD' | 'ACKNOWLEDGED' | null>(null);
+
+  /**
+   * Whether this operator may see the notice at all (`pos.export.read` at the branch). The routes answer
+   * 403 without it, and a note on every ticket saying the till could not be checked is not an answer to a
+   * person who was never meant to be asked. The server decides; this only keeps the page quiet.
+   */
+  protected readonly mayRead = computed(() => this.capabilities.has('POS_EXPORT_READ'));
+  /** Whether this operator may close it (`pos.export.resolve`): the floor sees a notice and tells the manager. */
+  protected readonly mayResolve = computed(() => this.capabilities.has('POS_EXPORT_RESOLVE'));
 
   protected readonly open = computed<TillRevisionNotice | null>(() => {
     const notice = this.view()?.notice ?? null;
@@ -71,6 +82,16 @@ export class TillRevisionBanner {
       const scope = this.scope();
       const orderId = this.orderId();
       this.orderVersion();
+      if (!this.mayRead()) {
+        // Nothing to ask and nothing said about it. The signal is read here so that the session context
+        // arriving late (it settles before the first paint in practice) starts the read.
+        untracked(() => {
+          this.loadSequence++;
+          this.shownFor = null;
+          this.clear();
+        });
+        return;
+      }
       untracked(() => void this.load(scope, orderId));
     });
   }
@@ -124,15 +145,19 @@ export class TillRevisionBanner {
     }
   }
 
+  private clear(): void {
+    this.view.set(null);
+    this.message.set(null);
+    this.justClosed.set(null);
+    this.unreadable.set(false);
+  }
+
   private async load(scope: LocationScope, orderId: string): Promise<void> {
     const sequence = ++this.loadSequence;
     if (this.shownFor !== orderId) {
       // The pane is reused across orders under one route: nothing said about the last one carries over.
       this.shownFor = orderId;
-      this.view.set(null);
-      this.message.set(null);
-      this.justClosed.set(null);
-      this.unreadable.set(false);
+      this.clear();
     }
     try {
       const view = await this.api.forOrder(scope, orderId);

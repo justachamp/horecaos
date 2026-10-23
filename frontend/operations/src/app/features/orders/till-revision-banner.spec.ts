@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
+import { Capability, SessionCapabilities } from '../../core/auth/session-capabilities';
 import { I18n } from '../../core/i18n/i18n';
 import {
   TillRevisionApi,
@@ -34,10 +35,16 @@ function view(overrides: Partial<TillRevisionView> = {}): TillRevisionView {
   return { notice: notice(), canTell: false, ...overrides };
 }
 
-function mount(api: Partial<TillRevisionApi>) {
+/** The branch manager's pair; the floor holds only the read. */
+const MANAGER: readonly Capability[] = ['POS_EXPORT_READ', 'POS_EXPORT_RESOLVE'];
+
+function mount(api: Partial<TillRevisionApi>, held: readonly Capability[] = MANAGER) {
   TestBed.configureTestingModule({
     imports: [TillRevisionBanner],
-    providers: [{ provide: TillRevisionApi, useValue: api }],
+    providers: [
+      { provide: TillRevisionApi, useValue: api },
+      { provide: SessionCapabilities, useValue: { has: (c: Capability) => held.includes(c) } },
+    ],
   });
   TestBed.inject(I18n).setLocale('en');
   const fixture = TestBed.createComponent(TillRevisionBanner);
@@ -155,6 +162,30 @@ describe('TillRevisionBanner (ADR 0137, row 4.2c)', () => {
     await settle(fixture, () => expect(q('till-revision-closed')).not.toBeNull());
     expect(acknowledge).toHaveBeenCalledWith(SCOPE, 'o1');
     expect(q('till-revision-closed')!.textContent).toContain('the till was changed by hand');
+  });
+
+  it('shows the floor the difference but offers it no way to close it, and says who can', async () => {
+    const forOrder = vi.fn().mockResolvedValue(view({ canTell: true }));
+    const { fixture, q } = mount({ forOrder }, ['POS_EXPORT_READ']);
+
+    await settle(fixture, () => expect(q('till-revision-banner')).not.toBeNull());
+
+    expect(q('till-revision-body')).not.toBeNull();
+    expect(q('till-revision-send')).toBeNull();
+    expect(q('till-revision-acknowledge')).toBeNull();
+    expect(q('till-revision-ask-manager')).not.toBeNull();
+  });
+
+  it('asks nothing and says nothing to someone who may not read it, instead of a note on every ticket', async () => {
+    const forOrder = vi.fn().mockRejectedValue(new Error('403'));
+    const { fixture, q } = mount({ forOrder }, []);
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(forOrder).not.toHaveBeenCalled();
+    expect(q('till-revision-banner')).toBeNull();
+    expect(q('till-revision-unreadable')).toBeNull();
   });
 
   it('reads again when the order moves, because a weighing changes the total', async () => {

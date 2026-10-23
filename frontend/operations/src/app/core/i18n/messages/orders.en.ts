@@ -253,6 +253,8 @@ export const ordersEn = {
   'orders.tillRevision.send': 'Send the new total to the till',
   'orders.tillRevision.sending': 'Sending…',
   'orders.tillRevision.acknowledge': 'I changed the till',
+  'orders.tillRevision.askManager':
+    'Ask the branch manager to change the till and say so here: you can see this notice but not close it.',
   'orders.tillRevision.failed': 'The last try to tell the till did not go through.',
   'orders.tillRevision.told': 'The till was sent the new total.',
   'orders.tillRevision.acknowledged': 'Noted: the till was changed by hand.',

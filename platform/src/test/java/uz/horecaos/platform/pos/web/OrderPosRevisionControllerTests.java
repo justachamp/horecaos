@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -24,6 +25,7 @@ import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.ordering.api.TillRevisionNotices.Notice;
 import uz.horecaos.platform.pos.application.PosOrderRevisionService;
@@ -87,7 +89,7 @@ class OrderPosRevisionControllerTests {
         orderExists();
         when(revisions.view(TENANT, ORDER)).thenReturn(new PosOrderRevisionService.View(notice("OPEN"), true));
 
-        TillRevisionResponse body = bodyOf(controller.tillRevisionForOrder(TENANT, ORDER));
+        TillRevisionResponse body = bodyOf(controller.tillRevisionForOrder(TENANT, BRAND, LOCATION, ORDER));
 
         assertThat(body.canTell()).isTrue();
         assertThat(noticeOf(body).tillTotalMinor()).isEqualTo(215_000);
@@ -102,7 +104,7 @@ class OrderPosRevisionControllerTests {
         orderExists();
         when(revisions.view(TENANT, ORDER)).thenReturn(new PosOrderRevisionService.View(null, false));
 
-        TillRevisionResponse body = bodyOf(controller.tillRevisionForOrder(TENANT, ORDER));
+        TillRevisionResponse body = bodyOf(controller.tillRevisionForOrder(TENANT, BRAND, LOCATION, ORDER));
 
         assertThat(body.notice()).isNull();
         assertThat(body.canTell()).isFalse();
@@ -113,10 +115,29 @@ class OrderPosRevisionControllerTests {
     void anUnknownOrderIsNotFound() {
         when(orders.summary(TENANT, ORDER)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> controller.tillRevisionForOrder(TENANT, ORDER)).isInstanceOf(ApiException.class);
-        assertThatThrownBy(() -> controller.sendTillRevision(TENANT, ORDER)).isInstanceOf(ApiException.class);
-        assertThatThrownBy(() -> controller.acknowledgeTillRevision(TENANT, ORDER))
+        assertThatThrownBy(() -> controller.tillRevisionForOrder(TENANT, BRAND, LOCATION, ORDER))
                 .isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> controller.sendTillRevision(TENANT, BRAND, LOCATION, ORDER))
+                .isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> controller.acknowledgeTillRevision(TENANT, BRAND, LOCATION, ORDER))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    @DisplayName("an order of another branch is a 404 on every route, even for a caller who holds the capability")
+    void anOrderOfAnotherBranchIsNotFound() {
+        orderExists();
+        UUID otherLocation = UUID.randomUUID();
+        UUID otherBrand = UUID.randomUUID();
+
+        assertThatThrownBy(() -> controller.tillRevisionForOrder(TENANT, BRAND, otherLocation, ORDER))
+                .isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> controller.sendTillRevision(TENANT, BRAND, otherLocation, ORDER))
+                .isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> controller.acknowledgeTillRevision(TENANT, otherBrand, LOCATION, ORDER))
+                .isInstanceOf(ApiException.class);
+        verify(revisions, never()).tell(any(), any(), any());
+        verify(revisions, never()).acknowledge(any(), any(), any());
     }
 
     @Test
@@ -128,7 +149,7 @@ class OrderPosRevisionControllerTests {
                 .thenReturn(new PosOrderRevisionService.Result(
                         PosOrderRevisionService.Outcome.REJECTED, "CLOPOS_REFUSED", view));
 
-        TillRevisionSendResponse body = bodyOf(controller.sendTillRevision(TENANT, ORDER));
+        TillRevisionSendResponse body = bodyOf(controller.sendTillRevision(TENANT, BRAND, LOCATION, ORDER));
 
         assertThat(body.outcome()).isEqualTo("REJECTED");
         assertThat(body.code()).isEqualTo("CLOPOS_REFUSED");
@@ -148,7 +169,7 @@ class OrderPosRevisionControllerTests {
                 .thenReturn(new PosOrderRevisionService.View(notice("ACKNOWLEDGED"), false));
         when(revisions.acknowledge(TENANT, ORDER, "operator-1")).thenReturn(true);
 
-        TillRevisionResponse body = bodyOf(controller.acknowledgeTillRevision(TENANT, ORDER));
+        TillRevisionResponse body = bodyOf(controller.acknowledgeTillRevision(TENANT, BRAND, LOCATION, ORDER));
 
         assertThat(noticeOf(body).status()).isEqualTo("ACKNOWLEDGED");
         verify(audit).record(any(AuditFact.class));
@@ -161,7 +182,20 @@ class OrderPosRevisionControllerTests {
                 audit,
                 () -> new AuthenticatedActor("operator-1", Set.of(), Map.of()),
                 Clock.fixed(NOW, ZoneOffset.UTC));
-        assertThatThrownBy(() -> empty.acknowledgeTillRevision(TENANT, ORDER)).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> empty.acknowledgeTillRevision(TENANT, BRAND, LOCATION, ORDER))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    @DisplayName("every route is checked at the branch in its path, not at the tenant (ADR 0025)")
+    void everyRouteIsCheckedAtTheBranch() throws Exception {
+        for (String method : new String[] {"tillRevisionForOrder", "sendTillRevision", "acknowledgeTillRevision"}) {
+            Method found =
+                    OrderPosRevisionController.class.getMethod(method, UUID.class, UUID.class, UUID.class, UUID.class);
+            assertThat(found.getAnnotation(RequiresCapability.class).scope())
+                    .as(method)
+                    .isEqualTo(ScopeType.LOCATION);
+        }
     }
 
     @Test
@@ -170,7 +204,8 @@ class OrderPosRevisionControllerTests {
         assertThat(capabilityOf("sendTillRevision")).isEqualTo(Capability.POS_EXPORT_RESOLVE);
         assertThat(capabilityOf("acknowledgeTillRevision")).isEqualTo(Capability.POS_EXPORT_RESOLVE);
         assertThat(capabilityOf("tillRevisionForOrder")).isEqualTo(Capability.POS_EXPORT_READ);
-        Method send = OrderPosRevisionController.class.getMethod("sendTillRevision", UUID.class, UUID.class);
+        Method send = OrderPosRevisionController.class.getMethod(
+                "sendTillRevision", UUID.class, UUID.class, UUID.class, UUID.class);
         assertThat(send.getAnnotation(RequiresCapability.class).mutating()).isTrue();
     }
 
@@ -183,7 +218,8 @@ class OrderPosRevisionControllerTests {
     }
 
     private static Capability capabilityOf(String method) throws Exception {
-        Method found = OrderPosRevisionController.class.getMethod(method, UUID.class, UUID.class);
+        Method found =
+                OrderPosRevisionController.class.getMethod(method, UUID.class, UUID.class, UUID.class, UUID.class);
         return found.getAnnotation(RequiresCapability.class).value();
     }
 }

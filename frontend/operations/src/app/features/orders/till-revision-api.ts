@@ -3,7 +3,8 @@ import { firstValueFrom, tap } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { IntentCommandRegistry } from '../../core/api/idempotency';
-import { TenantScope, posPaths } from '../../core/api/pos-paths';
+import { LocationScope } from '../../core/api/operations-paths';
+import { posPaths } from '../../core/api/pos-paths';
 
 /** `OpenAPI`: `OPEN` until the till was told or a person changed it; `TOLD` and `ACKNOWLEDGED` are the two ways it ends. */
 export type TillRevisionStatus = 'OPEN' | 'TOLD' | 'ACKNOWLEDGED';
@@ -62,14 +63,14 @@ export class TillRevisionApi {
   private readonly api = inject(ApiClient);
   private readonly intents = new IntentCommandRegistry<Record<string, never>>();
 
-  async forOrder(scope: TenantScope, orderId: string): Promise<TillRevisionView> {
+  async forOrder(scope: LocationScope, orderId: string): Promise<TillRevisionView> {
     const result = await firstValueFrom(
       this.api.get<TillRevisionView>(posPaths.orderTillRevision(scope, orderId)),
     );
     return result.value;
   }
 
-  send(scope: TenantScope, orderId: string): Promise<TillRevisionSendResult> {
+  send(scope: LocationScope, orderId: string): Promise<TillRevisionSendResult> {
     const id = `send:${orderId}`;
     return firstValueFrom(
       this.api
@@ -81,7 +82,7 @@ export class TillRevisionApi {
     );
   }
 
-  acknowledge(scope: TenantScope, orderId: string): Promise<TillRevisionView> {
+  acknowledge(scope: LocationScope, orderId: string): Promise<TillRevisionView> {
     const id = `acknowledge:${orderId}`;
     return firstValueFrom(
       this.api

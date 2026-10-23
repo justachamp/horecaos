@@ -252,6 +252,8 @@ export const ordersRu: AreaMessages<typeof ordersEn> = {
   'orders.tillRevision.send': 'Отправить новую сумму в кассу',
   'orders.tillRevision.sending': 'Отправляем…',
   'orders.tillRevision.acknowledge': 'Я изменил сумму в кассе',
+  'orders.tillRevision.askManager':
+    'Попросите управляющего филиала изменить сумму в кассе и подтвердить здесь: вы видите это уведомление, но не можете его закрыть.',
   'orders.tillRevision.failed': 'Последняя попытка сообщить кассе не удалась.',
   'orders.tillRevision.told': 'Новая сумма отправлена в кассу.',
   'orders.tillRevision.acknowledged': 'Принято: сумма в кассе исправлена вручную.',

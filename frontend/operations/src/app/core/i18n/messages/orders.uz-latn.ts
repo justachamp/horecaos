@@ -254,6 +254,8 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   'orders.tillRevision.send': 'Yangi summani kassaga yuborish',
   'orders.tillRevision.sending': 'Yuborilmoqda…',
   'orders.tillRevision.acknowledge': 'Kassadagi summani oʻzgartirdim',
+  'orders.tillRevision.askManager':
+    'Filial boshqaruvchisidan kassadagi summani oʻzgartirib, shu yerda tasdiqlashini soʻrang: siz bu xabarni koʻrasiz, lekin yopa olmaysiz.',
   'orders.tillRevision.failed': 'Kassaga xabar berishning oxirgi urinishi oʻtmadi.',
   'orders.tillRevision.told': 'Yangi summa kassaga yuborildi.',
   'orders.tillRevision.acknowledged': 'Qayd etildi: kassadagi summa qoʻlda tuzatildi.',

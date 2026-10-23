@@ -273,6 +273,28 @@ class PlatformRoleTests {
         assertThat(PlatformRole.LOCATION_STAFF.scopeType()).isEqualTo(ScopeType.LOCATION);
     }
 
+    /**
+     * ADR 0137, ADR 0180: the till-revision notice is shown on the pass and the order detail of a branch, and
+     * its routes are branch routes. The people who stand at the pass must be able to read it, the branch
+     * manager must be able to close it, and the person who weighs must not be able to say the till was changed.
+     */
+    @Test
+    void theTillRevisionNoticeIsReadByTheBranchAndClosedByItsManager() {
+        assertThat(PlatformRole.LOCATION_MANAGER.grants(Capability.POS_EXPORT_READ))
+                .isTrue();
+        assertThat(PlatformRole.LOCATION_MANAGER.grants(Capability.POS_EXPORT_RESOLVE))
+                .isTrue();
+        assertThat(PlatformRole.LOCATION_STAFF.grants(Capability.POS_EXPORT_READ))
+                .isTrue();
+        assertThat(PlatformRole.LOCATION_STAFF.grants(Capability.POS_EXPORT_RESOLVE))
+                .as("the floor sees the difference and tells the manager; it does not decide the till is right")
+                .isFalse();
+        assertThat(PlatformRole.LOCATION_MANAGER.scopeType()).isEqualTo(ScopeType.LOCATION);
+        assertThat(PlatformRole.TENANT_OWNER.grants(Capability.POS_EXPORT_RESOLVE))
+                .as("a grant at a higher scope still covers the branch route")
+                .isTrue();
+    }
+
     @Test
     void everyRoleThatManagesCustomersCanAlsoCaptureTheirAddress() {
         for (PlatformRole role : PlatformRole.values()) {

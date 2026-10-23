@@ -75,7 +75,9 @@ export type Capability =
   | 'IAM_STAFF_MFA_RESET'
   | 'TERMINAL_READ'
   | 'TERMINAL_MANAGE'
-  | 'KIOSK_DEVICE_MANAGE';
+  | 'KIOSK_DEVICE_MANAGE'
+  | 'POS_EXPORT_READ'
+  | 'POS_EXPORT_RESOLVE';
 
 /**
  * Whether the signed-in operator holds a given capability *anywhere* — the

@@ -17,6 +17,17 @@
   revise an order; the wording of the accuracy line; the provider encoding of a fractional receipt
   quantity (wave `w11`); the Committee's official IKPU/MXIK file. Nothing here has been run against a
   real aggregator, till or provider, and the local seed script has been syntax-checked but not walked.
+  Corrected 2026-10-23 (Implementation status; review fix `fix21-e-catalog-stops-fiscal`): the route
+  table in the Specification gave the till-revision routes at tenant scope, and that is not what is
+  built or what could work. They are branch routes, `GET|POST
+  /api/v1/operations/tenants/{t}/brands/{b}/locations/{l}/orders/{o}/till-revision[/send|/acknowledge]`,
+  checked at `LOCATION` scope (`OrderPosRevisionController`, which answers 404 for an order of another
+  branch), because the banner sits on the pass and the order detail of a branch and the people there hold
+  no tenant-scope grant. `pos.export.read` is held by `LOCATION_MANAGER` and `LOCATION_STAFF` and
+  `pos.export.resolve` by `LOCATION_MANAGER` (`PlatformRole`), beside the owner and the administrator at
+  tenant scope; the tenant-level POS export routes are unchanged and a branch grant does not reach them.
+  The console draws the banner only for an operator who holds `pos.export.read`, and offers the two ways to
+  close the notice only to one who holds `pos.export.resolve`.
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: proposed by Claude (batch 21, wave `w5-catalog-stops-fiscal`); Ayubkhon Abbosov

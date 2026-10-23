@@ -37145,6 +37145,165 @@
         "tags" : [ "Order lateness" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/till-revision" : {
+      "get" : {
+        "description" : "`notice` is null when the till and the order agree (or the order was never exported before its weight was captured). An open notice carries what the till holds and what the order is worth; once closed, the latest notice is returned with its status so a screen can say what happened. `canTell` is true only while a notice is open and the binding the order was exported through has ORDER_REVISION enabled and usable: no real vendor has it today.",
+        "operationId" : "tillRevisionForOrder",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TillRevisionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether the till holds a different total than this order has, and whether the platform can tell it",
+        "tags" : [ "Order till revision" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/till-revision/acknowledge" : {
+      "post" : {
+        "description" : "A person changed the till by hand. Closes the open notice as ACKNOWLEDGED, audited against the person. 409 when no notice is open.",
+        "operationId" : "acknowledgeTillRevision",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TillRevisionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Say the till now agrees with the order",
+        "tags" : [ "Order till revision" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/till-revision/send" : {
+      "post" : {
+        "description" : "Only where the binding can take one (ORDER_REVISION). Sent under a key built from the notice, so a repeat is the same send. Answers 200 with the outcome in the body: a refusal, an unreachable till and an unknown outcome are ordinary answers, and in each the notice stays open with a stable failure code.",
+        "operationId" : "sendTillRevision",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TillRevisionSendResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Tell the till the order's revised total",
+        "tags" : [ "Order till revision" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/preparation-bands" : {
       "put" : {
         "description" : "Whole set, so the coverage is always exactly what an operator last reviewed. The band is one of three inputs to the promised time; the longest of the band and any item override wins.",
@@ -49681,117 +49840,6 @@
         },
         "summary" : "Every remedy granted on one order",
         "tags" : [ "Order remedies" ]
-      }
-    },
-    "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/till-revision" : {
-      "get" : {
-        "description" : "`notice` is null when the till and the order agree (or the order was never exported before its weight was captured). An open notice carries what the till holds and what the order is worth; once closed, the latest notice is returned with its status so a screen can say what happened. `canTell` is true only while a notice is open and the binding the order was exported through has ORDER_REVISION enabled and usable: no real vendor has it today.",
-        "operationId" : "tillRevisionForOrder",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "path",
-          "name" : "orderId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/TillRevisionResponse"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Whether the till holds a different total than this order has, and whether the platform can tell it",
-        "tags" : [ "Order till revision" ]
-      }
-    },
-    "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/till-revision/acknowledge" : {
-      "post" : {
-        "description" : "A person changed the till by hand. Closes the open notice as ACKNOWLEDGED, audited against the person. 409 when no notice is open.",
-        "operationId" : "acknowledgeTillRevision",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "path",
-          "name" : "orderId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/TillRevisionResponse"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Say the till now agrees with the order",
-        "tags" : [ "Order till revision" ]
-      }
-    },
-    "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/till-revision/send" : {
-      "post" : {
-        "description" : "Only where the binding can take one (ORDER_REVISION). Sent under a key built from the notice, so a repeat is the same send. Answers 200 with the outcome in the body: a refusal, an unreachable till and an unknown outcome are ordinary answers, and in each the notice stays open with a stable failure code.",
-        "operationId" : "sendTillRevision",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "tenantId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        }, {
-          "in" : "path",
-          "name" : "orderId",
-          "required" : true,
-          "schema" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/TillRevisionSendResponse"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "Tell the till the order's revised total",
-        "tags" : [ "Order till revision" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/partner-delivery-invoices" : {

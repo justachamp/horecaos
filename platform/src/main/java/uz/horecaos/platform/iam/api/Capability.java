@@ -1233,6 +1233,11 @@ public enum Capability {
      * answer to "did the kitchen get this" is a list of provider order
      * identifiers and match evidence, which is integration diagnostics rather
      * than the branch's order queue.
+     *
+     * <p>Held by the branch's own roles too, for one reason: the till-revision notice (ADR 0137, ADR 0180)
+     * is shown on the pass and the order detail of a branch and its routes are branch routes. The branch
+     * manager and the floor read it; the POS export routes above stay tenant-scope, which a branch grant
+     * does not reach.
      */
     POS_EXPORT_READ("pos.export.read", "pos", "export.read"),
 
@@ -1247,6 +1252,11 @@ public enum Capability {
      * customer who ordered the same thing twice. Resolving it wrongly costs real
      * food in one direction and a hungry customer in the other, and the judgement
      * belongs to somebody who can pick up a telephone and ask the branch.
+     *
+     * <p>The branch manager is that somebody for a till revision (ADR 0137, ADR 0180): saying the till was
+     * changed by hand, or telling a vendor that can take it the weighed total, is the branch's own act on the
+     * branch's own till. The grant is at the branch and reaches the branch's till-revision routes only; the
+     * export push stays an owner's and an administrator's.
      */
     POS_EXPORT_RESOLVE("pos.export.resolve", "pos", "export.resolve"),
 

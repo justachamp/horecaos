@@ -21,6 +21,7 @@ import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.ordering.api.TillRevisionNotices.Notice;
 import uz.horecaos.platform.pos.application.PosOrderRevisionService;
@@ -40,7 +41,8 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * sends an operator to cancel a paid order over a number on a till.
  */
 @RestController
-@RequestMapping("/api/v1/operations/tenants/{tenantId}/orders/{orderId}/till-revision")
+@RequestMapping(
+        "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/till-revision")
 @Tag(
         name = "Order till revision",
         description = "An order the till already holds whose total changed after a weight was captured, and "
@@ -67,7 +69,7 @@ public class OrderPosRevisionController {
     }
 
     @GetMapping
-    @RequiresCapability(Capability.POS_EXPORT_READ)
+    @RequiresCapability(value = Capability.POS_EXPORT_READ, scope = ScopeType.LOCATION)
     @Operation(
             summary =
                     "Whether the till holds a different total than this order has, and whether the platform can tell it",
@@ -78,13 +80,16 @@ public class OrderPosRevisionController {
                     + "open and the binding the order was exported through has ORDER_REVISION enabled and "
                     + "usable: no real vendor has it today.")
     public ResponseEntity<TillRevisionResponse> tillRevisionForOrder(
-            @PathVariable UUID tenantId, @PathVariable UUID orderId) {
-        requireOrder(tenantId, orderId);
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID orderId) {
+        requireOrderAtLocation(tenantId, brandId, locationId, orderId);
         return ResponseEntity.ok(TillRevisionResponse.of(revisions.view(tenantId, orderId)));
     }
 
     @PostMapping("/send")
-    @RequiresCapability(value = Capability.POS_EXPORT_RESOLVE, mutating = true)
+    @RequiresCapability(value = Capability.POS_EXPORT_RESOLVE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
             summary = "Tell the till the order's revised total",
             description = "Only where the binding can take one (ORDER_REVISION). Sent under a key built from "
@@ -92,8 +97,11 @@ public class OrderPosRevisionController {
                     + "refusal, an unreachable till and an unknown outcome are ordinary answers, and in each "
                     + "the notice stays open with a stable failure code.")
     public ResponseEntity<TillRevisionSendResponse> sendTillRevision(
-            @PathVariable UUID tenantId, @PathVariable UUID orderId) {
-        requireOrder(tenantId, orderId);
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID orderId) {
+        requireOrderAtLocation(tenantId, brandId, locationId, orderId);
         String subject = currentActor.get().subject();
         PosOrderRevisionService.Result result = revisions.tell(tenantId, orderId, subject);
         Notice notice = result.view().notice();
@@ -105,14 +113,17 @@ public class OrderPosRevisionController {
     }
 
     @PostMapping("/acknowledge")
-    @RequiresCapability(value = Capability.POS_EXPORT_RESOLVE, mutating = true)
+    @RequiresCapability(value = Capability.POS_EXPORT_RESOLVE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
             summary = "Say the till now agrees with the order",
             description = "A person changed the till by hand. Closes the open notice as ACKNOWLEDGED, audited "
                     + "against the person. 409 when no notice is open.")
     public ResponseEntity<TillRevisionResponse> acknowledgeTillRevision(
-            @PathVariable UUID tenantId, @PathVariable UUID orderId) {
-        requireOrder(tenantId, orderId);
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID orderId) {
+        requireOrderAtLocation(tenantId, brandId, locationId, orderId);
         String subject = currentActor.get().subject();
         Notice before = revisions.view(tenantId, orderId).notice();
         if (before == null || !before.open() || !revisions.acknowledge(tenantId, orderId, subject)) {
@@ -163,8 +174,17 @@ public class OrderPosRevisionController {
                 .build());
     }
 
-    private void requireOrder(UUID tenantId, UUID orderId) {
-        if (orders.summary(tenantId, orderId).isEmpty()) {
+    /**
+     * The order must be this branch's. The capability was checked against the branch in the path, and an order
+     * id in that path is the client's: without this an operator of one branch could read, send or close the
+     * notice of a sibling branch's order by naming it under their own (the same rule {@code
+     * OperationsOrderController#requireOrderAtLocation} applies).
+     */
+    private void requireOrderAtLocation(UUID tenantId, UUID brandId, UUID locationId, UUID orderId) {
+        boolean atLocation = orders.summary(tenantId, orderId)
+                .filter(found -> brandId.equals(found.brandId()) && locationId.equals(found.locationId()))
+                .isPresent();
+        if (!atLocation) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order");
         }
     }
