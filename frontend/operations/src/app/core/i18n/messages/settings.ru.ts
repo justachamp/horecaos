@@ -1795,7 +1795,7 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.kiosk.idle.remove': 'Убрать',
   'settings.kiosk.idle.full': 'В списке уже {max} картинок. Уберите одну, чтобы добавить другую.',
   'settings.kiosk.idle.hint':
-    'Выберите картинку и подгоните её под кадр 9:16. JPEG, PNG или WebP до 1 МБ.',
+    'Выберите JPEG, PNG или WebP и подгоните под кадр 9:16. После подгонки картинка должна быть не больше 1 МБ.',
   'settings.kiosk.idle.uploading': 'Загружаем и проверяем картинку…',
   'settings.kiosk.idle.added': 'Картинка добавлена в список.',
   'settings.kiosk.idle.tooLarge':

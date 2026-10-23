@@ -113,7 +113,7 @@
                 <q-media-uploader
                   [aspectRatios]="ratios"
                   [accept]="accept"
-                  [maxSizeBytes]="maximumBytes()"
+                  [maxSizeBytes]="originalMaxBytes"
                   [exportEdgePx]="exportEdge"
                   [uploading]="uploading()"
                   (cropped)="onPicture($event)"
