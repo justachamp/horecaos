@@ -1,5 +1,6 @@
 package uz.horecaos.platform.fiscal.api;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -20,4 +21,24 @@ public interface FiscalTerminalDirectory {
      *     uz.horecaos.platform.fiscal.domain.FiscalTerminal#ISSUE_FISCAL_RECEIPT}
      */
     boolean hasCapableTerminal(UUID tenantId, UUID locationId);
+
+    /**
+     * The terminal that issues for this location and this taxpayer: active, capable, and belonging to the legal
+     * entity that sold (ADR 0166 Decision 1). A terminal registered under another entity is not an answer, because a
+     * receipt issued on another company's equipment names that company.
+     */
+    default Optional<CapableTerminal> capableTerminal(UUID tenantId, UUID locationId, UUID legalEntityId) {
+        return Optional.empty();
+    }
+
+    /**
+     * @param terminalId the registry id
+     * @param reference the registry's reference, which an adapter maps to its device
+     * @param providerBindingId the integration binding the terminal issues through, if one is recorded
+     */
+    record CapableTerminal(
+            UUID terminalId,
+            String reference,
+            UUID legalEntityId,
+            @org.jspecify.annotations.Nullable UUID providerBindingId) {}
 }

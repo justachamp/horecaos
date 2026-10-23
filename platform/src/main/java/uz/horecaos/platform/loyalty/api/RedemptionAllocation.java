@@ -2,7 +2,9 @@ package uz.horecaos.platform.loyalty.api;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -119,17 +121,32 @@ public final class RedemptionAllocation {
 
         long remainder = redeemedMinor - allocated;
         if (remainder > 0) {
-            UUID highest = eligible.stream()
-                    .max(Comparator.comparingLong(Line::grossMinor)
-                            // Deterministic on a tie, so re-deriving the
-                            // allocation for a correction document reproduces the
-                            // receipt that was issued rather than a near miss.
-                            .thenComparing(Line::lineId))
-                    .orElseThrow()
-                    .lineId();
-            shares.replaceAll(share -> share.lineId().equals(highest)
-                    ? new LineDiscount(highest, share.discountMinor() + remainder)
-                    : share);
+            // The highest-value line first, then the next, each taking what it can still bear. Three
+            // lines of three and a redemption of eight floor to two each, and the two left over would
+            // otherwise all go to one line, which would then be discounted by four on a line that cost
+            // three: a negative line on a receipt. In every ordinary case the highest-value line bears
+            // all of it, exactly as before.
+            List<LineDiscount> ranked = new ArrayList<>(shares);
+            Map<UUID, Long> grossOf = new HashMap<>();
+            eligible.forEach(line -> grossOf.put(line.lineId(), line.grossMinor()));
+            ranked.sort(Comparator.<LineDiscount>comparingLong(share -> -grossOf.getOrDefault(share.lineId(), 0L))
+                    // Deterministic on a tie, so re-deriving the
+                    // allocation for a correction document reproduces the
+                    // receipt that was issued rather than a near miss.
+                    .thenComparing(share -> share.lineId(), Comparator.reverseOrder()));
+            Map<UUID, Long> extra = new HashMap<>();
+            for (LineDiscount share : ranked) {
+                if (remainder == 0) {
+                    break;
+                }
+                long room = Math.min(remainder, grossOf.getOrDefault(share.lineId(), 0L) - share.discountMinor());
+                if (room > 0) {
+                    extra.put(share.lineId(), room);
+                    remainder -= room;
+                }
+            }
+            shares.replaceAll(share ->
+                    new LineDiscount(share.lineId(), share.discountMinor() + extra.getOrDefault(share.lineId(), 0L)));
         }
 
         List<LineDiscount> result = new ArrayList<>();

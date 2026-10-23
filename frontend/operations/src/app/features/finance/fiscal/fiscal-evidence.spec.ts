@@ -215,6 +215,20 @@ describe('FiscalEvidence: the fiscal evidence of one order (row X.2, ADR 0166)',
       );
     });
 
+    it('states the business day the seller was resolved on when the document kept it, and nothing when it did not', async () => {
+      configure({
+        masked: view([
+          document_({ businessDate: '2026-10-14' }),
+          document_({ documentId: 'doc-2', businessDate: null }),
+        ]),
+      });
+      const fixture = await render();
+
+      const days = allByTestId(fixture, 'fiscal-evidence-business-date');
+      expect(days, 'only the document that kept a day draws one').toHaveLength(1);
+      expect(days[0].textContent).toContain('2026-10-14');
+    });
+
     it('says a backfilled INN was resolved from the entity afterwards and not from the filing', async () => {
       configure({
         masked: view([
@@ -383,6 +397,36 @@ describe('FiscalEvidence: the fiscal evidence of one order (row X.2, ADR 0166)',
         'the fee is marked as the delivery fee, as it was filed',
       ).toBe('Delivery');
       expect(allByTestId(fixture, 'fiscal-evidence-line')).toHaveLength(1);
+    });
+
+    it('draws a weighed line with its decimal count, the unit in its name and the weighed total', async () => {
+      configure({
+        masked: view([
+          document_({
+            lines: {
+              state: 'AVAILABLE',
+              synthetic: false,
+              markingCodesTransmitted: 0,
+              items: [
+                line({
+                  name: 'Lamb cutlets, kg',
+                  quantity: 1.04,
+                  unitPrice: uzs(50_000),
+                  tax: uzs(5_571),
+                  discount: uzs(0),
+                }),
+              ],
+            },
+          }),
+        ]),
+      });
+      const fixture = await render();
+
+      const rows = allByTestId(fixture, 'fiscal-evidence-line');
+      expect(rows).toHaveLength(1);
+      const text = rows[0].textContent ?? '';
+      expect(text, 'the count is the weight, not a rounded whole number').toContain('1.04');
+      expect(text, 'the name says what the count is in').toContain('Lamb cutlets, kg');
     });
 
     it('says a placeholder is not a sale', async () => {

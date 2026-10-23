@@ -110,6 +110,13 @@ public final class EventCatalog {
     public static final String REVIEWS_EVENTS_TOPIC = KafkaTopicCatalog.REVIEWS_EVENTS;
 
     /**
+     * ADR 0166 fiscal facts. Its own topic: a consumer of "a receipt is being corrected" should not read
+     * ordering's volume to find it, and the producer is the fiscal module. Nothing on it is receipt
+     * evidence.
+     */
+    public static final String FISCAL_EVENTS_TOPIC = KafkaTopicCatalog.FISCAL_EVENTS;
+
+    /**
      * ADR 0018 pricing facts. Its own topic rather than a share of {@code
      * tenancy.events}: nothing that reads price-book activations should have to
      * filter out tenant and brand creations to get them, and the two have
@@ -670,6 +677,33 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "A lead became the order or the reservation it was for (ADR 0111): exactly one of the "
                             + "two ids."),
+            new EventContract(
+                    "FiscalCorrectionRequested",
+                    1,
+                    "fiscal",
+                    FISCAL_EVENTS_TOPIC,
+                    "documentId",
+                    "events/fiscal.events/FiscalCorrectionRequested.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A correction or a void was requested against an issued fiscal receipt (ADR 0166), by a "
+                            + "person under a second person's approval or by the platform because an amendment "
+                            + "changed a filed total. Identifiers, the kind, the document's status and a "
+                            + "reason code -- never a fiscal sign, a receipt number or link, a terminal id, a "
+                            + "marking code or a taxpayer number."),
+            new EventContract(
+                    "FiscalCorrectionAttached",
+                    1,
+                    "fiscal",
+                    FISCAL_EVENTS_TOPIC,
+                    "documentId",
+                    "events/fiscal.events/FiscalCorrectionAttached.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "The tenant's fiscal agent issued a correction or a void and an operator attached its "
+                            + "reference (ADR 0166): a linked CORRECTION or REFUND document exists and the "
+                            + "original is CORRECTED or VOIDED. Names the linked document; carries none of "
+                            + "its evidence."),
             new EventContract(
                     "ReviewSubmitted",
                     1,

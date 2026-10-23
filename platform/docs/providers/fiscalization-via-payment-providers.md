@@ -498,7 +498,7 @@ nothing that relaxes it.
 |---|---|---|
 | Whose TIN/PINFL does Click's `CommissionInfo` carry, and may it vary per line under one service? | Click | Whether one merchant account can serve many restaurants |
 | Is `submit_items` idempotent for a repeated `payment_id`? | Click | Whether read-back before retry is mandatory or merely prudent |
-| How is a fractional quantity expressed in `Amount` (`uint64`) and `count`? | Click, Payme | Any catch-weight or splittable item; ADR 0038 forbids it only for *marked* goods |
+| How is a fractional quantity expressed in `Amount` (`uint64`) and `count`? | Click, Payme | Any catch-weight or splittable item; ADR 0038 forbids it only for *marked* goods. **Built against the open question (2026-10-14):** the receipt line carries a decimal count and a unit price chosen so that `unit × count` is a whole minor unit (the rounding to it is stated as discount); Click's `Amount` is the count times an injected uniform scale (`horecaos.payments.click.quantity-scale`, default 1, which refuses a fractional count before anything is sent); Payme's `count` is a JSON number (`1.04`) beside a per-unit `price`. The answers set the scale and confirm the Payme shape; see `runbooks/external-connections/w11-fiscal-evidence.md` |
 | Is there a deadline after which `SetFiscalData` will not arrive? | Payme | The sweeper interval that turns silence into `BLOCKED` |
 | Full `status_code` list for `SetFiscalData` | Payme | Distinguishing a retryable OFD error from a permanent one |
 | Is the HorecaOS–restaurant relationship a commission agreement in the fiscal sense? | Legal | ADR 0038's open input on fiscal agency |

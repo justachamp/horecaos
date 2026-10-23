@@ -50,6 +50,35 @@ public class JdbcFiscalTerminalStore implements FiscalTerminalDirectory {
     /**
      * {@inheritDoc}
      *
+     * <p>The oldest active capable terminal of the entity at the location, so the choice is stable when a branch
+     * has two; which of two real devices a given sale goes to is a routing decision no one has asked for.
+     */
+    @Override
+    public Optional<CapableTerminal> capableTerminal(UUID tenantId, UUID locationId, UUID legalEntityId) {
+        return jdbc.sql("""
+                SELECT id, terminal_reference, legal_entity_id, provider_binding_id
+                  FROM fiscal.fiscal_terminals
+                 WHERE tenant_id = :tenantId AND location_id = :locationId
+                   AND legal_entity_id = :legalEntityId
+                   AND status = 'ACTIVE'
+                   AND capability_snapshot @> '{"IssueFiscalReceipt": true}'::jsonb
+                 ORDER BY created_at, id
+                 LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("legalEntityId", legalEntityId)
+                .query((row, number) -> new CapableTerminal(
+                        row.getObject("id", UUID.class),
+                        row.getString("terminal_reference"),
+                        row.getObject("legal_entity_id", UUID.class),
+                        row.getObject("provider_binding_id", UUID.class)))
+                .optional();
+    }
+
+    /**
+     * {@inheritDoc}
+     *
      * <p>The exact predicate the migration's own partial index carries, so this
      * is an index lookup rather than a scan of every terminal a tenant has ever
      * registered.

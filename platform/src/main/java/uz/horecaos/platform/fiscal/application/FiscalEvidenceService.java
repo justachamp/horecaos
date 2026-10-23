@@ -2,6 +2,7 @@ package uz.horecaos.platform.fiscal.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -36,7 +37,6 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.tenancy.api.PolicyResolver;
-import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 
 /**
  * What an operator is shown about the receipts filed for an order, and what they can be shown
@@ -175,7 +175,7 @@ public class FiscalEvidenceService {
             String ikpu,
             String packageCode,
             @Nullable Long unitCode,
-            int quantity,
+            java.math.BigDecimal quantity,
             Money unitPrice,
             Money tax,
             int vatPercent,
@@ -231,6 +231,7 @@ public class FiscalEvidenceService {
             Seller seller,
             @Nullable MerchantAccount merchantAccount,
             @Nullable UUID tenderId,
+            @Nullable LocalDate businessDate,
             @Nullable UUID paymentIntentId,
             boolean hasEvidence,
             Identifiers identifiers,
@@ -329,6 +330,7 @@ public class FiscalEvidenceService {
                         ? null
                         : new MerchantAccount(row.merchantBindingId(), mask(row.merchantAccountReference())),
                 row.tenderId(),
+                row.businessDate(),
                 row.paymentIntentId(),
                 row.hasEvidence(),
                 identifiersOf(row, reveal),
@@ -482,19 +484,8 @@ public class FiscalEvidenceService {
     // ------------------------------------------------------------------- policy
 
     private Retention retention(UUID tenantId) {
-        FiscalEvidencePolicies.FiscalEvidenceRetention policy;
-        try {
-            policy = policies.resolve(FiscalEvidencePolicies.EVIDENCE_RETENTION, ResourceScope.tenant(tenantId))
-                    .map(ResolvedPolicy::document)
-                    .orElseGet(FiscalEvidencePolicies.FiscalEvidenceRetention::platformDefault);
-        } catch (RuntimeException unreadable) {
-            log.error(
-                    "Tenant {} has an unreadable {} policy; the platform default applies.",
-                    tenantId,
-                    FiscalEvidencePolicies.EVIDENCE_RETENTION.code(),
-                    unreadable);
-            policy = FiscalEvidencePolicies.FiscalEvidenceRetention.platformDefault();
-        }
+        FiscalEvidencePolicies.FiscalEvidenceRetention policy =
+                FiscalEvidencePolicies.effectiveRetention(policies, tenantId);
         return new Retention(policy.years(), policy.provisional());
     }
 

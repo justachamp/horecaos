@@ -25,6 +25,7 @@ import {
 import { LangService } from '../../../services/lang.service';
 import { MenuService } from '../../../services/menu.service';
 import { PaymentSessionService } from '../../../services/payment-session.service';
+import { submitPaymentForm, type PaymentForm } from '../../../services/payment-form';
 import { TranslateService } from '../../../services/translate.service';
 import {
   ChosenLinesComponent,
@@ -1039,6 +1040,11 @@ export class DineInTableComponent implements OnInit {
   private async openPaymentSession(orderId: string): Promise<void> {
     try {
       const session = await this.paymentSession.open(orderId);
+      if (session.form && this.submitForm(session.form)) {
+        // Payme on a fiscalised cashbox: the receipt detail is a field of the checkout form, which a link
+        // cannot carry, so the browser POSTs the form the platform built.
+        return;
+      }
       if (session.checkoutUrl) {
         this.redirectTo(session.checkoutUrl);
         return;
@@ -1185,6 +1191,11 @@ export class DineInTableComponent implements OnInit {
    */
   private redirectTo(url: string): void {
     window.location.href = url;
+  }
+
+  /** The other line that leaves this application, isolated for the same reason as `redirectTo`. */
+  private submitForm(form: PaymentForm): boolean {
+    return submitPaymentForm(form);
   }
 }
 

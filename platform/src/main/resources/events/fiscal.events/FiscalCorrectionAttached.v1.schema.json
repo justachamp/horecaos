@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/fiscal.events/FiscalCorrectionAttached.v1.schema.json",
+  "title": "FiscalCorrectionAttached v1 payload",
+  "description": "The tenant's fiscal agent issued a correction or a void and an operator attached its reference (ADR 0166 Decision 8): a linked CORRECTION or REFUND document was created and the original moved to CORRECTED or VOIDED. Names the linked document and carries none of its evidence; the reference is read through the evidence endpoint under a recorded purpose.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "documentId",
+    "requestId",
+    "orderId",
+    "kind",
+    "status",
+    "linkedDocumentId",
+    "linkedDocumentType"
+  ],
+  "properties": {
+    "documentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "requestId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "legalEntityId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "CORRECTION",
+        "VOID"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "CORRECTED",
+        "VOIDED"
+      ]
+    },
+    "linkedDocumentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "linkedDocumentType": {
+      "type": "string",
+      "enum": [
+        "CORRECTION",
+        "REFUND"
+      ]
+    }
+  }
+}

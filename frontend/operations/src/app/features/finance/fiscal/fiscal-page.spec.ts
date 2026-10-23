@@ -189,13 +189,15 @@ describe('FiscalPage', () => {
     expect(api.blocked).toHaveBeenLastCalledWith(TENANT_ID, 'MARKS_INCOMPLETE');
   });
 
-  it('offers every reason a document can be blocked for, the placeholder gate’s among them', async () => {
+  it('offers every reason a document can be blocked for, the ones the receipt line builder names among them', async () => {
     const offered = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll('select.filter option'),
     ).map((option) => (option as HTMLOptionElement).value);
 
-    // `FiscalReasonCode.BLOCKING`, the platform's own list. LINES_NOT_BUILT is what every Click receipt outside a
-    // sandbox is blocked for until the real line builder exists, so it is the reason most documents wait on.
+    // `FiscalReasonCode.BLOCKING`, the platform's own list. The receipt line builder blocks a document with
+    // CLASSIFICATION_MISSING, VAT_NOT_EXPRESSIBLE or RECEIPT_DOES_NOT_RECONCILE and files nothing; LINES_NOT_BUILT
+    // is historical, the reason a document was blocked with before the builder existed, and stays filterable so
+    // that those documents can be found and asked again.
     expect(offered).toEqual([
       '',
       'PROVIDER_REPORT_OVERDUE',
@@ -203,17 +205,21 @@ describe('FiscalPage', () => {
       'MARKS_INCOMPLETE',
       'NO_FISCAL_PATH',
       'TERMINAL_OFFLINE',
+      'VAT_NOT_EXPRESSIBLE',
+      'RECEIPT_DOES_NOT_RECONCILE',
       'LINES_NOT_BUILT',
     ]);
   });
 
-  it('reloads the worklist filtered by the lines-not-built reason too', async () => {
+  it('reloads the worklist filtered by a reason the line builder names, and by the historical one', async () => {
     const select = fixture.nativeElement.querySelector('select.filter') as HTMLSelectElement;
-    select.value = 'LINES_NOT_BUILT';
-    select.dispatchEvent(new Event('change'));
-    await flushMicrotasks();
+    for (const reason of ['RECEIPT_DOES_NOT_RECONCILE', 'VAT_NOT_EXPRESSIBLE', 'LINES_NOT_BUILT']) {
+      select.value = reason;
+      select.dispatchEvent(new Event('change'));
+      await flushMicrotasks();
 
-    expect(api.blocked).toHaveBeenLastCalledWith(TENANT_ID, 'LINES_NOT_BUILT');
+      expect(api.blocked).toHaveBeenLastCalledWith(TENANT_ID, reason);
+    }
   });
 
   it('retries a blocked document with the reason and its version as If-Match', async () => {
@@ -396,6 +402,21 @@ describe('FiscalPage', () => {
       await reload();
 
       expect(byTestId('fiscal-request-row')?.textContent).toContain('SOMETHING_NEW');
+    });
+
+    it('names a request the platform opened itself, because an order was amended after its receipt, in words', async () => {
+      evidenceApi.openCorrections.mockResolvedValue([
+        request({
+          reasonCode: 'AMENDED_AFTER_ISSUE',
+          requestedBy: 'fiscal-amendment-watch',
+          approvalId: null,
+        }),
+      ]);
+      await reload();
+
+      const row = byTestId('fiscal-request-row');
+      expect(row?.textContent).toContain('Order amended after the receipt was filed');
+      expect(row?.textContent).not.toContain('AMENDED_AFTER_ISSUE');
     });
 
     it('opens that order’s documents and evidence, where the agent’s reference is attached', async () => {

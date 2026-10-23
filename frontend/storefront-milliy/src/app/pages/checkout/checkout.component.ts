@@ -15,6 +15,7 @@ import { IconComponent } from '../../shared/icon/icon.component';
 import { OrderSummaryComponent } from './order-summary/order-summary.component';
 import { PaymentListComponent, type PaymentChoice } from './payment-list/payment-list.component';
 import { PaymentSessionService } from '../../services/payment-session.service';
+import { submitPaymentForm, type PaymentForm } from '../../services/payment-form';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { UiCartService } from '../../services/ui-cart.service';
 import { newIdempotencyKey } from '../../core/api/idempotency';
@@ -327,6 +328,11 @@ export class CheckoutComponent implements OnInit {
   private async openPaymentSession(orderId: string): Promise<boolean> {
     try {
       const session = await this.paymentSession.open(orderId);
+      if (session.form && this.submitForm(session.form)) {
+        // Payme on a fiscalised cashbox: the receipt detail is a field of the checkout form, which a link
+        // cannot carry, so the browser POSTs the form the platform built.
+        return true;
+      }
       if (session.checkoutUrl) {
         this.redirectTo(session.checkoutUrl);
         return true;
@@ -345,5 +351,10 @@ export class CheckoutComponent implements OnInit {
    */
   private redirectTo(url: string): void {
     window.location.href = url;
+  }
+
+  /** The other line that leaves this application, isolated for the same reason as `redirectTo`. */
+  private submitForm(form: PaymentForm): boolean {
+    return submitPaymentForm(form);
   }
 }

@@ -147,6 +147,8 @@ export interface FiscalEvidenceDocumentView {
   readonly seller: FiscalSellerView;
   readonly merchantAccount: FiscalMerchantAccountView | null;
   readonly tenderId: string | null;
+  /** The local day the order closed on, in the branch's calendar; null on a document written before it was kept. */
+  readonly businessDate?: string | null;
   readonly paymentIntentId: string | null;
   readonly hasEvidence: boolean;
   readonly identifiers: FiscalIdentifiersView;

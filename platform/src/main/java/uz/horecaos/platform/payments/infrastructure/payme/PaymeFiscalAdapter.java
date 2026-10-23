@@ -13,6 +13,8 @@ import uz.horecaos.platform.payments.domain.FiscalSubmission;
 import uz.horecaos.platform.payments.domain.PaymentIntent;
 import uz.horecaos.platform.payments.domain.PaymentProviderType;
 import uz.horecaos.platform.payments.domain.ProviderBinding;
+import uz.horecaos.platform.payments.domain.SentReceipt;
+import uz.horecaos.platform.payments.domain.SomAmount;
 import uz.horecaos.platform.payments.domain.TiyinAmount;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentIntentStore;
 
@@ -85,6 +87,12 @@ public class PaymeFiscalAdapter implements FiscalReceiptPort {
         return PaymentProviderType.PAYME;
     }
 
+    /** Payme's {@code detail} object is fixed before the customer pays (ADR 0166 Decision 9). */
+    @Override
+    public boolean takesLinesWithTheCheckout() {
+        return true;
+    }
+
     @Override
     public FiscalSubmission submit(FiscalDocument document, ProviderBinding binding) {
         Instant now = clock.instant();
@@ -118,6 +126,15 @@ public class PaymeFiscalAdapter implements FiscalReceiptPort {
                     now);
         }
 
-        return FiscalSubmission.accepted(now);
+        // What Payme holds is what went with the checkout: record it as the request that left, the way the
+        // Click adapter does, so the evidence shows these lines and not a rebuilt copy. The whole charge was
+        // taken as one payment through the provider, which is "received by card" in the evidence's vocabulary.
+        SomAmount charged = intent.get().amount();
+        return FiscalSubmission.accepted(now)
+                .withSent(new SentReceipt(
+                        document.lines(),
+                        charged,
+                        new SomAmount(0, charged.currency()),
+                        new SomAmount(0, charged.currency())));
     }
 }

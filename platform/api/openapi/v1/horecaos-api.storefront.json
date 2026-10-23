@@ -2136,6 +2136,20 @@
         },
         "type" : "object"
       },
+      "PaymentFormResponse" : {
+        "properties" : {
+          "action" : {
+            "type" : "string"
+          },
+          "fields" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
       "PaymentMethodsResponse" : {
         "properties" : {
           "cartId" : {
@@ -3341,6 +3355,9 @@
           "expiresAt" : {
             "format" : "date-time",
             "type" : "string"
+          },
+          "form" : {
+            "$ref" : "#/components/schemas/PaymentFormResponse"
           },
           "merchantTransId" : {
             "type" : "string"

@@ -50,7 +50,12 @@ public class JdbcFiscalCorrectionStore {
                 == 1;
     }
 
-    /** Opens a request. The partial unique index is what makes a second open one for a document fail. */
+    /**
+     * Opens a request. The partial unique index is what makes a second open one for a document fail.
+     *
+     * @param sourceRevision the order revision whose amendment opened the request on its own (V0686), or null for
+     *     a request a person raised
+     */
     public void insertRequest(
             UUID id,
             UUID tenantId,
@@ -60,13 +65,14 @@ public class JdbcFiscalCorrectionStore {
             String reasonNote,
             String requestedBy,
             @Nullable UUID approvalId,
+            @Nullable Integer sourceRevision,
             Instant now) {
         jdbc.sql("""
                         INSERT INTO fiscal.fiscal_correction_requests (
                             id, tenant_id, document_id, kind, reason_code, reason_note, status,
-                            requested_by, approval_id, requested_at, version, created_at, updated_at)
+                            requested_by, approval_id, source_revision, requested_at, version, created_at, updated_at)
                         VALUES (:id, :tenantId, :documentId, :kind, :reasonCode, :reasonNote, 'REQUESTED',
-                            :requestedBy, :approvalId, :now, 1, :now, :now)
+                            :requestedBy, :approvalId, :sourceRevision, :now, 1, :now, :now)
                         """)
                 .param("id", id)
                 .param("tenantId", tenantId)
@@ -76,8 +82,25 @@ public class JdbcFiscalCorrectionStore {
                 .param("reasonNote", reasonNote)
                 .param("requestedBy", requestedBy)
                 .param("approvalId", approvalId)
+                .param("sourceRevision", sourceRevision)
                 .param("now", utc(now))
                 .update();
+    }
+
+    /**
+     * The latest order revision any request on this document already answers, or 0 when none was opened by an
+     * amendment. A request of any status counts: one the agent declined has still been asked.
+     */
+    public int highestCoveredRevision(UUID tenantId, UUID documentId) {
+        return jdbc.sql("""
+                        SELECT COALESCE(max(source_revision), 0)
+                          FROM fiscal.fiscal_correction_requests
+                         WHERE tenant_id = :tenantId AND document_id = :documentId
+                        """)
+                .param("tenantId", tenantId)
+                .param("documentId", documentId)
+                .query(Integer.class)
+                .single();
     }
 
     /** What the tenant's agent filed, as the operator attaches it. A reference, not a receipt. */

@@ -27,6 +27,9 @@ public final class FiscalReason {
     /** The provider issued a receipt and the evidence is on the row. */
     public static final String PARTNER_FISCALIZED = "PARTNER_FISCALIZED";
 
+    /** The tenant's own fiscal terminal issued a receipt and its evidence is on the row (ADR 0166 «Providers»). */
+    public static final String TERMINAL_FISCALIZED = "TERMINAL_FISCALIZED";
+
     /** Awaiting capture, because Click cannot fiscalize before a payment exists. */
     public static final String AWAITING_CAPTURE = "AWAITING_CAPTURE";
 

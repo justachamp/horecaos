@@ -57,8 +57,13 @@
   created lazily on demand rather than seeded per tenant as the checklist below
   describes, which is a difference worth knowing before anybody writes the
   seeding step it asks for. Also not built: the campaign-driven accrual rules ADR 0044
-  owns; expiry warning notifications; `fiscal.fiscal_document_lines`, so the
-  per-line allocation is written nowhere; the `cash_due_minor` handoff to ADR
+  owns; expiry warning notifications; `fiscal.fiscal_document_lines` (no such table: since batch 21
+  the allocation reaches the receipt through `ReceiptLineAllocator`, which feeds `RedemptionAllocation`
+  to the receipt line builder, so a redeemed order is filed with the redemption as a per-line discount
+  and the goods' VAT extracted again from what they were paid, 7 714 in the worked order; the lines as
+  filed are kept behind the document's protected request, not as rows, and the finance sign-off of
+  that VAT treatment is still open; `RedemptionAllocation` now caps the remainder at what a line can
+  bear, so a near-total redemption over equal small lines cannot make a line negative); the `cash_due_minor` handoff to ADR
   0014's assignment; and the tax effect on the liability report. The storefront
   balance endpoints exist but require `LOYALTY_READ` at tenant scope, a staff
   capability no customer principal can hold, so there is still no

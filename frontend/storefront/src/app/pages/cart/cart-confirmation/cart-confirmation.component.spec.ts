@@ -811,6 +811,44 @@ describe('CartConfirmationComponent: CLICK opens a payment session and redirects
     expect(navigateSpy).not.toHaveBeenCalled();
   });
 
+  it('posts the checkout form the platform built when the session carries one, and does not follow the link', async () => {
+    const { comp, cart, paymentSessions, navigateSpy } = await setUp(['PAYME']);
+    cart.applyDestination.mockResolvedValue(true);
+    cart.priceCart.mockResolvedValue(pricedFixture());
+    cart.checkout.mockResolvedValue(checkoutResult({ orderId: 'order-payme' }));
+    paymentSessions.open.mockResolvedValue({
+      attemptId: 'a2',
+      merchantTransId: 'm2',
+      provider: 'PAYME',
+      presentation: 'PAYMENT_LINK',
+      checkoutUrl: 'https://checkout.payme.example/abc',
+      qrPayload: 'https://checkout.payme.example/abc',
+      expiresAt: new Date().toISOString(),
+      amountMinor: 15_000,
+      currency: 'UZS',
+      rePresented: false,
+      presentationCount: 1,
+      form: {
+        action: 'https://checkout.payme.example/',
+        fields: { merchant: 'cashbox-1', amount: '1500000', detail: 'ZGV0YWls' },
+      },
+    });
+    const submit = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {});
+
+    await comp.submitOrder();
+
+    expect(submit).toHaveBeenCalledTimes(1);
+    const form = document.body.querySelector('form') as HTMLFormElement;
+    expect(form.action).toBe('https://checkout.payme.example/');
+    expect(
+      (form.querySelector('input[name="detail"]') as HTMLInputElement).value,
+      'the receipt detail travels in the form, where a link cannot carry it',
+    ).toBe('ZGV0YWls');
+    expect(window.location.href).not.toBe('https://checkout.payme.example/abc');
+    expect(navigateSpy).not.toHaveBeenCalled();
+    form.remove();
+  });
+
   it('falls back to the order-status screen when the payment session cannot be opened', async () => {
     const { comp, cart, paymentSessions, notification, navigateSpy } = await setUp(['CLICK']);
     cart.applyDestination.mockResolvedValue(true);

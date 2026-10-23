@@ -54,6 +54,7 @@ import uz.horecaos.platform.payments.infrastructure.click.ClickFiscalAdapter;
 import uz.horecaos.platform.payments.infrastructure.click.ClickMerchantApi;
 import uz.horecaos.platform.payments.infrastructure.click.ClickPaymentAdapter;
 import uz.horecaos.platform.payments.infrastructure.click.ClickPrepareId;
+import uz.horecaos.platform.payments.infrastructure.click.ClickQuantityScale;
 import uz.horecaos.platform.payments.infrastructure.click.ClickSignature;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentAttemptStore;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentBindingResolver;
@@ -110,6 +111,7 @@ class ClickShopApiCallbackTests {
     private RecordingTransport transport;
     private ClickPaymentAdapter clickAdapter;
     private ClickFiscalAdapter fiscalAdapter;
+    private ClickMerchantApi clickApi;
     private ClickShopApiController controller;
     private RecordingEventPublisher published;
 
@@ -157,6 +159,7 @@ class ClickShopApiCallbackTests {
         transport = new RecordingTransport();
         ClickMerchantApi click = new ClickMerchantApi(transport, CLOCK);
         clickAdapter = new ClickPaymentAdapter(click, CLOCK);
+        clickApi = click;
         fiscalAdapter = new ClickFiscalAdapter(click, attempts, CLOCK);
 
         published = new RecordingEventPublisher();
@@ -483,7 +486,7 @@ class ClickShopApiCallbackTests {
         assertThat(items.getFirst())
                 .containsEntry("Price", 80_000L)
                 .containsEntry("GoodPrice", 40_000L)
-                .containsEntry("Amount", 2)
+                .containsEntry("Amount", 2L)
                 .containsEntry("VAT", 8_000L)
                 .containsEntry("SPIC", "01234567890123456");
         // The payment call for this same payment went out in som.
@@ -493,6 +496,149 @@ class ClickShopApiCallbackTests {
                 .containsEntry("received_ecash", 0L);
         assertThat(submission.status()).isEqualTo(FiscalStatus.ISSUED);
         assertThat(submission.fiscalEvidence().orElseThrow().receiptReference()).isEqualTo("123456789");
+    }
+
+    /**
+     * A weighed line (ADR 0137, ADR 0166): Amount is a {@code uint64}, so the count is scaled, Price is still
+     * the line total and GoodPrice the unit price, and the card share is what the customer paid.
+     *
+     * <p>The scale is the injected constant the open question to Click in writing will settle; 1000 is the
+     * thousandths common in Uzbek OFD schemas, and these tests pin the shape, not the answer.
+     */
+    @Test
+    @DisplayName(
+            "a weighed 1.040 kg is Amount 1040 at scale 1000, Price the line total, and the card share what was paid")
+    void aWeighedLineIsAScaledAmount() {
+        captureWithPaymentId("777");
+        acceptSubmissionAndReceipt();
+
+        ClickFiscalAdapter scaled = new ClickFiscalAdapter(clickApi, attempts, CLOCK, new ClickQuantityScale(1000));
+        FiscalSubmission submission = scaled.submit(
+                documentOf(weighedLine(new java.math.BigDecimal("1.040"), 80_000, new SomAmount(1, "UZS"))), binding());
+
+        Map<String, Object> body = submittedBody();
+        assertThat(items(body).getFirst())
+                .containsEntry("Amount", 1040L)
+                .containsEntry("GoodPrice", 8_000_000L)
+                .containsEntry("Price", 8_320_000L)
+                .containsEntry("Discount", 100L);
+        assertThat(body)
+                .as("received_card is what was paid, the listed total less the discount")
+                .containsEntry("received_card", 8_319_900L);
+        assertThat(submission.status()).isEqualTo(FiscalStatus.ISSUED);
+    }
+
+    @Test
+    @DisplayName("half a kilogram is Amount 500 at scale 1000")
+    void halfAKilogramIsFiveHundred() {
+        captureWithPaymentId("777");
+        acceptSubmissionAndReceipt();
+
+        new ClickFiscalAdapter(clickApi, attempts, CLOCK, new ClickQuantityScale(1000))
+                .submit(documentOf(weighedLine(new java.math.BigDecimal("0.5"), 80_000, null)), binding());
+
+        assertThat(items(submittedBody()).getFirst())
+                .containsEntry("Amount", 500L)
+                .containsEntry("GoodPrice", 8_000_000L)
+                .containsEntry("Price", 4_000_000L);
+    }
+
+    @Test
+    @DisplayName("the scale is uniform: a whole count is scaled too, or Click would read it as thousandths")
+    void theScaleIsUniform() {
+        captureWithPaymentId("777");
+        acceptSubmissionAndReceipt();
+
+        new ClickFiscalAdapter(clickApi, attempts, CLOCK, new ClickQuantityScale(1000)).submit(document(), binding());
+
+        assertThat(items(submittedBody()).getFirst()).containsEntry("Amount", 2000L);
+    }
+
+    @Test
+    @DisplayName("at the default scale a fractional count is refused before anything is sent: it is never rounded")
+    void aFractionalCountIsRefusedAtTheDefaultScale() {
+        captureWithPaymentId("777");
+
+        FiscalSubmission submission = fiscalAdapter.submit(
+                documentOf(weighedLine(new java.math.BigDecimal("1.040"), 80_000, new SomAmount(1, "UZS"))), binding());
+
+        assertThat(submission.classification())
+                .isEqualTo(uz.horecaos.platform.payments.domain.ProviderOutcome.Classification.REJECTED);
+        assertThat(submission.providerStatusCode()).isEqualTo("QUANTITY_UNREPRESENTABLE");
+        assertThat(transport.paths()).as("nothing left for Click").doesNotContain("/payment/ofd_data/submit_items");
+    }
+
+    @Test
+    @DisplayName("a count the scale cannot say exactly is refused, not rounded")
+    void aCountTheScaleCannotSayExactlyIsRefused() {
+        captureWithPaymentId("777");
+
+        FiscalSubmission submission = new ClickFiscalAdapter(clickApi, attempts, CLOCK, new ClickQuantityScale(1000))
+                .submit(documentOf(weighedLine(new java.math.BigDecimal("1.0405"), 80_000, null)), binding());
+
+        assertThat(submission.providerStatusCode()).isEqualTo("QUANTITY_UNREPRESENTABLE");
+    }
+
+    private void acceptSubmissionAndReceipt() {
+        transport.answer(ProviderOutcome.success(Map.of("error_code", 0), null));
+        transport.answer(ProviderOutcome.success(
+                Map.of(
+                        "paymentId",
+                        777L,
+                        "qrCodeURL",
+                        "https://ofd.soliq.uz/epi?t=EZ000000000030&r=123456789" + "&c=20221028171340&s=854971301623"),
+                null));
+    }
+
+    private Map<String, Object> submittedBody() {
+        MerchantApiCall submitted = transport.calls().getFirst();
+        assertThat(submitted.path()).isEqualTo("/payment/ofd_data/submit_items");
+        return Objects.requireNonNull(submitted.body(), "submit_items must always carry a body");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> items(Map<String, Object> body) {
+        return Objects.requireNonNull(
+                (List<Map<String, Object>>) body.get("items"), "submit_items must always carry an items array");
+    }
+
+    private static FiscalReceiptLine weighedLine(
+            java.math.BigDecimal quantity, long unitPriceSom, @org.jspecify.annotations.Nullable SomAmount discount) {
+        return new FiscalReceiptLine(
+                "Lamb, kg",
+                "10101001001000000",
+                "1500321",
+                166L,
+                quantity,
+                new SomAmount(unitPriceSom, "UZS"),
+                new SomAmount(0, "UZS"),
+                12,
+                discount,
+                null,
+                List.of(),
+                "301234567",
+                null,
+                FiscalReceiptLine.Kind.ITEM);
+    }
+
+    private FiscalDocument documentOf(FiscalReceiptLine line) {
+        return new FiscalDocument(
+                UUID.randomUUID(),
+                TENANT,
+                ORDER,
+                LEGAL_ENTITY,
+                intentId,
+                null,
+                PaymentProviderType.CLICK,
+                FiscalDocumentType.SALE,
+                null,
+                FiscalStatus.PENDING,
+                FiscalReason.AWAITING_PROVIDER,
+                "Submitted to Click",
+                List.of(line),
+                null,
+                1,
+                CLOCK.instant());
     }
 
     @Test

@@ -392,6 +392,7 @@ public class PricingEngine {
         List<AdjustmentDraft> drafts = new ArrayList<>();
 
         long modifierTotal = 0;
+        List<AppliedOption> chosenOptions = new ArrayList<>();
         for (UUID optionId : line.modifierOptionIds()) {
             Long modifierPrice = inputs.modifierPrices().get(optionId);
             if (modifierPrice == null) {
@@ -401,11 +402,13 @@ public class PricingEngine {
                 continue;
             }
             modifierTotal = Math.addExact(modifierTotal, modifierPrice);
+            chosenOptions.add(new AppliedOption(optionId, modifierPrice));
         }
 
         // The second level (ADR 0136): validated against the facts, then priced exactly
         // as a first-level option is. A selection the facts do not allow never gets here.
         long nestedTotal = 0;
+        List<AppliedOption> nestedOptions = new ArrayList<>();
         for (UUID optionId : CompositePricing.resolveNested(line, composite)) {
             Long nestedPrice = inputs.modifierPrices().get(optionId);
             if (nestedPrice == null) {
@@ -415,6 +418,7 @@ public class PricingEngine {
                 continue;
             }
             nestedTotal = Math.addExact(nestedTotal, nestedPrice);
+            nestedOptions.add(new AppliedOption(optionId, nestedPrice));
         }
 
         HiddenTotal hidden = hiddenCharges(line.variantId(), inputs, composite, strict);
@@ -451,26 +455,9 @@ public class PricingEngine {
                 inputs.priceBookVersion(),
                 baseLine,
                 "BASE_PRICE"));
-        if (modifierTotal > 0) {
-            drafts.add(new AdjustmentDraft(
-                    line.lineId(),
-                    Adjustment.Type.MODIFIER,
-                    "PRICE_BOOK",
-                    inputs.priceBookId(),
-                    inputs.priceBookVersion(),
-                    modifiersLine,
-                    "MODIFIERS"));
-        }
-        if (nestedTotal > 0) {
-            drafts.add(new AdjustmentDraft(
-                    line.lineId(),
-                    Adjustment.Type.MODIFIER,
-                    "PRICE_BOOK",
-                    inputs.priceBookId(),
-                    inputs.priceBookVersion(),
-                    nestedLine,
-                    "NESTED_MODIFIERS"));
-        }
+        addOptionDrafts(drafts, line.lineId(), chosenOptions, modifiersLine, inputs.priceBookVersion(), "MODIFIERS");
+        addOptionDrafts(
+                drafts, line.lineId(), nestedOptions, nestedLine, inputs.priceBookVersion(), "NESTED_MODIFIERS");
         addHiddenDrafts(drafts, line.lineId(), hidden, line.quantity());
 
         Quote.QuoteLine quoteLine = Quote.QuoteLine.item(
@@ -596,7 +583,7 @@ public class PricingEngine {
      */
     private HiddenTotal hiddenCharges(
             UUID variantId, PricingInputs inputs, CompositePricing.CompositeInputs composite, boolean strict) {
-        List<HiddenApplied> applied = new ArrayList<>();
+        List<AppliedOption> applied = new ArrayList<>();
         long total = 0;
         for (CompositePricing.HiddenCharge charge : composite.hiddenChargesOf(variantId)) {
             Long price = inputs.modifierPrices().get(charge.optionId());
@@ -606,11 +593,60 @@ public class PricingEngine {
                 }
                 continue;
             }
-            applied.add(new HiddenApplied(charge.optionId(), price));
+            applied.add(new AppliedOption(charge.optionId(), price));
             total = Math.addExact(total, price);
         }
         return new HiddenTotal(total, applied);
     }
+
+    /**
+     * One adjustment per priced option the customer chose, which together are the line's modifier charge.
+     *
+     * <p>A receipt carries every priced modifier option as a line of its own, with the option's own
+     * classification (ADR 0038, ADR 0166 Decision 9), so the order has to be able to say what each one
+     * charged. It used to say it once for the whole line, as one {@code MODIFIERS} step, and a receipt
+     * built from that could not tell the cheese from the sauce. The charge is still rounded once, on the
+     * line, exactly as before ({@code lineAmount} is the figure the line's gross already contains); only
+     * how it is itemised changed: the shares are the line's charge split in proportion to the options'
+     * unit prices, so for a whole quantity each is exactly {@code price × quantity} and for a decimal one
+     * the shares still sum to the line's charge to the minor unit. The description code is the one the
+     * aggregate carried, so a reader that filters on it still finds the charge.
+     *
+     * <p>An option priced at zero adds nothing to the line and is not itemised: the order's modifier row
+     * says it was chosen. (A hidden option is itemised even at zero, because there the adjustment is the
+     * only evidence it was applied.)
+     */
+    private static void addOptionDrafts(
+            List<AdjustmentDraft> drafts,
+            String lineId,
+            List<AppliedOption> options,
+            long lineAmount,
+            int priceBookVersion,
+            String descriptionCode) {
+        List<AppliedOption> priced =
+                options.stream().filter(option -> option.priceMinor() > 0).toList();
+        if (priced.isEmpty() || lineAmount <= 0) {
+            return;
+        }
+        long[] shares = TaxCalculation.apportion(
+                lineAmount, priced.stream().mapToLong(AppliedOption::priceMinor).toArray());
+        for (int i = 0; i < priced.size(); i++) {
+            drafts.add(new AdjustmentDraft(
+                    lineId,
+                    Adjustment.Type.MODIFIER,
+                    MODIFIER_OPTION_SOURCE,
+                    priced.get(i).optionId(),
+                    priceBookVersion,
+                    shares[i],
+                    descriptionCode));
+        }
+    }
+
+    /**
+     * The {@code source_type} of an adjustment for an option the customer chose, whose {@code source_id}
+     * is the option itself: what an order reads to learn what each option charged.
+     */
+    public static final String MODIFIER_OPTION_SOURCE = QuoteSnapshot.Adjustment.MODIFIER_OPTION_SOURCE;
 
     /**
      * One adjustment per hidden option, even at a price of zero.
@@ -621,7 +657,7 @@ public class PricingEngine {
      */
     private static void addHiddenDrafts(
             List<AdjustmentDraft> drafts, String lineId, HiddenTotal hidden, BigDecimal units) {
-        for (HiddenApplied charge : hidden.applied()) {
+        for (AppliedOption charge : hidden.applied()) {
             drafts.add(new AdjustmentDraft(
                     lineId,
                     Adjustment.Type.MODIFIER,
@@ -636,7 +672,7 @@ public class PricingEngine {
     /** What the hidden charges add to a line of {@code units}, each rounded once as its adjustment is. */
     private static long hiddenLineMinor(HiddenTotal hidden, BigDecimal units) {
         long total = 0;
-        for (HiddenApplied charge : hidden.applied()) {
+        for (AppliedOption charge : hidden.applied()) {
             total = Math.addExact(total, Quantities.times(charge.priceMinor(), units));
         }
         return total;
@@ -649,9 +685,9 @@ public class PricingEngine {
      */
     public static final String HIDDEN_MODIFIER_SOURCE = QuoteSnapshot.Adjustment.HIDDEN_MODIFIER_SOURCE;
 
-    private record HiddenApplied(UUID optionId, long priceMinor) {}
+    private record AppliedOption(UUID optionId, long priceMinor) {}
 
-    private record HiddenTotal(long totalMinor, List<HiddenApplied> applied) {}
+    private record HiddenTotal(long totalMinor, List<AppliedOption> applied) {}
 
     private record AdjustmentDraft(
             @Nullable String lineId,

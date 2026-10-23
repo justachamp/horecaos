@@ -197,7 +197,7 @@ final class DocumentFixtures {
                 "UZS",
                 Instant.parse("2026-10-08T07:02:30Z"),
                 List.of(new uz.horecaos.platform.payments.api.FiscalReceiptSource.Line(
-                        "Order A-014", 1, 138_000, 138_000, 0, 0)),
+                        "Order A-014", java.math.BigDecimal.ONE, 138_000, 138_000, 0, 0)),
                 138_000,
                 0,
                 evidence);

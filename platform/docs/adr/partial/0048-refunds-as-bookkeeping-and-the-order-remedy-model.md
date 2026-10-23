@@ -40,6 +40,11 @@
   the daily reconciliation that would move a row off the unverified worklist, an
   `evidence_reference` for the cabinet export, any event or outbox row, and a
   refund runbook under [`docs/runbooks/`](../../runbooks/).
+  2026-10-23 (batch 21): the refund runbook the checklist asks for now exists,
+  [refunds-fiscal-evidence-and-corrections.md](../../runbooks/refunds-fiscal-evidence-and-corrections.md)
+  (never executed, so a draft under ADR 0023): what an operator does in the Click cabinet, the Payme cabinet or at the
+  counter before opening the console, how the refund is recorded, how its receipt is voided and the agent's reference
+  attached, and the refund-without-a-source rule ADR 0165 Decision 5 asks to be written there.
 - Date proposed: 2026-08-25
 - Date decided: 2026-08-25
 - Deciders: Ayubkhon Abbosov (platform architecture, owner of the 2026-08-25 decision), finance (settlement, liability, and who bears a reimbursement), support operations (the people who actually perform the refund), product (the remedy set)

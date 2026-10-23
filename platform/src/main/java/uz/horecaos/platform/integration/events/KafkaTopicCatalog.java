@@ -55,6 +55,12 @@ public final class KafkaTopicCatalog {
      */
     public static final String REVIEWS_EVENTS = "reviews.events";
 
+    /**
+     * ADR 0166 fiscal facts: a correction or a void of an issued receipt was requested, and the agent's
+     * reference attached. Identifiers, the kind and the status only -- never a piece of receipt evidence.
+     */
+    public static final String FISCAL_EVENTS = "fiscal.events";
+
     /** ADR 0040 marketplace facts: a partner confirmed a new availability, a channel went stale. */
     public static final String INTEGRATION_EVENTS = "integration.events";
 
@@ -109,6 +115,10 @@ public final class KafkaTopicCatalog {
             // case facts stay in order and a poison record holds back that order alone. Shares tenancy's
             // partition count, seven days, replication one (ADR 0034).
             new TopicSpecification(REVIEWS_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
+            // ADR 0166. A correction request is staff work against an issued receipt, a small fraction of
+            // orders, keyed by the document so a request and its attachment stay in order. Shares
+            // tenancy's partition count, seven days, replication one (ADR 0034).
+            new TopicSpecification(FISCAL_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
             // ADR 0012. One schedule row per binding and a pilot's binding count
             // is small, so this shares fulfillment.commands' shape rather than
             // ordering's: a command topic, not a fact topic, and durable state

@@ -768,6 +768,7 @@ export const financeEn = {
   'finance.fiscalEvidence.seller.source.UNRESOLVED':
     'No legal entity is named on this document, so no TIN can be stated.',
   'finance.fiscalEvidence.field.merchantAccount': 'Merchant account',
+  'finance.fiscalEvidence.field.businessDate': 'Business day the seller was resolved on',
   'finance.fiscalEvidence.field.fiscalSign': 'Fiscal sign',
   'finance.fiscalEvidence.field.receiptNumber': 'Receipt number',
   'finance.fiscalEvidence.field.terminalId': 'Terminal',
@@ -791,7 +792,7 @@ export const financeEn = {
   'finance.fiscalEvidence.lines.kind.DELIVERY_FEE': 'Delivery',
   'finance.fiscalEvidence.lines.kind.SYNTHETIC': 'Placeholder',
   'finance.fiscalEvidence.lines.synthetic':
-    'This is the one-line placeholder a sandbox files to prove the connection. Its zeros are not a sale.',
+    'This is the one-line placeholder a sandbox filed before receipts were built from the order, to prove the connection. Its zeros are not a sale.',
   'finance.fiscalEvidence.lines.notSent':
     'No lines were recorded for this receipt: either nothing has been sent yet, or what was sent was not kept. Nothing is shown in their place.',
   'finance.fiscalEvidence.lines.notReadable':
@@ -823,6 +824,7 @@ export const financeEn = {
   'finance.fiscalEvidence.correction.reason.DUPLICATE_RECEIPT': 'Duplicate receipt',
   'finance.fiscalEvidence.correction.reason.CUSTOMER_REFUND': 'Customer refund',
   'finance.fiscalEvidence.correction.reason.OTHER': 'Other',
+  'finance.fiscalEvidence.correction.reason.AMENDED_AFTER_ISSUE': 'Order amended after the receipt was filed',
   'finance.fiscalEvidence.correction.note.label': 'What is wrong (up to 255 characters)',
   'finance.fiscalEvidence.correction.submit': 'Send the request',
   'finance.fiscalEvidence.correction.submitting': 'Sending…',

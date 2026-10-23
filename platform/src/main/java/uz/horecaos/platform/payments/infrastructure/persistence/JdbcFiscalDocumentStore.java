@@ -99,6 +99,24 @@ public class JdbcFiscalDocumentStore {
      * could not be read), which is a different fact from "the entity's INN is X today": the caller must
      * not substitute a resolution made now for a sale made then.
      */
+    /**
+     * The ADR 0029 protected reference to the lines this document's latest request carried, or empty when
+     * nothing was sent (or what was sent was not kept). A reference and never the lines: the caller reveals
+     * it under a purpose.
+     */
+    public Optional<String> protectedRequestReference(UUID tenantId, UUID documentId) {
+        return jdbc
+                .sql("SELECT protected_request_reference FROM payments.fiscal_documents "
+                        + "WHERE tenant_id = :tenantId AND id = :id")
+                .param("tenantId", tenantId)
+                .param("id", documentId)
+                .query((row, number) -> row.getString("protected_request_reference"))
+                .list()
+                .stream()
+                .filter(Objects::nonNull)
+                .findFirst();
+    }
+
     public Optional<String> sellerTin(UUID tenantId, UUID documentId) {
         return jdbc
                 .sql("SELECT seller_tin FROM payments.fiscal_documents WHERE tenant_id = :tenantId AND id = :id")
@@ -248,8 +266,7 @@ public class JdbcFiscalDocumentStore {
     public boolean recordSentEvidence(
             UUID tenantId,
             UUID documentId,
-            UUID merchantBindingId,
-            boolean linesSynthetic,
+            @Nullable UUID merchantBindingId,
             String protectedRequestReference,
             String sentTenderSplitReference,
             Instant sentAt) {
@@ -257,8 +274,8 @@ public class JdbcFiscalDocumentStore {
                 UPDATE payments.fiscal_documents
                 SET protected_request_reference = :request,
                     sent_tender_split_reference = :split,
-                    lines_synthetic = :synthetic,
-                    merchant_binding_id = :binding
+                    lines_synthetic = false,
+                    merchant_binding_id = CAST(:binding AS uuid)
                 WHERE tenant_id = :tenantId AND id = :id
                   AND status NOT IN ('ISSUED', 'CORRECTION_REQUESTED', 'VOID_REQUESTED',
                                      'CORRECTED', 'VOIDED')
@@ -267,7 +284,6 @@ public class JdbcFiscalDocumentStore {
                         .param("id", documentId)
                         .param("request", protectedRequestReference)
                         .param("split", sentTenderSplitReference)
-                        .param("synthetic", linesSynthetic)
                         .param("binding", merchantBindingId)
                         .update()
                 == 1;
@@ -280,7 +296,7 @@ public class JdbcFiscalDocumentStore {
                         id, tenant_id, document_id, attempt, sent_at, protected_request_reference,
                         sent_tender_split_reference, lines_synthetic, merchant_binding_id)
                     SELECT :newId, :tenantId, :id, COALESCE(MAX(attempt), 0) + 1, :sentAt, :request, :split,
-                           :synthetic, :binding
+                           false, CAST(:binding AS uuid)
                       FROM payments.fiscal_sent_requests
                      WHERE tenant_id = :tenantId AND document_id = :id
                     ON CONFLICT DO NOTHING
@@ -291,11 +307,33 @@ public class JdbcFiscalDocumentStore {
                     .param("sentAt", utc(sentAt))
                     .param("request", protectedRequestReference)
                     .param("split", sentTenderSplitReference)
-                    .param("synthetic", linesSynthetic)
                     .param("binding", merchantBindingId)
                     .update();
         }
         return recorded;
+    }
+
+    /**
+     * Names the registered terminal the document was asked of (V0688), so a TERMINAL receipt is issued by
+     * something: the checks that an issued document carries a provider now accept a terminal instead. Written
+     * before the status moves, because the check is evaluated on that move. Refused once the document holds a
+     * receipt, like the evidence is.
+     *
+     * @return true when this call wrote it
+     */
+    public boolean recordTerminal(UUID tenantId, UUID documentId, UUID terminalId) {
+        return jdbc.sql("""
+                        UPDATE payments.fiscal_documents
+                           SET fiscal_terminal_id = :terminal
+                         WHERE tenant_id = :tenantId AND id = :id
+                           AND status NOT IN ('ISSUED', 'CORRECTION_REQUESTED', 'VOID_REQUESTED',
+                                              'CORRECTED', 'VOIDED')
+                        """)
+                        .param("tenantId", tenantId)
+                        .param("id", documentId)
+                        .param("terminal", terminalId)
+                        .update()
+                == 1;
     }
 
     /**

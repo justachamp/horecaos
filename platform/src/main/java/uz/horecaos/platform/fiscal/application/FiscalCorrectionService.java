@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +19,8 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.fiscal.api.FiscalCorrectionAttached;
+import uz.horecaos.platform.fiscal.api.FiscalCorrectionRequested;
 import uz.horecaos.platform.fiscal.domain.FiscalDocumentState;
 import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalCorrectionStore;
 import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalCorrectionStore.AttachedReference;
@@ -98,6 +101,12 @@ public class FiscalCorrectionService {
         CANCELLED
     }
 
+    /** A person raised the request under a second person's approval (the event's {@code source}). */
+    public static final String SOURCE_OPERATOR = "OPERATOR";
+
+    /** The platform opened the request because an amendment changed a total that had been filed. */
+    public static final String SOURCE_AMENDMENT = "AMENDMENT";
+
     /** The reason code of a linked {@code CORRECTION} document an attachment created. */
     public static final String CORRECTION_ATTACHED = "CORRECTION_ATTACHED";
 
@@ -148,6 +157,7 @@ public class FiscalCorrectionService {
     private final AuditRecorder audit;
     private final Clock clock;
     private final FiscalReceiptLinks receiptLinks;
+    private final ApplicationEventPublisher events;
 
     public FiscalCorrectionService(
             JdbcFiscalLifecycleStore documents,
@@ -156,7 +166,8 @@ public class FiscalCorrectionService {
             ApprovalService approvals,
             AuditRecorder audit,
             Clock clock,
-            FiscalReceiptLinks receiptLinks) {
+            FiscalReceiptLinks receiptLinks,
+            ApplicationEventPublisher events) {
         this.documents = documents;
         this.corrections = corrections;
         this.evidence = evidence;
@@ -164,6 +175,7 @@ public class FiscalCorrectionService {
         this.audit = audit;
         this.clock = clock;
         this.receiptLinks = receiptLinks;
+        this.events = events;
     }
 
     @Transactional
@@ -219,6 +231,7 @@ public class FiscalCorrectionService {
                     note,
                     actor.subject(),
                     approvalId,
+                    null,
                     now);
         } catch (DuplicateKeyException alreadyOpen) {
             // uq_fiscal_correction_one_open_per_document: two people asking for one correction is
@@ -254,8 +267,126 @@ public class FiscalCorrectionService {
                 .occurredAt(now)
                 .build());
 
+        // Through the outbox, in this transaction (ADR 0032, ADR 0004): the request and the fact that it was
+        // raised commit together. Identifiers, the kind and the status; no evidence field.
+        events.publishEvent(new FiscalCorrectionRequested(
+                UUID.randomUUID(),
+                tenantId,
+                documentId,
+                requestId,
+                document.orderId(),
+                document.legalEntityId(),
+                kind.name(),
+                kind.requested.name(),
+                reason.name(),
+                SOURCE_OPERATOR,
+                now));
+
         CorrectionRow created = evidence.findCorrection(tenantId, requestId).orElseThrow();
         return new RequestResult.Raised(created, expectedVersion + 1);
+    }
+
+    /** Who the platform is when it opens a request itself; the request's {@code requested_by}. */
+    public static final String AMENDMENT_WATCH = "fiscal-amendment-watch";
+
+    /** The reason code of a request the platform opened because an amendment changed a filed order. */
+    public static final String AMENDED_AFTER_ISSUE = "AMENDED_AFTER_ISSUE";
+
+    /**
+     * Opens a correction request because the order was amended after its receipt left (ADR 0166 Decision 8,
+     * ADR 0039): the platform's own request, unapproved, for a person to act on.
+     *
+     * <p>It differs from {@link #request} in exactly the ways the decision says: nobody raised it, so there is
+     * no approval to spend and no operator to name (the actor is a system job); and it covers a revision, so the
+     * same amendment never asks twice. What stays the same is everything that makes a correction safe: the
+     * document moves to {@code CORRECTION_REQUESTED}, nothing is edited or issued, the tenant's agent issues the
+     * correction, and attaching its reference is an approval action bound to the reference typed (a second
+     * person signs). It is the attachment, not the request, that needs the second person, so the request sits on
+     * the ageing worklist until a person either attaches a reference or closes it as declined or cancelled.
+     *
+     * @param revision the order revision whose amendment opened the request
+     * @return false when there is nothing to ask: the document is not an issued sale, or the revision (or a later
+     *     one) already has its request
+     */
+    @Transactional
+    public boolean openForAmendment(UUID tenantId, UUID documentId, int revision) {
+        FiscalDocumentRow document = documents.find(tenantId, documentId).orElse(null);
+        if (document == null
+                || !"SALE".equals(document.documentType())
+                || document.state() != FiscalDocumentState.ISSUED) {
+            return false;
+        }
+        if (corrections.highestCoveredRevision(tenantId, documentId) >= revision) {
+            return false;
+        }
+
+        Instant now = clock.instant();
+        UUID requestId = UUID.randomUUID();
+        String note =
+                "The order was amended (revision %d) after this receipt was filed; the lines and the total it states may no longer match the sale"
+                        .formatted(revision);
+        // A duplicate key here is the race the state check above cannot see (a person raised a request in the
+        // same instant). It is not swallowed: the sweep logs it and finds the document again next time.
+        corrections.insertRequest(
+                requestId,
+                tenantId,
+                documentId,
+                Kind.CORRECTION.name(),
+                AMENDED_AFTER_ISSUE,
+                note,
+                AMENDMENT_WATCH,
+                null,
+                revision,
+                now);
+        if (!corrections.moveDocument(
+                tenantId,
+                documentId,
+                FiscalDocumentState.ISSUED.name(),
+                Kind.CORRECTION.requested.name(),
+                document.version(),
+                now)) {
+            // Somebody moved the document between the read and the move. The whole unit rolls back, the request
+            // with it, and the next pass looks at the document as it then is.
+            throw new IllegalStateException("Fiscal document " + documentId + " changed while its request was opened");
+        }
+
+        ActorRef actor = ActorRef.systemJob(AMENDMENT_WATCH);
+        audit.record(AuditFact.of("fiscal.correction.requested", AuditClass.BUSINESS)
+                .by(actor)
+                .at(ResourceScope.tenant(tenantId))
+                .target("fiscal_document", documentId)
+                .targetVersion((long) document.version())
+                .because(note)
+                .changed(ChangeDocuments.diff(
+                        Map.of(
+                                "status",
+                                FiscalDocumentState.ISSUED.name(),
+                                "orderId",
+                                document.orderId().toString()),
+                        Map.of(
+                                "status", Kind.CORRECTION.requested.name(),
+                                "kind", Kind.CORRECTION.name(),
+                                "reasonCode", AMENDED_AFTER_ISSUE,
+                                "requestId", requestId.toString(),
+                                "sourceRevision", revision,
+                                "orderId", document.orderId().toString())))
+                .correlatedBy(documentId.toString())
+                .occurredAt(now)
+                .build());
+
+        events.publishEvent(new FiscalCorrectionRequested(
+                UUID.randomUUID(),
+                tenantId,
+                documentId,
+                requestId,
+                document.orderId(),
+                document.legalEntityId(),
+                Kind.CORRECTION.name(),
+                Kind.CORRECTION.requested.name(),
+                AMENDED_AFTER_ISSUE,
+                SOURCE_AMENDMENT,
+                now));
+        return true;
     }
 
     /**
@@ -374,6 +505,19 @@ public class FiscalCorrectionService {
                 .correlatedBy(correlationId == null ? original.id().toString() : correlationId)
                 .occurredAt(now)
                 .build());
+
+        events.publishEvent(new FiscalCorrectionAttached(
+                UUID.randomUUID(),
+                tenantId,
+                original.id(),
+                requestId,
+                original.orderId(),
+                original.legalEntityId(),
+                kind.name(),
+                kind.done.name(),
+                linkedId,
+                kind.linkedDocumentType,
+                now));
 
         CorrectionRow attached = evidence.findCorrection(tenantId, requestId).orElseThrow();
         return new AttachResult.Done(new Attached(attached, linkedId, expectedVersion + 1));

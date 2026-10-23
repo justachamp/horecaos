@@ -9771,6 +9771,10 @@
             "format" : "date-time",
             "type" : "string"
           },
+          "businessDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
           "correction" : {
             "$ref" : "#/components/schemas/CorrectionSummaryResponse"
           },
@@ -15107,8 +15111,7 @@
             "type" : "string"
           },
           "quantity" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "tax" : {
             "$ref" : "#/components/schemas/ApiMoney"
@@ -70154,7 +70157,7 @@
     },
     "/api/v1/tenants/{tenantId}/fiscal/documents/{documentId}/retries" : {
       "post" : {
-        "description" : "Reuses the document and never creates a second one: two sale receipts for one payment is a discrepancy with the tax authority that can only be corrected, never deleted. On the Click path the adapter reads back through GET payment/ofd_data first — a populated qrCodeURL means the earlier submission worked — because Click does not document submit_items as idempotent. Answers 409 with reasonCode FISCAL_LINES_NOT_BUILT, sending nothing, while the real receipt line builder does not exist and the environment is not a sandbox where the platform allows the placeholder line (ADR 0166).",
+        "description" : "Reuses the document and never creates a second one: two sale receipts for one payment is a discrepancy with the tax authority that can only be corrected, never deleted. On the Click path the adapter reads back through GET payment/ofd_data first — a populated qrCodeURL means the earlier submission worked — because Click does not document submit_items as idempotent. The receipt lines are built from the order (ADR 0166): an order that cannot be built answers 200 with the outcome BLOCKED_CLASSIFICATION, BLOCKED_TAX, BLOCKED_RECONCILIATION or BLOCKED_MARKS, sends nothing, and the document carries the reason.",
         "operationId" : "retry_1",
         "parameters" : [ {
           "in" : "path",

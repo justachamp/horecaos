@@ -877,6 +877,15 @@ describe('FiscalizationPage', () => {
       expect(text()).toContain('Unclassified: 1 of 3 items');
     });
 
+    it('says that receipts are built from the order’s own lines and that an unclassified item blocks one', async () => {
+      await openClassification();
+
+      const note = byTestId('fiscalization-receipt-lines')?.textContent ?? '';
+      expect(note).toContain('built from each order’s own lines');
+      expect(note).toContain('blocks that order’s receipt');
+      expect(note).toContain('no placeholder code');
+    });
+
     it('reads the references when the classification tab is opened, not before', async () => {
       expect(taxProfiles).not.toHaveBeenCalled();
       expect(paymentTypes).not.toHaveBeenCalled();

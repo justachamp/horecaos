@@ -775,6 +775,7 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
   'finance.fiscalEvidence.seller.source.UNRESOLVED':
     'Hujjatda yuridik shaxs koʻrsatilmagan, shuning uchun STIRni aytib boʻlmaydi.',
   'finance.fiscalEvidence.field.merchantAccount': 'Merchant hisobi',
+  'finance.fiscalEvidence.field.businessDate': 'Sotuvchi aniqlangan operatsion kun',
   'finance.fiscalEvidence.field.fiscalSign': 'Fiskal belgi',
   'finance.fiscalEvidence.field.receiptNumber': 'Chek raqami',
   'finance.fiscalEvidence.field.terminalId': 'Terminal',
@@ -798,7 +799,7 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
   'finance.fiscalEvidence.lines.kind.DELIVERY_FEE': 'Yetkazib berish',
   'finance.fiscalEvidence.lines.kind.SYNTHETIC': 'Vaqtincha',
   'finance.fiscalEvidence.lines.synthetic':
-    'Bu — ulanishni tekshirish uchun sinov muhiti yuboradigan bir qatorli vaqtincha chek. Undagi nollar sotuv emas.',
+    'Bu — cheklar buyurtma boʻyicha tuzila boshlashidan oldin ulanishni tekshirish uchun sinov muhiti yuborgan bir qatorli vaqtincha chek. Undagi nollar sotuv emas.',
   'finance.fiscalEvidence.lines.notSent':
     'Bu chek uchun qatorlar yozilmagan: yo hali hech narsa yuborilmagan, yo yuborilgani saqlanmagan. Oʻrniga hech narsa koʻrsatilmaydi.',
   'finance.fiscalEvidence.lines.notReadable':
@@ -829,6 +830,7 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
   'finance.fiscalEvidence.correction.reason.DUPLICATE_RECEIPT': 'Chek takrorlangan',
   'finance.fiscalEvidence.correction.reason.CUSTOMER_REFUND': 'Mijozga qaytarish',
   'finance.fiscalEvidence.correction.reason.OTHER': 'Boshqa',
+  'finance.fiscalEvidence.correction.reason.AMENDED_AFTER_ISSUE': 'Chek kiritilgandan keyin buyurtma oʻzgartirildi',
   'finance.fiscalEvidence.correction.note.label': 'Nima notoʻgʻri (255 belgigacha)',
   'finance.fiscalEvidence.correction.submit': 'Soʻrovni yuborish',
   'finance.fiscalEvidence.correction.submitting': 'Yuborilmoqda…',

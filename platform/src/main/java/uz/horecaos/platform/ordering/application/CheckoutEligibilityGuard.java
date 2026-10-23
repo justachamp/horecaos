@@ -7,6 +7,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.customers.api.CustomerBlacklistPort;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -57,7 +58,9 @@ class CheckoutEligibilityGuard {
     private final OrderingTenantContext tenancy;
     private final CartSaleWindowRules saleWindows;
     private final PromotionQueryPort promotionQuery;
+    private final MarkedCartLines markedLines;
 
+    /** Without marked goods, which is every construction that predates ADR 0166's payment-options rule. */
     @SuppressWarnings("checkstyle:ParameterNumber")
     CheckoutEligibilityGuard(
             JdbcCartStore carts,
@@ -74,6 +77,42 @@ class CheckoutEligibilityGuard {
             OrderingTenantContext tenancy,
             CartSaleWindowRules saleWindows,
             PromotionQueryPort promotionQuery) {
+        this(
+                carts,
+                cartService,
+                channels,
+                serviceability,
+                migrationOwnership,
+                payments,
+                settlements,
+                quotes,
+                catalog,
+                blacklist,
+                configuration,
+                tenancy,
+                saleWindows,
+                promotionQuery,
+                MarkedCartLines.NONE);
+    }
+
+    @Autowired
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    CheckoutEligibilityGuard(
+            JdbcCartStore carts,
+            CartService cartService,
+            SalesChannelLookup channels,
+            ServiceabilityResolver serviceability,
+            MigrationOwnershipPort migrationOwnership,
+            PaymentIntentPort payments,
+            OrderSettlementPort settlements,
+            QuoteAcceptancePort quotes,
+            OrderCatalogSnapshot catalog,
+            CustomerBlacklistPort blacklist,
+            ConfigurationResolver configuration,
+            OrderingTenantContext tenancy,
+            CartSaleWindowRules saleWindows,
+            PromotionQueryPort promotionQuery,
+            MarkedCartLines markedLines) {
         this.carts = carts;
         this.cartService = cartService;
         this.channels = channels;
@@ -88,6 +127,7 @@ class CheckoutEligibilityGuard {
         this.tenancy = tenancy;
         this.saleWindows = saleWindows;
         this.promotionQuery = promotionQuery;
+        this.markedLines = markedLines;
     }
 
     /** Every fact a validated checkout needs downstream, gathered in one read-only pass. */
@@ -399,6 +439,17 @@ class CheckoutEligibilityGuard {
                             + "cannot be paid with "
                             + paymentMethodCode
                             + " in advance");
+        }
+
+        // ADR 0038 stage 6, ADR 0166 Decision 7: a basket holding a marked good is paid with a method whose
+        // receipt can carry the code. CartPaymentOptions stops offering the others; this refuses a checkout
+        // that names one anyway, so the list a customer is shown and this checkout cannot disagree.
+        if (!payments.carriesMarkingCodes(command.tenantId(), paymentMethodCode)
+                && markedLines.requiresMarkingCapablePayment(command.tenantId(), command.brandId(), cartLines)) {
+            return Result.rejected(
+                    "MARKED_GOODS_NEED_MARKING_CAPABLE_PAYMENT",
+                    "This basket has a marked item, whose receipt must carry its code, so it cannot be paid with "
+                            + paymentMethodCode);
         }
 
         // ADR 0140: the payment method is an input to the price whenever a promotion reads

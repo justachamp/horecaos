@@ -659,6 +659,8 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.terminals.retire': 'Списать',
 
   'settings.fiscalization.classification.title': 'Классификация товаров',
+  'settings.fiscalization.classification.receiptLines':
+    'Чек строится из строк самого заказа: блюдо, каждая платная опция и доставка, каждая со своей классификацией. Позиция без полной классификации (ИКПУ, код упаковки, код единицы и фискальное название) блокирует чек этого заказа: ничего не отправляется, и код-заглушка не подставляется никогда.',
   'settings.fiscalization.classification.headline':
     'Не классифицировано: {unclassified} из {total} позиций',
   'settings.fiscalization.classification.empty': 'Всё классифицировано.',

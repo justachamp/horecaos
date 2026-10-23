@@ -770,6 +770,7 @@ export const financeRu: AreaMessages<typeof financeEn> = {
   'finance.fiscalEvidence.seller.source.UNRESOLVED':
     'В документе не указано юрлицо, поэтому ИНН назвать нельзя.',
   'finance.fiscalEvidence.field.merchantAccount': 'Мерчант-аккаунт',
+  'finance.fiscalEvidence.field.businessDate': 'Операционный день, по которому определён продавец',
   'finance.fiscalEvidence.field.fiscalSign': 'Фискальный признак',
   'finance.fiscalEvidence.field.receiptNumber': 'Номер чека',
   'finance.fiscalEvidence.field.terminalId': 'Терминал',
@@ -793,7 +794,7 @@ export const financeRu: AreaMessages<typeof financeEn> = {
   'finance.fiscalEvidence.lines.kind.DELIVERY_FEE': 'Доставка',
   'finance.fiscalEvidence.lines.kind.SYNTHETIC': 'Заглушка',
   'finance.fiscalEvidence.lines.synthetic':
-    'Это однострочная заглушка, которую песочница отправляет, чтобы проверить соединение. Её нули — не продажа.',
+    'Это однострочная заглушка, которую песочница отправляла до того, как чеки стали строиться по заказу, чтобы проверить соединение. Её нули — не продажа.',
   'finance.fiscalEvidence.lines.notSent':
     'Строки по этому чеку не записаны: либо ещё ничего не отправлено, либо отправленное не сохранилось. Вместо них ничего не показывается.',
   'finance.fiscalEvidence.lines.notReadable':
@@ -824,6 +825,7 @@ export const financeRu: AreaMessages<typeof financeEn> = {
   'finance.fiscalEvidence.correction.reason.DUPLICATE_RECEIPT': 'Дубликат чека',
   'finance.fiscalEvidence.correction.reason.CUSTOMER_REFUND': 'Возврат клиенту',
   'finance.fiscalEvidence.correction.reason.OTHER': 'Другое',
+  'finance.fiscalEvidence.correction.reason.AMENDED_AFTER_ISSUE': 'Заказ изменён после пробития чека',
   'finance.fiscalEvidence.correction.note.label': 'Что не так (до 255 символов)',
   'finance.fiscalEvidence.correction.submit': 'Отправить запрос',
   'finance.fiscalEvidence.correction.submitting': 'Отправляем…',

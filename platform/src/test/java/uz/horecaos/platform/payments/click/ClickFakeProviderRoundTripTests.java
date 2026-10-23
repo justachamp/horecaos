@@ -38,6 +38,7 @@ import uz.horecaos.platform.payments.infrastructure.click.fake.FakeCustomerPayme
 import uz.horecaos.platform.payments.infrastructure.click.fake.FakeCustomerPaymentService.FakePaymentResult;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentAttemptStore;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentIntentStore;
+import uz.horecaos.platform.support.ReceiptOrderSeed;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -75,6 +76,10 @@ import uz.horecaos.platform.support.TestDatabase;
 class ClickFakeProviderRoundTripTests {
 
     private static final long AMOUNT_SOM = 15_000L;
+
+    /** The VAT inside 15 000 at 12 percent, as the quote would have recorded it: 15 000 x 12 / 112, rounded. */
+    private static final long TAX_SOM = 1_607L;
+
     private static final String CLICK_SECRET = "round-trip-test-click-secret";
     private static final String CLICK_SERVICE_ID = "roundtrip-service-1";
     private static final String CLICK_MERCHANT_USER_ID = "5555";
@@ -159,9 +164,6 @@ class ClickFakeProviderRoundTripTests {
     private PartnerFiscalizationPort partnerFiscalization;
 
     @Autowired
-    private uz.horecaos.platform.tenancy.api.PolicyAuthor policyAuthor;
-
-    @Autowired
     private uz.horecaos.platform.iam.api.protection.FieldProtection protection;
 
     private UUID orderId;
@@ -177,6 +179,9 @@ class ClickFakeProviderRoundTripTests {
         // The story now runs more than once per class, so what each run seeds must be cleared.
         jdbc.sql("TRUNCATE TABLE ordering.carts CASCADE").update();
         jdbc.sql("TRUNCATE TABLE pricing.quotes CASCADE").update();
+        jdbc.sql(
+                        "TRUNCATE TABLE catalog.fiscal_classifications, catalog.fees, catalog.variants, catalog.products CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE catalog.publications, catalog.catalogs CASCADE")
                 .update();
         jdbc.sql("TRUNCATE TABLE payments.merchant_bindings CASCADE").update();
@@ -193,15 +198,6 @@ class ClickFakeProviderRoundTripTests {
         assertThat(partnerFiscalization.isWired()).isTrue();
 
         seedTenancy();
-        // ADR 0166, Decision 6: the placeholder line is filed only in a sandbox and only when the
-        // platform has said so. This story proves the wire against a fake, which is exactly that.
-        // Authored after the truncation above, which takes tenant.policies with it.
-        policyAuthor.author(
-                uz.horecaos.platform.fiscal.api.FiscalEvidencePolicies.SYNTHETIC_LINES_ALLOWED,
-                uz.horecaos.platform.iam.api.ResourceScope.platform(),
-                new uz.horecaos.platform.fiscal.api.FiscalEvidencePolicies.SyntheticLines(true),
-                uz.horecaos.platform.audit.api.ActorRef.user("platform-admin", "Platform"),
-                "round-trip test: prove the wire against the fake provider");
         seedClickProviderPointedAtTheFake();
         seedLegalEntityAndBinding();
         orderId = seedOrder();
@@ -289,8 +285,8 @@ class ClickFakeProviderRoundTripTests {
                           FROM fiscal.fiscal_documents WHERE order_id = :o
                         """).param("o", orderId).query().singleRow();
         assertThat(sent.get("lines_synthetic"))
-                .as("the one-line stand-in says it was a stand-in")
-                .isEqualTo(true);
+                .as("these are the lines of the sale, not a stand-in")
+                .isEqualTo(false);
         assertThat(sent.get("merchant_binding_id"))
                 .as("the merchant account it went through")
                 .isNotNull();
@@ -303,10 +299,14 @@ class ClickFakeProviderRoundTripTests {
                 uz.horecaos.platform.fiscal.api.SentReceiptEvidence.requestRecord(document.id()),
                 "test");
         assertThat(linesJson)
-                .contains("\"synthetic\":true")
-                .contains("\"kind\":\"SYNTHETIC\"")
-                .contains("\"ikpu\":\"00000000000000000\"")
-                .contains("\"unitPriceMinor\":" + AMOUNT_SOM);
+                .contains("\"synthetic\":false")
+                .contains("\"kind\":\"ITEM\"")
+                .contains("\"name\":\"Plov\"")
+                .contains("\"ikpu\":\"10901001001000000\"")
+                .contains("\"vatPercent\":12")
+                .contains("\"taxAmountMinor\":" + TAX_SOM)
+                .contains("\"unitPriceMinor\":" + AMOUNT_SOM)
+                .doesNotContain("00000000000000000");
         String splitJson = protection.reveal(
                 TENANT,
                 uz.horecaos.platform.iam.api.protection.ProtectedValue.deserialize(
@@ -320,28 +320,44 @@ class ClickFakeProviderRoundTripTests {
     }
 
     @Test
-    @DisplayName("the same story in a production environment files nothing: the document is blocked as lines-not-built")
-    void aProductionEnvironmentFilesNoPlaceholder() {
+    @DisplayName(
+            "the same story with an unclassified dish files nothing: the document is blocked, with the reason, never a placeholder")
+    void anUnclassifiedOrderFilesNothing() {
         payAndCompleteTheOrder();
-        // The same fake, now declared production: the placeholder may not be filed there, whatever
-        // the platform's flag says.
-        jdbc.sql("UPDATE integration.provider_environments SET is_production = true"
-                        + " WHERE code = 'click-roundtrip-fake'")
-                .update();
+        jdbc.sql("DELETE FROM catalog.fiscal_classifications").update();
 
         sweeper.openObligations();
         sweeper.submitCapturedObligations();
 
         var row = jdbc.sql("""
-                        SELECT status, reason_code, lines_synthetic, protected_request_reference, attempt_count
+                        SELECT status, reason_code, lines_synthetic, protected_request_reference
                           FROM fiscal.fiscal_documents WHERE order_id = :o
                         """).param("o", orderId).query().singleRow();
         assertThat(row.get("status")).isEqualTo("BLOCKED");
-        assertThat(row.get("reason_code")).isEqualTo("LINES_NOT_BUILT");
+        assertThat(row.get("reason_code")).isEqualTo("CLASSIFICATION_MISSING");
         assertThat(row.get("lines_synthetic")).isEqualTo(false);
         assertThat(row.get("protected_request_reference"))
                 .as("nothing was sent, so nothing is recorded as sent")
                 .isNull();
+    }
+
+    @Test
+    @DisplayName("the document keeps the business date it was opened on, the date its seller was resolved for")
+    void theDocumentKeepsItsBusinessDate() {
+        payAndCompleteTheOrder();
+
+        sweeper.openObligations();
+
+        var row = jdbc.sql("""
+                        SELECT d.business_date,
+                               (o.closed_at AT TIME ZONE 'Asia/Tashkent')::date AS closed_on
+                          FROM fiscal.fiscal_documents d
+                          JOIN ordering.orders o ON o.tenant_id = d.tenant_id AND o.id = d.order_id
+                         WHERE d.order_id = :o
+                        """).param("o", orderId).query().singleRow();
+        assertThat(row.get("business_date"))
+                .as("the date the seller was resolved on, kept as it was")
+                .isEqualTo(row.get("closed_on"));
     }
 
     // ------------------------------------------------------------------- fixtures
@@ -484,7 +500,7 @@ class ClickFakeProviderRoundTripTests {
                     catalog_publication_id, calculation_version, context_hash, subtotal_minor,
                     tax_minor, total_minor, expires_at)
                 VALUES (:id, :tenantId, :brandId, :locationId, 'UZS', 'ACTIVE', :publicationId,
-                    1, 'hash', :amount, 0, :amount, now() + interval '1 day')
+                    1, 'hash', :net, :tax, :amount, now() + interval '1 day')
                 """)
                 .param("id", quote)
                 .param("tenantId", TENANT)
@@ -492,7 +508,10 @@ class ClickFakeProviderRoundTripTests {
                 .param("locationId", LOCATION)
                 .param("publicationId", publication)
                 .param("amount", AMOUNT_SOM)
+                .param("net", AMOUNT_SOM - TAX_SOM)
+                .param("tax", TAX_SOM)
                 .update();
+        ReceiptOrderSeed.quoteTax(jdbc, TENANT, quote, 1200, "INCLUSIVE");
 
         jdbc.sql("""
                 INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
@@ -523,7 +542,7 @@ class ClickFakeProviderRoundTripTests {
                     :id, :number, :tenantId, :brandId, :locationId, :channelId, 'WEB',
                     'guest-hash', 'DELIVERY', 'AUTO_CONFIRM', 'NONE', 'PAYMENT_AUTHORIZING',
                     'AUTHORIZED', 'UZS',
-                    :amount, 0, :amount, :quoteId, 'hash', :publicationId, :cartId, :idempotencyKey)
+                    :net, :tax, :amount, :quoteId, 'hash', :publicationId, :cartId, :idempotencyKey)
                 """)
                 .param("id", orderId)
                 .param("number", "RT-1")
@@ -535,8 +554,17 @@ class ClickFakeProviderRoundTripTests {
                 .param("publicationId", publication)
                 .param("cartId", cart)
                 .param("amount", AMOUNT_SOM)
+                .param("net", AMOUNT_SOM - TAX_SOM)
+                .param("tax", TAX_SOM)
                 .param("idempotencyKey", UUID.randomUUID().toString())
                 .update();
+
+        // What the sale was: one dish, classified, at the price the quote gave it.
+        UUID plov = ReceiptOrderSeed.variant(jdbc, TENANT, BRAND, "PLOV");
+        ReceiptOrderSeed.classify(
+                jdbc, TENANT, BRAND, ReceiptOrderSeed.Node.VARIANT, plov, "10901001001000000", "1500123", 796, "Plov");
+        ReceiptOrderSeed.orderLine(
+                jdbc, TENANT, orderId, 1, plov, "Plov", java.math.BigDecimal.ONE, AMOUNT_SOM, AMOUNT_SOM, TAX_SOM);
 
         return orderId;
     }

@@ -307,6 +307,38 @@ public class JdbcPricingStore {
     }
 
     /**
+     * The tax rule a quote extracted VAT under, from its calculation document: the profile, the rate in
+     * basis points and whether prices were inclusive. Empty when the document records none (a quote
+     * from before it did), or names a profile that is not an identifier.
+     */
+    public Optional<uz.horecaos.platform.pricing.api.QuoteTaxLookup.QuoteTax> findQuoteTax(
+            UUID tenantId, UUID quoteId) {
+        return jdbc.sql("""
+                SELECT calculation_document ->> 'taxProfileId' AS profile,
+                       calculation_document ->> 'taxRateBasisPoints' AS rate,
+                       calculation_document ->> 'taxMode' AS mode
+                FROM pricing.quotes
+                WHERE tenant_id = :tenantId AND id = :id
+                  AND (calculation_document -> 'taxRateBasisPoints') IS NOT NULL
+                  AND (calculation_document -> 'taxProfileId') IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("id", quoteId)
+                .query((row, number) -> {
+                    try {
+                        return Optional.of(new uz.horecaos.platform.pricing.api.QuoteTaxLookup.QuoteTax(
+                                UUID.fromString(row.getString("profile")),
+                                Integer.parseInt(row.getString("rate")),
+                                "INCLUSIVE".equals(row.getString("mode"))));
+                    } catch (IllegalArgumentException notRecorded) {
+                        return Optional.<uz.horecaos.platform.pricing.api.QuoteTaxLookup.QuoteTax>empty();
+                    }
+                })
+                .optional()
+                .flatMap(found -> found);
+    }
+
+    /**
      * The {@code promotionInputs} a quote was priced with, as recorded in its
      * calculation document (ADR 0140), or empty for a quote priced before
      * calculation version 3, which recorded none.

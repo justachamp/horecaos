@@ -14987,6 +14987,10 @@
             "format" : "date-time",
             "type" : "string"
           },
+          "businessDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
           "correction" : {
             "$ref" : "#/components/schemas/CorrectionSummaryResponse"
           },
@@ -22874,8 +22878,7 @@
             "type" : "string"
           },
           "quantity" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "tax" : {
             "$ref" : "#/components/schemas/ApiMoney"
@@ -26800,6 +26803,20 @@
           },
           "taxId" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PaymentFormResponse" : {
+        "properties" : {
+          "action" : {
+            "type" : "string"
+          },
+          "fields" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           }
         },
         "type" : "object"
@@ -34809,6 +34826,38 @@
         },
         "type" : "object"
       },
+      "RetentionRow" : {
+        "properties" : {
+          "documents" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "oldest" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "pastRetention" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "provisional" : {
+            "type" : "boolean"
+          },
+          "retainedAfter" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "retentionYears" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "RetentionRule" : {
         "properties" : {
           "code" : {
@@ -40156,6 +40205,9 @@
           "expiresAt" : {
             "format" : "date-time",
             "type" : "string"
+          },
+          "form" : {
+            "$ref" : "#/components/schemas/PaymentFormResponse"
           },
           "merchantTransId" : {
             "type" : "string"
@@ -46039,6 +46091,29 @@
         },
         "summary" : "Whether the official ИКПУ/MXIK list is loaded, which dataset it is, and how old",
         "tags" : [ "Fiscal reference" ]
+      }
+    },
+    "/api/v1/control-plane/fiscal/retention" : {
+      "get" : {
+        "description" : "Report-only (ADR 0166 Decision 10): nothing is deleted or marked, and no role the application uses may delete a fiscal row. The period is the tenant's, never below the platform's, and flagged provisional while it is the unconfirmed default.",
+        "operationId" : "retention",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/RetentionRow"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "How much fiscal evidence each tenant holds, and how much is past its retention",
+        "tags" : [ "Platform fiscal" ]
       }
     },
     "/api/v1/control-plane/grants" : {
@@ -107343,7 +107418,7 @@
     },
     "/api/v1/tenants/{tenantId}/fiscal/documents/{documentId}/retries" : {
       "post" : {
-        "description" : "Reuses the document and never creates a second one: two sale receipts for one payment is a discrepancy with the tax authority that can only be corrected, never deleted. On the Click path the adapter reads back through GET payment/ofd_data first — a populated qrCodeURL means the earlier submission worked — because Click does not document submit_items as idempotent. Answers 409 with reasonCode FISCAL_LINES_NOT_BUILT, sending nothing, while the real receipt line builder does not exist and the environment is not a sandbox where the platform allows the placeholder line (ADR 0166).",
+        "description" : "Reuses the document and never creates a second one: two sale receipts for one payment is a discrepancy with the tax authority that can only be corrected, never deleted. On the Click path the adapter reads back through GET payment/ofd_data first — a populated qrCodeURL means the earlier submission worked — because Click does not document submit_items as idempotent. The receipt lines are built from the order (ADR 0166): an order that cannot be built answers 200 with the outcome BLOCKED_CLASSIFICATION, BLOCKED_TAX, BLOCKED_RECONCILIATION or BLOCKED_MARKS, sends nothing, and the document carries the reason.",
         "operationId" : "retry_1",
         "parameters" : [ {
           "in" : "path",

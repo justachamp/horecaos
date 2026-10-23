@@ -266,11 +266,18 @@ public class FiscalDocumentService {
 
         PartnerFiscalizationPort.Outcome outcome = partner.retry(tenantId, documentId, idempotencyKey);
 
-        if (outcome == PartnerFiscalizationPort.Outcome.LINES_NOT_BUILT) {
-            // ADR 0166, Decision 6. Nothing was sent, so the attempt claimed above must not stand:
-            // the exception rolls this transaction back, the document keeps the state and reason it
-            // had, and the operator is told why in a code a client can branch on.
-            throw new LinesNotBuiltException(documentId);
+        String blockReason = blockReasonOf(outcome);
+        if (blockReason != null) {
+            // ADR 0166, Decision 6. The receipt could not be built (or, for a terminal receipt, issued), so
+            // nothing was sent and the document says why in the one reason that names the obstacle. A document
+            // still waiting is blocked; one that was already blocked for another reason (including the
+            // historical LINES_NOT_BUILT) is restated, so the worklist shows what is true now and not what was
+            // true when it was claimed.
+            Instant now = clock.instant();
+            String note = noteOf(outcome);
+            if (!documents.blockUnsent(tenantId, documentId, blockReason, note, now)) {
+                documents.restateBlock(tenantId, documentId, blockReason, note, now);
+            }
         }
 
         audit.record(AuditFact.of("fiscal.document.retry", AuditClass.BUSINESS)
@@ -295,6 +302,27 @@ public class FiscalDocumentService {
                 .build());
 
         return new RetryResult(documentId, outcome, expectedVersion + 1);
+    }
+
+    /** The block reason a builder outcome names, or null when the outcome is not a block on the lines. */
+    private static @Nullable String blockReasonOf(PartnerFiscalizationPort.Outcome outcome) {
+        return switch (outcome) {
+            case BLOCKED_CLASSIFICATION -> FiscalReasonCode.CLASSIFICATION_MISSING;
+            case BLOCKED_TAX -> FiscalReasonCode.VAT_NOT_EXPRESSIBLE;
+            case BLOCKED_RECONCILIATION -> FiscalReasonCode.RECEIPT_DOES_NOT_RECONCILE;
+            case NO_TERMINAL -> FiscalReasonCode.NO_FISCAL_PATH;
+            case TERMINAL_UNREACHABLE -> FiscalReasonCode.TERMINAL_OFFLINE;
+            default -> null;
+        };
+    }
+
+    /** The sentence the block carries: nothing was sent, and what stopped it. */
+    private static String noteOf(PartnerFiscalizationPort.Outcome outcome) {
+        return switch (outcome) {
+            case NO_TERMINAL -> "no active fiscal terminal of the selling legal entity is bound to this location";
+            case TERMINAL_UNREACHABLE -> "the tenant's fiscal terminal could not be reached; nothing was issued";
+            default -> "the receipt could not be built on retry; nothing was sent";
+        };
     }
 
     /**
@@ -401,18 +429,6 @@ public class FiscalDocumentService {
             super(("Fiscal document %s names no legal entity. A receipt is issued under the "
                             + "selling company's own merchant account, so this needs an ADR 0038 fiscal "
                             + "assignment for the branch before it can be sent.")
-                    .formatted(documentId));
-        }
-    }
-
-    /**
-     * The real receipt line builder does not exist and the one-line placeholder may not be filed
-     * here (ADR 0166, Decision 6): refused before anything is sent.
-     */
-    public static class LinesNotBuiltException extends RuntimeException {
-        public LinesNotBuiltException(UUID documentId) {
-            super(("Fiscal document %s cannot be sent: the receipt line builder does not exist yet, "
-                            + "and a placeholder receipt may only be filed in a sandbox.")
                     .formatted(documentId));
         }
     }

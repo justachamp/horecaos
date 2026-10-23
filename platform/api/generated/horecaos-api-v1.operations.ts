@@ -3082,6 +3082,7 @@ export interface EventClassResponse {
 export interface EvidenceDocumentResponse {
   attemptCount?: number;
   blockedAt?: string;
+  businessDate?: string;
   correction?: CorrectionSummaryResponse;
   correctsDocumentId?: string;
   createdAt?: string;
