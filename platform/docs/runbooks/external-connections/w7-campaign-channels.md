@@ -61,7 +61,10 @@ password, point the platform at it). Two points are specific to bulk mail:
 
 **What a customer's unsubscribe page is.** `GET /providers/mail/unsubscribe/{token}` on the API origin
 (`HORECAOS_API_ORIGIN`) renders a confirmation page and changes nothing; `POST` unsubscribes. The token is
-in the path and never logged. The page is platform-hosted, in the message's language, with no storefront
+in the path. The application never logs it, and the edge replaces it with `redacted` in its access and
+error logs (the `request>uri` filter in both Caddyfiles, which also covers the push click path
+`/providers/push/clicks/{token}`); keep that filter when the edge changes, because a token in a log is a
+working unsubscribe link for whoever reads the log. The page is platform-hosted, in the message's language, with no storefront
 styling. The origin must be reachable by the customer's mail client and by a browser; the production edge
 already proxies it (the API origin's catch-all).
 

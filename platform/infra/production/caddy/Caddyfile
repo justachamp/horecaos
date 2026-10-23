@@ -41,7 +41,7 @@
 		format filter {
 			wrap json
 			fields {
-				request>uri regexp "\?.*$" "?redacted"
+				request>uri regexp "^(/providers/(?:mail/unsubscribe|push/clicks)/)[^/?]+|(\?).*$" "${1}${2}redacted"
 			}
 		}
 	}
@@ -437,7 +437,7 @@
 		format filter {
 			wrap json
 			fields {
-				request>uri regexp "\?.*$" "?redacted"
+				request>uri regexp "^(/providers/(?:mail/unsubscribe|push/clicks)/)[^/?]+|(\?).*$" "${1}${2}redacted"
 			}
 		}
 	}
@@ -483,7 +483,7 @@
 		format filter {
 			wrap json
 			fields {
-				request>uri regexp "\?.*$" "?redacted"
+				request>uri regexp "^(/providers/(?:mail/unsubscribe|push/clicks)/)[^/?]+|(\?).*$" "${1}${2}redacted"
 			}
 		}
 	}
@@ -542,7 +542,7 @@
 		format filter {
 			wrap json
 			fields {
-				request>uri regexp "\?.*$" "?redacted"
+				request>uri regexp "^(/providers/(?:mail/unsubscribe|push/clicks)/)[^/?]+|(\?).*$" "${1}${2}redacted"
 			}
 		}
 	}
