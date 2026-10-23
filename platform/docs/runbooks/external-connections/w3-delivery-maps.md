@@ -42,8 +42,10 @@ Steps:
    bao kv put horecaos/production/provider_geocoding/platform/yandex-server-key value=@-   # paste, then Ctrl-D
    ```
 
-3. Tell the platform the reference, and name the provider, in the environment file read by the
-   `platform` container (`/etc/horecaos/production.env` on the pilot VM):
+3. Tell the platform the reference, and name the provider, in the environment file the stack is
+   started with (`/etc/horecaos/production.env` on the pilot VM). `deploy/compose.production.yml`
+   forwards these three variables to `platform-app` (and `ProductionComposeRunbookVariablesTests`
+   fails if one is dropped), so the file is the only place they are set:
 
    ```sh
    HORECAOS_GEO_PROVIDER=yandex

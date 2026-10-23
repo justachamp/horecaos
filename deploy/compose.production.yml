@@ -544,6 +544,19 @@ services:
       HORECAOS_ROUTING_OSRM_ENABLED: ${HORECAOS_ROUTING_OSRM_ENABLED:-false}
       HORECAOS_ROUTING_OSRM_DATASET_VERSION: ${HORECAOS_ROUTING_DATASET_TAG:-}
 
+      # ADR 0145: address search and map tiles. `none` (the default) is also the way back: suggestions
+      # degrade to text and every map area says there is no provider. Turning it on is these three lines in the
+      # environment file and a restart, nothing else; this block is what carries them into the container
+      # (compose forwards nothing from --env-file except what is listed), and ProductionComposeRunbookVariablesTests
+      # fails when a variable the runbook names is missing here. The server key is never a value: the reference
+      # names it in OpenBao, for example
+      # horecaos:production:provider_geocoding:platform:yandex-server-key. The browser key is public by
+      # construction (a referrer-restricted key delivered to browsers by GET .../map-config), so it is a value.
+      # Steps and the way back: platform/docs/runbooks/external-connections/w3-delivery-maps.md, sections 1 to 3.
+      HORECAOS_GEO_PROVIDER: ${HORECAOS_GEO_PROVIDER:-none}
+      HORECAOS_GEO_YANDEX_SECRET_REFERENCE: ${HORECAOS_GEO_YANDEX_SECRET_REFERENCE:-}
+      HORECAOS_GEO_YANDEX_BROWSER_KEY: ${HORECAOS_GEO_YANDEX_BROWSER_KEY:-}
+
       TZ: Asia/Tashkent
     volumes:
       - bao-runtime:/run/bao:ro
