@@ -112,6 +112,59 @@ class StaffPasswordResetControllerTests {
         verify(resets).request(eq("cashier"), eq(StaffConsole.OPERATIONS), eq("ru"), anyString());
     }
 
+    /**
+     * The tag the operations console actually sends, in the body it actually sends.
+     *
+     * <p>The console's {@code LOCALES} are {@code ru}, {@code uz-Latn} and {@code en} and, since
+     * ADR 0149, the page posts {@code I18n.locale()} as it is. The DTO used to accept only
+     * {@code uz|ru|en}, so every Uzbek-language operator got a 400 before the service's alias
+     * handling ran, and the only recovery path of a locked-out account was closed to them. The
+     * service decides what the platform sends in ({@code LocaleVocabulary.message}), so the
+     * boundary has to hand it any registered tag, any alias and a tag nobody has activated yet.
+     */
+    @Test
+    @DisplayName("asking for a reset accepts every tag the consoles send, and the tag reaches the service as sent")
+    void requestingAResetAcceptsTheConsolesOwnTags() throws Exception {
+        // A caller address of this method's own: ten a minute per address is the limiter's budget, and
+        // the methods around this one spend 127.0.0.1's.
+        for (String prefix : new String[] {"control-plane", "operations"}) {
+            String address = "control-plane".equals(prefix) ? "203.0.113.20" : "203.0.113.21";
+            String[] tags = "control-plane".equals(prefix)
+                    ? new String[] {"uz-Latn"}
+                    : new String[] {"uz-Latn", "uz", "ru", "en", "kk", "en-US", "uz_UZ"};
+            for (String tag : tags) {
+                MvcResult result = mvc.perform(post("/api/v1/%s/auth/password-resets".formatted(prefix))
+                                .with(from(address))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"login\":\"cashier-%s\",\"locale\":\"%s\"}".formatted(tag, tag)))
+                        .andReturn();
+
+                assertThat(result.getResponse().getStatus())
+                        .as("%s with locale %s", prefix, tag)
+                        .isEqualTo(202);
+                StaffConsole console =
+                        "control-plane".equals(prefix) ? StaffConsole.CONTROL_PLANE : StaffConsole.OPERATIONS;
+                verify(resets).request(eq("cashier-" + tag), eq(console), eq(tag), anyString());
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("a locale that is not a language tag at all is still refused before the service is reached")
+    void aLocaleThatIsNotATagIsRefused() throws Exception {
+        for (String junk : new String[] {"", "<script>", "ru; DROP TABLE x", "a".repeat(40), "123"}) {
+            int status = mvc.perform(post("/api/v1/operations/auth/password-resets")
+                            .with(from("203.0.113.22"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"login\":\"cashier\",\"locale\":\"%s\"}".formatted(junk)))
+                    .andReturn()
+                    .getResponse()
+                    .getStatus();
+            assertThat(status).as("locale '%s'", junk).isEqualTo(400);
+        }
+        verify(resets, never()).request(anyString(), any(StaffConsole.class), anyString(), anyString());
+    }
+
     @Test
     @DisplayName("inspecting a link is reachable with no bearer token, on both prefixes")
     void inspectingALinkIsUnauthenticated() throws Exception {
