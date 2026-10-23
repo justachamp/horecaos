@@ -16,8 +16,10 @@
   (`POST …/adjustment-rule-simulations` and its panel on the rule form) and the deliveries list
   (`GET …/deliveries`, `/deliveries`). Not done: the reader behind `ORDER_UNDELIVERED` and `ORDER_DAMAGED`
   (see Open inputs: neither code exists in the exception list, no screen records one, and every engagement
-  is `SELF_EMPLOYED` by constraint), a photo check for the `PHOTO` kind to report, and a real SMS gateway
-  account carrying a courier's link, which is the owner's (`docs/runbooks/external-connections/w3-delivery-maps.md`).
+  is `SELF_EMPLOYED` by constraint), a photo check for the `PHOTO` kind to report, a real SMS gateway
+  account carrying a courier's link, which is the owner's, and the production `CourierAccessMessenger`
+  over it, which is unwritten work and not an external fact (`docs/runbooks/external-connections/w3-delivery-maps.md`
+  section 8; see the 2026-10-23 addition).
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: proposed by Claude (batch 21); Ayubkhon Abbosov (platform owner) decides
@@ -284,6 +286,34 @@ A location left alone lets a courier who is out of place finish a delivery and t
 position was unverified; the same location set to `HARD` answers `409 GATE_FAILED` and the shipment
 does not move; a rule on `GEO_UNVERIFIED_RATE` counts the deliveries whose pickup and handover were
 both measured and passed as verified; a rule on `ORDER_DAMAGED` is refused at the API.
+
+## Status addition (2026-10-23)
+
+Three corrections from the review of batch 21's delivery wave; this record's Decision, Alternatives and
+Consequences are unchanged.
+
+- **The missing SMS adapter is not waiting on the owner's account alone.** The Implementation status line
+  and the open input above filed the whole gap under the owner. The account and the approved sender are
+  external; `CourierAccessMessenger`'s production implementation is not, and it is not written because
+  three things it needs are decided nowhere: which brand's SMS installation texts a courier
+  (`NotificationGateway` resolves an account through a brand or location binding; the courier row, the
+  invitation and `AccessMessage` carry no brand), which route carries a one-time bearer link (the ADR 0182
+  courier path persists an intent with its variables on a row, while Decision 7 keeps the token out of every
+  table), and what «connected» means once a bean always exists (`smsConnected()` is bean presence today;
+  readiness is per brand). Decision 7 stands as written and is what the code does: with no bean an
+  invitation waits as `SMS_NOT_CONNECTED`. The runbook row says the same.
+- **Decision 8 now voids the sign-in link when the courier leaves.** V0657 defines `VOIDED` as «replaced by
+  a newer invitation, or the courier left, before it was spent», but only the first was implemented.
+  `CourierLifecycleService.endEngagement` and `.archive` now call `JdbcCourierAccessStore.voidLive` in their
+  own transaction (and the audit fact carries `accessInvitationsVoided`), and `CourierAccessService.accept`
+  and `CourierAccessRelay` require a live engagement as `issue` does, so an engagement that ended some other
+  way is covered too. Proved by `CourierAccessEndpointTests` through the lifecycle endpoints.
+- **Decision 9's preview is tenant-wide.** A reason is a tenant-level registry row (it has no location
+  column) that `AdjustmentRuleEvaluator` reads at every branch's shift close, so the rule form no longer
+  sends `locationId` and the replay covers every branch; the optional `locationId` stays on the endpoint for
+  a question about one branch. `truncated` now also says that more shifts or periods closed in the lookback
+  than the 5,000 newest the replay holds (`CourierRuleSimulator.MAX_WINDOWS`), so a «nobody» from a cut
+  answer is not read as safe.
 
 ## References
 
