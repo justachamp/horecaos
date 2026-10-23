@@ -97,7 +97,8 @@ class CustomerExportParticipantsTests {
                 new OrderingExportParticipant(new JdbcOrderExportStore(app), base.protection),
                 new LoyaltyExportParticipant(app),
                 new MarketingExportParticipant(app),
-                new ReviewsExportParticipant(app, base.protection),
+                new ReviewsExportParticipant(
+                        app, new uz.horecaos.platform.reviews.application.ReviewCommentVault(base.protection)),
                 new DineInExportParticipant(app, base.protection),
                 new NotificationsExportParticipant(app),
                 new ConversationsExportParticipant(app, base.protection),

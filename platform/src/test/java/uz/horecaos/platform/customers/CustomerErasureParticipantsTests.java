@@ -363,7 +363,9 @@ class CustomerErasureParticipantsTests {
                 .as("an endpoint that kept the old hash would still answer a search for her number")
                 .isNotEqualTo(hers.phoneHash);
         // notifications-push (ADR 0182): the subscription ends and keeps no secret
-        assertThat(text("SELECT status FROM notifications.push_subscriptions WHERE customer_account_id = :id", customer))
+        assertThat(text(
+                        "SELECT status FROM notifications.push_subscriptions WHERE customer_account_id = :id",
+                        customer))
                 .isEqualTo("REVOKED");
         assertThat(text(
                         "SELECT coalesce(secret_ciphertext, 'NULL') FROM notifications.push_subscriptions "

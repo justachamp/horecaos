@@ -1,8 +1,11 @@
 package uz.horecaos.platform.reviews.application;
 
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
+import uz.horecaos.platform.customers.spi.CustomerExportParticipant.ExportSubject;
+import uz.horecaos.platform.customers.spi.ExportReveal;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
@@ -88,6 +91,19 @@ public class ReviewCommentVault {
                     "A comment is revealed for public display only when it is PUBLISHED with the author's consent");
         }
         return reveal(tenantId, REVIEW_TABLE, REVIEW_COLUMN, reviewId, commentProtected, RevealPurpose.PUBLIC_DISPLAY);
+    }
+
+    /**
+     * Renders one {@code reviews.order_reviews} row for the customer's own data export (ADR 0029): the comment
+     * is opened under the purpose the person producing the export declared, which is not a reveal purpose of
+     * this module because no reader of a review screen performs it, and every other column passes through.
+     * The export participant holds no protection port of its own so that this class stays the one place a
+     * comment is decrypted.
+     *
+     * @param raw the row as the store read it, with its {@code id} and its {@code comment_protected}
+     */
+    public Map<String, @Nullable Object> renderForExport(ExportSubject subject, Map<String, Object> raw) {
+        return ExportReveal.row(protection, subject, REVIEW_TABLE, "id", raw);
     }
 
     private String reveal(

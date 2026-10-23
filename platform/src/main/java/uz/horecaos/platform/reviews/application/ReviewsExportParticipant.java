@@ -8,12 +8,10 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.customers.spi.CustomerExportParticipant;
-import uz.horecaos.platform.customers.spi.ExportReveal;
 import uz.horecaos.platform.customers.spi.ExportRow;
 import uz.horecaos.platform.customers.spi.ExportSection;
 import uz.horecaos.platform.customers.spi.ExportTable;
 import uz.horecaos.platform.customers.spi.ExportsCustomerData;
-import uz.horecaos.platform.iam.api.protection.FieldProtection;
 
 /**
  * What a customer said about her orders and what the tenant did about it (ADR 0029): her ratings and comments, whether she
@@ -37,11 +35,11 @@ public class ReviewsExportParticipant implements CustomerExportParticipant {
     private static final int FETCH = ExportTable.MAX_ROWS + 1;
 
     private final JdbcClient jdbc;
-    private final FieldProtection protection;
+    private final ReviewCommentVault vault;
 
-    public ReviewsExportParticipant(JdbcClient jdbc, FieldProtection protection) {
+    public ReviewsExportParticipant(JdbcClient jdbc, ReviewCommentVault vault) {
         this.jdbc = jdbc;
-        this.protection = protection;
+        this.vault = vault;
     }
 
     @Override
@@ -55,7 +53,7 @@ public class ReviewsExportParticipant implements CustomerExportParticipant {
                  ORDER BY submitted_at DESC, id DESC
                  LIMIT :limit
                 """)) {
-            reviews.add(ExportReveal.row(protection, subject, "reviews.order_reviews", "id", raw));
+            reviews.add(vault.renderForExport(subject, raw));
         }
         return new ExportSection(
                 List.of(
