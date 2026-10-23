@@ -11,6 +11,31 @@
   both storefronts. One dependency is not this record's: for a provider-paid order the receipt lines
   come from the fiscal line builder of wave `w11`, and this wave was built against the bridge as it
   stood.
+
+  **Correction, 2026-10-23 (fix batch 21, finding "an intent already" guard).** The Specification
+  says a settlement that "has a money tender with an intent already" is refused with
+  `SETTLEMENT_NOT_REPLANNABLE`, and *Negative consequences* says the same of "an intent already
+  attached to the money tender". That guard cannot fire in the tree as built. `OrderSettlementService.replanMoneyLeg`
+  and `restateTotal` do test `TenderRow.paymentIntentId() != null`, and the store's
+  `UPDATE payments.tenders` is guarded `payment_intent_id IS NULL`, but nothing ever writes
+  `payments.tenders.payment_intent_id`: the one tender writer (`OrderSettlementService.plan`, through
+  `JdbcSettlementStore.insertTender`) passes null, there is no `UPDATE` that sets it, and a payment
+  intent is tied to its order (`payments.payment_intents.order_id`), not to a tender. The check is
+  defence in depth for the day an intent is linked to its tender; it is not what keeps a re-plan from
+  running under an open provider intent. What does, today, is two other things, both tested:
+  (1) `OrderAmendmentService.propose` refuses `CHANGE_PAYMENT_METHOD` on an order whose payment
+  projection is not `NOT_REQUIRED` (`PAYMENT_METHOD_CHANGE_REQUIRES_VOID_REFUND`, proved by
+  `changePaymentMethodIsRefusedForAnOnlinePaidOrder`), and that holds at apply, because a
+  `NOT_REQUIRED` projection leaves that value only through an amendment's own revision
+  (`JdbcOrderStore.updatePaymentProjection` is guarded `payment_status_projection <> 'NOT_REQUIRED'`),
+  which moves the order version that `apply` compares; and (2) the settlement guards `status =
+  PLANNED` and `settled_minor = 0` in `replanMoneyTender`, proved by
+  `aSettlementThatHasBegunToSettleRefusesAMethodChange`. Linking an intent to its tender was not done
+  in the fix batch: `fiscal` already reads that column (`JdbcFiscalLifecycleStore.ordersOwingADocument`,
+  V0685's backfill) to pick the tender a document covers, so writing it changes which fiscal documents
+  carry a tender id, which is the fiscal wave's decision and not a money-leg correction. The record's
+  wording above stays as accepted; read "an intent already attached to the money tender" as the
+  future guard this note describes.
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: proposed by Claude (batch 21); Ayubkhon Abbosov (platform owner) decides

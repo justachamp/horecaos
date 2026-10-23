@@ -149,6 +149,10 @@ public interface OrderSettlementPort {
      * stays what it was and the money follows the method. A change that would leave no money to collect is refused
      * (ADR 0046 requires at least one som of money).
      *
+     * <p>"Has no payment intent" is a guard for later: no code links an intent to a tender yet, so it does not
+     * refuse today, and a caller must itself know that no provider intent is open for the order (the amendment
+     * does, by refusing a method change unless the order's payment projection is {@code NOT_REQUIRED}).
+     *
      * @param locationId the branch the order was placed at, which a cash tender's fiscal responsibility depends on
      */
     default MoneyLegReplan replanMoneyLeg(

@@ -394,6 +394,15 @@ public class OrderSettlementService implements CashDueLookupPort {
      * it would leave the tenders summing to a different figure than the intent the provider
      * was asked to collect.
      *
+     * <p><strong>The intent test is a guard for later.</strong> Nothing writes {@code
+     * payments.tenders.payment_intent_id} yet (a payment intent is tied to its order, not to a
+     * tender), so {@code paymentIntentId() != null} is always false today and does not by itself
+     * keep this from running under an open provider intent. Today's protection is the callers':
+     * the catchweight reconciliation ({@code PAYMENT_ALREADY_TAKEN}) and the amendment's cash-due
+     * restatement both act only on an order whose payment projection is {@code NOT_REQUIRED}, so a
+     * caller other than those must establish the same before it calls this (see ADR 0185's
+     * implementation status).
+     *
      * @return true when the settlement now sums to {@code newTotalMinor} or there is none
      */
     @Transactional
@@ -445,6 +454,15 @@ public class OrderSettlementService implements CashDueLookupPort {
      * <p>Only a settlement that is still {@code PLANNED} with nothing settled and exactly one money tender that is
      * still {@code PLANNED} with no payment intent: the shape of an order whose money has not moved. Anything else
      * has money in motion, and the answer is empty, which refuses the amendment.
+     *
+     * <p><strong>The intent test is a guard for later.</strong> Nothing writes {@code
+     * payments.tenders.payment_intent_id} yet (a payment intent is tied to its order, not to a tender), so the
+     * {@code paymentIntentId() != null} check, and the {@code payment_intent_id IS NULL} predicate of the store's
+     * update, never refuse today. What keeps a re-plan from running under an open provider intent is the
+     * amendment: {@code OrderAmendmentService.propose} refuses a method change on an order whose payment
+     * projection is not {@code NOT_REQUIRED}, a projection that only an amendment's own revision can move, and
+     * this method's own {@code PLANNED} and nothing-settled guards (ADR 0185's implementation status). A caller
+     * other than that amendment must establish the same before it calls this.
      *
      * @param newMethodId the tenant's registry row for the new method, registered by the planner on first use
      * @return the new money figure, or empty when the settlement cannot be re-planned; nothing is written then
