@@ -8382,6 +8382,88 @@ class CartCheckoutAndOrderTests {
     }
 
     @Test
+    @DisplayName(
+            "a completed order of another customer, or of the same customer at a sister brand, does not make a new customer trusted")
+    void priorOrdersAreCountedForTheSameAccountInTheSameBrandOnly() {
+        autoConfirmWithAHoldBackPath();
+        UUID sisterBrand = UUID.randomUUID();
+        UUID sisterLocation = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, 'SISTER', 'sister', 'Sister brand', 'ACTIVE', 0)
+                """).param("id", sisterBrand).param("tenantId", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
+                    timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, 'SISTER01', 'sister-01', 'SISTER01', 'Asia/Tashkent',
+                    'ACTIVE', 0)
+                """)
+                .param("id", sisterLocation)
+                .param("tenantId", TENANT)
+                .param("brandId", sisterBrand)
+                .update();
+        var earlier = placeOrder("idem-scope-earlier");
+        assertThat(earlier.status()).isEqualTo(OrderStatus.CONFIRMED);
+        handOver(orderIdOf(earlier));
+        UUID completed = orderIdOf(earlier);
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_MIN_PRIOR_ORDERS_CODE, 1);
+
+        // Another customer of the same brand has a completed order; CUSTOMER has none. The tenant, the
+        // brand and the status all match, so only the account predicate of the count tells them apart.
+        moveCompletedOrder(completed, OTHER_CUSTOMER, BRAND, LOCATION);
+        assertThat(orderStore.countCompletedForCustomer(TENANT, BRAND, OTHER_CUSTOMER))
+                .isEqualTo(1L);
+        assertThat(orderStore.countCompletedForCustomer(TENANT, BRAND, CUSTOMER))
+                .as("someone else's completed order is not CUSTOMER's history")
+                .isZero();
+        var firstOrderBesideAnotherCustomer = placeOrder("idem-scope-other-customer");
+        assertThat(firstOrderBesideAnotherCustomer.status())
+                .as("CUSTOMER's first order waits for a person however many orders other customers completed")
+                .isEqualTo(OrderStatus.AWAITING_APPROVAL);
+        assertThat(heldReason(orderIdOf(firstOrderBesideAnotherCustomer))).isEqualTo("AUTO_ACCEPT_HELD_PRIOR_ORDERS");
+
+        // CUSTOMER's own completed order, but at a sister brand of the same tenant: the account is shared
+        // across a tenant's brands under TENANT_SHARED, and only the brand predicate tells them apart.
+        moveCompletedOrder(completed, CUSTOMER, sisterBrand, sisterLocation);
+        assertThat(orderStore.countCompletedForCustomer(TENANT, sisterBrand, CUSTOMER))
+                .isEqualTo(1L);
+        assertThat(orderStore.countCompletedForCustomer(TENANT, BRAND, CUSTOMER))
+                .as("a sister brand's history is not this brand's")
+                .isZero();
+        var firstOrderBesideASisterBrand = placeOrder("idem-scope-sister-brand");
+        assertThat(firstOrderBesideASisterBrand.status())
+                .as("CUSTOMER's first order in BRAND waits for a person although a sister brand knows them")
+                .isEqualTo(OrderStatus.AWAITING_APPROVAL);
+        assertThat(heldReason(orderIdOf(firstOrderBesideASisterBrand))).isEqualTo("AUTO_ACCEPT_HELD_PRIOR_ORDERS");
+
+        // The control: the very same row, back where it belongs, is what the gate trusts. Without it
+        // the two refusals above could be a gate that holds everybody.
+        moveCompletedOrder(completed, CUSTOMER, BRAND, LOCATION);
+        assertThat(orderStore.countCompletedForCustomer(TENANT, BRAND, CUSTOMER))
+                .isEqualTo(1L);
+        assertThat(placeOrder("idem-scope-own-history").status())
+                .as("CUSTOMER's own completed order in BRAND is a prior success")
+                .isEqualTo(OrderStatus.CONFIRMED);
+    }
+
+    /** Where a completed order's account and branch are, for a test that needs the same row to be someone else's. */
+    private void moveCompletedOrder(UUID orderId, UUID customerAccountId, UUID brandId, UUID locationId) {
+        assertThat(jdbc.sql("""
+                                UPDATE ordering.orders
+                                SET customer_account_id = :accountId, brand_id = :brandId, location_id = :locationId
+                                WHERE tenant_id = :tenantId AND id = :orderId AND status = 'COMPLETED'
+                                """)
+                        .param("accountId", customerAccountId)
+                        .param("brandId", brandId)
+                        .param("locationId", locationId)
+                        .param("tenantId", TENANT)
+                        .param("orderId", orderId)
+                        .update())
+                .as("exactly the one completed order is moved")
+                .isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("a guest counts as having no prior orders")
     void aGuestHasNoPriorOrders() {
         autoConfirmWithAHoldBackPath();
