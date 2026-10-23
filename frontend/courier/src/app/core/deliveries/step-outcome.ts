@@ -9,7 +9,9 @@ import type {
 /**
  * Every reason a rule of the courier policy can give for refusing a step (`GateRefusal`,
  * couriers.md section 16), each the `reason` of a `422`. The set is closed on the platform's side
- * and every member is pinned by a test there; here it is the list the screens have a sentence for.
+ * and pinned there to the exact set (`DeliveryGateTests`); here it is the list the screens have a
+ * sentence for. It is a copy, not generated -- the `reason` is a problem-document extension and the
+ * OpenAPI baseline does not carry it -- so `gate-refusal-drift.spec.ts` holds it to the enum's source.
  */
 export const GATE_REFUSAL_REASONS = [
   'GPS_POSITION_REQUIRED',

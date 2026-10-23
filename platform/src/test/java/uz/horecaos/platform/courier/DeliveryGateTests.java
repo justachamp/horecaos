@@ -205,13 +205,19 @@ class DeliveryGateTests {
         assertThat(DeliveryGate.paymentConfirmationRequired(off, 87_000L)).isFalse();
     }
 
+    /**
+     * The exact set, not a lower bound: the courier client keeps a copy of this list (the reasons it has a
+     * sentence for) and {@code frontend/courier/.../gate-refusal-drift.spec.ts} holds the copy to the enum's source.
+     * Adding or renaming a member fails here first, with the client's list and its three catalogues in the same
+     * change.
+     */
     @Test
-    @DisplayName("every refusal the gate can produce has a distinct, stable name")
+    @DisplayName("every refusal the gate can produce has a distinct, stable name, and these are all of them")
     void refusalNamesAreDistinctAndStable() {
         assertThat(GateRefusal.values())
                 .extracting(Enum::name)
                 .doesNotHaveDuplicates()
-                .contains(
+                .containsExactlyInAnyOrder(
                         "GPS_POSITION_REQUIRED",
                         "GPS_ACCURACY_INSUFFICIENT",
                         "GPS_REFERENCE_UNAVAILABLE",
