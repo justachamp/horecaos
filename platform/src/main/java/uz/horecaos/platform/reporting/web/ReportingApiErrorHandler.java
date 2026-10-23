@@ -83,6 +83,15 @@ public class ReportingApiErrorHandler {
                 Map.of("reason", "NON_SCALAR_METRIC", "metricCode", exception.metricCode()));
     }
 
+    /** Built, and answered by its own report: refused by name rather than crashed on or answered empty. */
+    @ExceptionHandler(ReportingRefusals.MetricNotQueryableException.class)
+    ProblemDetail notQueryable(ReportingRefusals.MetricNotQueryableException exception) {
+        return ApiProblem.withProperties(
+                ErrorCode.VALIDATION_FAILED,
+                message(exception),
+                Map.of("reason", "METRIC_NOT_QUERYABLE", "metricCode", exception.metricCode()));
+    }
+
     /** T13 (7.6a): a customer-type-grain metric was mixed with an agg_branch_day metric in one call. */
     @ExceptionHandler(ReportingRefusals.MixedCustomerTypeGrainException.class)
     ProblemDetail mixedCustomerTypeGrain(ReportingRefusals.MixedCustomerTypeGrainException exception) {

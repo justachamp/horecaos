@@ -165,6 +165,27 @@ class PromotionReportControllerHttpTests {
                 .contains("provenance");
     }
 
+    @Test
+    @DisplayName(
+            "/queries refuses a promotion metric by name and points at the summary, instead of a 500 or an empty 200")
+    void queriesPointsAtThePromotionSummary() throws Exception {
+        for (String metric :
+                new String[] {"promo.discount_som.v1", "promo.redemptions.v1", "promo.avg_check_with.v1"}) {
+            MvcResult refused = mvc.perform(get("/api/v1/tenants/" + TENANT + "/reporting/queries")
+                            .with(tokenFor(MANAGER))
+                            .queryParam("from", "2026-09-01")
+                            .queryParam("to", "2026-09-07")
+                            .queryParam("metric", metric))
+                    .andReturn();
+
+            assertThat(refused.getResponse().getStatus()).as(metric).isEqualTo(400);
+            assertThat(refused.getResponse().getContentAsString(UTF_8))
+                    .as(metric)
+                    .contains(metric)
+                    .contains("reporting/promotions/summary");
+        }
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private void insertRedemption(UUID tenant, String subjectHash, long discountMinor) {
