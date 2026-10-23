@@ -5,8 +5,9 @@
   `feature.kiosk_devices` for the kiosk parts. `V0695` adds `media.assets.purpose` (always a `PUBLIC`, tenant-owned still image,
   `ck_media_asset_purpose_shape`) and `tenant.kiosk_idle_media` with its version row (position 0 to 7 and a unique key, so a ninth
   picture cannot exist); `V0696` widens the chat event-class CHECK with `REVIEW_POSITIVE`, `REVIEW_NEGATIVE` and
-  `LOYALTY_SYNC_DISCREPANCY`. `media` lends `MediaPurpose` and `PurposedImages` (an upload over 1 MB or not a still image is refused
-  at the request, verification rejects a picture that is not 9:16 with `PURPOSE_ASPECT_RATIO`, and the attach checks again);
+  `LOYALTY_SYNC_DISCREPANCY`. `media` lends `MediaPurpose` and `PurposedImages` (an upload over 1 MB or not a JPEG, PNG or WebP still image is refused
+  at the request, an AVIF included although the platform stores it for other assets, verification rejects a picture that is not 9:16
+  with `PURPOSE_ASPECT_RATIO`, and the attach checks the type, the shape and the size again, `MediaPurpose.allowsContentType`);
   `KioskIdleMediaService` and `KioskIdleMediaController` list, upload, finalize, attach, order and remove under
   `kiosk.device.manage` with `If-Match` and an ADR 0027 fact each, and the pictures ride the kiosk's configuration read; the KIOSK
   card shows *Idle screen pictures* (9:16 crop, 1 MB cap, order, remove, a `KioskFrame` preview) and draws the printer, terminal and

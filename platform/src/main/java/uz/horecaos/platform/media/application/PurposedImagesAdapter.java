@@ -92,6 +92,7 @@ class PurposedImagesAdapter implements PurposedImages {
         if (contentType == null
                 || !contentType.startsWith("image/")
                 || contentType.startsWith("image/svg")
+                || !purpose.allowsContentType(contentType)
                 || width == null
                 || height == null) {
             return Verdict.NOT_A_RASTER_IMAGE;

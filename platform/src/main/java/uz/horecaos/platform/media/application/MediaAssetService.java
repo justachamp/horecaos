@@ -202,6 +202,11 @@ public class MediaAssetService implements MediaAvailability {
             if (VIDEO_MP4.equals(declared)) {
                 throw new IllegalArgumentException("A " + purpose + " asset is a still image, not a video");
             }
+            if (!purpose.allowsContentType(declared)) {
+                // The purpose's own closed set, narrower than ALLOWED_IMAGE_TYPES: an AVIF is a stored image type
+                // and not one a kiosk's browser is promised to decode.
+                throw new IllegalArgumentException("A " + purpose + " image is a JPEG, PNG or WebP");
+            }
             if (sizeBytes > purpose.maximumBytes()) {
                 throw new IllegalArgumentException(
                         "A %s image is at most %d bytes".formatted(purpose, purpose.maximumBytes()));

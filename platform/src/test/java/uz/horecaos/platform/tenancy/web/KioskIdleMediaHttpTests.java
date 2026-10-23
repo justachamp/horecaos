@@ -420,6 +420,15 @@ class KioskIdleMediaHttpTests {
                 .isEqualTo("NOT_A_RASTER_IMAGE");
         MvcResult gif = mvc.perform(upload(LOBBY, "image/gif", 5_000, MANAGER)).andReturn();
         assertThat(gif.getResponse().getStatus()).isEqualTo(422);
+        MvcResult avif =
+                mvc.perform(upload(LOBBY, "image/avif", 5_000, MANAGER)).andReturn();
+        assertThat(avif.getResponse().getStatus())
+                .as("AVIF is stored for other assets but is not one of the JPEG, PNG and WebP a kiosk is promised")
+                .isEqualTo(422);
+        assertThat(JSON.readTree(avif.getResponse().getContentAsString())
+                        .get("reason")
+                        .asString())
+                .isEqualTo("NOT_A_RASTER_IMAGE");
         assertThat(count("SELECT count(*) FROM media.assets"))
                 .as("only the first request allocated anything")
                 .isEqualTo(1);

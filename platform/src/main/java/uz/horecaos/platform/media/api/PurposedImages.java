@@ -61,7 +61,7 @@ public interface PurposedImages {
         UNKNOWN_ASSET,
         /** Not yet verified, rejected or deleted. */
         NOT_AVAILABLE,
-        /** Not a raster image whose dimensions the pipeline read. */
+        /** Not a raster image whose dimensions the pipeline read, or not of a type the purpose takes (JPEG, PNG or WebP). */
         NOT_A_RASTER_IMAGE,
         WRONG_ASPECT_RATIO,
         TOO_LARGE

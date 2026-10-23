@@ -171,6 +171,35 @@ class PurposedImagesAdapterTests {
     }
 
     @Test
+    @DisplayName("an AVIF is a raster image the platform stores but not one a kiosk takes: JPEG, PNG and WebP only")
+    void onlyTheTypesThePurposeNamesAreAccepted() {
+        for (String type : new String[] {"image/jpeg", "image/png", "image/webp"}) {
+            stored(asset(
+                    TENANT,
+                    MediaOwner.tenant(TENANT),
+                    MediaVisibility.PUBLIC,
+                    MediaAssetStatus.AVAILABLE,
+                    "KIOSK_IDLE",
+                    type,
+                    540,
+                    960,
+                    200_000L));
+            assertThat(check()).as(type).isEqualTo(Verdict.ACCEPTED);
+        }
+        stored(asset(
+                TENANT,
+                MediaOwner.tenant(TENANT),
+                MediaVisibility.PUBLIC,
+                MediaAssetStatus.AVAILABLE,
+                "KIOSK_IDLE",
+                "image/avif",
+                540,
+                960,
+                200_000L));
+        assertThat(check()).isEqualTo(Verdict.NOT_A_RASTER_IMAGE);
+    }
+
+    @Test
     @DisplayName("a picture that is not verified yet, a vector image and a wrong shape each say so")
     void eachFailingConditionNamesItself() {
         stored(asset(
