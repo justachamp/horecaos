@@ -77,7 +77,12 @@
     }
 
     <!-- The brand's content (ADR 0157): each section draws nothing until the document has it. -->
-    <app-content-brand-switcher [entries]="content.brandSwitcher()" />
+    @if (content.brandSwitcher().length > 0) {
+      <!-- Dark until a brand lists a sibling (ADR 0183), so its code is fetched only by a storefront that shows it. -->
+      @defer (on immediate) {
+        <app-content-brand-switcher [entries]="content.brandSwitcher()" />
+      }
+    }
     <app-content-stories [stories]="content.stories()" [categories]="contentCategories()" />
     <app-content-carousel [items]="content.carousel()" [categories]="contentCategories()" />
     <app-content-promo-grid [items]="content.promoGrid()" [categories]="contentCategories()" />
@@ -240,12 +245,15 @@
     </div>
   }
   @if (categoriesOpen()) {
-    <app-categories-overlay
-      [categories]="categories"
-      [selectedId]="selectedCategoryId()"
-      (chosen)="chooseFromOverlay($event)"
-      (closed)="categoriesOpen.set(false)"
-    />
+    <!-- Opened by a tap on the marketplace layout's «all», so a storefront on the standard strip never loads it. -->
+    @defer (on immediate) {
+      <app-categories-overlay
+        [categories]="categories"
+        [selectedId]="selectedCategoryId()"
+        (chosen)="chooseFromOverlay($event)"
+        (closed)="categoriesOpen.set(false)"
+      />
+    }
   }
   <!-- Behind @defer so a home screen with no pop-up never loads the dialog's code. -->
   @defer (when content.popup() !== null) {

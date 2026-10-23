@@ -996,6 +996,15 @@ function stripNames(fixture: ComponentFixture<unknown>): string[] {
     .filter((name) => name.startsWith('Category '));
 }
 
+/** The overlay's code is behind @defer: it is drawn once the chunk has loaded, not in the click's own turn. */
+async function openedOverlay(fixture: ComponentFixture<unknown>): Promise<void> {
+  fixture.detectChanges();
+  await vi.waitFor(() => {
+    fixture.detectChanges();
+    expect(query(fixture, '[role="dialog"]')).not.toBeNull();
+  });
+}
+
 describe('HomeComponent: the brand switcher and the marketplace layout (ADR 0183 D17)', () => {
   beforeEach(() => localStorage.clear());
 
@@ -1060,7 +1069,7 @@ describe('HomeComponent: the brand switcher and the marketplace layout (ADR 0183
     await mount(fixture);
 
     (query(fixture, '[data-testid="all-categories-open"]') as HTMLButtonElement).click();
-    fixture.detectChanges();
+    await openedOverlay(fixture);
 
     const dialog = query(fixture, '[role="dialog"]') as HTMLElement;
     expect(dialog).not.toBeNull();
@@ -1088,13 +1097,13 @@ describe('HomeComponent: the brand switcher and the marketplace layout (ADR 0183
     await mount(fixture);
 
     (query(fixture, '[data-testid="all-categories-open"]') as HTMLButtonElement).click();
-    fixture.detectChanges();
+    await openedOverlay(fixture);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     fixture.detectChanges();
     expect(query(fixture, '[role="dialog"]')).toBeNull();
 
     (query(fixture, '[data-testid="all-categories-open"]') as HTMLButtonElement).click();
-    fixture.detectChanges();
+    await openedOverlay(fixture);
     (query(fixture, '[data-testid="categories-overlay-backdrop"]') as HTMLElement).click();
     fixture.detectChanges();
     expect(query(fixture, '[role="dialog"]')).toBeNull();
