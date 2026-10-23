@@ -9,6 +9,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -436,11 +437,17 @@ public class JdbcMarketplaceAvailabilityStore {
      * Resumption: the partner portal may have been edited by hand while the reconciler could not
      * talk to it, so every belief about what the partner holds is withdrawn and the whole binding
      * is resent once.
+     *
+     * <p>The dry run's recorded decisions go with it (all three columns together, as {@code
+     * ck_marketplace_item_would_push} requires): they were the output of a rehearsal that is over, and
+     * left behind they would read as decisions the live reconciler is about to make, and would stop a later
+     * rehearsal from recording a dish whose desired value has not moved since.
      */
     public int forgetConfirmations(UUID tenantId, UUID bindingId, Instant now) {
         return jdbc.sql("""
                 UPDATE integration.marketplace_item_availability
                 SET confirmed_available = NULL, confirmed_at = NULL,
+                    would_push_available = NULL, would_push_seq = NULL, would_push_at = NULL,
                     state = CASE WHEN state = 'UNCERTAIN' THEN 'UNCERTAIN' ELSE 'PENDING' END,
                     pending_since = COALESCE(pending_since, :now),
                     next_attempt_at = :now, attempt_count = 0, updated_at = :now
@@ -717,8 +724,7 @@ public class JdbcMarketplaceAvailabilityStore {
                        count(a.*) FILTER (WHERE a.state = 'UNCERTAIN') AS uncertain,
                        count(a.*) FILTER (WHERE a.state = 'REJECTED_UNMAPPED') AS rejected,
                        min(a.pending_since) FILTER (WHERE a.state <> 'IN_SYNC') AS oldest_pending,
-                       count(a.*) FILTER (WHERE a.would_push_seq IS NOT NULL AND a.state <> 'IN_SYNC'
-                                             AND a.would_push_seq = a.desired_seq) AS would_push,
+                       count(a.*) FILTER (WHERE %s) AS would_push,
                        s.last_sweep_at AS last_sweep_at,
                        s.stale_alerted_at AS stale_alerted_at,
                        s.reconcile_was_enabled AS reconcile_was_enabled,
@@ -738,7 +744,7 @@ public class JdbcMarketplaceAvailabilityStore {
                          s.stale_alerted_at, s.reconcile_was_enabled, w.last_success_at, w.last_failure_at,
                          w.last_failure_code
                 ORDER BY i.display_name, b.id
-                """)
+                """.formatted(wouldPushPredicate("a")))
                 .param("tenantId", tenantId)
                 .param("locationId", locationId)
                 .query((row, number) -> new BindingSummary(
@@ -759,6 +765,60 @@ public class JdbcMarketplaceAvailabilityStore {
                         "ACTIVE".equals(row.getString("installation_status")),
                         row.getInt("would_push"),
                         instant(row.getObject("stale_alerted_at", OffsetDateTime.class))))
+                .list();
+    }
+
+    /**
+     * A row the dry run has recorded a decision for, and that decision is still about the dish's current desired
+     * value. The one definition of "would push": the count on the propagation read and the list behind it are
+     * both this, so the list is the count row for row.
+     */
+    private static String wouldPushPredicate(String alias) {
+        return "%1$s.would_push_seq IS NOT NULL AND %1$s.state <> 'IN_SYNC' AND %1$s.would_push_seq = %1$s.desired_seq"
+                .formatted(alias);
+    }
+
+    /** Whether this binding is an active marketplace binding of this branch. */
+    public boolean bindingIsAtLocation(UUID tenantId, UUID locationId, UUID bindingId) {
+        return jdbc.sql("""
+                SELECT EXISTS (
+                    SELECT 1 FROM integration.bindings b
+                    JOIN integration.installations i ON i.tenant_id = b.tenant_id AND i.id = b.installation_id
+                    WHERE b.tenant_id = :tenantId AND b.id = :bindingId AND b.location_id = :locationId
+                      AND i.provider_category = 'MARKETPLACE' AND b.status = 'ACTIVE')
+                """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .param("locationId", locationId)
+                .query(Boolean.class)
+                .single();
+    }
+
+    /**
+     * The dishes a dry-run binding would push, by the partner's own item reference, after {@code after}
+     * (exclusive). The reference is unique within a binding, so the order is total and a page boundary can
+     * neither skip nor repeat a dish however the table moves between pages.
+     */
+    public List<WouldPushRow> wouldPush(UUID tenantId, UUID bindingId, @Nullable String after, int limit) {
+        return jdbc.sql("""
+                SELECT external_entity_id, variant_id, would_push_available, would_push_at, confirmed_available
+                FROM integration.marketplace_item_availability a
+                WHERE a.tenant_id = :tenantId AND a.binding_id = :bindingId
+                  AND %s
+                  AND (CAST(:after AS text) IS NULL OR a.external_entity_id > CAST(:after AS text))
+                ORDER BY a.external_entity_id
+                LIMIT :limit
+                """.formatted(wouldPushPredicate("a")))
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .param("after", after)
+                .param("limit", limit)
+                .query((row, number) -> new WouldPushRow(
+                        row.getString("external_entity_id"),
+                        row.getObject("variant_id", UUID.class),
+                        row.getBoolean("would_push_available"),
+                        Objects.requireNonNull(instant(row.getObject("would_push_at", OffsetDateTime.class))),
+                        (Boolean) row.getObject("confirmed_available")))
                 .list();
     }
 
@@ -920,6 +980,14 @@ public class JdbcMarketplaceAvailabilityStore {
             // ADR 0180 Decision 1: since when this binding is inside a reported stale episode, or null. The
             // incident ends when the mark clears, so a value here is an open incident.
             @Nullable Instant staleAlertedAt) {}
+
+    /** One recorded decision of a dry run: the dish, the partner's reference for it, and what it would be set to. */
+    public record WouldPushRow(
+            String externalEntityId,
+            UUID variantId,
+            boolean wouldPushAvailable,
+            Instant wouldPushAt,
+            @Nullable Boolean confirmedAvailable) {}
 
     public record Watermark(String alertState, @Nullable Instant lastSuccessAt, int staleAfterSeconds) {}
 

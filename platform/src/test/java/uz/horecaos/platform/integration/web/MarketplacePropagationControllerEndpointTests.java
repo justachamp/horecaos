@@ -5,9 +5,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -55,6 +58,8 @@ class MarketplacePropagationControllerEndpointTests {
     private static final UUID LOCATION = UUID.fromString("018f9f20-5000-7000-8000-0000000000c1");
     private static final UUID OTHER_LOCATION = UUID.fromString("018f9f20-5000-7000-8000-0000000000c2");
     private static final UUID VARIANT = UUID.fromString("018f9f20-5000-7000-8000-0000000000d2");
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private static final String MANAGER = "propagation-endpoint-manager";
     private static final String NO_GRANT = "propagation-endpoint-no-grant";
@@ -202,11 +207,233 @@ class MarketplacePropagationControllerEndpointTests {
                 .isEqualTo(403);
     }
 
+    // ------------------------------------------------------------------ the dry run's whole list (ADR 0180)
+
+    @Test
+    void theDryRunListsEveryDishItWouldPushWithItsNameAndNotJustASample() throws Exception {
+        dryRunOn();
+        UUID wired = binding(TENANT, BRAND, LOCATION, "WIRED_EDA", "Wired Eda");
+        int dishes = 25;
+        for (int number = 1; number <= dishes; number++) {
+            wouldPush(wired, "ext-%03d".formatted(number), dish("Dish %03d".formatted(number)), true, 1, 1);
+        }
+        // A decision the desired value has since moved past is not the dry run's output, and neither is a dish
+        // nothing has been decided for: the list is the count, row for row.
+        wouldPush(wired, "ext-900", dish("Moved on"), true, 2, 1);
+        pendingWithoutDecision(wired, "ext-901", dish("Undecided"));
+
+        JsonNode binding = bindingOf(wired);
+        assertThat(binding.path("mode").asText()).isEqualTo("DRY_RUN");
+        assertThat(binding.path("wouldPush").asInt()).isEqualTo(dishes);
+        assertThat(binding.path("unconfirmedItems"))
+                .as("the sample on the banner read stays a sample; the list below is the whole decision set")
+                .hasSizeLessThan(dishes);
+
+        List<JsonNode> listed = new ArrayList<>();
+        String cursor = null;
+        int pages = 0;
+        do {
+            MvcResult result = mvc.perform(get(wouldPushPath(LOCATION, wired)
+                                    + "?limit=10"
+                                    + (cursor == null ? "" : "&cursor=" + cursor))
+                            .with(tokenFor(MANAGER)))
+                    .andReturn();
+            assertThat(result.getResponse().getStatus()).isEqualTo(200);
+            JsonNode page = json(result);
+            page.path("items").forEach(listed::add);
+            cursor = page.path("nextCursor").isNull()
+                    ? null
+                    : page.path("nextCursor").asText();
+            pages++;
+        } while (cursor != null && pages < 10);
+
+        assertThat(pages).as("25 decisions at 10 a page").isEqualTo(3);
+        assertThat(listed)
+                .as("every dish the banner counts, no more and no fewer")
+                .hasSize(binding.path("wouldPush").asInt());
+        assertThat(listed)
+                .extracting(item -> item.path("externalItemReference").asText())
+                .isSorted()
+                .doesNotHaveDuplicates()
+                .doesNotContain("ext-900", "ext-901");
+        assertThat(listed)
+                .extracting(item -> item.path("dishName").asText())
+                .as("the manager compares dishes by name against the partner's portal")
+                .startsWith("Dish 001", "Dish 002")
+                .endsWith("Dish 025");
+        assertThat(listed).allSatisfy(item -> {
+            assertThat(item.path("wouldPushAvailable").asBoolean()).isTrue();
+            assertThat(item.path("wouldPushAt").asText()).isNotBlank();
+            assertThat(item.path("variantId").asText()).isNotBlank();
+        });
+    }
+
+    @Test
+    void aListIsEmptyOnceTheBindingStopsRehearsing() throws Exception {
+        UUID wired = binding(TENANT, BRAND, LOCATION, "WIRED_EDA", "Wired Eda");
+        wouldPush(wired, "ext-001", dish("Plov"), true, 1, 1);
+
+        MvcResult result = mvc.perform(get(wouldPushPath(LOCATION, wired)).with(tokenFor(MANAGER)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json(result).path("items"))
+                .as("a rehearsal's leftovers are not a decision the platform is about to make")
+                .isEmpty();
+    }
+
+    @Test
+    void aBindingOfAnotherBranchOrTenantIsNotFoundThroughThisBranchPath() throws Exception {
+        dryRunOn();
+        UUID own = binding(TENANT, BRAND, LOCATION, "WIRED_EDA", "Own branch");
+        wouldPush(own, "ext-001", dish("Own plov"), true, 1, 1);
+        UUID elsewhere = binding(TENANT, BRAND, OTHER_LOCATION, "WIRED_EDA", "Other branch");
+        wouldPush(elsewhere, "ext-001", dish("Plov"), true, 1, 1);
+        UUID foreign = binding(
+                OTHER_TENANT,
+                OTHER_BRAND,
+                UUID.fromString("018f9f20-5000-7000-8000-0000000000c3"),
+                "WIRED_EDA",
+                "Other tenant");
+
+        assertThat(mvc.perform(get(wouldPushPath(LOCATION, own)).with(tokenFor(MANAGER)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .as("the branch's own binding is listed, so the 404s below are about the binding and not the route")
+                .isEqualTo(200);
+        assertThat(mvc.perform(get(wouldPushPath(LOCATION, elsewhere)).with(tokenFor(MANAGER)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .as("the binding id in the path is the client's: it must belong to the branch in the path")
+                .isEqualTo(404);
+        assertThat(mvc.perform(get(wouldPushPath(LOCATION, foreign)).with(tokenFor(MANAGER)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(404);
+        assertThat(mvc.perform(get(wouldPushPath(LOCATION, UUID.randomUUID())).with(tokenFor(MANAGER)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(404);
+    }
+
+    @Test
+    void theListNeedsInventoryReadAtThatBranch() throws Exception {
+        UUID wired = binding(TENANT, BRAND, LOCATION, "WIRED_EDA", "Wired Eda");
+
+        assertThat(mvc.perform(get(wouldPushPath(LOCATION, wired)).with(tokenFor(NO_GRANT)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(403);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private static String path(UUID location) {
         return "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + location
                 + "/inventory/marketplace-propagation";
+    }
+
+    private static String wouldPushPath(UUID location, UUID binding) {
+        return path(location) + "/" + binding + "/would-push";
+    }
+
+    private void dryRunOn() {
+        jdbc.sql("""
+                INSERT INTO tenant.configuration_values
+                    (id, key_code, scope_type, tenant_id, value_type, boolean_value, set_by)
+                VALUES (:id, 'marketplace.availability.dry_run', 'TENANT', :tenantId, 'BOOLEAN', true, 'test')
+                """).param("id", UUID.randomUUID()).param("tenantId", TENANT).update();
+    }
+
+    /** A mapped dish: a product with a name and its one variant. */
+    private UUID dish(String name) {
+        UUID product = UUID.randomUUID();
+        UUID variant = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO catalog.products (id, tenant_id, brand_id, code, status)
+                VALUES (:id, :t, :b, :code, 'ACTIVE')
+                """)
+                .param("id", product)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("code", "P-" + product.toString().substring(0, 12))
+                .update();
+        jdbc.sql("""
+                INSERT INTO catalog.variants (id, tenant_id, brand_id, product_id, is_default, status)
+                VALUES (:id, :t, :b, :p, true, 'ACTIVE')
+                """)
+                .param("id", variant)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("p", product)
+                .update();
+        jdbc.sql("""
+                INSERT INTO catalog.translations (tenant_id, brand_id, entity_type, entity_id, locale, name)
+                VALUES (:t, :b, 'PRODUCT', :p, 'en', :name)
+                """)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("p", product)
+                .param("name", name)
+                .update();
+        return variant;
+    }
+
+    /** A pending row the dry run has recorded a decision for at {@code wouldPushSeq}, while the dish is at {@code desiredSeq}. */
+    private void wouldPush(
+            UUID binding, String externalId, UUID variant, boolean value, long desiredSeq, long wouldPushSeq) {
+        jdbc.sql("""
+                INSERT INTO integration.marketplace_item_availability
+                    (tenant_id, binding_id, external_entity_id, variant_id, location_id, desired_available, desired_seq,
+                     desired_at, state, pending_since, would_push_available, would_push_seq, would_push_at)
+                VALUES (:t, :b, :ext, :v, :l, :value, :desiredSeq, now(), 'PENDING', now() - interval '1 hour',
+                        :value, :wouldPushSeq, now())
+                """)
+                .param("t", TENANT)
+                .param("b", binding)
+                .param("ext", externalId)
+                .param("v", variant)
+                .param("l", LOCATION)
+                .param("value", value)
+                .param("desiredSeq", desiredSeq)
+                .param("wouldPushSeq", wouldPushSeq)
+                .update();
+    }
+
+    private void pendingWithoutDecision(UUID binding, String externalId, UUID variant) {
+        jdbc.sql("""
+                INSERT INTO integration.marketplace_item_availability
+                    (tenant_id, binding_id, external_entity_id, variant_id, location_id, desired_available, desired_seq,
+                     desired_at, state, pending_since)
+                VALUES (:t, :b, :ext, :v, :l, true, 1, now(), 'PENDING', now() - interval '1 hour')
+                """)
+                .param("t", TENANT)
+                .param("b", binding)
+                .param("ext", externalId)
+                .param("v", variant)
+                .param("l", LOCATION)
+                .update();
+    }
+
+    private JsonNode bindingOf(UUID binding) throws Exception {
+        MvcResult result =
+                mvc.perform(get(path(LOCATION)).with(tokenFor(MANAGER))).andReturn();
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        for (JsonNode candidate : json(result).path("bindings")) {
+            if (binding.toString().equals(candidate.path("bindingId").asText())) {
+                return candidate;
+            }
+        }
+        throw new AssertionError("the propagation read does not list binding " + binding);
+    }
+
+    private static JsonNode json(MvcResult result) throws Exception {
+        return JSON.readTree(result.getResponse().getContentAsString());
     }
 
     private void brandAndLocation(UUID tenant, UUID brand, UUID location, String code) {

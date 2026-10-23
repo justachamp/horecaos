@@ -1648,6 +1648,39 @@ class MarketplaceAvailabilityReconcilerTests {
     }
 
     @Test
+    @DisplayName("leaving the dry run withdraws what it recorded: a dish whose first live push fails is a pending "
+            + "dish, not a would-push one")
+    void leavingTheDryRunWithdrawsTheRecordedDecisions() {
+        World w = world();
+        configuration.put("marketplace.availability.dry_run", true);
+        build();
+        reconcile(w);
+        assertThat(recordedDecisions(w))
+                .as("the rehearsal recorded both dishes")
+                .isEqualTo(2);
+
+        configuration.put("marketplace.availability.dry_run", false);
+        build();
+        partner.script(refused(10));
+        clock.advance(Duration.ofMinutes(1));
+        reconcile(w);
+
+        assertThat(rowStates(w)).as("the partner refused: nothing is confirmed").containsOnly("PENDING");
+        assertThat(recordedDecisions(w))
+                .as("a finished rehearsal leaves no decision behind, all three columns together")
+                .isZero();
+        MarketplacePropagationQuery.Binding live =
+                propagation.at(w.tenant, w.location).get(0);
+        assertThat(live.mode()).isEqualTo(Mode.AUTOMATIC);
+        assertThat(live.wouldPush()).isZero();
+        assertThat(live.unconfirmedItems())
+                .isNotEmpty()
+                .extracting(MarketplacePropagationQuery.Item::wouldPushAvailable)
+                .as("the item of a live binding does not carry a rehearsal's decision")
+                .containsOnlyNulls();
+    }
+
+    @Test
     @DisplayName(
             "the dry-run switch can be set where a binding lives, at its location, and is off until someone sets it")
     void theDryRunSwitchIsSettableAtTheBindingsLocationAndOffByDefault() {
@@ -2226,6 +2259,14 @@ class MarketplaceAvailabilityReconcilerTests {
                 .param("e", externalId)
                 .query(String.class)
                 .single();
+    }
+
+    /** The rows that still carry a dry run's recorded decision. */
+    private long recordedDecisions(World w) {
+        return jdbc.sql("""
+                        SELECT count(*) FROM integration.marketplace_item_availability
+                        WHERE binding_id = :b AND would_push_seq IS NOT NULL
+                        """).param("b", w.binding()).query(Long.class).single();
     }
 
     private List<String> rowStates(World w) {

@@ -8840,6 +8840,11 @@ export interface PageWalletEntryView {
   nextCursor?: string;
 }
 
+export interface PageWouldPushItemResponse {
+  items?: Array<WouldPushItemResponse>;
+  nextCursor?: string;
+}
+
 export interface PaidHoldResponse {
   isDefault?: boolean;
   levels?: Array<Level>;
@@ -14990,6 +14995,15 @@ export interface WordingResponse {
   versionNumber?: number;
 }
 
+export interface WouldPushItemResponse {
+  confirmedAvailable?: boolean;
+  dishName?: string;
+  externalItemReference?: string;
+  variantId?: string;
+  wouldPushAt?: string;
+  wouldPushAvailable?: boolean;
+}
+
 export interface ZoneDensityResponse {
   provenance?: ProvenanceResponse;
   zones?: Array<ZoneDensityRowResponse>;
@@ -16195,6 +16209,7 @@ export interface Operations {
   "checkAvailability": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/availability"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channel?: string; variantIds: Array<string> } } }; responses: { "200": AvailabilityDecision } };
   "backfillLocationListing": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/listing-backfill"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": InventoryControllerBackfillResponse } };
   "propagation": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/marketplace-propagation"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": PropagationResponse } };
+  "wouldPush": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/marketplace-propagation/{bindingId}/would-push"; request: { parameters: { path: { bindingId: string; brandId: string; locationId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PageWouldPushItemResponse } };
   "listPositions": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/positions"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<StockPositionResponse> } };
   "listVariant": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/stock-items"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: ListVariantRequest }; responses: { "200": StockItemResponse } };
   "listAtLocation": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/stops"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { activeOnly?: boolean; cursor?: string; limit?: number; scope?: "LOCATION" | "BRAND" | "MENU" | "CHANNEL" | "TERMINAL"; source?: "OPERATOR" | "BOT" | "POS" | "KITCHEN_DEVICE" | "RULE"; variantId?: string } } }; responses: { "200": PageStopResponse } };

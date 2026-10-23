@@ -606,6 +606,14 @@ export const operationsPaths = {
     return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/marketplace-propagation`;
   },
 
+  /**
+   * ADR 0180 Decision 3 — every dish a dry-run binding would push, one decision per row, with the dish's name
+   * (`MarketplacePropagationController.wouldPush`). Cursor-paged: `cursor` and `limit` query params.
+   */
+  inventoryMarketplaceWouldPush(scope: LocationScope, bindingId: string): string {
+    return `${this.inventoryMarketplacePropagation(scope)}/${encodeURIComponent(bindingId)}/would-push`;
+  },
+
   /** ADR 0141 — "why can't I sell this?" for one dish here; optional `channel` query param (a channel code). */
   inventoryAvailabilityExplanation(scope: LocationScope, variantId: string): string {
     return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/variants/${encodeURIComponent(variantId)}/availability-explanation`;

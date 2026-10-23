@@ -28,6 +28,17 @@
   tenant scope; the tenant-level POS export routes are unchanged and a branch grant does not reach them.
   The console draws the banner only for an operator who holds `pos.export.read`, and offers the two ways to
   close the notice only to one who holds `pos.export.resolve`.
+  Corrected 2026-10-23 (Implementation status, same review fix): Decision 3 says the operator compares
+  "a list of decisions, one per dish" with the partner's portal, but the only read that exposed them was
+  the propagation read's `unconfirmedItems`, capped at 20 and naming a dish by variant id alone, so a
+  branch of sixty dishes could not be compared from the product. `GET
+  /api/v1/tenants/{t}/brands/{b}/locations/{l}/inventory/marketplace-propagation/{bindingId}/would-push`
+  (`MarketplacePropagationController.wouldPush`, `inventory.read` at the branch, 404 for a binding that is
+  not an active marketplace binding of that branch) now lists every decision, cursor-paged by the
+  partner's item reference, with the dish's name resolved when the list is read; its size is the
+  `wouldPush` count, both built from one predicate (`JdbcMarketplaceAvailabilityStore.wouldPushPredicate`).
+  The stop list's banner offers it beside the count. Leaving the dry run clears the recorded decisions
+  (`forgetConfirmations`), and the items of a binding that is not rehearsing no longer carry them.
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: proposed by Claude (batch 21, wave `w5-catalog-stops-fiscal`); Ayubkhon Abbosov

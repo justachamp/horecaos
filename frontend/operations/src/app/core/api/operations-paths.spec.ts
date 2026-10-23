@@ -82,6 +82,9 @@ describe('operationsPaths inventory* group (row 4.4c/4.4d InventoryController pa
     expect(operationsPaths.inventoryMarketplacePropagation(SCOPE)).toBe(
       '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/marketplace-propagation',
     );
+    expect(operationsPaths.inventoryMarketplaceWouldPush(SCOPE, 'b 1')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/marketplace-propagation/b%201/would-push',
+    );
     expect(operationsPaths.inventoryAvailabilityExplanation(SCOPE, 'v1')).toBe(
       '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/variants/v1/availability-explanation',
     );

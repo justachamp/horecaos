@@ -237,6 +237,18 @@ export const kitchenRu: AreaMessages<typeof kitchenEn> = {
   'kitchen.stopList.propagation.inSync': '{name}: синхронизировано',
   'kitchen.stopList.propagation.dryRun':
     '{name}: пробный режим — было бы отправлено позиций: {count}, ничего не отправлено. Сверьте с партнёрским кабинетом, прежде чем включать',
+  'kitchen.stopList.propagation.dryRun.show': 'Показать все блюда: {count}',
+  'kitchen.stopList.propagation.dryRun.hide': 'Скрыть список из {count} блюд',
+  'kitchen.stopList.propagation.dryRun.loading': 'Загружаем…',
+  'kitchen.stopList.propagation.dryRun.more': 'Показать ещё',
+  'kitchen.stopList.propagation.dryRun.failed': 'Не удалось загрузить список. Попробуйте ещё раз.',
+  'kitchen.stopList.propagation.dryRun.available': 'будет доступно',
+  'kitchen.stopList.propagation.dryRun.stopped': 'будет на стопе',
+  'kitchen.stopList.propagation.dryRun.unnamed': 'Блюда уже нет в меню',
+  'kitchen.stopList.propagation.dryRun.reference': 'Позиция партнёра {reference}',
+  'kitchen.stopList.propagation.dryRun.partnerUnknown': 'что сейчас у партнёра, неизвестно',
+  'kitchen.stopList.propagation.dryRun.partnerAvailable': 'у партнёра известно: доступно',
+  'kitchen.stopList.propagation.dryRun.partnerStopped': 'у партнёра известно: на стопе',
   'kitchen.stopList.propagation.incident':
     '{name}: партнёр не подтверждает с {since}. Это остаётся открытым, пока он не подтвердит, и закроется само.',
 

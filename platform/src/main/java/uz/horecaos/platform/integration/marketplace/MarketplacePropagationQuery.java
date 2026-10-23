@@ -2,6 +2,7 @@ package uz.horecaos.platform.integration.marketplace;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -115,32 +116,99 @@ public class MarketplacePropagationQuery {
 
     @Transactional(readOnly = true)
     public List<Binding> at(UUID tenantId, UUID locationId) {
-        boolean enabled = !Boolean.FALSE.equals(
-                configuration.value(MarketplaceConfigurationKeys.RECONCILE_ENABLED, ResourceScope.tenant(tenantId)));
+        boolean enabled = reconcileEnabled(tenantId);
         return store.summariesAtLocation(tenantId, locationId).stream()
                 .map(summary -> toBinding(tenantId, locationId, summary, enabled))
                 .toList();
     }
 
-    private Binding toBinding(UUID tenantId, UUID locationId, BindingSummary summary, boolean enabled) {
-        Reason reason = null;
-        Mode mode;
-        if (!adapters.propagates(summary.providerType())) {
-            reason = Reason.NO_ADAPTER;
-            mode = Mode.MANUAL;
-        } else if (!enabled) {
-            mode = Mode.SUSPENDED;
-        } else {
-            reason = reconcilerCannotAct(tenantId, summary);
-            mode = reason == null ? (dryRun(tenantId, locationId) ? Mode.DRY_RUN : Mode.AUTOMATIC) : Mode.MANUAL;
+    /** One decision of a dry run: the dish, the partner's reference for it, and what it would be set to. */
+    public record WouldPush(
+            UUID variantId,
+            String externalItemReference,
+            boolean wouldPushAvailable,
+            Instant wouldPushAt,
+            @Nullable Boolean confirmedAvailable) {}
+
+    /** A page of a dry run's decisions; {@code nextCursor} is null on the last. */
+    public record WouldPushPage(
+            List<WouldPush> items, @Nullable String nextCursor) {}
+
+    /**
+     * Every dish a dry-run binding would push, a page at a time, ordered by the partner's item reference: the
+     * list behind the propagation read's {@code wouldPush} count, which is this list's size and uses the same
+     * predicate. The sample on {@link Binding#unconfirmedItems()} stays a sample.
+     *
+     * <p>Empty for a binding that is not rehearsing: what a rehearsal left in a row is not a decision the
+     * platform is about to make, and the read says {@code wouldPush} is zero there too.
+     *
+     * @param after the partner reference of the last dish already seen, or null for the first page
+     * @return empty when the binding is not an active marketplace binding of this branch, which is the same
+     *     answer as "it does not exist" and deliberately so
+     */
+    @Transactional(readOnly = true)
+    public Optional<WouldPushPage> wouldPush(
+            UUID tenantId, UUID locationId, UUID bindingId, @Nullable String after, int limit) {
+        if (!store.bindingIsAtLocation(tenantId, locationId, bindingId)) {
+            return Optional.empty();
         }
+        boolean rehearsing = store.summariesAtLocation(tenantId, locationId).stream()
+                .filter(summary -> summary.bindingId().equals(bindingId))
+                .anyMatch(summary -> standing(tenantId, locationId, summary, reconcileEnabled(tenantId))
+                                .mode()
+                        == Mode.DRY_RUN);
+        if (!rehearsing) {
+            return Optional.of(new WouldPushPage(List.of(), null));
+        }
+        List<JdbcMarketplaceAvailabilityStore.WouldPushRow> rows =
+                store.wouldPush(tenantId, bindingId, after, limit + 1);
+        boolean more = rows.size() > limit;
+        List<WouldPush> items = rows.stream()
+                .limit(limit)
+                .map(row -> new WouldPush(
+                        row.variantId(),
+                        row.externalEntityId(),
+                        row.wouldPushAvailable(),
+                        row.wouldPushAt(),
+                        row.confirmedAvailable()))
+                .toList();
+        return Optional.of(
+                new WouldPushPage(items, more ? items.get(items.size() - 1).externalItemReference() : null));
+    }
+
+    private boolean reconcileEnabled(UUID tenantId) {
+        return !Boolean.FALSE.equals(
+                configuration.value(MarketplaceConfigurationKeys.RECONCILE_ENABLED, ResourceScope.tenant(tenantId)));
+    }
+
+    /** How the platform stands towards one binding right now, and why it is not pushing when it is not. */
+    private record Standing(Mode mode, @Nullable Reason reason) {}
+
+    private Standing standing(UUID tenantId, UUID locationId, BindingSummary summary, boolean enabled) {
+        if (!adapters.propagates(summary.providerType())) {
+            return new Standing(Mode.MANUAL, Reason.NO_ADAPTER);
+        }
+        if (!enabled) {
+            return new Standing(Mode.SUSPENDED, null);
+        }
+        Reason reason = reconcilerCannotAct(tenantId, summary);
+        if (reason != null) {
+            return new Standing(Mode.MANUAL, reason);
+        }
+        return new Standing(dryRun(tenantId, locationId) ? Mode.DRY_RUN : Mode.AUTOMATIC, null);
+    }
+
+    private Binding toBinding(UUID tenantId, UUID locationId, BindingSummary summary, boolean enabled) {
+        Standing standing = standing(tenantId, locationId, summary, enabled);
+        Mode mode = standing.mode();
+        Reason reason = standing.reason();
         // Rows exist only for a binding the reconciler maintains. A MANUAL binding has none (or
         // none it still looks after), so its counts are zero by construction rather than by a
         // claim of being in sync.
         List<Item> unconfirmed = mode == Mode.MANUAL
                 ? List.of()
                 : store.unconfirmedItems(tenantId, summary.bindingId(), ITEM_SAMPLE).stream()
-                        .map(MarketplacePropagationQuery::toItem)
+                        .map(row -> toItem(row, mode == Mode.DRY_RUN))
                         .toList();
         return new Binding(
                 summary.bindingId(),
@@ -191,7 +259,8 @@ public class MarketplacePropagationQuery {
         return null;
     }
 
-    private static Item toItem(ItemRow row) {
+    /** The recorded decision belongs to a rehearsal, so it is shown only while the binding is rehearsing. */
+    private static Item toItem(ItemRow row, boolean rehearsing) {
         return new Item(
                 row.variantId(),
                 row.desiredAvailable(),
@@ -199,7 +268,7 @@ public class MarketplacePropagationQuery {
                 row.state(),
                 row.pendingSince(),
                 row.lastFailureCode(),
-                row.wouldPushAvailable(),
-                row.wouldPushAt());
+                rehearsing ? row.wouldPushAvailable() : null,
+                rehearsing ? row.wouldPushAt() : null);
     }
 }
