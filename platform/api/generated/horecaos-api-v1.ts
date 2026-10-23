@@ -9302,6 +9302,7 @@ export interface PickupLocation {
 }
 
 export interface PickupLocationSearchRequest {
+  brandId?: string;
   limit?: number;
   point?: GeoPoint;
 }

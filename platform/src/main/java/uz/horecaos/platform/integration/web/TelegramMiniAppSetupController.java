@@ -22,7 +22,8 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  *
  * <p>{@code GET} derives every step from the facts and stores nothing, so the flow resumes wherever it was left.
  * {@code POST .../menu-button} is the one thing the platform does on the tenant's behalf: it sets the bot's menu button to
- * open the brand's verified storefront and reads it back. It declares {@code integration.installation.manage}, the grant
+ * open the brand's verified storefront and reads it back; when the Mini App is off or the address no longer verified and Telegram
+ * still shows a Mini App button, the same call takes it off. It declares {@code integration.installation.manage}, the grant
  * that connected the bot, at the brand: an owner or admin holds it everywhere, and nobody gets it by being a marketer.
  *
  * <p>Nothing here accepts a URL or a token. The Mini App address is derived from the brand's verified hostname, and the
@@ -56,11 +57,13 @@ public class TelegramMiniAppSetupController {
     @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, scope = ScopeType.BRAND, mutating = true)
     @Operation(
             summary = "Set the bot's menu button to open the brand's storefront, and read it back",
-            description =
-                    "Calls Telegram's setChatMenuButton with the label from the Telegram channel's settings and "
-                            + "the brand's verified storefront address, then getChatMenuButton. 422 naming what is missing "
-                            + "when the bot, the Telegram channel, the Mini App switch or the address is not there, or when "
-                            + "Telegram refuses. A Telegram that accepts and then shows something else leaves MENU_BUTTON TODO.")
+            description = "Calls Telegram's setChatMenuButton with the label from the Telegram channel's settings and "
+                    + "the brand's verified storefront address, then getChatMenuButton. 422 naming what is missing "
+                    + "when the bot, the Telegram channel, the Mini App switch or the address is not there, or when "
+                    + "Telegram refuses. A Telegram that accepts and then shows something else leaves MENU_BUTTON TODO. "
+                    + "While Telegram still shows a Mini App button the setup no longer stands behind (the Mini App is "
+                    + "off, or the address is not verified; MENU_BUTTON reads STALE_BUTTON) the same call sets "
+                    + "Telegram's default button back instead, read back the same way.")
     public MiniAppStatusView applyMenuButton(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
         return MiniAppStatusView.of(setup.applyMenuButton(
                 tenantId, brandId, ActorRef.user(currentActor.get().subject(), null)));

@@ -2540,6 +2540,10 @@
       },
       "PickupLocationSearchRequest" : {
         "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "limit" : {
             "format" : "int32",
             "type" : "integer"
@@ -4361,7 +4365,7 @@
     },
     "/api/v1/storefront/pickup-locations" : {
       "post" : {
-        "description" : "Returns at most twenty active pickup branches, nearest first; with no point, in the brand's own storefront order (distanceKnown is then false on every branch). Each result carries the same current serviceability answer the checkout path will later re-resolve authoritatively. POST so the caller's coordinate travels in the body rather than the query string; nothing is written and no resource is created.",
+        "description" : "Returns at most twenty active pickup branches, nearest first; with no point, in the order the brand set for its storefront (distanceKnown is then false on every branch). Name brandId to search one brand, as a brand's own storefront does; without it the search spans every brand and, with no point, lists each brand's own order interleaved by rank. Each result carries the same current serviceability answer the checkout path will later re-resolve authoritatively. POST so the caller's coordinate travels in the body rather than the query string; nothing is written and no resource is created.",
         "operationId" : "nearbyPickupLocations",
         "requestBody" : {
           "content" : {
