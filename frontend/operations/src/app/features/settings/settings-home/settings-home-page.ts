@@ -27,10 +27,9 @@ import { ConfigurationApi } from '../configuration-api';
 import { ReadinessApi, ValidationResult } from './readiness-api';
 import { ReadinessMessageKey, readinessMessages } from './readiness-messages';
 import { TierCounts, countByTier, orderFindings, tierOf } from './readiness-order';
-import { FindScope, FoundSetting, findSettings } from '../settings-find';
-import { SETTINGS_NAVIGATION, SettingsNavGroup, visibleSettings } from '../settings-nav';
+import { FindScope, FoundSetting, findSettings, settingsBreadcrumb } from '../settings-find';
+import { SettingsNavGroup, visibleSettings } from '../settings-nav';
 import { REFERENCE_LISTS } from '../settings-search-index';
-import { settingsSearchText } from '../settings-search-text';
 
 /** Where `q-combobox`'s flat `options` list sends the operator once one is chosen. */
 type SearchResultKind = 'configurationKey' | 'policy' | 'referenceList';
@@ -308,7 +307,8 @@ export class SettingsHomePage {
       keys: this.configurationKeys(),
       placements: this.placements(),
       scope: this.findScope(),
-      breadcrumbOf: (route) => this.breadcrumbOf(route),
+      breadcrumbOf: (route) =>
+        settingsBreadcrumb(route, this.i18n.locale(), (key) => this.i18n.t(key)),
     }),
   );
 
@@ -339,21 +339,6 @@ export class SettingsHomePage {
     }));
     return [...settingResults, ...referenceResults].slice(0, MAX_SEARCH_RESULTS);
   });
-
-  /** «Group → Screen» for a route: the Settings rail's own labels, or the screen's section outside Settings. */
-  private breadcrumbOf(route: string): string {
-    const arrow = settingsSearchText.text(this.i18n.locale(), 'breadcrumb.arrow');
-    for (const group of SETTINGS_NAVIGATION) {
-      const item = group.items.find((candidate) => candidate.path === route);
-      if (item !== undefined) {
-        return `${this.i18n.t(group.label)}${arrow}${this.i18n.t(item.label)}`;
-      }
-    }
-    return settingsSearchText.text(
-      this.i18n.locale(),
-      `dest.${route}` as Parameters<typeof settingsSearchText.text>[1],
-    );
-  }
 
   protected readonly readinessState = signal<ReadinessState>('loading');
   protected readonly readinessErrorText = signal<string | null>(null);

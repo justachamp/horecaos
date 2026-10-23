@@ -11,6 +11,17 @@ import { I18n } from '../../core/i18n/i18n';
 import { ConfigurationApi } from '../../features/settings/configuration-api';
 import { CommandPalette } from './command-palette';
 
+/** A key whose screen is outside the Settings rail (Staff), so its breadcrumb is not a rail label. */
+const MFA: ConfigurationKeyView = {
+  code: 'iam.staff_mfa_requirement',
+  valueType: 'String',
+  defaultValue: null,
+  settableScopes: ['PLATFORM', 'TENANT'],
+  owningModule: 'iam',
+  explicitNullTerminates: false,
+  description: 'Whom the tenant asks for an authenticator code.',
+};
+
 /** A key a screen sets (the VAT rate was one until ADR 0177 retired it, so this stands in for any routed key). */
 const LATE: ConfigurationKeyView = {
   code: 'ordering.late_order_threshold_minutes',
@@ -195,6 +206,36 @@ describe('CommandPalette', () => {
     expect(navigate).toHaveBeenCalledWith(['/settings', 'order-policy'], {
       queryParams: { brand: 'b1' },
     });
+  });
+
+  it('names the section of a setting that lives outside the Settings rail, not its raw route', async () => {
+    await render({ keys: [MFA] });
+
+    type('two-step');
+    const hint = rows()
+      .find((candidate) => candidate.textContent?.includes('Staff two-step sign-in'))
+      ?.querySelector('.palette__hint')?.textContent;
+
+    expect(hint).toContain('Staff → People');
+    expect(hint).not.toContain('/staff');
+  });
+
+  it('finds that setting by the name of its section, as the Settings search does', async () => {
+    await render({ keys: [MFA] });
+
+    type('Staff → People');
+
+    expect(labels()).toContain('Staff two-step sign-in');
+  });
+
+  it('speaks the section in the operator’s language', async () => {
+    await render({ keys: [MFA] });
+    TestBed.inject(I18n).setLocale('ru');
+    fixture.detectChanges();
+
+    type('Сотрудники → Люди');
+
+    expect(labels()).toContain('Двухфакторная защита сотрудников');
   });
 
   it('does not say a setting is not set when where it is set could not be read', async () => {

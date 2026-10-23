@@ -6,6 +6,8 @@ import {
   PolicyPlacementView,
 } from '../../core/api/configuration';
 import { Locale } from '../../core/i18n/i18n';
+import { MessageKey } from '../../core/i18n/messages.en';
+import { SETTINGS_NAVIGATION } from './settings-nav';
 import {
   POLICY_ROUTES,
   PolicyCode,
@@ -235,6 +237,32 @@ export function policyDetail(
     where: where(chosen, locale),
     by,
   })}${more(others, locale)}`;
+}
+
+/**
+ * «Group → Screen» for a route the index names: the Settings rail's own labels for a screen in the rail, and for
+ * one outside it (Staff, Kitchen, Delivery, Marketing...) the section the index writes for it, in the operator's
+ * language. One function for both places that print it, the Settings home and the command palette, so a result
+ * reads the same in each and can be found by the section's name; a bare route (`/staff`) is never what is shown.
+ *
+ * `translate` is the catalogue's `t`, passed in so the caller's own language signal is what a computed reads.
+ */
+export function settingsBreadcrumb(
+  route: string,
+  locale: Locale,
+  translate: (key: MessageKey) => string,
+): string {
+  const arrow = settingsSearchText.text(locale, 'breadcrumb.arrow');
+  for (const group of SETTINGS_NAVIGATION) {
+    const item = group.items.find((candidate) => candidate.path === route);
+    if (item !== undefined) {
+      return `${translate(group.label)}${arrow}${translate(item.label)}`;
+    }
+  }
+  return settingsSearchText.text(
+    locale,
+    `dest.${route}` as Parameters<typeof settingsSearchText.text>[1],
+  );
 }
 
 export interface FindInput {

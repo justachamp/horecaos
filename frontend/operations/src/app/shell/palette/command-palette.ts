@@ -16,8 +16,8 @@ import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { FeatureFlags } from '../../core/feature-flags';
 import { I18n } from '../../core/i18n/i18n';
 import { ConfigurationApi } from '../../features/settings/configuration-api';
-import { FindScope, findSettings } from '../../features/settings/settings-find';
-import { SETTINGS_NAVIGATION, visibleSettings } from '../../features/settings/settings-nav';
+import { FindScope, findSettings, settingsBreadcrumb } from '../../features/settings/settings-find';
+import { visibleSettings } from '../../features/settings/settings-nav';
 import { Modal } from '../../shared/ui/modal';
 import { NAV_ITEMS, admitsSection } from '../navigation';
 import { Destination, PaletteItem, paletteItems } from './palette-items';
@@ -98,7 +98,8 @@ export class CommandPalette implements OnInit {
       keys: this.keys(),
       placements: this.placements(),
       scope: this.scope(),
-      breadcrumbOf: (route) => this.breadcrumbOf(route),
+      breadcrumbOf: (route) =>
+        settingsBreadcrumb(route, this.i18n.locale(), (key) => this.i18n.t(key)),
     });
     return paletteItems(
       this.query(),
@@ -164,16 +165,6 @@ export class CommandPalette implements OnInit {
 
   protected dismiss(): void {
     this.closed.emit();
-  }
-
-  private breadcrumbOf(route: string): string {
-    for (const group of SETTINGS_NAVIGATION) {
-      const item = group.items.find((candidate) => candidate.path === route);
-      if (item !== undefined) {
-        return `${this.i18n.t(group.label)} → ${this.i18n.t(item.label)}`;
-      }
-    }
-    return route;
   }
 
   private async loadSettings(): Promise<void> {
