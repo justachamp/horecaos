@@ -1,6 +1,5 @@
 package uz.horecaos.platform.tenancy.api;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -8,17 +7,12 @@ import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The rules for a row that keeps its wording in the platform's three fixed
- * columns <em>and</em> a per-locale translations table (row 10.12's one-release
- * transition — V0430, V0431): what a write may supply, and how a read merges the
- * two homes into one answer.
+ * The rules for a row whose wording is one entry per language in a per-locale table (row 10.12, V0430,
+ * V0431, V0678, V0679): what a write may supply, and how a read orders the entries into one answer.
  *
- * <p>The three columns ({@code ru}, {@code uz-Latn}, {@code en}) stay the source
- * for the platform triple. The translations table receives every label written
- * and is the only home of a locale outside the triple. Nothing in a write ever
- * <em>removes</em> a locale: a label that is not in the request is left as it
- * was, which is how an editor that shows only the locales a tenant supports keeps
- * the wording of one it no longer shows.
+ * <p>Nothing in a write ever <em>removes</em> a locale: a label that is not in the request is left as it
+ * was, which is how an editor that shows only the locales a tenant supports keeps the wording of one it
+ * no longer shows.
  */
 public final class LocalizedLabels {
 
@@ -27,10 +21,9 @@ public final class LocalizedLabels {
     public static final String EN = "en";
 
     /**
-     * The three languages the legacy {@code label_ru}, {@code label_uz} and {@code label_en}
-     * <em>columns</em> exist for, in canonical order. This is a fact about those tables' schema, not
-     * a statement of which languages the platform has: that is {@link PlatformLocales}, and every
-     * other language lives in the translations tables (ADR 0149).
+     * The three languages a read puts first, in this order, before every other language sorted by tag.
+     * This is the order of a listing, not a statement of which languages the platform has: that is
+     * {@link PlatformLocales} (ADR 0149).
      */
     public static final List<String> PLATFORM_TRIPLE = List.of(RU, UZ_LATN, EN);
 
@@ -45,31 +38,22 @@ public final class LocalizedLabels {
     }
 
     /**
-     * What a request supplies: the legacy three fields (each nullable) overlaid by
-     * the per-locale map, blank values dropped, trimmed.
+     * What a request supplies: the per-locale map's wording, blank values dropped, trimmed, under the
+     * canonical tags.
      *
-     * <p>A bare {@code uz} is refused rather than passed through: the platform's
-     * Uzbek locale is {@code uz-Latn} (ADR 0035, a bare {@code uz} is ambiguous
-     * between scripts), and a row stored under {@code uz} would sit beside the
-     * {@code label_uz} column as a second, never-read Uzbek. A tag that is a case
-     * variant of a triple locale ({@code uz-latn}, {@code uz-LATN}) passes the
-     * well-formedness pattern and is the same language, so it is written under the
-     * canonical tag ({@link #canonical}) instead of becoming that second Uzbek.
+     * <p>A bare {@code uz} is refused rather than passed through: the platform's Uzbek locale is
+     * {@code uz-Latn} (ADR 0035, a bare {@code uz} is ambiguous between scripts), and a row stored under
+     * {@code uz} would sit beside the {@code uz-Latn} one as a second, never-read Uzbek. A tag that is a
+     * case variant of a language the registry declares ({@code uz-latn}, {@code uz-LATN}) passes the
+     * well-formedness pattern and is the same language, so it is written under the canonical tag
+     * ({@link #canonical}) instead of becoming that second Uzbek.
      *
      * @param maxLength the column width each label must fit
-     * @throws IllegalArgumentException a locale that is not a well-formed tag, is a
-     *                                  bare {@code uz}, or a label over {@code maxLength}
+     * @throws IllegalArgumentException a locale that is not a well-formed tag, is a bare {@code uz}, or a
+     *                                  label over {@code maxLength}
      */
-    public static Map<String, String> supplied(
-            @Nullable String ru,
-            @Nullable String uz,
-            @Nullable String en,
-            @Nullable Map<String, String> byLocale,
-            int maxLength) {
+    public static Map<String, String> supplied(@Nullable Map<String, String> byLocale, int maxLength) {
         Map<String, String> labels = new LinkedHashMap<>();
-        putIfPresent(labels, RU, ru);
-        putIfPresent(labels, UZ_LATN, uz);
-        putIfPresent(labels, EN, en);
         if (byLocale != null) {
             byLocale.forEach((locale, label) -> {
                 if (locale == null || !isWellFormed(locale)) {
@@ -92,15 +76,6 @@ public final class LocalizedLabels {
     }
 
     /**
-     * What a request supplies when the per-locale map is the only shape (a row whose legacy
-     * ru/uz/en columns are gone, V0678): the map's wording, blank values dropped, trimmed, under
-     * the canonical tags. The rules are {@link #supplied(String, String, String, Map, int)}'s.
-     */
-    public static Map<String, String> supplied(@Nullable Map<String, String> byLocale, int maxLength) {
-        return supplied(null, null, null, byLocale, maxLength);
-    }
-
-    /**
      * The tag a locale is stored and reported under: a triple locale's own spelling for
      * any case variant of it, every other tag as given. BCP 47 tags are case-insensitive,
      * the columns and the {@code ck_*_translation_locale} constraints are not.
@@ -115,30 +90,6 @@ public final class LocalizedLabels {
         if (label != null && !label.isBlank()) {
             labels.put(locale, label.trim());
         }
-    }
-
-    /**
-     * The single answer a read gives: the platform triple from its columns, then any
-     * other locale from the translations table, each locale once.
-     *
-     * <p>A translations row for a triple locale (the transition's mirror of the
-     * column) is ignored — the column is the source, so a stale mirror cannot show
-     * through — and so is one stored under a case variant of it ({@code uz-latn}),
-     * which would otherwise be reported as a second language. A blank column is
-     * skipped so the map never carries an empty wording.
-     */
-    public static Map<String, String> merge(String ru, String uz, String en, Map<String, String> translationRows) {
-        Map<String, String> merged = new LinkedHashMap<>();
-        putIfPresent(merged, RU, ru);
-        putIfPresent(merged, UZ_LATN, uz);
-        putIfPresent(merged, EN, en);
-        List<String> others = new ArrayList<>(translationRows.keySet());
-        others.removeIf(locale -> PLATFORM_TRIPLE.contains(canonical(locale)));
-        others.sort(null);
-        for (String locale : others) {
-            putIfPresent(merged, locale, translationRows.get(locale));
-        }
-        return merged;
     }
 
     /**

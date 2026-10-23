@@ -507,7 +507,9 @@ class OperationsDispatchRulesEndpointTests {
         assertThat(zone.path("names").path("kaa").asText())
                 .as("a language the platform triple never held (V0679)")
                 .isEqualTo("Uzaq aymaq");
-        assertThat(zone.has("nameEn")).as("the fixed-language fields left the wire").isFalse();
+        assertThat(zone.has("nameEn"))
+                .as("the fixed-language fields left the wire")
+                .isFalse();
         assertThat(ids(body.path("channels"))).containsExactly(CHANNEL.toString());
         assertThat(ids(body.path("locations"))).containsExactly(LOCATION.toString());
     }
