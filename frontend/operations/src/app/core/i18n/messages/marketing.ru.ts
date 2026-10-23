@@ -1664,4 +1664,6 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.storefront.branches.save': 'Сохранить порядок',
   'marketing.storefront.branches.reset': 'Отменить изменения',
   'marketing.storefront.branches.saved': 'Порядок сохранён.',
+  'marketing.storefront.branches.stale':
+    'Пока вы редактировали, кто-то изменил порядок филиалов. Ниже порядок в его нынешнем виде; внесите своё изменение заново.',
 };

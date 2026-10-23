@@ -150,8 +150,14 @@ class StorefrontBranchOrderEndpointTests {
         return setOrderAs(OWNER, TENANT, BRAND, key, ids);
     }
 
+    /** A save made the way the console makes it: against the version of the order the subject reads just before. */
     private MvcResult setOrderAs(String subject, UUID tenantId, UUID brandId, String key, UUID... ids)
             throws Exception {
+        return setOrderAgainst(subject, tenantId, brandId, key, currentVersion(subject, tenantId, brandId), ids);
+    }
+
+    private MvcResult setOrderAgainst(
+            String subject, UUID tenantId, UUID brandId, String key, String ifMatch, UUID... ids) throws Exception {
         List<String> quoted = new ArrayList<>();
         for (UUID id : ids) {
             quoted.add("\"" + id + "\"");
@@ -159,9 +165,18 @@ class StorefrontBranchOrderEndpointTests {
         return mvc.perform(put(path(tenantId, brandId))
                         .with(tokenFor(subject))
                         .header(IDEMPOTENCY_HEADER, key)
+                        .header("If-Match", ifMatch)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"locationIds\":[" + String.join(",", quoted) + "]}"))
                 .andReturn();
+    }
+
+    /** The ETag of the order as the subject reads it now; {@code W/"0"} for a subject who cannot read one. */
+    private String currentVersion(String subject, UUID tenantId, UUID brandId) throws Exception {
+        MvcResult result = mvc.perform(get(path(tenantId, brandId)).with(tokenFor(subject)))
+                .andReturn();
+        String etag = result.getResponse().getHeader("ETag");
+        return etag == null ? "W/\"0\"" : etag;
     }
 
     private JsonNode read() throws Exception {
@@ -310,6 +325,106 @@ class StorefrontBranchOrderEndpointTests {
     void aBranchWithoutACoordinateOnlyAppearsWithoutAPoint() throws Exception {
         assertThat(search("{\"limit\": 20}")).contains("Delta");
         assertThat(search(AT_ALPHA)).doesNotContain("Delta");
+    }
+
+    @Test
+    @DisplayName("a save with no version is refused: a replacement cannot be sent blind")
+    void aSaveWithoutAVersionIsRefused() throws Exception {
+        MvcResult blind = mvc.perform(put(path(TENANT, BRAND))
+                        .with(tokenFor(OWNER))
+                        .header(IDEMPOTENCY_HEADER, "blind")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"locationIds\":[\"" + ALPHA + "\"]}"))
+                .andReturn();
+
+        assertThat(blind.getResponse().getStatus()).isEqualTo(400);
+        read().forEach(branch -> assertThat(branch.get("storefrontSortOrder").isNull())
+                .as(branch.get("displayName").asString())
+                .isTrue());
+    }
+
+    @Test
+    @DisplayName("a console that read the order before a colleague changed it cannot unplace the colleague's branch")
+    void aStaleConsoleCannotUnplaceAColleaguesBranch() throws Exception {
+        setOrder("order-0", ALPHA, BRAVO);
+        String openedByA = currentVersion(OWNER, TENANT, BRAND);
+
+        // B opens the screen, places Charlie and saves.
+        assertThat(setOrder("order-b", ALPHA, BRAVO, CHARLIE).getResponse().getStatus())
+                .isEqualTo(200);
+
+        // A's screen still shows Alpha and Bravo only. A reverses them: the list does not name Charlie, so an unguarded
+        // replace-all would quietly return Charlie to unset.
+        MvcResult stale = setOrderAgainst(OWNER, TENANT, BRAND, "order-a", openedByA, BRAVO, ALPHA);
+
+        assertThat(stale.getResponse().getStatus())
+                .as(stale.getResponse().getContentAsString())
+                .isEqualTo(409);
+        assertThat(stale.getResponse().getContentAsString()).contains("STALE_VERSION");
+        JsonNode now = read();
+        assertThat(now.findValuesAsString("displayName"))
+                .containsExactly("Alpha", "Bravo", "Charlie", "Delta", "Dup 1", "Dup 2");
+        assertThat(now.get(2).get("storefrontSortOrder").asInt())
+                .as("Charlie keeps the place B gave it")
+                .isEqualTo(30);
+
+        // A reads again, sees Charlie, and the same change is saved.
+        assertThat(setOrder("order-a2", BRAVO, ALPHA, CHARLIE).getResponse().getStatus())
+                .isEqualTo(200);
+        assertThat(read().findValuesAsString("displayName"))
+                .containsExactly("Bravo", "Alpha", "Charlie", "Delta", "Dup 1", "Dup 2");
+    }
+
+    @Test
+    @DisplayName("two saves against one version cannot both win")
+    void twoSavesAgainstOneVersionCannotBothWin() throws Exception {
+        setOrder("order-0", ALPHA, BRAVO);
+        String shared = currentVersion(OWNER, TENANT, BRAND);
+        java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.Future<Integer> first = pool.submit(() -> {
+                go.await();
+                return setOrderAgainst(OWNER, TENANT, BRAND, "race-1", shared, BRAVO, ALPHA)
+                        .getResponse()
+                        .getStatus();
+            });
+            java.util.concurrent.Future<Integer> second = pool.submit(() -> {
+                go.await();
+                return setOrderAgainst(OWNER, TENANT, BRAND, "race-2", shared, ALPHA, BRAVO, CHARLIE)
+                        .getResponse()
+                        .getStatus();
+            });
+            go.countDown();
+
+            assertThat(List.of(first.get(), second.get())).containsExactlyInAnyOrder(200, 409);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName(
+            "the version is the order: a save answers with the version a read then reports, and a rename leaves it alone")
+    void theVersionIsTheOrder() throws Exception {
+        String empty = currentVersion(OWNER, TENANT, BRAND);
+
+        MvcResult saved = setOrder("order-1", CHARLIE, ALPHA);
+        String returned = saved.getResponse().getHeader("ETag");
+
+        assertThat(returned).isNotNull().isNotEqualTo(empty).isEqualTo(currentVersion(OWNER, TENANT, BRAND));
+
+        jdbc.sql("UPDATE tenant.locations SET display_name = 'Bravo II' WHERE id = :id")
+                .param("id", BRAVO)
+                .update();
+        assertThat(currentVersion(OWNER, TENANT, BRAND))
+                .as("renaming a branch nobody placed does not change the order")
+                .isEqualTo(returned);
+
+        setOrder("order-2", ALPHA, CHARLIE);
+        assertThat(currentVersion(OWNER, TENANT, BRAND))
+                .as("moving a branch does")
+                .isNotEqualTo(returned);
     }
 
     @Test

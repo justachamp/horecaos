@@ -1689,4 +1689,6 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.storefront.branches.save': 'Tartibni saqlash',
   'marketing.storefront.branches.reset': 'Oʻzgarishlarni bekor qilish',
   'marketing.storefront.branches.saved': 'Tartib saqlandi.',
+  'marketing.storefront.branches.stale':
+    'Siz tahrirlayotganingizda kimdir filiallar tartibini oʻzgartirdi. Quyida hozirgi tartib; oʻzgartirishingizni qaytadan kiriting.',
 };

@@ -33,6 +33,23 @@ public class JdbcStorefrontBranchOrderStore {
             String status,
             @Nullable Integer storefrontSortOrder) {}
 
+    /**
+     * Holds the brand's row until the transaction ends, so two replacements of one brand's order run one after the other:
+     * the second then reads the order the first left and is compared against the version it presented. {@code FOR NO KEY
+     * UPDATE} does not block the foreign-key checks of a branch being created or edited under the brand.
+     */
+    public void lockBrand(UUID tenantId, UUID brandId) {
+        jdbc.sql("""
+                SELECT id FROM tenant.brands
+                 WHERE tenant_id = :tenantId AND id = :brandId
+                   FOR NO KEY UPDATE
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query(UUID.class)
+                .optional();
+    }
+
     /** The brand's branches in the order the storefront would list them with no point. */
     public List<Branch> list(UUID tenantId, UUID brandId) {
         return jdbc.sql("""

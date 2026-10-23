@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../../core/api/api-client';
 import { BrandScope } from '../../../core/api/catalog-paths';
 import { contentPaths } from '../../../core/api/content-paths';
+import { parseETag } from '../../../core/api/aggregate-version';
 import { command } from '../../../core/api/idempotency';
 
 /** Mirrors `BrandSwitcherService.SwitcherEntryView`. `version` is the ETag every change presents in If-Match. */
@@ -38,6 +39,13 @@ export interface OrderedBranch {
   readonly status: string;
   /** Null for a branch nobody has placed: the storefront lists those last, by name. */
   readonly storefrontSortOrder: number | null;
+}
+
+/** The brand's branches in storefront order, with the version of that order the next save must present. */
+export interface BranchOrder {
+  readonly branches: readonly OrderedBranch[];
+  /** Null only when the platform sent no validator; a save then has nothing to present and is refused. */
+  readonly version: number | null;
 }
 
 /**
@@ -111,22 +119,36 @@ export class StorefrontMerchandisingApi {
     );
   }
 
-  async branches(scope: BrandScope): Promise<readonly OrderedBranch[]> {
-    return (
-      await firstValueFrom(this.api.get<readonly OrderedBranch[]>(contentPaths.branchOrder(scope)))
-    ).value;
+  async branches(scope: BrandScope): Promise<BranchOrder> {
+    const read = await firstValueFrom(
+      this.api.get<readonly OrderedBranch[]>(contentPaths.branchOrder(scope)),
+    );
+    return { branches: read.value, version: read.version };
   }
 
-  /** Replaces the order with the branches named, first to last; any branch left out becomes unplaced. */
-  setBranchOrder(
+  /**
+   * Replaces the order with the branches named, first to last; any branch left out becomes unplaced.
+   *
+   * `expectedVersion` is the version the order was read at. The write replaces the whole order, so a console that
+   * saved without it would silently unplace a branch a colleague placed meanwhile; the platform refuses with
+   * `STALE_VERSION` instead.
+   */
+  async setBranchOrder(
     scope: BrandScope,
     locationIds: readonly string[],
-  ): Promise<readonly OrderedBranch[]> {
-    return firstValueFrom(
-      this.api.put<{ locationIds: readonly string[] }, readonly OrderedBranch[]>(
+    expectedVersion: number,
+  ): Promise<BranchOrder> {
+    const response = await firstValueFrom(
+      this.api.send<{ locationIds: readonly string[] }, readonly OrderedBranch[]>(
+        'PUT',
         contentPaths.branchOrder(scope),
         command({ locationIds }),
+        { expectedVersion },
       ),
     );
+    return {
+      branches: response.body ?? [],
+      version: parseETag(response.headers.get('ETag')),
+    };
   }
 }

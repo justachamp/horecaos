@@ -167,5 +167,6 @@ with Marketplace the category rail shows five categories and an «All categories
   branch order is served by `POST /api/v1/storefront/pickup-locations` and proved there, and a customer sees it only once a
   branch chooser is built on that endpoint. A brand's own storefront must send its `brandId` in that request to get the brand's own
   order; without it the search spans every brand and, with no point, lists each brand's first branch, then each brand's second, and
-  so on. The marketplace layout needs a tenant to say what its category navigation should do;
+  so on. Saving the order presents the version it was read at (`If-Match`); a colleague's change in between answers 409 and the
+  screen shows the current order. The marketplace layout needs a tenant to say what its category navigation should do;
   what is built is the smallest honest version (ADR 0183, Consequences).

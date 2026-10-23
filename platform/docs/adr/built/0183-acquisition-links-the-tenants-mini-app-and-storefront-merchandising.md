@@ -29,6 +29,15 @@
   brand's first branch precedes any brand's second; one brand's order is never disturbed by another's numbers
   (`StorefrontBranchOrderEndpointTests.noPointAcrossBrandsInterleavesEachBrandsOwnOrder`, `aBrandNamedInTheSearchGetsItsOwnOrderAlone`).
   The customer apps still do not call the search, so the runbook says what a branch chooser built on it must send.
+  **Correction, 2026-10-23 (fix wave H, the branch order's version).** `PUT .../storefront-branch-order` replaces the whole order
+  (a branch left out returns to unset) and carried no version, against ADR 0031's «mutations of versioned aggregates require the
+  expected version»: a console opened before a colleague placed a branch silently unplaced it on save. The order has no row of its
+  own, so its version is derived from what it is (48 bits of a SHA-256 over the placed branches and their positions) and served as
+  the `ETag` of the read and of the write. The write now requires `If-Match` (400 without it, 409 `STALE_VERSION` when the order has
+  moved) and holds the brand's row while it compares and writes. The version moves when a branch is placed, moved or unplaced, not
+  when one is renamed or added unplaced. The console presents the version it read and, on `STALE_VERSION`, shows the order as it now
+  stands, drops its draft and says so (`StorefrontBranchOrderEndpointTests.aStaleConsoleCannotUnplaceAColleaguesBranch`,
+  `twoSavesAgainstOneVersionCannotBothWin`, `theVersionIsTheOrder`; `storefront-branch-order.spec.ts`).
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: proposed by Claude (batch 21); Ayubkhon Abbosov (platform owner) decides

@@ -1668,4 +1668,6 @@ export const marketingEn = {
   'marketing.storefront.branches.save': 'Save order',
   'marketing.storefront.branches.reset': 'Undo changes',
   'marketing.storefront.branches.saved': 'Order saved.',
+  'marketing.storefront.branches.stale':
+    'Someone changed the branch order while you were editing. This is the order as it stands now; make your change again.',
 } as const;
