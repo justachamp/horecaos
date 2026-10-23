@@ -36,7 +36,11 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * <p>What it cannot tell you is stated rather than implied. A {@code GEO_UNVERIFIED_RATE} rule at a location
  * that never asked for the position check hits everybody, because nothing was verified, and the simulator shows
  * exactly that. A period that is still open is replayed as it stands today and flagged, because it may yet
- * change. Settlement periods carry no location, so a location filter narrows shifts only.
+ * change. Settlement periods carry no location, so a location filter narrows shifts only. A reason is a
+ * tenant-level registry row that {@link AdjustmentRuleEvaluator} reads at every branch's shift close, so a caller
+ * previewing a rule for the tenant passes no location; the filter exists for a question about one branch.
+ * Only the newest {@link #MAX_WINDOWS} shifts or periods are replayed, and the answer is {@code truncated} when
+ * there were more.
  */
 @Service
 public class CourierRuleSimulator {
@@ -47,7 +51,8 @@ public class CourierRuleSimulator {
     /** Rows kept; more than this and the answer says it was cut. */
     static final int MAX_HITS = 500;
 
-    private static final int MAX_WINDOWS = 5_000;
+    /** Shifts or settlement periods replayed, newest first; one more and the answer says it was cut. */
+    public static final int MAX_WINDOWS = 5_000;
 
     private static final Set<String> COMPARATORS = Set.of("GTE", "LTE");
     private static final Set<String> WINDOWS = Set.of("SHIFT", "SETTLEMENT_PERIOD");
@@ -84,7 +89,11 @@ public class CourierRuleSimulator {
         boolean cut = false;
 
         if ("SHIFT".equals(candidate.window())) {
-            List<ShiftRow> closed = shifts.closedSince(tenantId, since, locationId, MAX_WINDOWS);
+            List<ShiftRow> closed = shifts.closedSince(tenantId, since, locationId, MAX_WINDOWS + 1);
+            if (closed.size() > MAX_WINDOWS) {
+                closed = closed.subList(0, MAX_WINDOWS);
+                cut = true;
+            }
             replayed = closed.size();
             for (ShiftRow shift : closed) {
                 Optional<Long> value = AdjustmentRuleEvaluator.shiftValue(
@@ -96,7 +105,11 @@ public class CourierRuleSimulator {
             }
         } else {
             LocalDate sinceDate = LocalDate.ofInstant(since, ZoneOffset.UTC);
-            List<PeriodRow> periods = ledger.periodsEndingSince(tenantId, sinceDate, MAX_WINDOWS);
+            List<PeriodRow> periods = ledger.periodsEndingSince(tenantId, sinceDate, MAX_WINDOWS + 1);
+            if (periods.size() > MAX_WINDOWS) {
+                periods = periods.subList(0, MAX_WINDOWS);
+                cut = true;
+            }
             replayed = periods.size();
             for (PeriodRow period : periods) {
                 long cashVariance = ledger.entriesOf(tenantId, period.id()).stream()
@@ -207,7 +220,10 @@ public class CourierRuleSimulator {
     /**
      * @param windowsReplayed how many closed shifts or settlement periods the rule was held against, so «nobody»
      *     can be told apart from «nothing was there to look at»
-     * @param truncated       more windows hit than are listed
+     * @param truncated       the answer is partial and the real figure may be higher: more windows hit than are
+     *     listed, or more shifts or periods closed in the lookback than the {@link #MAX_WINDOWS} newest that were
+     *     replayed. A rule is tenant-wide, so the replay covers every branch unless a location is asked for, and a
+     *     large tenant can reach the cap; a «nobody» from a truncated answer is not «safe to ship»
      */
     public record Simulation(
             int lookbackDays,
