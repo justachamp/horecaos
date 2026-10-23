@@ -23,9 +23,12 @@
   Keycloak 26.7.0. What is not done, and is not the code's to do: acceptance on a real handset,
   the pre-production Keycloak client, courier account and DNS (the owner,
   `docs/runbooks/external-connections/w4-courier-client.md`), the notice's final wording (the
-  tenant and counsel; the screen ships a marked draft), the pickup and handover endpoints the gate
-  contract names (the delivery-maps wave builds them; this client is written to them, see
-  "The gates"), and a push channel for offers (ADR 0020), so offers are polled.
+  tenant and counsel; the screen ships a marked draft), and a push channel for offers (ADR 0020),
+  so offers are polled. The pickup and handover endpoints the gate contract names are not on
+  that list any more: they are built and published (`CourierDeliveryController.pickUp` and
+  `handOver`, merged in the batch-21 integration), so the two buttons work end to end and the
+  sentences below that say they answer a `404` are history (status addition of 2026-10-23, after
+  the integration).
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: proposed by Claude (batch 21); Ayubkhon Abbosov (platform owner) decides
@@ -379,8 +382,9 @@ source, ADR 0045), delete the Keycloak client (every courier session ends), and 
 - [x] Client part 3: offers (polled), accept and decline with position, my deliveries, arrival,
       pickup and handover (the gate contract), the customer-location reveal, payment
       confirmation, and every refusal by reason.
-- [ ] The pickup and handover endpoints on the platform (the delivery-maps wave), so the two
-      buttons that call them work end to end.
+- [x] The pickup and handover endpoints on the platform (the delivery-maps wave), so the two
+      buttons that call them work end to end (`CourierDeliveryController`, merged in the batch-21
+      integration; `courier-gate-contract.spec.ts` holds the client to the published paths).
 - [ ] The notice's final wording and its version (the tenant and counsel).
 - [ ] Pre-production: the Keycloak client, a courier account, DNS, and acceptance on a real
       handset with GPS (external).
@@ -452,3 +456,62 @@ event). Nothing else was added to the platform for it: no migration, no new capa
   say-so.
 - **Offers are seen only while the app is open and visible.** A courier who locks the phone learns
   of an offer when they next open it, and it may have lapsed (ADR 0020's push channel is the fix).
+
+## Status addition (2026-10-23, after the batch-21 integration)
+
+Written once the courier client and the delivery-maps wave's server side were on one branch and a
+review compared this record to the code. Nothing in the Decision, Alternatives considered or
+Consequences above or in the first status addition is changed; where a sentence there is now
+wrong, this section is the correction.
+
+**The pickup and handover endpoints exist.** "The gates" (Specification) says "Those two paths do not
+exist on this branch" and that the buttons answer a `404` until the server side merges, and the
+third bullet of "Consequences (additional)" repeats it. Both were true of the courier wave's
+branch and are not true of the integrated one. `CourierDeliveryController` serves
+`POST /api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/pickup`
+(`courierPickUpDelivery`) and `.../handover` (`courierHandOverDelivery`): capability
+`courier.delivery.advance` through `@CourierSelfAuthorized`, `@Idempotent`, `If-Match` required, a
+body that is empty or carries the courier's position. Both are in the published
+`platform/api/openapi/v1/horecaos-api.courier.json`, and `courier-gate-contract.spec.ts` reads the
+paths, the request body's shape and the `checks` field names from that baseline, so a rename on
+either side fails a build. The wire shape of the outcomes (`409 GATE_FAILED` whose detail is the
+failed kinds; `200` with `checks`) is pinned by `CourierDeliveryEndpointTests`. The revisit
+condition in the "call `advance` instead" row (the merged server does not carry the gates on the
+new paths) did not occur, and `CourierApi.gateStep` is unchanged. The checklist box is ticked.
+
+**The twelve reasons are guarded by a test, not by the compiler.** "The gates" says a `GateRefusal`
+reason added on the platform is "a compile error" on the client. It is not: `GATE_REFUSAL_REASONS`
+(`core/deliveries/step-outcome.ts`) is a hand-kept copy, the `reason` is an untyped extension of the
+problem document and is absent from the OpenAPI baseline, and the compiler can only see a reason
+added to *that list* without its sentence (`REFUSAL_KEYS` is a `Record` over it). A member added to
+the enum alone would have shown every courier the generic sentence while both builds stayed green. The guard is now two tests: `gate-refusal-drift.spec.ts` reads
+`GateRefusal.java` and fails in either direction when its constants differ from the client's list,
+and `DeliveryGateTests.refusalNamesAreDistinctAndStable` asserts the exact set instead of a lower
+bound, so an addition or a rename fails on the platform first (and `CourierDeliveryService.describe`
+already cannot compile with a member it has no case for). The comments in `step-message.ts` and
+`step-outcome.ts` say the same.
+
+**What the client does when the identity provider does not answer.** "Signing in" and "The app" speak
+of a single-flight refresh without saying what a failed one means. Only a refusal ends the session
+(`OidcClient.refresh`: a 4xx answer is `refresh_failed`); a fetch that never arrived, a 5xx, a 408 or
+a 429 is `refresh_unavailable`, which `AuthService` answers by keeping its tokens and handing out the
+one it holds (`RenewOutcome` `kept`), and the bearer interceptor turns into `NETWORK` without
+starting a sign-in. A courier in a lift keeps the duty session, the sender and its buffer; the
+session ends when the identity provider says it does, or when the refresh token's own lifetime runs
+out.
+
+**A retry is the same request.** "One idempotency key per intent" is now true of the body as well as
+the key. The platform hashes the body under a key and refuses another body with `409
+IDEMPOTENCY_KEY_REUSED`, and the position a step carries changes with every fix, so a retried
+arrival, pickup, handover, offer acceptance or shift open and close would never have been the replay
+it kept the key for. `IntentKeys.runWith` reads the position once for the intent and sends it again
+as it was after a request that never arrived. "A position is read, handed to the one call that needs
+it and forgotten" stands with one stated exception: while a request that never arrived is being
+retried the position waits in memory with its key, until the platform answers or the courier signs
+out. `IDEMPOTENCY_KEY_REUSED` is also a reload-and-say-it-changed outcome (`stale`), and the cash a
+courier declares is part of its intent's key because the amount is part of its body.
+
+**The first read of the record is retried.** `WorkSession.begin` counts as begun only once the
+platform has answered; a failed first read leaves nothing torn down and nothing started on a guess,
+and the next `begin` (Today, Shift, Offers and Deliveries all call it) or the Retry on Today (now
+`WorkSession.refresh`) reads again and brings offers, duty and deliveries up.
