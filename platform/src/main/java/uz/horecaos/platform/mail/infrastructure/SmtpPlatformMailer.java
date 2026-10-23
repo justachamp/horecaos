@@ -5,9 +5,13 @@ import jakarta.mail.SendFailedException;
 import jakarta.mail.internet.AddressException;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
+import java.io.IOException;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import org.eclipse.angus.mail.smtp.SMTPAddressFailedException;
+import org.eclipse.angus.mail.smtp.SMTPSendFailedException;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +50,8 @@ public class SmtpPlatformMailer implements PlatformMailer {
     private static final Logger log = LoggerFactory.getLogger(SmtpPlatformMailer.class);
 
     private static final int TIMEOUT_MILLIS = 10_000;
+
+    private static final String SMTP_UNAVAILABLE = "SMTP_UNAVAILABLE";
 
     private final SecretResolver secrets;
     private final String host;
@@ -140,42 +146,88 @@ public class SmtpPlatformMailer implements PlatformMailer {
             log.warn("The SMTP server refused the platform's credentials");
             return new MailOutcome.Failed("SMTP_AUTHENTICATION");
         } catch (MailSendException refused) {
-            if (refused.getFailedMessages().values().stream().anyMatch(SmtpPlatformMailer::addressRefused)) {
-                return new MailOutcome.Rejected("ADDRESS_REJECTED");
+            MailOutcome outcome = outcomeOf(refused);
+            if (outcome instanceof MailOutcome.Failed failed) {
+                log.warn(
+                        "The SMTP server did not accept an email ({}, {})",
+                        refused.getClass().getSimpleName(),
+                        failed.code());
             }
-            log.warn(
-                    "The SMTP server did not accept an email ({})",
-                    refused.getClass().getSimpleName());
-            return new MailOutcome.Failed(failureCode(refused));
+            return outcome;
         } catch (MailException unreachable) {
+            // Not a send failure: Spring raises the others while it parses or prepares a message,
+            // before a connection is opened, so nothing can have been sent.
             log.warn(
                     "The SMTP server could not be reached ({})",
                     unreachable.getClass().getSimpleName());
-            return new MailOutcome.Failed(failureCode(unreachable));
+            return new MailOutcome.Failed(SMTP_UNAVAILABLE);
         }
     }
 
     /**
-     * {@code SMTP_NO_ANSWER} when the connection was lost after the message was on its way, and
-     * {@code SMTP_UNAVAILABLE} when it provably never got there. The difference decides whether a
-     * caller that must not send twice may try again.
+     * What a send that Spring reports as a {@link MailSendException} amounts to, decided by the phase
+     * of the SMTP session the failure belongs to, because that is what decides whether the message
+     * may be sent again.
+     *
+     * <p>Spring puts the real exception of a failed send in {@link MailSendException#getFailedMessages()}
+     * and gives the wrapper no cause, so the wrapper's own chain says nothing about a send; only the
+     * failed message's exception does. In the order a session runs:
+     *
+     * <ol>
+     *   <li><strong>The connection phase</strong> (connect, greeting, EHLO, STARTTLS, AUTH) is the one
+     *       failure Spring wraps with a cause, and the cause is the very exception it files under the
+     *       message. Nothing was transmitted, however the connection died: {@code SMTP_UNAVAILABLE}.
+     *   <li><strong>Before the data went</strong> (MAIL, RCPT, DATA): a server that closes the line
+     *       reports it as a reply with no code and the command it did not answer, and that command
+     *       places it. A server that never took the data has accepted nothing: {@code SMTP_UNAVAILABLE}.
+     *   <li><strong>After the data terminator</strong>, or anywhere the exception names no command (a
+     *       reset or a read timeout surfaces as an I/O error with nothing to say where): the server may
+     *       have queued the message, so {@code SMTP_NO_ANSWER}. A reset in the middle of a session is
+     *       deliberately in this class: the cost of that reading is one lost send, and the cost of the
+     *       other is a duplicate that a caller who must not send twice has promised not to make.
+     *   <li><strong>A clear reply</strong> (a 4xx or 5xx to the data) means the server said no:
+     *       {@code SMTP_UNAVAILABLE}.
+     *   <li><strong>No failed message at all</strong> means every message got its final reply and what
+     *       failed was the goodbye (Spring's «failed to close server connection after message
+     *       sending»): the message is {@code Sent}, whatever the connection did afterwards.
+     * </ol>
      */
-    private static String failureCode(Throwable failure) {
+    static MailOutcome outcomeOf(MailSendException failure) {
+        Map<Object, Exception> failed = failure.getFailedMessages();
+        if (failed.isEmpty()) {
+            return new MailOutcome.Sent();
+        }
+        if (failed.values().stream().anyMatch(SmtpPlatformMailer::addressRefused)) {
+            return new MailOutcome.Rejected("ADDRESS_REJECTED");
+        }
+        Throwable connection = failure.getCause();
+        if (connection != null && failed.containsValue(connection)) {
+            return new MailOutcome.Failed(SMTP_UNAVAILABLE);
+        }
+        return new MailOutcome.Failed(
+                failed.values().stream().anyMatch(SmtpPlatformMailer::mayHaveBeenQueued)
+                        ? MailOutcome.SMTP_NO_ANSWER
+                        : SMTP_UNAVAILABLE);
+    }
+
+    /**
+     * Whether a failure while a message was being sent leaves the server possibly holding it: the
+     * line was lost with nothing to place the loss before the data (a reset, a timeout, a broken
+     * pipe, a closed stream), or it was lost on the command that ends the data.
+     */
+    private static boolean mayHaveBeenQueued(Throwable failure) {
         for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
-            String message =
-                    cause.getMessage() == null ? "" : cause.getMessage().toLowerCase(Locale.ROOT);
-            if (cause instanceof java.net.SocketTimeoutException && message.contains("read timed out")) {
-                return MailOutcome.SMTP_NO_ANSWER;
+            if (cause instanceof SMTPSendFailedException unanswered && unanswered.getReturnCode() == -1) {
+                return ".".equals(unanswered.getCommand());
             }
-            if (cause instanceof java.net.SocketException
-                    && (message.contains("connection reset") || message.contains("broken pipe"))) {
-                return MailOutcome.SMTP_NO_ANSWER;
+            if (cause instanceof SMTPAddressFailedException unanswered && unanswered.getReturnCode() == -1) {
+                return false;
             }
-            if (cause instanceof java.io.EOFException) {
-                return MailOutcome.SMTP_NO_ANSWER;
+            if (cause instanceof IOException) {
+                return true;
             }
         }
-        return "SMTP_UNAVAILABLE";
+        return false;
     }
 
     /**
