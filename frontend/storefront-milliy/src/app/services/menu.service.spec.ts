@@ -40,6 +40,32 @@ function setUp() {
   return { service: TestBed.inject(MenuService), api };
 }
 
+describe('MenuService: the КБЖУ accuracy line switch (ADR 0137, row 4.2c)', () => {
+  it('is off until a menu says otherwise, and follows the menu last read', async () => {
+    const { service, api } = setUp();
+    expect(service.nutritionAccuracyNotice()).toBe(false);
+
+    api.get.mockResolvedValueOnce({ ...emptyMenu(), nutritionAccuracyNotice: true });
+    await service.menu('uz');
+    expect(service.nutritionAccuracyNotice()).toBe(true);
+
+    api.get.mockResolvedValueOnce({ ...emptyMenu(), nutritionAccuracyNotice: false });
+    await service.menu('uz');
+    expect(service.nutritionAccuracyNotice()).toBe(false);
+  });
+
+  it('reads a menu from a platform that predates the switch as off', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValueOnce({ ...emptyMenu(), nutritionAccuracyNotice: true });
+    await service.menu('uz');
+
+    api.get.mockResolvedValueOnce(emptyMenu());
+    await service.menu('ru');
+
+    expect(service.nutritionAccuracyNotice()).toBe(false);
+  });
+});
+
 describe('MenuService.menu: every read goes back to the origin', () => {
   it('a later call for the same key still re-fetches -- the origin, not a stale local copy, decides freshness', async () => {
     const { service, api } = setUp();

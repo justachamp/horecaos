@@ -50,6 +50,7 @@ changing retention is an approved operational migration with a rollback plan.
 | `pricing.events` | 3 | 1 | `PT168H` | `delete` |
 | `marketing.events` | 3 | 1 | `PT168H` | `delete` |
 | `content.events` | 3 | 1 | `PT168H` | `delete` |
+| `catalog.events` | 3 | 1 | `PT168H` | `delete` |
 | `customers.events` | 3 | 1 | `PT168H` | `delete` |
 | `reviews.events` | 3 | 1 | `PT168H` | `delete` |
 | `fiscal.events` | 3 | 1 | `PT168H` | `delete` |
@@ -555,6 +556,28 @@ high-volume per-request facts whose payload shape and retention deserve their
 own decision rather than riding along with a once-a-day control-plane
 activation — the same restraint `inventory.events` states for its own six
 unpublished siblings.
+
+## `catalog.events`
+
+- Producing module: `catalog`
+- Retention class: business fact
+- Classification: `INTERNAL` — no personal data, no name, no price and no URL on this topic
+- Key: `brandId`
+
+| Event | Version | Key | Schema | Version-1 payload |
+|---|---|---|---|---|
+| `CatalogDraftChanged` | 1 | `brandId` | [`CatalogDraftChanged.v1`](../../src/main/resources/events/catalog.events/CatalogDraftChanged.v1.schema.json) | `brandId`, `entityType`, `entityId`, `change` (`CREATED`, `UPDATED`, `ARCHIVED`, `TRANSLATED`, `MEDIA_CHANGED`, `CLASSIFIED`, `PHYSICAL_ATTRIBUTES_CHANGED`, `COMPOSITE_CHANGED`, `CHANNEL_MEDIA_REPLACED`, `CHANNEL_OFFERING_CHANGED`), `channelId` |
+
+ADR 0016's `CatalogDraftChanged`, which ADR 0136, 0137 and 0138 each said an authoring write "rides" and which no
+code published until batch 21 (ADR 0180). It says that a brand's *draft* moved, which entity and how, never what it
+became: what a dish is called or costs is in the draft, which a consumer reads through the authorized API. Nothing a
+customer is served moves until the draft is published (`CatalogPublished`, which is not built as an event). Appended
+by `CatalogOutboxEventListener` in the same `BEFORE_COMMIT` transaction as the write and its audit fact, so neither
+commits without the other; several writes to one entity in one transaction are one fact (`CatalogDraftSignal`), and a
+catalog import, which is a bulk write, is suppressed rather than announced row by row (`ImportSuppression`). The
+consumer it exists for is a marketplace menu push, which must re-project a channel's menu when the draft moves
+(ADR 0040, an external fact); nothing in the platform consumes it yet, and a pull-first partner reads the
+projection instead (`GET /api/v1/partner/tenants/{t}/restaurants/{l}/menu`).
 
 ## `content.events`
 

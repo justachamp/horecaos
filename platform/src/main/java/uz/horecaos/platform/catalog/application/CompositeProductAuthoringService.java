@@ -9,6 +9,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -16,6 +18,7 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.catalog.api.CatalogDraftChanged.Change;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierGroup;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
@@ -66,13 +69,26 @@ public class CompositeProductAuthoringService {
     private final JdbcCatalogStore catalogStore;
     private final AuditRecorder audit;
     private final Clock clock;
+    private final CatalogDraftSignal draft;
 
+    /** A service that says nothing when the draft moves, as every fixture built before the draft event is. */
     public CompositeProductAuthoringService(
             JdbcCompositeCatalogStore store, JdbcCatalogStore catalogStore, AuditRecorder audit, Clock clock) {
+        this(store, catalogStore, audit, clock, event -> {});
+    }
+
+    @Autowired
+    public CompositeProductAuthoringService(
+            JdbcCompositeCatalogStore store,
+            JdbcCatalogStore catalogStore,
+            AuditRecorder audit,
+            Clock clock,
+            ApplicationEventPublisher events) {
         this.store = store;
         this.catalogStore = catalogStore;
         this.audit = audit;
         this.clock = clock;
+        this.draft = new CatalogDraftSignal(events, clock);
     }
 
     // ------------------------------------------------------------- combo groups
@@ -126,6 +142,7 @@ public class CompositeProductAuthoringService {
                 command.name(),
                 null);
 
+        draft.changed(group.tenantId(), group.brandId(), EntityType.COMBO_GROUP, group.id(), Change.CREATED);
         audit.record(AuditFact.of("catalog.comboGroup.created", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.brand(group.tenantId(), group.brandId()))
@@ -173,6 +190,7 @@ public class CompositeProductAuthoringService {
             throw ApiException.staleVersion(expectedVersion, currentGroupVersion(tenantId, brandId, comboGroupId));
         }
 
+        draft.changed(tenantId, brandId, EntityType.COMBO_GROUP, comboGroupId, Change.COMPOSITE_CHANGED);
         audit.record(AuditFact.of("catalog.comboGroup.updated", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.brand(tenantId, brandId))
@@ -280,6 +298,7 @@ public class CompositeProductAuthoringService {
                 1);
         store.insertComboComponent(component);
 
+        draft.changed(tenantId, brandId, EntityType.COMBO_GROUP, group.id(), Change.COMPOSITE_CHANGED);
         audit.record(AuditFact.of("catalog.comboComponent.added", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.brand(tenantId, brandId))
@@ -323,6 +342,7 @@ public class CompositeProductAuthoringService {
             throw ApiException.staleVersion(expectedVersion, current);
         }
 
+        draft.changed(tenantId, brandId, EntityType.COMBO_GROUP, before.comboGroupId(), Change.COMPOSITE_CHANGED);
         audit.record(AuditFact.of("catalog.comboComponent.updated", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.brand(tenantId, brandId))
@@ -362,6 +382,7 @@ public class CompositeProductAuthoringService {
 
         Map<String, Object> beforeFields =
                 existing.isPresent() ? Map.of("sortOrder", existing.get().sortOrder()) : Map.of();
+        draft.changed(tenantId, brandId, EntityType.VARIANT, variantId, Change.COMPOSITE_CHANGED);
         audit.record(AuditFact.of("catalog.variantModifierGroup.attached", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.brand(tenantId, brandId))
@@ -428,6 +449,12 @@ public class CompositeProductAuthoringService {
             throw ApiException.staleVersion(expectedVersion, current);
         }
 
+        draft.changed(
+                tenantId,
+                brandId,
+                ownerType == AttachmentOwnerType.PRODUCT ? EntityType.PRODUCT : EntityType.VARIANT,
+                ownerId,
+                Change.COMPOSITE_CHANGED);
         audit.record(AuditFact.of("catalog.modifierAttachment.policySet", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.brand(tenantId, brandId))

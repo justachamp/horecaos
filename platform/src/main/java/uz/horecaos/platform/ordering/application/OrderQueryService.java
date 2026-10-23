@@ -187,12 +187,19 @@ public class OrderQueryService implements OrderCountsQuery {
             // ADR 0136: what each hidden auto-selected option charged, itemised on the order.
             Map<UUID, Map<UUID, Long>> hiddenCharges = orders.hiddenCharges(tenantId, orderId);
 
+            // ADR 0040 / ADR 0141: the lines an aggregator order arrived flagged on (an item the catalogue
+            // does not carry, or a dish stopped here). Only the live set carries a flag, so a read of an
+            // earlier revision shows none.
+            Map<UUID, JdbcOrderStore.LineIntakeFlag> intakeFlags =
+                    revision == null ? orders.intakeFlags(tenantId, orderId) : Map.of();
+
             List<DetailLine> detailLines = new ArrayList<>(lines.size());
             lines.forEach(line -> detailLines.add(new DetailLine(
                     line,
                     modifiers.getOrDefault(line.lineId(), List.of()),
                     commentPresets.getOrDefault(line.lineId(), List.of()),
-                    hiddenCharges.getOrDefault(line.lineId(), Map.of()))));
+                    hiddenCharges.getOrDefault(line.lineId(), Map.of()),
+                    intakeFlags.get(line.lineId()))));
 
             return new OrderDetail(order, detailLines, warnings(), customerDetail(tenantId, order));
         });
@@ -817,12 +824,15 @@ public class OrderQueryService implements OrderCountsQuery {
     /**
      * @param hiddenChargeByOption what each hidden auto-selected option on this line charged, by
      *     option id, for the whole line (ADR 0136). It is already inside the line's final amount
+     * @param intakeFlag why an aggregator line needs a person before it is cooked (ADR 0040, ADR 0141);
+     *     null on every line that arrived sellable and mapped, which is every native line
      */
     public record DetailLine(
             OrderLineRow line,
             List<OrderModifierRow> modifiers,
             List<OrderCommentPresetRow> commentPresets,
-            Map<UUID, Long> hiddenChargeByOption) {
+            Map<UUID, Long> hiddenChargeByOption,
+            JdbcOrderStore.@Nullable LineIntakeFlag intakeFlag) {
 
         /** What the option the server applied cost for this line, zero when it was free. */
         public long hiddenChargeOf(UUID optionId) {

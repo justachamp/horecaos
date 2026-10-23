@@ -499,6 +499,7 @@
     "nutritionPer100g": "100 g uchun",
     "nutritionPer100ml": "100 ml uchun",
     "nutritionPerUnit": "bir porsiyada ({{amount}})",
+    "nutritionAccuracy": "KBJU qiymatlari taxminiy va haqiqiyidan farq qilishi mumkin.",
     "calories": "Kaloriya",
     "proteins": "Oqsillar",
     "fats": "Yog'lar",

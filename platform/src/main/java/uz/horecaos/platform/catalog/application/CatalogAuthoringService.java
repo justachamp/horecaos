@@ -25,6 +25,7 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.catalog.api.CatalogDraftChanged.Change;
 import uz.horecaos.platform.catalog.api.ChannelAssortmentChanged;
 import uz.horecaos.platform.catalog.api.OfferingBecameAvailable;
 import uz.horecaos.platform.catalog.api.StopOverlayLookup;
@@ -77,6 +78,8 @@ public class CatalogAuthoringService {
     private final CatalogTenantContext tenantContext;
     private final ApplicationEventPublisher events;
     private final @Nullable StopOverlayLookup stopOverlay;
+    /** ADR 0016: says that the draft changed, once per fact per transaction ({@link CatalogDraftSignal}). */
+    private final CatalogDraftSignal draft;
 
     /**
      * See {@code ServiceabilityService}'s matching overload for why this
@@ -147,6 +150,7 @@ public class CatalogAuthoringService {
         this.tenantContext = tenantContext;
         this.events = events;
         this.stopOverlay = stopOverlay;
+        this.draft = new CatalogDraftSignal(events, clock);
     }
 
     @Transactional
@@ -154,6 +158,7 @@ public class CatalogAuthoringService {
         UUID catalogId = UUID.randomUUID();
         store.insertCatalog(catalogId, tenantId, brandId, code, name);
         store.upsertTranslation(tenantId, brandId, EntityType.CATALOG, catalogId, locale, name, null);
+        draft.changed(tenantId, brandId, EntityType.CATALOG, catalogId, Change.CREATED);
         return catalogId;
     }
 
@@ -215,6 +220,7 @@ public class CatalogAuthoringService {
         classify(tenantId, brandId, PriceableNode.variant(variantId), fiscal, actorId);
         store.addProductToCatalog(tenantId, brandId, catalogId, productId, 0);
         store.upsertTranslation(tenantId, brandId, EntityType.PRODUCT, productId, locale, name, description);
+        draft.changed(tenantId, brandId, EntityType.PRODUCT, productId, Change.CREATED);
 
         return new ProductCreated(productId, variantId);
     }
@@ -254,6 +260,7 @@ public class CatalogAuthoringService {
         if (name != null) {
             store.upsertTranslation(tenantId, brandId, EntityType.VARIANT, variantId, locale, name, null);
         }
+        draft.changed(tenantId, brandId, EntityType.VARIANT, variantId, Change.CREATED);
         return variantId;
     }
 
@@ -281,24 +288,34 @@ public class CatalogAuthoringService {
         store.insertCategory(
                 categoryId, tenantId, brandId, catalogId, parentCategoryId, code, sortOrder, Status.ACTIVE);
         store.upsertTranslation(tenantId, brandId, EntityType.CATEGORY, categoryId, locale, name, null);
+        draft.changed(tenantId, brandId, EntityType.CATEGORY, categoryId, Change.CREATED);
         return categoryId;
     }
 
     @Transactional
     public void placeProductInCategory(UUID tenantId, UUID brandId, UUID categoryId, UUID productId, int sortOrder) {
         store.addProductToCategory(tenantId, brandId, categoryId, productId, sortOrder);
+        draft.changed(tenantId, brandId, EntityType.CATEGORY, categoryId, Change.UPDATED);
     }
 
     /** The undo {@link #placeProductInCategory} never had. */
     @Transactional
     public boolean removeProductFromCategory(UUID tenantId, UUID brandId, UUID categoryId, UUID productId) {
-        return store.removeProductFromCategory(tenantId, brandId, categoryId, productId);
+        boolean removed = store.removeProductFromCategory(tenantId, brandId, categoryId, productId);
+        if (removed) {
+            draft.changed(tenantId, brandId, EntityType.CATEGORY, categoryId, Change.UPDATED);
+        }
+        return removed;
     }
 
     /** The undo a catalog's own {@code addProductToCatalog} never had. */
     @Transactional
     public boolean removeProductFromCatalog(UUID tenantId, UUID brandId, UUID catalogId, UUID productId) {
-        return store.removeProductFromCatalog(tenantId, brandId, catalogId, productId);
+        boolean removed = store.removeProductFromCatalog(tenantId, brandId, catalogId, productId);
+        if (removed) {
+            draft.changed(tenantId, brandId, EntityType.CATALOG, catalogId, Change.UPDATED);
+        }
+        return removed;
     }
 
     /**
@@ -309,7 +326,11 @@ public class CatalogAuthoringService {
      */
     @Transactional
     public boolean setProductStatus(UUID tenantId, UUID brandId, UUID productId, Status status) {
-        return store.updateProductStatus(tenantId, brandId, productId, status);
+        boolean updated = store.updateProductStatus(tenantId, brandId, productId, status);
+        if (updated) {
+            draft.changed(tenantId, brandId, EntityType.PRODUCT, productId, Change.UPDATED);
+        }
+        return updated;
     }
 
     /**
@@ -334,13 +355,21 @@ public class CatalogAuthoringService {
             @Nullable String sku,
             String unitCode,
             Status status) {
-        return store.updateVariant(tenantId, brandId, productId, variantId, sku, unitCode, status);
+        boolean updated = store.updateVariant(tenantId, brandId, productId, variantId, sku, unitCode, status);
+        if (updated) {
+            draft.changed(tenantId, brandId, EntityType.VARIANT, variantId, Change.UPDATED);
+        }
+        return updated;
     }
 
     /** Makes one variant of a product the default, and no other. */
     @Transactional
     public boolean setDefaultVariant(UUID tenantId, UUID brandId, UUID productId, UUID variantId) {
-        return store.setDefaultVariant(tenantId, brandId, productId, variantId);
+        boolean updated = store.setDefaultVariant(tenantId, brandId, productId, variantId);
+        if (updated) {
+            draft.changed(tenantId, brandId, EntityType.PRODUCT, productId, Change.UPDATED);
+        }
+        return updated;
     }
 
     /**
@@ -381,6 +410,7 @@ public class CatalogAuthoringService {
         if (!updated) {
             throw new UnknownCatalogEntityException(EntityType.CATEGORY, categoryId);
         }
+        draft.changed(tenantId, brandId, EntityType.CATEGORY, categoryId, Change.UPDATED);
     }
 
     /**
@@ -396,6 +426,7 @@ public class CatalogAuthoringService {
         if (!archived) {
             throw new UnknownCatalogEntityException(EntityType.CATEGORY, categoryId);
         }
+        draft.changed(tenantId, brandId, EntityType.CATEGORY, categoryId, Change.ARCHIVED);
     }
 
     /**
@@ -600,6 +631,8 @@ public class CatalogAuthoringService {
             return;
         }
         publishAssortmentChanged(tenantId, brandId, locationId);
+        draft.changed(
+                tenantId, brandId, EntityType.VARIANT.name(), variantId, Change.CHANNEL_OFFERING_CHANGED, channelId);
         audit.record(AuditFact.of("catalog.channelOffering.set", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.brand(tenantId, brandId))
@@ -686,6 +719,8 @@ public class CatalogAuthoringService {
         }
         if (changed > 0) {
             publishAssortmentChanged(tenantId, brandId, locationId);
+            draft.changed(
+                    tenantId, brandId, EntityType.VARIANT.name(), null, Change.CHANNEL_OFFERING_CHANGED, channelId);
             audit.record(AuditFact.of("catalog.channelOffering.bulkSet", AuditClass.BUSINESS)
                     .by(ActorRef.user(actorSubject, null))
                     .at(ResourceScope.brand(tenantId, brandId))
@@ -722,6 +757,7 @@ public class CatalogAuthoringService {
         store.insertModifierGroup(new ModifierGroup(
                 groupId, tenantId, brandId, code, required, minimum, maximum, allowRepeat, 0, Status.ACTIVE, 1));
         store.upsertTranslation(tenantId, brandId, EntityType.MODIFIER_GROUP, groupId, locale, name, null);
+        draft.changed(tenantId, brandId, EntityType.MODIFIER_GROUP, groupId, Change.CREATED);
         return groupId;
     }
 
@@ -760,6 +796,7 @@ public class CatalogAuthoringService {
                 1));
         classify(tenantId, brandId, PriceableNode.modifierOption(optionId), fiscal, actorId);
         store.upsertTranslation(tenantId, brandId, EntityType.MODIFIER_OPTION, optionId, locale, name, null);
+        draft.changed(tenantId, brandId, EntityType.MODIFIER_GROUP, groupId, Change.UPDATED);
         return optionId;
     }
 
@@ -880,6 +917,7 @@ public class CatalogAuthoringService {
         if (defaultVariantId == null) {
             defaultVariantId = variantIdMap.values().stream().findFirst().orElse(newProductId);
         }
+        draft.changed(tenantId, brandId, EntityType.PRODUCT, newProductId, Change.CREATED);
         return new ProductCreated(newProductId, defaultVariantId);
     }
 
@@ -915,6 +953,7 @@ public class CatalogAuthoringService {
             return;
         }
         store.updateProductStatus(tenantId, brandId, productId, status);
+        draft.changed(tenantId, brandId, EntityType.PRODUCT, productId, Change.UPDATED);
         audit.record(AuditFact.of("catalog.product.status_changed", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.brand(tenantId, brandId))
@@ -1089,6 +1128,7 @@ public class CatalogAuthoringService {
             outcomes.add(new BulkClassifyOutcome(item.node(), status));
         }
         if (!afterDoc.isEmpty()) {
+            draft.changed(tenantId, brandId, EntityType.VARIANT.name(), null, Change.CLASSIFIED, null);
             audit.record(AuditFact.of("catalog.fiscalClassification.bulkSet", AuditClass.BUSINESS)
                     .by(ActorRef.user(actorSubject, null))
                     .at(ResourceScope.brand(tenantId, brandId))
@@ -1182,6 +1222,7 @@ public class CatalogAuthoringService {
             return;
         }
         store.upsertFiscalClassification(tenantId, brandId, node, fiscal, "MANUAL", actorId);
+        draft.changed(tenantId, brandId, node.type().name(), node.id(), Change.CLASSIFIED, null);
     }
 
     /**
@@ -1209,6 +1250,7 @@ public class CatalogAuthoringService {
     @Transactional
     public void attachModifierGroup(UUID tenantId, UUID brandId, UUID productId, UUID modifierGroupId, int sortOrder) {
         store.attachModifierGroupToProduct(tenantId, brandId, productId, modifierGroupId, sortOrder);
+        draft.changed(tenantId, brandId, EntityType.PRODUCT, productId, Change.UPDATED);
     }
 
     @Transactional
@@ -1221,6 +1263,7 @@ public class CatalogAuthoringService {
             String role,
             int sortOrder) {
         store.attachMedia(tenantId, brandId, entityType, entityId, assetId.value(), role, sortOrder);
+        draft.changed(tenantId, brandId, entityType, entityId, Change.MEDIA_CHANGED);
     }
 
     /**
@@ -1239,6 +1282,7 @@ public class CatalogAuthoringService {
             int sortOrder,
             String channelCode) {
         store.attachMedia(tenantId, brandId, entityType, entityId, assetId.value(), role, sortOrder, channelCode);
+        draft.changed(tenantId, brandId, entityType, entityId, Change.MEDIA_CHANGED);
     }
 
     /**
@@ -1257,7 +1301,12 @@ public class CatalogAuthoringService {
             MediaAssetId assetId,
             String role,
             String channelCode) {
-        return store.detachMedia(tenantId, brandId, entityType, entityId, assetId.value(), role, channelCode);
+        boolean detached =
+                store.detachMedia(tenantId, brandId, entityType, entityId, assetId.value(), role, channelCode);
+        if (detached) {
+            draft.changed(tenantId, brandId, entityType, entityId, Change.MEDIA_CHANGED);
+        }
+        return detached;
     }
 
     /**
@@ -1514,6 +1563,7 @@ public class CatalogAuthoringService {
             throw new UnknownCatalogEntityException(entityType, entityId);
         }
         store.upsertTranslation(tenantId, brandId, entityType, entityId, locale, name, description);
+        draft.changed(tenantId, brandId, entityType, entityId, Change.TRANSLATED);
     }
 
     /**
@@ -1712,6 +1762,7 @@ public class CatalogAuthoringService {
         Optional<Integer> before = store.recommendationSortOrder(tenantId, brandId, sourceProductId, targetVariantId);
         UUID recommendationId =
                 store.upsertRecommendation(tenantId, brandId, sourceProductId, targetVariantId, sortOrder);
+        draft.changed(tenantId, brandId, EntityType.PRODUCT, sourceProductId, Change.UPDATED);
         Map<String, Object> beforeFields = before.isEmpty()
                 ? Map.of()
                 : Map.of("targetVariantId", targetVariantId.toString(), "sortOrder", before.get());
@@ -1744,6 +1795,7 @@ public class CatalogAuthoringService {
             // setChannelOffering's own no-op-writes-no-fact convention.
             return;
         }
+        draft.changed(tenantId, brandId, EntityType.PRODUCT, sourceProductId, Change.UPDATED);
         Map<String, Object> beforeDoc = new LinkedHashMap<>();
         beforeDoc.put("targetVariantId", targetVariantId.toString());
         beforeDoc.put("sortOrder", before.orElse(null));

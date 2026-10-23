@@ -41,12 +41,25 @@
           </span>
           <input
             type="number"
-            min="1"
+            [min]="line.step"
+            [step]="line.step"
+            [attr.inputmode]="splittable(line) ? 'decimal' : 'numeric'"
+            [attr.aria-invalid]="offStep(line)"
             class="add-lines-dialog__quantity"
             [value]="line.quantity"
             (input)="setQuantity(line.key, $any($event.target).value)"
             [attr.data-testid]="'order-add-lines-dialog-quantity-' + line.key"
           />
+          @if (splittable(line)) {
+            <span
+              class="q-caption add-lines-dialog__step"
+              [class.add-lines-dialog__step--problem]="offStep(line)"
+              [attr.role]="offStep(line) ? 'alert' : null"
+              [attr.data-testid]="'order-add-lines-dialog-step-' + line.key"
+            >
+              {{ 'orders.dialog.changeQuantity.step' | t: { step: stepText(line) } }}
+            </span>
+          }
           <button
             type="button"
             class="add-lines-dialog__remove"

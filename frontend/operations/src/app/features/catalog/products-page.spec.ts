@@ -852,6 +852,38 @@ describe('ProductsPage', () => {
     expect(summary?.textContent).toContain('12');
   });
 
+  it('opens the fiscal workbench straight away when the fiscalization settings hand a node off with ?workbench=fiscal', async () => {
+    configure({
+      listCatalogs: () => of(FAKE_CATALOGS),
+      listProducts: () =>
+        of({ items: [product({ productId: 'p1', hasMxik: false })], nextCursor: null }),
+      fiscalCoverage: () => of({ totalNodes: 3, unclassifiedCount: 1, nodes: [] }),
+    });
+
+    const harness = await RouterTestingHarness.create('/catalog/products?workbench=fiscal');
+    await flushMicrotasks();
+    harness.detectChanges();
+    const host = harness.routeNativeElement!;
+
+    expect(host.querySelector('[data-testid="fiscal-workbench-summary"]')).not.toBeNull();
+  });
+
+  it('does not open the workbench on a plain visit', async () => {
+    configure({
+      listCatalogs: () => of(FAKE_CATALOGS),
+      listProducts: () => of({ items: [product({ productId: 'p1' })], nextCursor: null }),
+      fiscalCoverage: () => of({ totalNodes: 3, unclassifiedCount: 1, nodes: [] }),
+    });
+
+    const harness = await RouterTestingHarness.create('/catalog/products');
+    await flushMicrotasks();
+    harness.detectChanges();
+
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="fiscal-workbench-summary"]'),
+    ).toBeNull();
+  });
+
   it('bulk-classifies through the fiscal workbench’s grid in one call and refreshes the coverage', async () => {
     const bulkClassify = vi
       .fn()

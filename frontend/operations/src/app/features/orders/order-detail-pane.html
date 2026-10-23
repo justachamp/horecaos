@@ -118,6 +118,11 @@
           [currency]="detail.value.summary.currency"
           (orderChanged)="refreshOrder()"
         />
+        <q-till-revision-banner
+          [scope]="scope"
+          [orderId]="detail.value.summary.orderId"
+          [orderVersion]="detail.value.summary.version ?? 0"
+        />
         <q-order-marking-panel
           [scope]="scope"
           [orderId]="detail.value.summary.orderId"
@@ -1003,6 +1008,7 @@
       [comboGroups]="addLinesComboGroups()"
       [currency]="addLinesCurrency()"
       [combosUnavailable]="addLinesCombosUnavailable()"
+      [portionSteps]="addLinesPortionSteps()"
       [busy]="busy()"
       (search)="onAddLinesSearch($event)"
       (confirm)="onAddLinesConfirm($event)"

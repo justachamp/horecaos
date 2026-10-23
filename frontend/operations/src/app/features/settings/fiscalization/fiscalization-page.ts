@@ -17,6 +17,7 @@ import {
   PaymentMethodResponsibility,
 } from '../payment-methods/payment-methods-api';
 import { FiscalBackfillEditor, isMissingCodes } from './fiscal-backfill-editor';
+import { FiscalUnitNameGaps, lacksUnitOrName } from './fiscal-unit-name-gaps';
 import {
   ClassifyDeliveryFeeRequest,
   FiscalBackfillOutcome,
@@ -85,7 +86,7 @@ const TERMINAL_KINDS: readonly FiscalTerminalKind[] = [
  */
 @Component({
   selector: 'q-fiscalization-page',
-  imports: [TPipe, RouterLink, FiscalBackfillEditor, MxikPicker],
+  imports: [TPipe, RouterLink, FiscalBackfillEditor, FiscalUnitNameGaps, MxikPicker],
   templateUrl: './fiscalization-page.html',
   styleUrl: './fiscalization-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -574,12 +575,14 @@ export class FiscalizationPage {
 
   /**
    * What the read-only list still shows: every unclassified node except the
-   * dishes the backfill editor above it is already listing, so no dish appears
-   * twice. A dish that has both codes but still lacks a unit code or a fiscal
-   * name stays here, because the editor cannot fix that.
+   * dishes the two editors above it are already listing, so no dish appears
+   * twice. The first editor fills a missing ИКПУ or package code; the second
+   * (batch 21) fills a missing unit code or receipt name on a dish that holds
+   * both codes. What is left is the delivery fee, which has its own control,
+   * and nodes an older server does not say enough about.
    */
   protected listedNodes(nodes: readonly FiscalCoverageNode[]): readonly FiscalCoverageNode[] {
-    return nodes.filter((node) => !isMissingCodes(node));
+    return nodes.filter((node) => !isMissingCodes(node) && !lacksUnitOrName(node));
   }
 
   // ADR 0173: the codes the national list has withdrawn, and the click that moves them to the named successor.

@@ -544,6 +544,24 @@ export const operationsPaths = {
   },
 
   /**
+   * ADR 0141, rollback switch three — the materialisation run that precedes switching stops off, at
+   * brand scope (`StopMaterialisationController`): `POST` starts a run, `GET` lists a brand's runs.
+   */
+  inventoryStopMaterialisationRuns(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrand(scope)}/inventory/stop-materialisation-runs`;
+  },
+
+  /** `GET` one run's report, cursor-paged: what the run could not carry, with dish and branch names. */
+  inventoryStopMaterialisationReport(scope: LocationScope, runId: string): string {
+    return `${this.inventoryStopMaterialisationRuns(scope)}/${encodeURIComponent(runId)}/report`;
+  },
+
+  /** `POST` acknowledges a finished run's report. Mutation: key and `If-Match` carrying the run's version. */
+  inventoryStopMaterialisationAcknowledgement(scope: LocationScope, runId: string): string {
+    return `${this.inventoryStopMaterialisationRuns(scope)}/${encodeURIComponent(runId)}/acknowledgement`;
+  },
+
+  /**
    * ADR 0141 — what each connected marketplace has and has not been told about the stop list
    * at this branch, and since when (`MarketplacePropagationController`, integration module).
    */

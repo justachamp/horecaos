@@ -1230,6 +1230,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Контактные лица филиала изменены',
       'uz-Latn': 'Filialning aloqa shaxslari oʻzgartirildi',
     },
+    'integration.binding.marketplaceRulesetSet': {
+      en: 'Marketplace content rules of a binding named or cleared',
+      ru: 'Правила содержания маркетплейса для привязки назначены или сняты',
+      'uz-Latn': 'Bogʻlanishning marketplace kontent qoidalari tayinlandi yoki olib tashlandi',
+    },
     'integration.installation_created': {
       en: 'Provider installation created',
       ru: 'Подключение провайдера создано',
@@ -1720,6 +1725,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'POS mapping retired',
       ru: 'Касса сопоставление выведено из эксплуатации',
       'uz-Latn': 'Kassa moslashtirish chiqarib tashlandi',
+    },
+    'pos.order_revision_acknowledged': {
+      en: 'A person confirmed the till was changed to the revised order total',
+      ru: 'Сотрудник подтвердил, что в кассе исправлена сумма заказа',
+      'uz-Latn': 'Xodim kassada buyurtma summasi oʻzgartirilganini tasdiqladi',
     },
     'pricing.price_book.activated': {
       en: 'Pricing price book activated',

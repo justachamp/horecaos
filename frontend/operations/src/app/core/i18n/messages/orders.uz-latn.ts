@@ -244,6 +244,30 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   'orders.detail.lines.column.amount': 'Summa',
   'orders.detail.lines.combo.caption': 'Kombo',
   'orders.detail.lines.autoAdded': 'avtomatik qoʻshilgan',
+  'orders.detail.lines.intake.stopped':
+    'Stopda: buyurtma qabul qilingan, pishirishdan oldin tekshiring',
+  'orders.detail.lines.intake.unmapped': 'Katalogda yoʻq: pozitsiyani agregatordan aniqlang',
+  'orders.detail.lines.intake.reference': 'Agregator pozitsiyasi {reference}',
+  'orders.tillRevision.title': 'Kassada eski summa qoldi',
+  'orders.tillRevision.body':
+    'Kassada {till}; tarozidan keyin buyurtma {revised} ({delta}). Kassadagi summani {revised} ga oʻzgartiring, soʻng quyida tasdiqlang.',
+  'orders.tillRevision.send': 'Yangi summani kassaga yuborish',
+  'orders.tillRevision.sending': 'Yuborilmoqda…',
+  'orders.tillRevision.acknowledge': 'Kassadagi summani oʻzgartirdim',
+  'orders.tillRevision.failed': 'Kassaga xabar berishning oxirgi urinishi oʻtmadi.',
+  'orders.tillRevision.told': 'Yangi summa kassaga yuborildi.',
+  'orders.tillRevision.acknowledged': 'Qayd etildi: kassadagi summa qoʻlda tuzatildi.',
+  'orders.tillRevision.unreadable': 'Kassa buyurtmaga mos kelishini tekshirib boʻlmadi.',
+  'orders.tillRevision.outcome.NO_OPEN_NOTICE':
+    'Oʻzgartiradigan narsa yoʻq: kassa va buyurtma mos.',
+  'orders.tillRevision.outcome.NOT_AVAILABLE':
+    'Bu kassaga bu yerdan yangi summa yuborib boʻlmaydi. Qoʻlda oʻzgartiring va tasdiqlang.',
+  'orders.tillRevision.outcome.REJECTED':
+    'Kassa yangi summani qabul qilmadi. Qoʻlda oʻzgartiring va tasdiqlang.',
+  'orders.tillRevision.outcome.RETRYABLE':
+    'Kassaga ulanib boʻlmadi. Qayta urining yoki qoʻlda oʻzgartiring.',
+  'orders.tillRevision.outcome.UNCERTAIN':
+    'Kassa yangi summani qabul qilgan boʻlishi ham, qilmagan boʻlishi ham mumkin. Qayta yuborishdan oldin tekshiring.',
   'orders.detail.lines.snapshotNotice': 'Nomlar va narxlar buyurtma berilgan paytda qayd etilgan.',
   'orders.detail.lines.note.hidden': '💬 izoh bor',
   'orders.detail.lines.note.empty': 'izoh yoʻq',

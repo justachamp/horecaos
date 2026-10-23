@@ -1,0 +1,58 @@
+:host {
+  display: block;
+}
+
+.till-revision {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--q-warning);
+  border-radius: var(--q-radius);
+  background: var(--q-warning-tint);
+}
+
+.till-revision__title,
+.till-revision__body {
+  margin: 0;
+}
+
+.till-revision__title {
+  color: var(--q-warning-text);
+}
+
+.till-revision__failure,
+.till-revision__message,
+.till-revision__closed,
+.till-revision__unreadable {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+.till-revision__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.till-revision__send,
+.till-revision__acknowledge {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.till-revision__send {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.till-revision__send:disabled,
+.till-revision__acknowledge:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

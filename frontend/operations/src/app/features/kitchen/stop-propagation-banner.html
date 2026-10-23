@@ -9,6 +9,15 @@
       >
         {{ line(binding) }}
       </p>
+      @if (incident(binding); as text) {
+        <p
+          class="q-body-sm propagation__line propagation__line--attention"
+          role="status"
+          data-testid="stop-propagation-incident"
+        >
+          {{ text }}
+        </p>
+      }
     }
   </div>
 }

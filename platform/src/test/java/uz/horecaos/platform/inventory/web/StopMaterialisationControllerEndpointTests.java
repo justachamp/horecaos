@@ -110,7 +110,8 @@ class StopMaterialisationControllerEndpointTests {
                     inventory.reservation_lines, inventory.reservations, inventory.movements,
                     inventory.positions, inventory.stock_items CASCADE
                 """).update();
-        jdbc.sql("TRUNCATE TABLE catalog.variants, catalog.products CASCADE").update();
+        jdbc.sql("TRUNCATE TABLE catalog.variants, catalog.products, catalog.translations CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         jdbc.sql("DELETE FROM tenant.configuration_values WHERE key_code = 'inventory.stops.read_enabled'")
                 .update();
@@ -168,6 +169,12 @@ class StopMaterialisationControllerEndpointTests {
         assertThat(line.path("reasonCode").asText()).isEqualTo("UNTRACKED_ITEM");
         assertThat(line.path("variantId").asText()).isEqualTo(UNTRACKED_DISH.toString());
         assertThat(line.path("locationId").asText()).isEqualTo(LOCATION.toString());
+        assertThat(line.path("variantName").asText())
+                .as("the dish is named through the catalog when the report is read")
+                .isEqualTo("Osh");
+        assertThat(line.path("locationName").asText())
+                .as("and the branch through the tenant")
+                .isEqualTo("Branch");
         assertThat(report.path("nextCursor").isNull()).isTrue();
 
         // -- run but not acknowledged: still refused.
@@ -237,6 +244,26 @@ class StopMaterialisationControllerEndpointTests {
         assertThat(resumed.path("sellable").asBoolean()).isFalse();
         assertThat(resumed.path("stopsConsulted").asBoolean()).isTrue();
         assertThat(resumed.path("stops")).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("a dish that no longer resolves to a name is reported by its id alone, with its branch still named")
+    void aLineWithoutANameKeepsItsIds() throws Exception {
+        jdbc.sql("DELETE FROM catalog.translations").update();
+        stopAtBranch(UNTRACKED_DISH);
+        JsonNode run = JSON.readTree(run(BRAND_MANAGER).getResponse().getContentAsString());
+
+        JsonNode line = JSON.readTree(mvc.perform(get(runPath(run.path("id").asText()) + "/report")
+                                .with(tokenFor(BRAND_MANAGER)))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString())
+                .path("items")
+                .get(0);
+
+        assertThat(line.path("variantId").asText()).isEqualTo(UNTRACKED_DISH.toString());
+        assertThat(line.path("variantName").isNull()).isTrue();
+        assertThat(line.path("locationName").asText()).isEqualTo("Branch");
     }
 
     @Test
@@ -396,6 +423,10 @@ class StopMaterialisationControllerEndpointTests {
                 .param("tenantId", TENANT)
                 .param("brandId", BRAND)
                 .update();
+        jdbc.sql("""
+                INSERT INTO catalog.translations (tenant_id, brand_id, entity_type, entity_id, locale, name)
+                VALUES (:t, :b, 'PRODUCT', :p, 'uz', 'Osh')
+                """).param("t", TENANT).param("b", BRAND).param("p", PRODUCT).update();
         for (UUID variant : List.of(BINARY_DISH, UNTRACKED_DISH)) {
             jdbc.sql("""
                     INSERT INTO catalog.variants (id, tenant_id, brand_id, product_id, is_default, status, sku)

@@ -36,7 +36,9 @@ public enum TelegramEventClass {
     TERMINAL_CREDENTIAL_LOCKED("A staff PIN was locked at a terminal"),
     TERMINAL_DEVICE_UNSEEN("A terminal that must be unlocked has not been seen"),
     RECOVERY_CASE_OPENED("Service-recovery case opened"),
-    RECOVERY_CASE_SLA_BREACHED("Service-recovery case passed a clock");
+    RECOVERY_CASE_SLA_BREACHED("Service-recovery case passed a clock"),
+    // ADR 0137, row 4.2c: a weighed total the till does not hold. Restated in V0665's CHECK.
+    TILL_REVISION_NEEDED("A weighed total needs the till changed");
 
     private final String description;
 

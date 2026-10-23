@@ -23,6 +23,11 @@ export interface PhysicalAttributesView {
   readonly fatGramsPer100?: number | null;
   readonly carbohydratesGramsPer100?: number | null;
   readonly version: number;
+  /**
+   * ADR 0137, row 4.2c: whether the brand's menu draws the code-owned accuracy line under a nutrition table
+   * (`catalog.nutrition_accuracy_line_enabled`). The editor previews it; absent on a platform that predates it.
+   */
+  readonly nutritionAccuracyNotice?: boolean;
 }
 
 /**

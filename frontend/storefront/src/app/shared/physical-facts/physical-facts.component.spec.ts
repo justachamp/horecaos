@@ -27,6 +27,7 @@ function render(inputs: {
   physical: PhysicalFacts | null;
   priceMinor?: number | null;
   compact?: boolean;
+  accuracyNotice?: boolean;
 }) {
   TestBed.configureTestingModule({
     providers: [
@@ -38,6 +39,7 @@ function render(inputs: {
   fixture.componentRef.setInput('physical', inputs.physical);
   fixture.componentRef.setInput('priceMinor', inputs.priceMinor ?? null);
   fixture.componentRef.setInput('compact', inputs.compact ?? false);
+  fixture.componentRef.setInput('accuracyNotice', inputs.accuracyNotice ?? false);
   fixture.detectChanges();
   const host = fixture.nativeElement as HTMLElement;
   const text = (id: string) => host.querySelector(`[data-testid="${id}"]`)?.textContent?.trim();
@@ -113,6 +115,44 @@ describe('PhysicalFactsComponent', () => {
 
     expect(host.textContent).toContain('physical.nutritionPer100ml');
     expect(host.textContent).not.toContain('physical.nutritionPer100g');
+  });
+
+  // ADR 0137, row 4.2c: the code-owned КБЖУ accuracy line, behind the platform's switch.
+  describe('the accuracy line', () => {
+    const withNutrition: PhysicalFacts = {
+      catchweight: false,
+      splittable: false,
+      netWeightGrams: 350,
+      nutrition: { caloriesKcalPer100: 215 },
+    };
+
+    it('is not drawn unless the menu asks for it', () => {
+      const { host } = render({ physical: withNutrition });
+
+      expect(host.querySelector('[data-testid="physical-nutrition"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="physical-nutrition-accuracy"]')).toBeNull();
+    });
+
+    it('is drawn inside the nutrition block, under the table, when the menu asks for it', () => {
+      const { host, text } = render({ physical: withNutrition, accuracyNotice: true });
+
+      const block = host.querySelector('[data-testid="physical-nutrition"]')!;
+      const line = block.querySelector('[data-testid="physical-nutrition-accuracy"]')!;
+      expect(line).not.toBeNull();
+      expect(text('physical-nutrition-accuracy')).toBe('physical.nutritionAccuracy');
+      expect(block.querySelector('table')!.compareDocumentPosition(line)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    });
+
+    it('is not drawn where there is no nutrition table to qualify, whatever the menu asks', () => {
+      const { host } = render({
+        physical: { catchweight: false, splittable: false, netWeightGrams: 350 },
+        accuracyNotice: true,
+      });
+
+      expect(host.querySelector('[data-testid="physical-nutrition-accuracy"]')).toBeNull();
+    });
   });
 
   it('shows no nutrition block when the author entered none', () => {

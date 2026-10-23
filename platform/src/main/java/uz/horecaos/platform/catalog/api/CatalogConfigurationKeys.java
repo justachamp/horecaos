@@ -44,6 +44,24 @@ public final class CatalogConfigurationKeys {
             .build();
 
     /** The code both declarations share. */
+    public static final String NUTRITION_ACCURACY_LINE_ENABLED_CODE = "catalog.nutrition_accuracy_line_enabled";
+
+    /**
+     * Whether the menu and the editor show the КБЖУ accuracy line (ADR 0137, row 4.2c). Off: whether any
+     * disclaimer is required, and its wording, are for legal and product. Declared without {@code
+     * tenantVisible()}, like {@link #AUTO_ADD_MANDATORY_ALLOWED}: it is turned on by a platform
+     * administrator on the owner's instruction once the wording exists.
+     */
+    public static final ConfigurationKey<Boolean> NUTRITION_ACCURACY_LINE_ENABLED = ConfigurationKey.of(
+                    NUTRITION_ACCURACY_LINE_ENABLED_CODE, Boolean.class)
+            .defaultValue(false)
+            .ownedBy("catalog")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("Whether the storefront menu and the product editor show the code-owned line under "
+                    + "a nutrition table saying the figures are approximate. Off until the wording is settled.")
+            .build();
+
+    /** The code both declarations share. */
     public static final String MXIK_REFERENCE_MAX_AGE_DAYS_CODE = "catalog.mxik_reference_max_age_days";
 
     /** Days the loaded ИКПУ/MXIK list may age before a platform alert is raised (ADR 0173). */

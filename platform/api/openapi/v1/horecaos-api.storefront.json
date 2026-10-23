@@ -1521,6 +1521,18 @@
           "code" : {
             "type" : "string"
           },
+          "imageUrls" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "mediaAssetIds" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "name" : {
             "type" : "string"
           },
@@ -1827,8 +1839,20 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "imageUrls" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "isDefault" : {
             "type" : "boolean"
+          },
+          "mediaAssetIds" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
           },
           "modifierGroupIds" : {
             "items" : {
@@ -3354,6 +3378,9 @@
               "$ref" : "#/components/schemas/MenuModifierGroup"
             },
             "type" : "array"
+          },
+          "nutritionAccuracyNotice" : {
+            "type" : "boolean"
           },
           "products" : {
             "items" : {

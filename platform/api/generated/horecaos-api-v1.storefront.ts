@@ -524,6 +524,8 @@ export interface Media {
 export interface MenuCategory {
   categoryId?: string;
   code?: string;
+  imageUrls?: Array<string>;
+  mediaAssetIds?: Array<string>;
   name?: string;
   parentCategoryId?: string;
   productIds?: Array<string>;
@@ -615,7 +617,9 @@ export interface MenuTag {
 
 export interface MenuVariant {
   amountMinor?: number;
+  imageUrls?: Array<string>;
   isDefault?: boolean;
+  mediaAssetIds?: Array<string>;
   modifierGroupIds?: Array<string>;
   modifierGroupPolicies?: Array<MenuModifierGroupPolicy>;
   name?: string;
@@ -1105,6 +1109,7 @@ export interface StorefrontMenu {
   currency?: string;
   locale?: string;
   modifierGroups?: Array<MenuModifierGroup>;
+  nutritionAccuracyNotice?: boolean;
   products?: Array<MenuProduct>;
   publicationId?: string;
 }

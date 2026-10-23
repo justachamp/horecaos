@@ -32,7 +32,8 @@ public class JdbcMarketplaceAvailabilityStore {
             tenant_id, binding_id, external_entity_id, variant_id, location_id,
             desired_available, desired_seq, desired_at, confirmed_available, confirmed_at,
             last_attempt_available, last_attempt_at, last_attempt_outcome,
-            state, attempt_count, next_attempt_at, last_failure_code, pending_since
+            state, attempt_count, next_attempt_at, last_failure_code, pending_since,
+            would_push_available, would_push_seq, would_push_at
             """;
 
     private final JdbcClient jdbc;
@@ -133,7 +134,7 @@ public class JdbcMarketplaceAvailabilityStore {
     public Optional<SyncState> syncState(UUID bindingId) {
         return jdbc.sql("""
                 SELECT binding_id, next_sweep_at, sweep_requested_at, reconcile_was_enabled, was_stale,
-                       xmin::text AS row_version
+                       was_dry_run, xmin::text AS row_version
                 FROM integration.marketplace_availability_sync_state WHERE binding_id = :bindingId
                 """)
                 .param("bindingId", bindingId)
@@ -143,8 +144,53 @@ public class JdbcMarketplaceAvailabilityStore {
                         instant(row.getObject("sweep_requested_at", OffsetDateTime.class)),
                         row.getBoolean("reconcile_was_enabled"),
                         row.getBoolean("was_stale"),
+                        row.getBoolean("was_dry_run"),
                         row.getString("row_version")))
                 .optional();
+    }
+
+    /**
+     * Remembers whether this pass ran in dry run, so the first pass after it can tell it is leaving one
+     * (ADR 0141 Phase 3): leaving withdraws every confirmation and resends everything once, as a resumption does.
+     */
+    public void recordDryRun(UUID tenantId, UUID bindingId, boolean dryRun, Instant now) {
+        jdbc.sql("""
+                INSERT INTO integration.marketplace_availability_sync_state
+                    (tenant_id, binding_id, was_dry_run, updated_at)
+                VALUES (:tenantId, :bindingId, :dryRun, :now)
+                ON CONFLICT (binding_id) DO UPDATE
+                SET was_dry_run = EXCLUDED.was_dry_run, updated_at = EXCLUDED.updated_at
+                """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .param("dryRun", dryRun)
+                .param("now", timestamp(now))
+                .update();
+    }
+
+    /**
+     * Records, for each row whose desired value differs from what the partner is known to hold, the value and
+     * sequence the reconciler would have pushed (ADR 0141 Phase 3, dry run). Nothing is sent and no belief about
+     * the partner changes. A row is recorded again only when its desired value has moved since it was last
+     * recorded, so a quiet binding costs nothing and a count is the number of NEW decisions.
+     *
+     * @return how many rows were newly recorded
+     */
+    public int recordWouldPush(UUID tenantId, UUID bindingId, Instant now) {
+        return jdbc.sql("""
+                UPDATE integration.marketplace_item_availability
+                SET would_push_available = desired_available, would_push_seq = desired_seq,
+                    would_push_at = :now, updated_at = :now
+                WHERE tenant_id = :tenantId AND binding_id = :bindingId
+                  AND state IN ('PENDING', 'UNCERTAIN')
+                  AND confirmed_available IS DISTINCT FROM desired_available
+                  AND (would_push_seq IS DISTINCT FROM desired_seq
+                       OR would_push_available IS DISTINCT FROM desired_available)
+                """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .param("now", timestamp(now))
+                .update();
     }
 
     /** Asks for an early sweep of these bindings (a marker). Idempotent. */
@@ -671,7 +717,10 @@ public class JdbcMarketplaceAvailabilityStore {
                        count(a.*) FILTER (WHERE a.state = 'UNCERTAIN') AS uncertain,
                        count(a.*) FILTER (WHERE a.state = 'REJECTED_UNMAPPED') AS rejected,
                        min(a.pending_since) FILTER (WHERE a.state <> 'IN_SYNC') AS oldest_pending,
+                       count(a.*) FILTER (WHERE a.would_push_seq IS NOT NULL AND a.state <> 'IN_SYNC'
+                                             AND a.would_push_seq = a.desired_seq) AS would_push,
                        s.last_sweep_at AS last_sweep_at,
+                       s.stale_alerted_at AS stale_alerted_at,
                        s.reconcile_was_enabled AS reconcile_was_enabled,
                        w.last_success_at AS last_success_at,
                        w.last_failure_at AS last_failure_at,
@@ -686,7 +735,8 @@ public class JdbcMarketplaceAvailabilityStore {
                 WHERE b.tenant_id = :tenantId AND b.location_id = :locationId
                   AND i.provider_category = 'MARKETPLACE' AND b.status = 'ACTIVE'
                 GROUP BY b.id, b.installation_id, i.status, i.provider_type, i.display_name, s.last_sweep_at,
-                         s.reconcile_was_enabled, w.last_success_at, w.last_failure_at, w.last_failure_code
+                         s.stale_alerted_at, s.reconcile_was_enabled, w.last_success_at, w.last_failure_at,
+                         w.last_failure_code
                 ORDER BY i.display_name, b.id
                 """)
                 .param("tenantId", tenantId)
@@ -706,8 +756,21 @@ public class JdbcMarketplaceAvailabilityStore {
                         instant(row.getObject("last_failure_at", OffsetDateTime.class)),
                         row.getString("last_failure_code"),
                         row.getObject("installation_id", UUID.class),
-                        "ACTIVE".equals(row.getString("installation_status"))))
+                        "ACTIVE".equals(row.getString("installation_status")),
+                        row.getInt("would_push"),
+                        instant(row.getObject("stale_alerted_at", OffsetDateTime.class))))
                 .list();
+    }
+
+    /** The brand a branch belongs to, which a location-scoped configuration value is resolved under. */
+    public Optional<UUID> brandOfLocation(UUID tenantId, UUID locationId) {
+        return jdbc.sql("""
+                SELECT brand_id FROM tenant.locations WHERE tenant_id = :tenantId AND id = :locationId
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .query(UUID.class)
+                .optional();
     }
 
     /** The items of one binding that the platform has not been able to confirm, oldest first. */
@@ -761,7 +824,10 @@ public class JdbcMarketplaceAvailabilityStore {
                 row.getInt("attempt_count"),
                 instant(row.getObject("next_attempt_at", OffsetDateTime.class)),
                 row.getString("last_failure_code"),
-                instant(row.getObject("pending_since", OffsetDateTime.class)));
+                instant(row.getObject("pending_since", OffsetDateTime.class)),
+                (Boolean) row.getObject("would_push_available"),
+                (Long) row.getObject("would_push_seq"),
+                instant(row.getObject("would_push_at", OffsetDateTime.class)));
     }
 
     private static String prefixed(String prefix, String columns) {
@@ -808,6 +874,7 @@ public class JdbcMarketplaceAvailabilityStore {
             @Nullable Instant sweepRequestedAt,
             boolean reconcileWasEnabled,
             boolean wasStale,
+            boolean wasDryRun,
             String rowVersion) {}
 
     public record ItemRow(
@@ -827,7 +894,10 @@ public class JdbcMarketplaceAvailabilityStore {
             int attemptCount,
             @Nullable Instant nextAttemptAt,
             @Nullable String lastFailureCode,
-            @Nullable Instant pendingSince) {}
+            @Nullable Instant pendingSince,
+            @Nullable Boolean wouldPushAvailable,
+            @Nullable Long wouldPushSeq,
+            @Nullable Instant wouldPushAt) {}
 
     public record BindingSummary(
             UUID bindingId,
@@ -844,7 +914,12 @@ public class JdbcMarketplaceAvailabilityStore {
             @Nullable Instant lastFailureAt,
             @Nullable String lastFailureCode,
             UUID installationId,
-            boolean installationActive) {}
+            boolean installationActive,
+            // ADR 0141 Phase 3: the rows whose current desired value the dry run has recorded as "would push".
+            int wouldPush,
+            // ADR 0180 Decision 1: since when this binding is inside a reported stale episode, or null. The
+            // incident ends when the mark clears, so a value here is an open incident.
+            @Nullable Instant staleAlertedAt) {}
 
     public record Watermark(String alertState, @Nullable Instant lastSuccessAt, int staleAfterSeconds) {}
 

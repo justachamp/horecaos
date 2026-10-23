@@ -300,6 +300,75 @@ const MAPPING_ENTITY_TYPES: readonly MappingEntityType[] = [
               }
             </section>
 
+            @if (marketplaceApplicable() && bindings().length > 0) {
+              <section class="block" data-testid="marketplace-ruleset">
+                <h3 class="q-body-sm strong">
+                  {{ i18n.t('settings.integrations.detail.ruleset.title') }}
+                </h3>
+                <p class="q-caption" data-testid="marketplace-ruleset-lead">
+                  {{
+                    rulesetCodes().length === 0
+                      ? i18n.t('settings.integrations.detail.ruleset.noneAuthored')
+                      : i18n.t('settings.integrations.detail.ruleset.lead')
+                  }}
+                </p>
+                @if (rulesetError(); as message) {
+                  <p class="q-body-sm error" role="alert" data-testid="marketplace-ruleset-error">
+                    {{ message }}
+                  </p>
+                }
+                <ul class="rulesets">
+                  @for (binding of bindings(); track binding.id) {
+                    <li class="q-body-sm" [attr.data-testid]="'marketplace-ruleset-' + binding.id">
+                      <span class="ruleset-scope">{{ scopeLabel(binding) }}</span>
+                      @if (rulesetCodes().length > 0) {
+                        <select
+                          class="q-body-sm"
+                          [disabled]="rulesetPending() === binding.id"
+                          [attr.aria-label]="i18n.t('settings.integrations.detail.ruleset.label')"
+                          (change)="setRuleset(binding, $any($event.target).value)"
+                          [attr.data-testid]="'marketplace-ruleset-select-' + binding.id"
+                        >
+                          <option value="" [selected]="!binding.marketplaceRulesetCode">
+                            {{ i18n.t('settings.integrations.detail.ruleset.universalOnly') }}
+                          </option>
+                          @for (code of rulesetCodes(); track code) {
+                            <option
+                              [value]="code"
+                              [selected]="binding.marketplaceRulesetCode === code"
+                            >
+                              {{ code }}
+                            </option>
+                          }
+                        </select>
+                      } @else {
+                        <span
+                          class="q-caption"
+                          [attr.data-testid]="'marketplace-ruleset-value-' + binding.id"
+                        >
+                          {{
+                            binding.marketplaceRulesetCode ??
+                              i18n.t('settings.integrations.detail.ruleset.universalOnly')
+                          }}
+                        </span>
+                        @if (binding.marketplaceRulesetCode) {
+                          <button
+                            type="button"
+                            class="q-body-sm link"
+                            [disabled]="rulesetPending() === binding.id"
+                            (click)="setRuleset(binding, '')"
+                            [attr.data-testid]="'marketplace-ruleset-clear-' + binding.id"
+                          >
+                            {{ i18n.t('settings.integrations.detail.ruleset.clear') }}
+                          </button>
+                        }
+                      }
+                    </li>
+                  }
+                </ul>
+              </section>
+            }
+
             @if (settingsApplicable()) {
               <section class="block">
                 <h3 class="q-body-sm strong">
@@ -601,6 +670,25 @@ const MAPPING_ENTITY_TYPES: readonly MappingEntityType[] = [
       gap: 12px;
     }
 
+    .rulesets {
+      list-style: none;
+      margin: 8px 0 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .rulesets li {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .ruleset-scope {
+      min-width: 160px;
+    }
+
     .link {
       border: none;
       background: transparent;
@@ -719,6 +807,10 @@ export class InstallationDetailPanel {
 
   protected readonly bindings = signal<readonly BindingView[]>([]);
   protected readonly bindingsLoading = signal(true);
+  /** ADR 0138: the marketplace rulesets a binding may name; empty until one is authored. */
+  protected readonly rulesetCodes = signal<readonly string[]>([]);
+  protected readonly rulesetPending = signal<string | null>(null);
+  protected readonly rulesetError = signal<string | null>(null);
   protected readonly bindingActionPending = signal<string | null>(null);
   protected readonly bindingActionError = signal<string | null>(null);
 
@@ -785,6 +877,7 @@ export class InstallationDetailPanel {
         }
         if (installation.category === 'MARKETPLACE') {
           void this.loadPartnerClients();
+          void this.loadRulesetCodes();
         }
       });
     });
@@ -914,6 +1007,46 @@ export class InstallationDetailPanel {
       this.webhookActionError.set(this.describeError(failure));
     } finally {
       this.registeringWebhook.set(false);
+    }
+  }
+
+  private async loadRulesetCodes(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      this.rulesetCodes.set(await this.api.listMarketplaceRulesets(scope));
+    } catch (failure) {
+      this.rulesetError.set(this.describeError(failure));
+    }
+  }
+
+  /**
+   * Names the ruleset a marketplace binding is checked against, or clears it (`''`), under the version the
+   * binding list was read at. A binding from an older server that sends no version is never written to: the
+   * write is refused rather than sent unconditioned.
+   */
+  protected async setRuleset(binding: BindingView, code: string): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope || binding.version === undefined) {
+      return;
+    }
+    this.rulesetPending.set(binding.id);
+    this.rulesetError.set(null);
+    try {
+      await this.api.setMarketplaceRuleset(
+        scope,
+        this.installation().id,
+        binding.id,
+        code === '' ? null : code,
+        binding.version,
+      );
+      await this.loadBindings();
+    } catch (failure) {
+      this.rulesetError.set(this.describeError(failure));
+    } finally {
+      this.rulesetPending.set(null);
     }
   }
 

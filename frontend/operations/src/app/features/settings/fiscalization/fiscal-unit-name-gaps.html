@@ -1,0 +1,220 @@
+@if (rows().length > 0) {
+  <section class="gaps" data-testid="fiscal-gaps">
+    <h3 class="q-subhead">{{ 'settings.fiscalization.gaps.title' | t }}</h3>
+    <p class="q-body-sm">{{ 'settings.fiscalization.gaps.lead' | t: { count: rows().length } }}</p>
+
+    <div class="gaps__toolbar">
+      <button
+        type="button"
+        class="q-body-sm gaps__button"
+        (click)="fillUnitsFromReference()"
+        [disabled]="unitFillable() === 0 || saving() || lookingUp()"
+        data-testid="gaps-fill-units"
+      >
+        {{ 'settings.fiscalization.gaps.fillUnits' | t: { count: unitFillable() } }}
+      </button>
+      <button
+        type="button"
+        class="q-body-sm gaps__button"
+        (click)="useNameForAll()"
+        [disabled]="nameFillable() === 0 || saving()"
+        data-testid="gaps-fill-names"
+      >
+        {{ 'settings.fiscalization.gaps.fillNames' | t: { count: nameFillable() } }}
+      </button>
+      <a
+        class="q-body-sm gaps__link"
+        routerLink="/catalog/products"
+        [queryParams]="{ workbench: 'fiscal' }"
+        data-testid="gaps-workbench"
+        >{{ 'settings.fiscalization.gaps.workbench' | t }}</a
+      >
+      <span class="gaps__spacer"></span>
+      @if (dirtyRows().length > 0) {
+        <span class="q-caption" data-testid="gaps-dirty-count">
+          {{ 'settings.fiscalization.backfill.dirty' | t: { count: dirtyRows().length } }}
+        </span>
+        <button
+          type="button"
+          class="q-body-sm gaps__button"
+          (click)="discard()"
+          [disabled]="saving()"
+          data-testid="gaps-discard"
+        >
+          {{ 'settings.fiscalization.backfill.discard' | t }}
+        </button>
+      }
+      <button
+        type="button"
+        class="q-body-sm gaps__button gaps__button--primary"
+        (click)="save()"
+        [disabled]="sendableRows().length === 0 || saving()"
+        data-testid="gaps-save"
+      >
+        {{
+          saving()
+            ? ('settings.fiscalization.backfill.saving' | t)
+            : ('settings.fiscalization.backfill.save' | t: { count: sendableRows().length })
+        }}
+      </button>
+    </div>
+
+    @if (fillSummary(); as filled) {
+      <p class="q-body-sm" role="status" data-testid="gaps-fill-summary">
+        {{
+          'settings.fiscalization.gaps.fillSummary'
+            | t: { filled: filled.filled, open: filled.open }
+        }}
+      </p>
+    }
+    @if (invalidRows().length > 0) {
+      <p class="q-body-sm gaps__problem" role="alert" data-testid="gaps-invalid">
+        {{ 'settings.fiscalization.backfill.invalidSkipped' | t: { count: invalidRows().length } }}
+      </p>
+    }
+    @if (saveError(); as message) {
+      <p class="q-body-sm gaps__problem" role="alert" data-testid="gaps-save-error">
+        {{ message }}
+      </p>
+    }
+    @if (summary(); as result) {
+      <p class="q-body-sm" role="status" data-testid="gaps-summary">
+        {{
+          'settings.fiscalization.backfill.summary'
+            | t: { saved: result.saved, unchanged: result.unchanged, failed: result.failed }
+        }}
+      </p>
+    }
+
+    <table class="gaps__table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ 'settings.fiscalization.classification.field.type' | t }}</th>
+          <th class="q-caption">{{ 'settings.fiscalization.classification.field.name' | t }}</th>
+          <th class="q-caption">{{ 'settings.fiscalization.backfill.column.mxik' | t }}</th>
+          <th class="q-caption">{{ 'settings.fiscalization.gaps.column.unit' | t }}</th>
+          <th class="q-caption">{{ 'settings.fiscalization.gaps.column.fiscalName' | t }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track row.nodeId) {
+          <tr data-testid="gaps-row" [attr.data-node-id]="row.nodeId">
+            <td class="q-body-sm">{{ typeLabel(row.nodeType) }}</td>
+            <td class="q-body-sm">{{ row.name }}</td>
+            <td class="q-body-sm q-mono">{{ row.mxik }}</td>
+            <td>
+              <input
+                class="q-body-sm gaps__cell"
+                [class.gaps__cell--stored]="!row.lacksUnit"
+                [class.gaps__cell--invalid]="row.unitError !== null"
+                type="text"
+                inputmode="numeric"
+                autocomplete="off"
+                spellcheck="false"
+                [value]="row.unit"
+                [readOnly]="!row.lacksUnit"
+                [disabled]="saving()"
+                [attr.aria-label]="'settings.fiscalization.gaps.column.unit' | t"
+                [attr.aria-invalid]="row.unitError !== null"
+                (input)="onUnit(row.nodeId, $any($event.target).value)"
+                [attr.data-testid]="'gaps-unit-' + row.nodeId"
+              />
+              @if (row.unitError; as key) {
+                <span
+                  class="q-caption gaps__error"
+                  [attr.data-testid]="'gaps-unit-error-' + row.nodeId"
+                  >{{ key | t }}</span
+                >
+              }
+              @if (row.lacksUnit) {
+                <button
+                  type="button"
+                  class="q-caption gaps__link"
+                  (click)="useReferenceUnit(row.nodeId)"
+                  [disabled]="saving() || lookingUp()"
+                  [attr.data-testid]="'gaps-reference-unit-' + row.nodeId"
+                >
+                  {{ 'settings.fiscalization.gaps.useReferenceUnit' | t }}
+                </button>
+              }
+              @if (row.unitChoices.length > 0) {
+                <span
+                  class="q-caption gaps__choices"
+                  [attr.data-testid]="'gaps-unit-choices-' + row.nodeId"
+                >
+                  {{ 'settings.fiscalization.gaps.unitChoices' | t }}
+                  @for (unit of row.unitChoices; track unit) {
+                    <button
+                      type="button"
+                      class="q-caption gaps__link"
+                      (click)="useUnit(row.nodeId, unit)"
+                      [attr.data-testid]="'gaps-unit-choice-' + row.nodeId + '-' + unit"
+                    >
+                      {{ unit }}
+                    </button>
+                  }
+                </span>
+              }
+              @if (row.referenceNote === 'none') {
+                <span
+                  class="q-caption gaps__note"
+                  [attr.data-testid]="'gaps-reference-none-' + row.nodeId"
+                  >{{ 'settings.fiscalization.gaps.noReferenceUnit' | t }}</span
+                >
+              }
+              @if (row.referenceNote === 'unavailable') {
+                <span
+                  class="q-caption gaps__error"
+                  [attr.data-testid]="'gaps-reference-unavailable-' + row.nodeId"
+                  >{{ 'settings.fiscalization.gaps.referenceUnavailable' | t }}</span
+                >
+              }
+            </td>
+            <td>
+              <input
+                class="q-body-sm gaps__cell gaps__cell--wide"
+                [class.gaps__cell--stored]="!row.lacksName"
+                [class.gaps__cell--invalid]="row.nameError !== null"
+                type="text"
+                autocomplete="off"
+                [attr.maxlength]="nameMax"
+                [value]="row.fiscalName"
+                [readOnly]="!row.lacksName"
+                [disabled]="saving()"
+                [attr.aria-label]="'settings.fiscalization.gaps.column.fiscalName' | t"
+                [attr.aria-invalid]="row.nameError !== null"
+                (input)="onName(row.nodeId, $any($event.target).value)"
+                [attr.data-testid]="'gaps-name-' + row.nodeId"
+              />
+              @if (row.nameError; as key) {
+                <span
+                  class="q-caption gaps__error"
+                  [attr.data-testid]="'gaps-name-error-' + row.nodeId"
+                  >{{ key | t }}</span
+                >
+              }
+              @if (row.lacksName) {
+                <button
+                  type="button"
+                  class="q-caption gaps__link"
+                  (click)="useItemName(row.nodeId)"
+                  [disabled]="saving()"
+                  [attr.data-testid]="'gaps-use-name-' + row.nodeId"
+                >
+                  {{ 'settings.fiscalization.gaps.useItemName' | t }}
+                </button>
+              }
+              @if (row.problem; as problem) {
+                <span
+                  class="q-caption gaps__error"
+                  [attr.data-testid]="'gaps-problem-' + row.nodeId"
+                  >{{ problemLabel(problem) }}</span
+                >
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+}

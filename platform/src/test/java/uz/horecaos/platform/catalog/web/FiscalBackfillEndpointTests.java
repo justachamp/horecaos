@@ -192,6 +192,40 @@ class FiscalBackfillEndpointTests {
     }
 
     @Test
+    @DisplayName("a node's coverage line carries the unit code and the fiscal name it holds, so a node short of only"
+            + " those two can be told from one short of a code")
+    void coverageCarriesTheUnitAndTheNameANodeHolds() throws Exception {
+        UUID nounit = UUID.fromString("018f9f30-3000-7000-8000-000000000105");
+        insertVariant(TENANT, BRAND, nounit, "NOUNIT", BURGERS);
+        jdbc.sql("""
+                INSERT INTO catalog.fiscal_classifications
+                    (id, tenant_id, brand_id, variant_id, mxik_code, package_code, source)
+                VALUES (:id, :tenantId, :brandId, :variantId, :mxik, :packageCode, 'MANUAL')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("variantId", nounit)
+                .param("mxik", MXIK_A)
+                .param("packageCode", PACKAGE_A)
+                .update();
+
+        String body = coverage();
+
+        assertThat(nodeIds(body, "VARIANT"))
+                .as("holding both codes does not make a node classified: ADR 0038 requires four fields")
+                .contains(nounit.toString());
+        assertThat(node(body, nounit, "mxikCode")).isEqualTo(MXIK_A);
+        assertThat(node(body, nounit, "packageCode")).isEqualTo(PACKAGE_A);
+        assertThat(node(body, nounit, "fiscalUnitCode")).isNull();
+        assertThat(node(body, nounit, "fiscalName")).isNull();
+        assertThat(node(body, HALF, "fiscalUnitCode"))
+                .as("HALF holds a unit code, so the console must not offer to fill one")
+                .isEqualTo(15);
+        assertThat(node(body, HALF, "fiscalName")).isEqualTo("Half burger");
+    }
+
+    @Test
     @DisplayName(
             "a category's default is the pair most of its classified dishes carry, and a category without one has none")
     void coverageOffersACategoryDefaultDrawnFromClassifiedSiblings() throws Exception {

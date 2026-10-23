@@ -23,6 +23,7 @@ import { ChallengeState } from '../orders/order-handover-api';
 import { OrderHandoverPanel } from '../orders/order-handover-panel';
 import { OrderMarkingPanel } from '../orders/order-marking-panel';
 import { OrderWeighingPanel } from '../orders/order-weighing-panel';
+import { TillRevisionBanner } from '../orders/till-revision-banner';
 import { KitchenApi, StationResponse, TicketItemView, TicketResponse } from './kitchen-api';
 import { TicketItemRow, ticketItemRows } from './kitchen-ticket';
 import { lineWeightText } from './kitchen-line-weight';
@@ -59,7 +60,14 @@ const POLL_INTERVAL_MS = 10_000;
  */
 @Component({
   selector: 'q-expo-page',
-  imports: [TPipe, OrderHandoverPanel, OrderTableChip, OrderWeighingPanel, OrderMarkingPanel],
+  imports: [
+    TPipe,
+    OrderHandoverPanel,
+    OrderTableChip,
+    OrderWeighingPanel,
+    OrderMarkingPanel,
+    TillRevisionBanner,
+  ],
   templateUrl: './expo-page.html',
   styleUrl: './expo-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

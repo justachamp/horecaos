@@ -75,6 +75,20 @@ export interface OrderLine {
   readonly origin?: 'CUSTOMER' | 'AUTO_ADD' | null;
   /** ADR 0158: a rule's line the customer could not decline. It can be neither removed nor lowered (ADR 0169). */
   readonly autoAddMandatory?: boolean;
+  /**
+   * ADR 0040 / ADR 0141: present only on an aggregator line that arrived needing a person before it is cooked.
+   * `UNMAPPED` — the catalogue does not carry the item; `STOPPED` — the dish was stopped on this channel at this
+   * branch when the order came in. The order was accepted either way (the customer has already paid the
+   * aggregator), so the flag is how the pass learns of it. Absent on every native line.
+   */
+  readonly intake?: OrderLineIntake | null;
+}
+
+/** `OperationsOrderController.LineIntakeResponse` — why an aggregator line needs a person. */
+export interface OrderLineIntake {
+  readonly status: 'UNMAPPED' | 'STOPPED';
+  /** The partner's own identifier for the item, so the branch can name the SKU to fix or to stop. */
+  readonly externalItemReference?: string | null;
 }
 
 /** `OperationsOrderController.ComboResponse` — the combo a line was bought as part of. */

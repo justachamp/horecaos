@@ -424,6 +424,8 @@ export interface MxikReferenceRow {
   readonly labelUz: string;
   readonly labelEn?: string | null;
   readonly defaultPackageCodes: readonly string[];
+  /** The unit codes the national list gives as the good's defaults (batch 21); absent on an older server. */
+  readonly defaultUnitCodes?: readonly number[];
   readonly validFrom: string;
   readonly validUntil?: string | null;
   /** Present only on a search asked as of a date (ADR 0173). */

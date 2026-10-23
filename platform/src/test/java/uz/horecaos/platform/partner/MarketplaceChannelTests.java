@@ -153,6 +153,32 @@ class MarketplaceChannelTests {
     private UUID channel;
     private UUID mappedVariant;
 
+    /**
+     * What the availability resolver is told is stopped here (ADR 0141). The real resolver's composition is
+     * proven in its own tests; this class proves what ingestion DOES with an answer, so the answer is
+     * scripted and every question it was asked is kept.
+     */
+    private final java.util.Set<UUID> stoppedHere = new java.util.HashSet<>();
+
+    private final java.util.List<List<Object>> availabilityQuestions = new java.util.ArrayList<>();
+
+    private final uz.horecaos.platform.inventory.api.ChannelAvailabilityPort availability =
+            (tenantId, brandId, locationId, channelId, variantIds, at) -> {
+                availabilityQuestions.add(List.of(brandId, locationId, channelId, at));
+                Map<UUID, uz.horecaos.platform.inventory.api.ChannelAvailabilityPort.ChannelAvailability> answers =
+                        new java.util.HashMap<>();
+                for (UUID variantId : variantIds) {
+                    answers.put(
+                            variantId,
+                            stoppedHere.contains(variantId)
+                                    ? uz.horecaos.platform.inventory.api.ChannelAvailabilityPort.ChannelAvailability
+                                            .blocked(List.of("ON_STOP"))
+                                    : uz.horecaos.platform.inventory.api.ChannelAvailabilityPort.ChannelAvailability
+                                            .ok());
+                }
+                return answers;
+            };
+
     @BeforeAll
     static void startDatabase() {
         Assumptions.assumeTrue(
@@ -208,8 +234,17 @@ class MarketplaceChannelTests {
                 new uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalTerminalStore(
                         jdbc, new tools.jackson.databind.ObjectMapper()));
 
+        stoppedHere.clear();
+        availabilityQuestions.clear();
         ingestion = new MarketplaceIngestionService(
-                store, intake, settlementPlanner, new PassthroughFieldProtection(), hasher, transactions, clock);
+                store,
+                intake,
+                settlementPlanner,
+                availability,
+                new PassthroughFieldProtection(),
+                hasher,
+                transactions,
+                clock);
         handovers = new HandoverVerificationService(store, hasher, audit, clock);
         liveness = new MarketplaceLivenessService(store, clock);
         authentication = new PartnerAuthenticationService(store, clock);
@@ -754,6 +789,116 @@ class MarketplaceChannelTests {
                         + "the aggregator gets nothing, and the branch never learns why")
                 .isEqualTo("UNMAPPED");
         assertThat(lines.get(1).get("source_variant_id")).isNull();
+    }
+
+    // ------------------------------------------------------------- stopped lines
+
+    @Test
+    @DisplayName("a dish stopped on this channel and branch is accepted, and its line is flagged STOPPED")
+    void aLineForAStoppedDishIsFlaggedRatherThanRefused() {
+        stoppedHere.add(mappedVariant);
+
+        MarketplaceIngestionService.Outcome outcome =
+                ingestion.receive(principal(), push("UZ-STOPPED", totals(40_000), List.of(line("ITEM-1", 40_000))));
+
+        assertThat(outcome.accepted())
+                .as("the customer has already paid the aggregator; refusing the order over a stopped dish "
+                        + "is a refund the branch caused")
+                .isTrue();
+        assertThat(outcome.unmappedItems())
+                .as("a stopped dish is mapped, not unmapped")
+                .isEmpty();
+
+        List<Map<String, Object>> lines =
+                jdbc.sql("""
+                SELECT external_mapping_status, source_variant_id
+                FROM ordering.order_lines WHERE order_id = :id ORDER BY line_number
+                """).param("id", outcome.orderId()).query().listOfRows();
+        assertThat(lines).hasSize(1);
+        assertThat(lines.get(0).get("external_mapping_status")).isEqualTo("STOPPED");
+        assertThat(lines.get(0).get("source_variant_id"))
+                .as("the line keeps its variant: it is the same dish, and the pass needs to know which")
+                .isEqualTo(mappedVariant);
+    }
+
+    @Test
+    @DisplayName("only the stopped lines of an order are flagged, and the resolver is asked about this branch "
+            + "and this channel at the order's own instant")
+    void onlyTheStoppedLinesAreFlaggedAndTheResolverIsAskedAboutThisVenue() {
+        MarketplaceIngestionService.Outcome sellable =
+                ingestion.receive(principal(), push("UZ-SELLABLE", totals(40_000), List.of(line("ITEM-1", 40_000))));
+        assertThat(statusesOf(java.util.Objects.requireNonNull(sellable.orderId())))
+                .containsExactly("MAPPED");
+
+        stoppedHere.add(mappedVariant);
+        MarketplaceIngestionService.Outcome mixed = ingestion.receive(
+                principal(),
+                push("UZ-MIXED", totals(70_000), List.of(line("ITEM-1", 40_000), line("ITEM-UNKNOWN", 30_000))));
+
+        assertThat(mixed.accepted()).isTrue();
+        assertThat(statusesOf(java.util.Objects.requireNonNull(mixed.orderId())))
+                .as("a stopped dish and an item the catalogue does not carry are different problems")
+                .containsExactly("STOPPED", "UNMAPPED");
+        assertThat(mixed.unmappedItems()).containsExactly("ITEM-UNKNOWN");
+
+        assertThat(availabilityQuestions).hasSize(2);
+        List<Object> asked = availabilityQuestions.get(1);
+        assertThat(asked.get(0)).as("brand").isEqualTo(BRAND);
+        assertThat(asked.get(1))
+                .as("the venue's own location, not another branch's")
+                .isEqualTo(branch);
+        assertThat(asked.get(2)).as("the binding's channel").isEqualTo(channel);
+        assertThat(asked.get(3))
+                .as("the instant the order arrived, not a later one")
+                .isEqualTo(NOON);
+    }
+
+    @Test
+    @DisplayName("an order of unmapped items alone asks the resolver nothing")
+    void anOrderWithNothingMappedAsksNothing() {
+        MarketplaceIngestionService.Outcome outcome = ingestion.receive(
+                principal(), push("UZ-ONLY-UNKNOWN", totals(30_000), List.of(line("ITEM-UNKNOWN", 30_000))));
+
+        assertThat(outcome.accepted()).isTrue();
+        assertThat(availabilityQuestions).isEmpty();
+        assertThat(statusesOf(java.util.Objects.requireNonNull(outcome.orderId())))
+                .containsExactly("UNMAPPED");
+    }
+
+    @Test
+    @DisplayName("a STOPPED line must keep its variant, and no other status is accepted")
+    void theStatusColumnTakesExactlyThreeValuesAndStoppedKeepsItsVariant() {
+        MarketplaceIngestionService.Outcome outcome =
+                ingestion.receive(principal(), push("UZ-CHECK3", totals(10_000), List.of(line("ITEM-1", 10_000))));
+
+        Throwable unknown = catchThrowable(
+                () -> jdbc.sql("""
+                UPDATE ordering.order_lines SET external_mapping_status = 'BOGUS' WHERE order_id = :id
+                """).param("id", outcome.orderId()).update());
+        assertThat(unknown).isNotNull();
+        assertThat(unknown.getMessage()).contains("ck_order_line_mapping_status");
+
+        assertThat(jdbc.sql("""
+                UPDATE ordering.order_lines SET external_mapping_status = 'STOPPED' WHERE order_id = :id
+                """).param("id", outcome.orderId()).update())
+                .as("a mapped line may be flagged stopped")
+                .isEqualTo(1);
+
+        Throwable variantless = catchThrowable(
+                () -> jdbc.sql("""
+                UPDATE ordering.order_lines SET source_variant_id = NULL WHERE order_id = :id
+                """).param("id", outcome.orderId()).update());
+        assertThat(variantless)
+                .as("a stopped line with no variant would be an unmapped one that does not say so")
+                .isNotNull();
+        assertThat(variantless.getMessage()).contains("ck_order_line_unmapped_has_no_variant");
+    }
+
+    private List<String> statusesOf(UUID orderId) {
+        return jdbc.sql("""
+                SELECT external_mapping_status FROM ordering.order_lines
+                WHERE order_id = :id ORDER BY line_number
+                """).param("id", orderId).query(String.class).list();
     }
 
     @Test

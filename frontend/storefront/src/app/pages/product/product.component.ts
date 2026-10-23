@@ -207,6 +207,9 @@ export class ProductComponent {
     return item.ingredients.map((ingredient) => ingredient.name).join(', ');
   }
 
+  /** ADR 0137, row 4.2c: whether the menu asks for the КБЖУ accuracy line under a nutrition table. */
+  protected readonly nutritionAccuracyNotice = this.menuService.nutritionAccuracyNotice;
+
   readonly product = signal<ProductDisplay | null>(null);
   readonly favouriting = signal(false);
   /** Raw menu item for variant IDs (cart API) */

@@ -885,6 +885,18 @@ public enum Capability {
     MARKETPLACE_AVAILABILITY_PULL("marketplace.availability.pull", "marketplace", "availability.pull"),
 
     /**
+     * ADR 0040 "Menu is pull-first", ADR 0138: an aggregator reading the restaurants it is bound to and the
+     * menu its channel serves at each ({@code PartnerMenuController}).
+     *
+     * <p>Held by the identical machine principal {@link #MARKETPLACE_AVAILABILITY_PULL} is, and again its own
+     * capability: reading the menu (names, prices, pictures, the partner's own ids) is a wider disclosure than
+     * reading a boolean per dish, and a credential issued only to poll availability should not read it by
+     * default. Nothing in it is personal data, and it is held over the bindings of the caller's installation
+     * only.
+     */
+    MARKETPLACE_MENU_READ("marketplace.menu.read", "marketplace", "menu.read"),
+
+    /**
      * ADR 0040: HorecaOS pushing a menu or an availability change out to a partner
      * that will not pull one.
      *

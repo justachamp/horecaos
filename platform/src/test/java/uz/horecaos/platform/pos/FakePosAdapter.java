@@ -98,6 +98,16 @@ public final class FakePosAdapter implements PosAdapter {
     private @Nullable String balanceCurrency;
     private @Nullable Runnable atNextBalanceWrite;
 
+    // Order revision (ADR 0137, ORDER_REVISION): what the till was told, and the failure modes it can be commanded
+    // into.
+    private final List<RecordedRevision> revisions = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private final Set<String> appliedRevisionKeys = ConcurrentHashMap.newKeySet();
+    private @Nullable ProviderOutcome nextRevisionOutcome;
+    private boolean loseNextRevisionReply;
+
+    /** One revised total the fake applied. */
+    public record RecordedRevision(String externalOrderId, PosAdapter.TillRevision revision) {}
+
     private static final class Wallet {
         final String externalId;
 
@@ -321,6 +331,42 @@ public final class FakePosAdapter implements PosAdapter {
     }
 
     /** How many orders the fake actually created, as opposed to was asked to. */
+    /** The next revision is answered with {@code outcome} and not applied: a refusal, or a till that is down. */
+    public synchronized FakePosAdapter failNextRevisionWith(ProviderOutcome outcome) {
+        this.nextRevisionOutcome = outcome;
+        return this;
+    }
+
+    /** The next revision is applied and the reply is lost: the platform sees an unknown outcome. */
+    public synchronized FakePosAdapter loseNextRevisionReply() {
+        this.loseNextRevisionReply = true;
+        return this;
+    }
+
+    /** Every revised total the fake applied, oldest first; a repeat under one key is applied once. */
+    public List<RecordedRevision> revisions() {
+        return List.copyOf(revisions);
+    }
+
+    @Override
+    public synchronized ProviderOutcome reviseExportedOrder(
+            PosContext context, String externalOrderId, TillRevision revision) {
+        ProviderOutcome scripted = nextRevisionOutcome;
+        nextRevisionOutcome = null;
+        if (scripted != null) {
+            return scripted;
+        }
+        if (appliedRevisionKeys.add(revision.idempotencyKey())) {
+            revisions.add(new RecordedRevision(externalOrderId, revision));
+            sideEffects.incrementAndGet();
+        }
+        if (loseNextRevisionReply) {
+            loseNextRevisionReply = false;
+            return ProviderOutcome.uncertain("CONNECTION_RESET", "Connection lost after sending");
+        }
+        return ProviderOutcome.success(Map.of("revised", true), externalOrderId);
+    }
+
     public int sideEffectCount() {
         return sideEffects.get();
     }

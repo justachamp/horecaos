@@ -878,11 +878,78 @@ public class JdbcPartnerStore {
                 .list();
     }
 
+    /**
+     * The partner's menu items by the HorecaOS variant behind each: the partner's own identifier where a
+     * {@code MENU_ITEM} mapping exists on this binding, so a menu pulled in platform ids can carry the
+     * id the partner knows the dish by.
+     */
+    public java.util.Map<UUID, String> mappedItemIdsByVariant(UUID tenantId, UUID bindingId) {
+        java.util.Map<UUID, String> byVariant = new java.util.HashMap<>();
+        jdbc.sql("""
+                SELECT horecaos_entity_id, external_entity_id
+                FROM integration.provider_entity_mappings
+                WHERE tenant_id = :tenantId
+                  AND binding_id = :bindingId
+                  AND entity_type = 'MENU_ITEM'
+                  AND status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .query((row, number) -> java.util.Map.entry(
+                        row.getObject("horecaos_entity_id", UUID.class), row.getString("external_entity_id")))
+                .list()
+                .forEach(entry -> byVariant.put(entry.getKey(), entry.getValue()));
+        return byVariant;
+    }
+
+    /**
+     * The branches a partner is bound to through live bindings, with the name the tenant gave each --
+     * what {@code GET .../restaurants} lists. One row per branch: where two of the partner's bindings
+     * serve one branch the lowest priority number is the one that answers it.
+     */
+    public List<BoundRestaurant> boundRestaurants(
+            UUID tenantId, java.util.Collection<UUID> permittedBindingIds, Instant at) {
+        if (permittedBindingIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("""
+                SELECT DISTINCT ON (b.location_id)
+                       b.location_id, b.brand_id, b.id AS binding_id, b.installation_id, l.display_name
+                FROM integration.bindings b
+                JOIN integration.installations i
+                  ON i.tenant_id = b.tenant_id AND i.id = b.installation_id
+                JOIN tenant.locations l
+                  ON l.tenant_id = b.tenant_id AND l.id = b.location_id
+                WHERE b.tenant_id = :tenantId
+                  AND b.id = ANY(:permitted)
+                  AND b.location_id IS NOT NULL
+                  AND i.provider_category = 'MARKETPLACE'
+                  AND i.status = 'ACTIVE'
+                  AND b.status = 'ACTIVE'
+                  AND b.effective_from <= :at
+                  AND (b.effective_until IS NULL OR b.effective_until > :at)
+                ORDER BY b.location_id, b.priority, b.id
+                """)
+                .param("tenantId", tenantId)
+                .param("permitted", permittedBindingIds.toArray(UUID[]::new))
+                .param("at", OffsetDateTime.ofInstant(at, ZoneOffset.UTC))
+                .query((row, number) -> new BoundRestaurant(
+                        row.getObject("location_id", UUID.class),
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("binding_id", UUID.class),
+                        row.getObject("installation_id", UUID.class),
+                        row.getString("display_name")))
+                .list();
+    }
+
     private static @Nullable Instant instant(@Nullable OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }
 
     // -------------------------------------------------------------------- rows
+
+    /** A branch a partner is bound to and the binding that serves it. */
+    public record BoundRestaurant(UUID locationId, UUID brandId, UUID bindingId, UUID installationId, String name) {}
 
     /** The binding that serves a branch for a partner, and what it needs to resolve availability. */
     public record PullBinding(UUID bindingId, UUID installationId, UUID brandId) {}

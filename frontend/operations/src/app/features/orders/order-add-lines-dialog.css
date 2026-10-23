@@ -29,12 +29,20 @@
 }
 
 .add-lines-dialog__quantity {
-  width: 4em;
+  width: 5em;
   padding: 4px 6px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   background: var(--q-canvas);
   color: var(--q-ink);
+}
+
+.add-lines-dialog__step {
+  color: var(--q-ink-muted, var(--q-ink));
+}
+
+.add-lines-dialog__step--problem {
+  color: var(--q-error-text);
 }
 
 .add-lines-dialog__remove {

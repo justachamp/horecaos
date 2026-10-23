@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -20,6 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
+import uz.horecaos.platform.inventory.api.ChannelAvailabilityPort;
+import uz.horecaos.platform.inventory.api.ChannelAvailabilityPort.ChannelAvailability;
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
 import uz.horecaos.platform.partner.api.PartnerPrincipal;
 import uz.horecaos.platform.partner.application.port.MarketplaceOrderIntake;
@@ -83,6 +86,7 @@ public class MarketplaceIngestionService {
     private final JdbcPartnerStore store;
     private final MarketplaceOrderIntake intake;
     private final OrderSettlementPort settlements;
+    private final ChannelAvailabilityPort availability;
     private final FieldProtection protection;
     private final HandoverCodeHasher hasher;
     private final TransactionOperations transactions;
@@ -92,6 +96,7 @@ public class MarketplaceIngestionService {
             JdbcPartnerStore store,
             MarketplaceOrderIntake intake,
             OrderSettlementPort settlements,
+            ChannelAvailabilityPort availability,
             FieldProtection protection,
             HandoverCodeHasher hasher,
             TransactionOperations transactions,
@@ -99,6 +104,7 @@ public class MarketplaceIngestionService {
         this.store = store;
         this.intake = intake;
         this.settlements = settlements;
+        this.availability = availability;
         this.protection = protection;
         this.hasher = hasher;
         this.transactions = transactions;
@@ -173,11 +179,17 @@ public class MarketplaceIngestionService {
                 push.lines().stream().map(PushLine::externalItemReference).toList();
         Map<String, UUID> variants = store.resolveMenuItems(principal.tenantId(), venue.bindingId(), externalItemIds);
 
+        // ADR 0141 Decision 6: a dish stopped on this channel at this branch is still ACCEPTED -- the
+        // customer has already paid the aggregator, and refusing the order over one line is how a
+        // menu-sync lag becomes a refund -- and the line is flagged for the pass. The resolver is the one
+        // the storefront menu and the partner pull use, asked at the order's own instant.
+        Set<UUID> stopped = stoppedVariants(principal, venue, variants, now);
+
         List<MarketplaceOrderIntake.IntakeLine> lines =
                 new ArrayList<>(push.lines().size());
         for (PushLine line : push.lines()) {
             UUID variantId = variants.get(line.externalItemReference());
-            lines.add(new MarketplaceOrderIntake.IntakeLine(
+            MarketplaceOrderIntake.IntakeLine intakeLine = new MarketplaceOrderIntake.IntakeLine(
                     null,
                     variantId,
                     line.externalItemReference(),
@@ -185,7 +197,8 @@ public class MarketplaceIngestionService {
                     line.quantity(),
                     line.unitAmountMinor(),
                     line.lineAmountMinor(),
-                    line.taxAmountMinor() == null ? 0L : line.taxAmountMinor()));
+                    line.taxAmountMinor() == null ? 0L : line.taxAmountMinor());
+            lines.add(variantId != null && stopped.contains(variantId) ? intakeLine.asStopped() : intakeLine);
         }
 
         List<ExternalReference> references = new ArrayList<>(2);
@@ -253,6 +266,29 @@ public class MarketplaceIngestionService {
                 .toList();
 
         return Outcome.accepted(created.orderId(), created.publicOrderNumber(), unmapped);
+    }
+
+    /**
+     * The mapped variants of this push that cannot be sold on the binding's channel at its branch now.
+     * Empty when nothing is mapped; a variant the resolver does not answer for is treated as sellable,
+     * because an unknown is not a stop and the order is accepted either way.
+     */
+    private Set<UUID> stoppedVariants(
+            PartnerPrincipal principal, JdbcPartnerStore.Venue venue, Map<String, UUID> variants, Instant now) {
+        if (variants.isEmpty()) {
+            return Set.of();
+        }
+        Set<UUID> mapped = Set.copyOf(variants.values());
+        Map<UUID, ChannelAvailability> answers = availability.resolve(
+                principal.tenantId(), venue.brandId(), venue.locationId(), venue.channelId(), mapped, now);
+        Set<UUID> stopped = new java.util.HashSet<>();
+        for (UUID variantId : mapped) {
+            ChannelAvailability answer = answers.get(variantId);
+            if (answer != null && !answer.sellable()) {
+                stopped.add(variantId);
+            }
+        }
+        return stopped;
     }
 
     /**

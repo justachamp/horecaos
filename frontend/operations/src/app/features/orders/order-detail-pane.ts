@@ -21,6 +21,7 @@ import { TimeZone, formatClock, formatDateTime, formatDuration } from '../../cor
 import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { formatMoney } from '../../core/format/money';
+import { lineQuantityStep } from '../../core/format/quantity';
 import { I18n, Locale } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { PlatformLocales } from '../../core/i18n/platform-locales';
@@ -85,6 +86,7 @@ import { OrderDetailActions } from './order-detail-actions';
 import { OrderDetailLines } from './order-detail-lines';
 import { OrderMarkingPanel } from './order-marking-panel';
 import { OrderWeighingPanel } from './order-weighing-panel';
+import { TillRevisionBanner } from './till-revision-banner';
 import { OrderDetailMoney } from './order-detail-money';
 import { OrderHandoverPanel } from './order-handover-panel';
 import { orderLifecycleSteps } from './order-lifecycle-steps';
@@ -223,6 +225,7 @@ type DialogKind =
     OrderDetailActions,
     OrderDetailLines,
     OrderWeighingPanel,
+    TillRevisionBanner,
     OrderMarkingPanel,
     OrderDetailMoney,
     OrderPosExportPanel,
@@ -478,6 +481,8 @@ export class OrderDetailPane {
   /** ADR 0136: the combo groups of the menu this order was placed through, and its currency; read when the dialog opens. */
   protected readonly addLinesComboGroups = signal<readonly MenuComboGroup[]>([]);
   protected readonly addLinesCurrency = signal<string | null>(null);
+  /** ADR 0137: the step each splittable dish of the order's channel menu is ordered in, by variant. */
+  protected readonly addLinesPortionSteps = signal<ReadonlyMap<string, number>>(new Map());
   /** The menu could not be read, so the dialog says a combo cannot be added from it. */
   protected readonly addLinesCombosUnavailable = signal(false);
 
@@ -566,6 +571,7 @@ export class OrderDetailPane {
     this.addLinesSearching.set(false);
     this.addLinesComboGroups.set([]);
     this.addLinesCurrency.set(null);
+    this.addLinesPortionSteps.set(new Map());
     this.addLinesCombosUnavailable.set(false);
     this.paymentMethods.set(['CASH']);
     this.pendingAmendment.set(null);
@@ -1329,6 +1335,19 @@ export class OrderDetailPane {
       const menu = await this.newOrderApi.menu(scope, channelCode, this.menuLocale());
       this.addLinesComboGroups.set(menu.comboGroups ?? []);
       this.addLinesCurrency.set(menu.currency);
+      // ADR 0137: a splittable dish is added by its portion. The published menu is the only place the step
+      // is read from (the variant search carries none), and the platform refuses an off-step quantity
+      // whatever this dialog offered, so a menu that could not be read costs nothing worse than whole units.
+      const steps = new Map<string, number>();
+      for (const product of menu.products) {
+        for (const variant of product.variants) {
+          const step = lineQuantityStep(variant.physical);
+          if (step !== 1) {
+            steps.set(variant.variantId, step);
+          }
+        }
+      }
+      this.addLinesPortionSteps.set(steps);
     } catch {
       this.addLinesCombosUnavailable.set(true);
     }

@@ -14,6 +14,7 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -600,6 +601,551 @@ class ChannelPreviewEndpointTests {
                 .andReturn();
         publication.publish(w.tenant, w.brand, w.catalogId, "UZUM", null);
         assertThat(imagesOf(liveMenu("UZUM"), w.lagman)).containsExactly(universal.toString());
+    }
+
+    @Test
+    @DisplayName(
+            "a channel's image for a variant and for a category is published with that channel, so its menu is served what its preview drew")
+    void variantAndCategoryOverridesReachTheChannelsMenu() throws Exception {
+        w.offerEverythingAt(w.l1);
+        UUID variantPhoto = w.asset();
+        UUID categoryPhoto = w.asset();
+
+        assertThat(status(overridePut(w.uzum, "VARIANT", w.lagman.defaultVariantId(), imageSet(variantPhoto))))
+                .isEqualTo(200);
+        assertThat(status(overridePut(w.uzum, "CATEGORY", w.mainsCategory, imageSet(categoryPhoto))))
+                .isEqualTo(200);
+        for (String channel : List.of("UZUM", "STOREFRONT")) {
+            assertThat(publication
+                            .publish(w.tenant, w.brand, w.catalogId, channel, null)
+                            .status())
+                    .isEqualTo(PublicationStatus.PUBLISHED);
+        }
+
+        JsonNode uzum = liveMenu("UZUM");
+        JsonNode storefront = liveMenu("STOREFRONT");
+        assertThat(strings(variantOf(uzum, w.lagman).path("mediaAssetIds")))
+                .as("Uzum's menu carries the photo the operator set for the variant on Uzum")
+                .containsExactly(variantPhoto.toString());
+        assertThat(variantOf(uzum, w.lagman).path("imageUrls").get(0).asText())
+                .as("and the URL a partner fetches is built from that asset")
+                .endsWith("/media/" + variantPhoto);
+        assertThat(strings(categoryOf(uzum, w.mainsCategory).path("mediaAssetIds")))
+                .containsExactly(categoryPhoto.toString());
+        assertThat(categoryOf(uzum, w.mainsCategory).path("imageUrls").get(0).asText())
+                .endsWith("/media/" + categoryPhoto);
+        assertThat(strings(variantOf(uzum, w.plov).path("mediaAssetIds")))
+                .as("a variant with no override and no image of its own carries none")
+                .isEmpty();
+        assertThat(strings(variantOf(storefront, w.lagman).path("mediaAssetIds")))
+                .as("an override names its channel: the storefront serves the variant no photo of Uzum's")
+                .isEmpty();
+        assertThat(strings(categoryOf(storefront, w.mainsCategory).path("mediaAssetIds")))
+                .isEmpty();
+
+        // Removing both and publishing again takes them out of the menu.
+        assertThat(status(overridePut(w.uzum, "VARIANT", w.lagman.defaultVariantId(), "{\"images\":[]}")))
+                .isEqualTo(200);
+        assertThat(status(overridePut(w.uzum, "CATEGORY", w.mainsCategory, "{\"images\":[]}")))
+                .isEqualTo(200);
+        publication.publish(w.tenant, w.brand, w.catalogId, "UZUM", null);
+        JsonNode cleared = liveMenu("UZUM");
+        assertThat(strings(variantOf(cleared, w.lagman).path("mediaAssetIds"))).isEmpty();
+        assertThat(strings(categoryOf(cleared, w.mainsCategory).path("mediaAssetIds")))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "a variant's own universal image reaches the menu of every channel, and the preview and the menu agree on it")
+    void aVariantsOwnImageIsServedToo() throws Exception {
+        w.offerEverythingAt(w.l1);
+        UUID own = w.asset();
+        store.attachMedia(w.tenant, w.brand, EntityType.VARIANT, w.plov.defaultVariantId(), own, "PRIMARY", 0);
+
+        publication.publish(w.tenant, w.brand, w.catalogId, "STOREFRONT", null);
+
+        assertThat(strings(variantOf(liveMenu("STOREFRONT"), w.plov).path("mediaAssetIds")))
+                .containsExactly(own.toString());
+        assertThat(strings(variantOf(liveMenu("STOREFRONT"), w.lagman).path("mediaAssetIds")))
+                .as("a variant nobody gave a picture carries none, so its publication is what it always was")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "an override write is announced on catalog.events in the same commit, scoped to its channel; saving what is stored announces nothing")
+    void anOverrideWriteIsAnnounced() throws Exception {
+        UUID image = w.asset();
+        long before = draftFacts();
+
+        MvcResult written = mvc.perform(overridePut(w.uzum, "PRODUCT", w.lagman.productId(), imageSet(image)))
+                .andReturn();
+        assertThat(written.getResponse().getStatus()).as(body(written)).isEqualTo(200);
+
+        List<Map<String, Object>> facts = draftFactRows();
+        assertThat(facts).hasSize((int) before + 1);
+        Map<String, Object> fact = facts.get(facts.size() - 1);
+        assertThat(fact.get("topic")).isEqualTo("catalog.events");
+        assertThat(String.valueOf(fact.get("aggregate_id"))).isEqualTo(w.brand.toString());
+        assertThat(fact.get("partition_key")).isEqualTo(w.brand.toString());
+        JsonNode payload = JSON.readTree(String.valueOf(fact.get("payload")));
+        assertThat(payload.path("entityType").asText()).isEqualTo("PRODUCT");
+        assertThat(payload.path("entityId").asText())
+                .isEqualTo(w.lagman.productId().toString());
+        assertThat(payload.path("change").asText()).isEqualTo("CHANNEL_MEDIA_REPLACED");
+        assertThat(payload.path("channelId").asText()).isEqualTo(w.uzum.toString());
+        assertThat(String.valueOf(fact.get("payload")))
+                .as("ids and codes only: no name, no price, no URL")
+                .doesNotContain("Lagman")
+                .doesNotContain("http")
+                .doesNotContain("/media/");
+
+        // The same set again changes nothing, so it says nothing.
+        assertThat(status(overridePut(w.uzum, "PRODUCT", w.lagman.productId(), imageSet(image))))
+                .isEqualTo(200);
+        assertThat(draftFacts()).isEqualTo(before + 1);
+    }
+
+    @Test
+    @DisplayName("authoring a product announces it once, however many writes the creation made")
+    void authoringAProductIsAnnouncedOnce() {
+        long before = draftFacts();
+
+        ProductRef created = w.product("MANTI", "Manti", w.mainsCategory);
+
+        List<Map<String, Object>> facts = draftFactRows();
+        List<JsonNode> mine = facts.stream()
+                .map(row -> {
+                    try {
+                        return JSON.readTree(String.valueOf(row.get("payload")));
+                    } catch (Exception failure) {
+                        throw new IllegalStateException(failure);
+                    }
+                })
+                .filter(payload -> created.productId()
+                        .toString()
+                        .equals(payload.path("entityId").asText()))
+                .toList();
+        assertThat(mine)
+                .as("createProduct, its translation and its classification are one product created, not three")
+                .hasSize(1);
+        assertThat(mine.get(0).path("change").asText()).isEqualTo("CREATED");
+        assertThat(facts.size() - before)
+                .as("and the placement in a category is the category's own fact")
+                .isEqualTo(2);
+    }
+
+    // ------------------------------------------------ the ruleset a binding names (batch 21, row 4.6a)
+
+    @Test
+    @DisplayName("the known rulesets are the registry's, and a binding names one, reads it back and clears it")
+    void aBindingNamesAKnownRulesetAndClearsIt() throws Exception {
+        UUID binding = w.marketplaceBinding(w.uzum, null);
+        UUID installation = Objects.requireNonNull(w.lastInstallation);
+
+        assertThat(strings(json(mvc.perform(
+                                get(rulesetsBase() + "/marketplace-rulesets").with(owner())))
+                        .path("knownCodes")))
+                .as("the registry the test registered")
+                .containsExactly(TEST_RULESET);
+        assertThat(bindingView(installation, binding)
+                        .path("marketplaceRulesetCode")
+                        .isNull())
+                .isTrue();
+        long version = bindingView(installation, binding).path("version").asLong();
+
+        MvcResult named = mvc.perform(rulesetPut(installation, binding, version, TEST_RULESET))
+                .andReturn();
+        assertThat(named.getResponse().getStatus()).as(body(named)).isEqualTo(200);
+        assertThat(json(named).path("rulesetCode").asText()).isEqualTo(TEST_RULESET);
+        assertThat(named.getResponse().getHeader(HttpHeaders.ETAG)).isEqualTo("W/\"" + (version + 1) + "\"");
+        assertThat(bindingView(installation, binding)
+                        .path("marketplaceRulesetCode")
+                        .asText())
+                .isEqualTo(TEST_RULESET);
+        assertThat(jdbc.sql("SELECT marketplace_ruleset_code FROM integration.bindings WHERE id = :id")
+                        .param("id", binding)
+                        .query(String.class)
+                        .single())
+                .isEqualTo(TEST_RULESET);
+
+        MvcResult cleared = mvc.perform(rulesetPut(installation, binding, version + 1, null))
+                .andReturn();
+        assertThat(cleared.getResponse().getStatus()).as(body(cleared)).isEqualTo(200);
+        assertThat(json(cleared).path("rulesetCode").isNull()).isTrue();
+        assertThat(bindingView(installation, binding)
+                        .path("marketplaceRulesetCode")
+                        .isNull())
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("a code the registry does not hold is refused with the codes that are known, and writes nothing")
+    void anUnknownRulesetIsRefused() throws Exception {
+        UUID binding = w.marketplaceBinding(w.uzum, null);
+        UUID installation = Objects.requireNonNull(w.lastInstallation);
+
+        MvcResult refused =
+                mvc.perform(rulesetPut(installation, binding, 0, "YANDEX_V9")).andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(400);
+        assertThat(body(refused))
+                .contains("No marketplace ruleset is registered under YANDEX_V9")
+                .contains("knownCodes")
+                .contains(TEST_RULESET);
+        assertThat(jdbc.sql("SELECT marketplace_ruleset_code FROM integration.bindings WHERE id = :id")
+                        .param("id", binding)
+                        .query(String.class)
+                        .optional())
+                .as("nothing was written")
+                .isEmpty();
+        MvcResult malformed =
+                mvc.perform(rulesetPut(installation, binding, 0, "not a code")).andReturn();
+        assertThat(malformed.getResponse().getStatus()).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName(
+            "the ruleset is written under the binding's version: a stale editor is told, a missing precondition is refused, and naming what is stored keeps the version")
+    void theRulesetIsVersioned() throws Exception {
+        UUID binding = w.marketplaceBinding(w.uzum, null);
+        UUID installation = Objects.requireNonNull(w.lastInstallation);
+        long version = bindingView(installation, binding).path("version").asLong();
+
+        MockHttpServletRequestBuilder noPrecondition = put(rulesetBase(installation, binding))
+                .with(owner())
+                .header(
+                        IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER,
+                        UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"" + TEST_RULESET + "\"}");
+        assertThat(status(noPrecondition))
+                .as("an operation on an aggregate quotes its version")
+                .isEqualTo(400);
+
+        assertThat(status(rulesetPut(installation, binding, version, TEST_RULESET)))
+                .isEqualTo(200);
+        MvcResult stale =
+                mvc.perform(rulesetPut(installation, binding, version, null)).andReturn();
+        assertThat(stale.getResponse().getStatus())
+                .as("a second editor holding the old version")
+                .isEqualTo(409);
+        assertThat(body(stale)).contains("STALE_VERSION");
+
+        MvcResult same = mvc.perform(rulesetPut(installation, binding, version + 1, TEST_RULESET))
+                .andReturn();
+        assertThat(same.getResponse().getStatus()).isEqualTo(200);
+        assertThat(same.getResponse().getHeader(HttpHeaders.ETAG))
+                .as("naming the code already stored is not an edit another editor is told about")
+                .isEqualTo("W/\"" + (version + 1) + "\"");
+    }
+
+    @Test
+    @DisplayName(
+            "naming a ruleset is audited with the code before and after, and the preview then runs the ruleset the binding names")
+    void namingARulesetIsAuditedAndTheNextPreviewRunsIt() throws Exception {
+        w.offerEverythingAt(w.l1);
+        UUID binding = w.marketplaceBinding(w.uzum, null);
+        UUID installation = Objects.requireNonNull(w.lastInstallation);
+        assertThat(findings(
+                        previewAll(w.uzum, "locationId", w.l1.toString()),
+                        ChannelFindings.MARKETPLACE_IMAGE_REQUIREMENT_UNMET))
+                .as("no ruleset named: the universal rules alone")
+                .isEmpty();
+
+        assertThat(status(rulesetPut(
+                        installation,
+                        binding,
+                        bindingView(installation, binding).path("version").asLong(),
+                        TEST_RULESET)))
+                .isEqualTo(200);
+
+        assertThat(findings(
+                        previewAll(w.uzum, "locationId", w.l1.toString()),
+                        ChannelFindings.MARKETPLACE_IMAGE_REQUIREMENT_UNMET))
+                .as("the ruleset the binding now names ran over the channel's projection")
+                .isNotEmpty();
+        List<Map<String, Object>> audit = jdbc.sql(
+                        "SELECT action_code, target_id::text AS target, change_document::text AS changes FROM audit.audit_events"
+                                + " WHERE tenant_id = :t AND action_code = 'integration.binding.marketplaceRulesetSet'")
+                .param("t", w.tenant)
+                .query()
+                .listOfRows();
+        assertThat(audit).hasSize(1);
+        assertThat(audit.get(0).get("target")).isEqualTo(binding.toString());
+        assertThat(String.valueOf(audit.get(0).get("changes"))).contains(TEST_RULESET);
+    }
+
+    @Test
+    @DisplayName(
+            "naming a ruleset needs integration.installation.manage, and another tenant's binding, or a payment installation's, is not found")
+    void rulesetWritesAreGuarded() throws Exception {
+        UUID binding = w.marketplaceBinding(w.uzum, null);
+        UUID installation = Objects.requireNonNull(w.lastInstallation);
+
+        assertRefused(
+                put(rulesetBase(installation, binding))
+                        .with(token(UUID.randomUUID().toString()))
+                        .header(
+                                IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER,
+                                UUID.randomUUID().toString())
+                        .header(HttpHeaders.IF_MATCH, "W/\"0\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":null}"),
+                Capability.INTEGRATION_INSTALLATION_MANAGE);
+
+        World other = new World();
+        UUID theirs = other.marketplaceBinding(other.uzum, null);
+        UUID theirInstallation = Objects.requireNonNull(other.lastInstallation);
+        assertThat(status(put("/api/v1/operations/tenants/%s/integrations/%s/bindings/%s/marketplace-ruleset"
+                                .formatted(w.tenant, theirInstallation, theirs))
+                        .with(owner())
+                        .header(
+                                IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER,
+                                UUID.randomUUID().toString())
+                        .header(HttpHeaders.IF_MATCH, "W/\"0\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":null}")))
+                .as("another tenant's binding on this tenant's path")
+                .isEqualTo(404);
+        assertThat(status(rulesetPut(installation, UUID.randomUUID(), 0, null)))
+                .as("a binding that does not exist")
+                .isEqualTo(404);
+    }
+
+    // ------------------------------------------------ the partner menu pull (batch 21, row 4.6a)
+
+    @Test
+    @DisplayName(
+            "a partner pulls the menu its channel serves: the same dishes, prices, stops and pictures as the live menu, with the partner's own item ids beside the platform's")
+    void thePartnerMenuIsTheChannelsLiveMenu() throws Exception {
+        w.offerEverythingAt(w.l1);
+        w.offer(w.samsa, OfferingStatus.UNAVAILABLE);
+        UUID binding = w.marketplaceBinding(w.uzum, null);
+        UUID installation = Objects.requireNonNull(w.lastInstallation);
+        partnerClient("uzum-menu-client", installation, w.tenant);
+        mapMenuItem(binding, installation, w.lagman.defaultVariantId(), "UZ-LAGMAN");
+        mapMenuItem(binding, installation, w.plov.defaultVariantId(), "UZ-PLOV");
+        UUID variantPhoto = w.asset();
+        UUID categoryPhoto = w.asset();
+        assertThat(status(overridePut(w.uzum, "VARIANT", w.lagman.defaultVariantId(), imageSet(variantPhoto))))
+                .isEqualTo(200);
+        assertThat(status(overridePut(w.uzum, "CATEGORY", w.mainsCategory, imageSet(categoryPhoto))))
+                .isEqualTo(200);
+        assertThat(publication
+                        .publish(w.tenant, w.brand, w.catalogId, "UZUM", null)
+                        .status())
+                .isEqualTo(PublicationStatus.PUBLISHED);
+
+        MvcResult pulled =
+                mvc.perform(partnerMenu(w.tenant, w.l1, "uzum-menu-client")).andReturn();
+        assertThat(pulled.getResponse().getStatus()).as(body(pulled)).isEqualTo(200);
+        JsonNode partner = json(pulled);
+        JsonNode live = liveMenu("UZUM");
+
+        assertThat(partner.path("locationId").asText()).isEqualTo(w.l1.toString());
+        assertThat(partner.path("currency").asText()).isEqualTo("UZS");
+        assertThat(ids(partner.path("items"), "productId"))
+                .as("the same dishes, in the same order, as a customer on the channel is served")
+                .containsExactlyElementsOf(ids(live.path("products"), "productId"));
+        for (ProductRef product : List.of(w.lagman, w.plov, w.samsa, w.tea)) {
+            JsonNode mine = variantOf(partner, product);
+            JsonNode theirs = variantOf(live, product);
+            assertThat(mine.path("amountMinor")).as("price of %s", product).isEqualTo(theirs.path("amountMinor"));
+            assertThat(mine.path("orderable").asBoolean())
+                    .as("orderability of %s", product)
+                    .isEqualTo(theirs.path("orderable").asBoolean());
+        }
+        assertThat(variantOf(partner, w.lagman).path("amountMinor").asLong()).isEqualTo(30_000L);
+        assertThat(variantOf(partner, w.samsa).path("orderable").asBoolean())
+                .as("a stopped dish is shown, not hidden, and not orderable")
+                .isFalse();
+        assertThat(variantOf(partner, w.lagman).path("partnerItemId").asText()).isEqualTo("UZ-LAGMAN");
+        assertThat(variantOf(partner, w.plov).path("partnerItemId").asText()).isEqualTo("UZ-PLOV");
+        assertThat(variantOf(partner, w.tea).path("partnerItemId").isNull())
+                .as("a dish the partner has not mapped carries only the platform's id")
+                .isTrue();
+        assertThat(variantOf(partner, w.lagman).path("variantId").asText())
+                .isEqualTo(w.lagman.defaultVariantId().toString());
+        assertThat(variantOf(partner, w.lagman)
+                        .path("images")
+                        .get(0)
+                        .path("assetId")
+                        .asText())
+                .as("the channel's photo for the variant is drawn in the partner menu")
+                .isEqualTo(variantPhoto.toString());
+        assertThat(variantOf(partner, w.lagman)
+                        .path("images")
+                        .get(0)
+                        .path("url")
+                        .asText())
+                .endsWith("/media/" + variantPhoto);
+        assertThat(variantOf(partner, w.plov).path("images").size()).isZero();
+        JsonNode mains = null;
+        for (JsonNode category : partner.path("categories")) {
+            if (category.path("categoryId").asText().equals(w.mainsCategory.toString())) {
+                mains = category;
+            }
+        }
+        assertThat(Objects.requireNonNull(mains)
+                        .path("images")
+                        .get(0)
+                        .path("assetId")
+                        .asText())
+                .isEqualTo(categoryPhoto.toString());
+        assertThat(partner.path("modifierGroups").size())
+                .isEqualTo(live.path("modifierGroups").size());
+        assertThat(pulled.getResponse().getHeader(HttpHeaders.ETAG)).isNotBlank();
+    }
+
+    @Test
+    @DisplayName(
+            "the menu has an ETag over everything a partner can see: unchanged it is a 304, and a price, a stop or a picture is a new tag")
+    void thePartnerMenuETagFollowsTheContent() throws Exception {
+        w.offerEverythingAt(w.l1);
+        w.marketplaceBinding(w.uzum, null);
+        partnerClient("uzum-etag-client", Objects.requireNonNull(w.lastInstallation), w.tenant);
+        publication.publish(w.tenant, w.brand, w.catalogId, "UZUM", null);
+
+        MvcResult first =
+                mvc.perform(partnerMenu(w.tenant, w.l1, "uzum-etag-client")).andReturn();
+        String tag = Objects.requireNonNull(first.getResponse().getHeader(HttpHeaders.ETAG));
+        assertThat(tag).isNotBlank();
+        assertThat(first.getResponse().getHeader(HttpHeaders.CACHE_CONTROL))
+                .as("a partner may keep the menu but must revalidate it")
+                .contains("no-cache");
+        assertThat(mvc.perform(partnerMenu(w.tenant, w.l1, "uzum-etag-client"))
+                        .andReturn()
+                        .getResponse()
+                        .getHeader(HttpHeaders.ETAG))
+                .as("no clock inside the tag: the same menu is the same tag a minute later")
+                .isEqualTo(tag);
+
+        MvcResult unchanged = mvc.perform(
+                        partnerMenu(w.tenant, w.l1, "uzum-etag-client").header(HttpHeaders.IF_NONE_MATCH, tag))
+                .andReturn();
+        assertThat(unchanged.getResponse().getStatus()).isEqualTo(304);
+        assertThat(unchanged.getResponse().getContentAsString()).isEmpty();
+        assertThat(unchanged.getResponse().getHeader(HttpHeaders.ETAG)).isEqualTo(tag);
+        assertThat(status(partnerMenu(w.tenant, w.l1, "uzum-etag-client").header(HttpHeaders.IF_NONE_MATCH, "*")))
+                .isEqualTo(304);
+        assertThat(status(partnerMenu(w.tenant, w.l1, "uzum-etag-client")
+                        .header(HttpHeaders.IF_NONE_MATCH, "\"stale\", " + tag)))
+                .as("a list of tags matches when one does")
+                .isEqualTo(304);
+
+        // A stop changes what a partner may sell, so it changes the tag.
+        w.offer(w.plov, OfferingStatus.UNAVAILABLE);
+        MvcResult afterStop = mvc.perform(
+                        partnerMenu(w.tenant, w.l1, "uzum-etag-client").header(HttpHeaders.IF_NONE_MATCH, tag))
+                .andReturn();
+        assertThat(afterStop.getResponse().getStatus()).isEqualTo(200);
+        assertThat(afterStop.getResponse().getHeader(HttpHeaders.ETAG)).isNotEqualTo(tag);
+
+        // And so does a price.
+        String afterStopTag = afterStop.getResponse().getHeader(HttpHeaders.ETAG);
+        Map<ProductRef, Long> raise = new java.util.LinkedHashMap<>();
+        raise.put(w.lagman, 31_000L);
+        UUID channelBook = w.priceBook("CHANNEL_BOOK", "CHANNEL", w.uzum, raise);
+        assertThat(channelBook).isNotNull();
+        assertThat(mvc.perform(partnerMenu(w.tenant, w.l1, "uzum-etag-client"))
+                        .andReturn()
+                        .getResponse()
+                        .getHeader(HttpHeaders.ETAG))
+                .isNotEqualTo(afterStopTag);
+    }
+
+    @Test
+    @DisplayName("a partner lists only the restaurants its credential is bound to, by name")
+    void thePartnerListsItsOwnRestaurants() throws Exception {
+        w.offerEverythingAt(w.l1);
+        w.marketplaceBinding(w.uzum, null);
+        partnerClient("uzum-list-client", Objects.requireNonNull(w.lastInstallation), w.tenant);
+
+        JsonNode listed = json(mvc.perform(get("/api/v1/partner/tenants/%s/restaurants".formatted(w.tenant))
+                .with(partnerToken("uzum-list-client"))));
+
+        assertThat(listed.path("restaurants")).hasSize(1);
+        JsonNode restaurant = listed.path("restaurants").get(0);
+        assertThat(restaurant.path("locationId").asText()).isEqualTo(w.l1.toString());
+        assertThat(restaurant.path("name").asText()).isEqualTo("L1");
+        assertThat(restaurant.path("channelConfigured").asBoolean()).isTrue();
+        assertThat(restaurant.properties().stream().map(Map.Entry::getKey).toList())
+                .as("a name and an id, nothing of the tenant's")
+                .containsExactlyInAnyOrder("locationId", "name", "channelConfigured");
+    }
+
+    @Test
+    @DisplayName(
+            "the partner menu is refused to a branch the credential is not bound to, another tenant's credential, a channel that is not configured and a channel nothing was published to")
+    void thePartnerMenuReach() throws Exception {
+        w.offerEverythingAt(w.l1);
+        w.offerEverythingAt(w.l2);
+        w.marketplaceBinding(w.uzum, null);
+        UUID installation = Objects.requireNonNull(w.lastInstallation);
+        partnerClient("uzum-reach-client", installation, w.tenant);
+        World other = new World();
+        other.marketplaceBinding(other.uzum, null);
+        partnerClient("other-reach-client", Objects.requireNonNull(other.lastInstallation), other.tenant);
+
+        MvcResult unpublished =
+                mvc.perform(partnerMenu(w.tenant, w.l1, "uzum-reach-client")).andReturn();
+        assertThat(unpublished.getResponse().getStatus()).isEqualTo(409);
+        assertThat(body(unpublished)).contains("MENU_NOT_PUBLISHED");
+
+        publication.publish(w.tenant, w.brand, w.catalogId, "UZUM", null);
+        assertThat(status(partnerMenu(w.tenant, w.l1, "uzum-reach-client"))).isEqualTo(200);
+        assertThat(status(partnerMenu(w.tenant, w.l2, "uzum-reach-client")))
+                .as("a real branch of this tenant the credential has no binding at")
+                .isEqualTo(404);
+        assertThat(status(partnerMenu(w.tenant, UUID.randomUUID(), "uzum-reach-client")))
+                .isEqualTo(404);
+        assertThat(status(partnerMenu(w.tenant, w.l1, "other-reach-client")))
+                .as("another tenant's credential on this tenant's path")
+                .isEqualTo(401);
+        assertThat(status(get("/api/v1/partner/tenants/%s/restaurants".formatted(w.tenant))
+                        .with(jwt().jwt(token -> token.subject("someone")))))
+                .as("a token that names no client")
+                .isEqualTo(401);
+
+        jdbc.sql("UPDATE tenant.sales_channels SET provider_installation_id = NULL WHERE id = :c")
+                .param("c", w.uzum)
+                .update();
+        MvcResult unconfigured =
+                mvc.perform(partnerMenu(w.tenant, w.l1, "uzum-reach-client")).andReturn();
+        assertThat(unconfigured.getResponse().getStatus()).isEqualTo(409);
+        assertThat(body(unconfigured)).contains("CHANNEL_NOT_CONFIGURED");
+    }
+
+    @Test
+    @DisplayName(
+            "a variant in the partner menu carries identifiers, wording, a price and an image reference, and nothing else")
+    void thePartnerMenuDisclosesNoMore() throws Exception {
+        w.offerEverythingAt(w.l1);
+        w.marketplaceBinding(w.uzum, null);
+        partnerClient("uzum-shape-client", Objects.requireNonNull(w.lastInstallation), w.tenant);
+        publication.publish(w.tenant, w.brand, w.catalogId, "UZUM", null);
+
+        JsonNode menu = json(mvc.perform(partnerMenu(w.tenant, w.l1, "uzum-shape-client")));
+
+        assertThat(menu.properties().stream().map(Map.Entry::getKey).toList())
+                .containsExactlyInAnyOrder(
+                        "locationId", "publicationId", "locale", "currency", "categories", "items", "modifierGroups");
+        assertThat(variantOf(menu, w.lagman).properties().stream()
+                        .map(Map.Entry::getKey)
+                        .toList())
+                .containsExactlyInAnyOrder(
+                        "variantId",
+                        "partnerItemId",
+                        "sku",
+                        "unitCode",
+                        "name",
+                        "isDefault",
+                        "orderable",
+                        "onSaleNow",
+                        "amountMinor",
+                        "images");
     }
 
     @Test
@@ -1592,6 +2138,105 @@ class ChannelPreviewEndpointTests {
                         .queryParam("locale", LOCALE)));
     }
 
+    private static List<String> strings(JsonNode array) {
+        List<String> values = new ArrayList<>();
+        array.forEach(value -> values.add(value.asText()));
+        return values;
+    }
+
+    private static JsonNode categoryOf(JsonNode menu, UUID categoryId) {
+        for (JsonNode category : menu.path("categories")) {
+            if (category.path("categoryId").asText().equals(categoryId.toString())) {
+                return category;
+            }
+        }
+        throw new AssertionError("category %s is not in this menu".formatted(categoryId));
+    }
+
+    /** How many CatalogDraftChanged facts this tenant's outbox holds. */
+    private long draftFacts() {
+        return draftFactRows().size();
+    }
+
+    private List<Map<String, Object>> draftFactRows() {
+        return jdbc.sql("""
+                        SELECT topic, aggregate_id::text AS aggregate_id, partition_key, payload::text AS payload
+                          FROM integration.outbox_events
+                         WHERE tenant_id = :t AND event_type = 'CatalogDraftChanged'
+                         ORDER BY occurred_at, event_id
+                        """).param("t", w.tenant).query().listOfRows();
+    }
+
+    private String rulesetsBase() {
+        return "/api/v1/operations/tenants/%s/integrations".formatted(w.tenant);
+    }
+
+    private String rulesetBase(UUID installation, UUID binding) {
+        return rulesetsBase() + "/%s/bindings/%s/marketplace-ruleset".formatted(installation, binding);
+    }
+
+    private MockHttpServletRequestBuilder rulesetPut(
+            UUID installation, UUID binding, long expectedVersion, @Nullable String code) {
+        return put(rulesetBase(installation, binding))
+                .with(owner())
+                .header(
+                        IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER,
+                        UUID.randomUUID().toString())
+                .header(HttpHeaders.IF_MATCH, "W/\"" + expectedVersion + "\"")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(code == null ? "{\"code\":null}" : "{\"code\":\"" + code + "\"}");
+    }
+
+    /** One binding as the installation screen reads it. */
+    private JsonNode bindingView(UUID installation, UUID binding) throws Exception {
+        JsonNode list = json(mvc.perform(
+                get(rulesetsBase() + "/" + installation + "/bindings").with(owner())));
+        for (JsonNode view : list) {
+            if (view.path("id").asText().equals(binding.toString())) {
+                return view;
+            }
+        }
+        throw new AssertionError("binding %s is not listed".formatted(binding));
+    }
+
+    private MockHttpServletRequestBuilder partnerMenu(UUID tenant, UUID branch, String clientId) {
+        return get("/api/v1/partner/tenants/%s/restaurants/%s/menu".formatted(tenant, branch))
+                .queryParam("locale", LOCALE)
+                .with(partnerToken(clientId));
+    }
+
+    private static RequestPostProcessor partnerToken(String clientId) {
+        return jwt().jwt(token -> token.subject("service-account-" + clientId).claim("azp", clientId));
+    }
+
+    private void partnerClient(String clientId, UUID installation, UUID tenant) {
+        jdbc.sql("""
+                INSERT INTO partner.api_clients (id, tenant_id, installation_id, client_id, secret_reference, status)
+                VALUES (:id, :t, :i, :client, 'horecaos:local:marketplace:tenant:menu-test', 'ACTIVE')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("t", tenant)
+                .param("i", installation)
+                .param("client", clientId)
+                .update();
+    }
+
+    private void mapMenuItem(UUID binding, UUID installation, UUID variant, String externalId) {
+        jdbc.sql("""
+                INSERT INTO integration.provider_entity_mappings
+                    (id, tenant_id, installation_id, binding_id, entity_type, horecaos_entity_id,
+                     external_entity_id, status, mapping_source)
+                VALUES (:id, :t, :i, :b, 'MENU_ITEM', :v, :ext, 'ACTIVE', 'OPERATOR')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("t", w.tenant)
+                .param("i", installation)
+                .param("b", binding)
+                .param("v", variant)
+                .param("ext", externalId)
+                .update();
+    }
+
     private long auditFacts() {
         return jdbc.sql(
                         "SELECT count(*) FROM audit.audit_events WHERE action_code = 'catalog.channelMediaOverride.replaced' AND tenant_id = :t")
@@ -1916,6 +2561,10 @@ class ChannelPreviewEndpointTests {
          * A MARKETPLACE installation and one binding of it at {@code l1}, with the channel pointed at the
          * installation — the shape an aggregator channel has once it is onboarded.
          */
+        /** The installation {@link #marketplaceBinding} created last. */
+        @Nullable
+        UUID lastInstallation;
+
         UUID marketplaceBinding(UUID channelId, @Nullable String rulesetCode) {
             String env = "w3-preview-" + UUID.randomUUID();
             jdbc.sql("""
@@ -1933,6 +2582,7 @@ class ChannelPreviewEndpointTests {
                     .param("t", tenant)
                     .param("env", env)
                     .update();
+            lastInstallation = installation;
             UUID binding = UUID.randomUUID();
             jdbc.sql("""
                     INSERT INTO integration.bindings (

@@ -48,6 +48,20 @@ export type BackfillColumn = 'mxik' | 'pkg';
 /** What this editor classifies (settings.md §10.7 Tab 3). The delivery fee has its own control above it. */
 export type BackfillNodeType = 'VARIANT' | 'MODIFIER_OPTION';
 
+/** The bulk assignment's type filter: everything the editor lists, or one kind of node. */
+export type BackfillTypeFilter = 'ALL' | BackfillNodeType;
+
+/** The category filter's value for the dishes that sit in no category (and for modifier options). */
+export const NO_CATEGORY = '__none__';
+
+/** What the last «apply» did, so the operator can see how much of the selection it reached. */
+interface BulkSummary {
+  readonly rows: number;
+  readonly cells: number;
+  /** Cells the selection already held a value in: a backfill fills gaps and never replaces. */
+  readonly kept: number;
+}
+
 /** A pending edit; a column that is absent is untouched and keeps what the dish holds. */
 interface RowEdit {
   readonly mxik?: string;
@@ -73,6 +87,8 @@ interface EditorRow {
   readonly nodeType: BackfillNodeType;
   readonly name: string;
   readonly categoryName: string | null;
+  /** The category the coverage read puts the dish in; null for a modifier option and for a dish on none. */
+  readonly categoryId: string | null;
   readonly locationCount: number;
   readonly mxik: string;
   readonly pkg: string;
@@ -153,6 +169,14 @@ function normalize(raw: string): string {
  * (`referenceNote`) rather than showing an empty dropdown that reads as «no such
  * product»; codes are typed or pasted until the list is loaded.
  *
+ * **Bulk assignment (batch 21).** A long menu is not filled a cell at a time. The table can be
+ * filtered (by kind, category, a piece of the name, and how many branches offer the dish), rows are
+ * ticked (or all that the filter shows, at once), one ИКПУ is chosen in the same `q-mxik-picker` with
+ * one package code (offered from the reference row's own list), and «apply» writes them into the
+ * selected rows' **empty** cells. The result is the same pending edits a typed cell makes, so it is
+ * reviewed in the table and sent by the same save: nothing is sent by applying, and a cell that already
+ * holds a code is left as it is, counted, and never replaced.
+ *
  * A row with an invalid cell is not sent; the rest of the batch is. That is
  * the same «N independent outcomes» rule `POST .../orders/bulk-actions` and the
  * import wizard use.
@@ -189,6 +213,20 @@ export class FiscalBackfillEditor {
    * It belongs to that pick: choosing or typing a different ИКПУ takes it back, where a typed one stays.
    */
   private readonly derivedPackages = signal<ReadonlyMap<string, string>>(new Map());
+
+  // ------------------------------------------------- bulk assignment (filter, select, apply)
+
+  protected readonly noCategory = NO_CATEGORY;
+  protected readonly typeFilter = signal<BackfillTypeFilter>('ALL');
+  protected readonly categoryFilter = signal('');
+  protected readonly nameFilter = signal('');
+  protected readonly minLocations = signal(0);
+  private readonly selection = signal<ReadonlySet<string>>(new Set());
+  /** The ИКПУ and package code to write, and the reference row the ИКПУ was chosen from. */
+  protected readonly bulkMxik = signal('');
+  protected readonly bulkPick = signal<MxikReferenceRow | null>(null);
+  protected readonly bulkPackage = signal('');
+  protected readonly bulkSummary = signal<BulkSummary | null>(null);
 
   protected readonly saving = signal(false);
   protected readonly saveError = signal<string | null>(null);
@@ -230,6 +268,7 @@ export class FiscalBackfillEditor {
         nodeType: node.nodeType as BackfillNodeType,
         name: node.name ?? '—',
         categoryName: node.categoryName,
+        categoryId: node.categoryId ?? null,
         locationCount: node.locationCount,
         mxik,
         pkg,
@@ -262,6 +301,206 @@ export class FiscalBackfillEditor {
   protected readonly copyableCount = computed(
     () => this.rows().filter((r) => r.canCopyDefault).length,
   );
+
+  /** The categories the listed dishes sit in, for the filter; a dish on none is reached by {@link NO_CATEGORY}. */
+  protected readonly categories = computed<
+    readonly { readonly id: string; readonly name: string }[]
+  >(() => {
+    const seen = new Map<string, string>();
+    for (const row of this.rows()) {
+      if (row.categoryId !== null && !seen.has(row.categoryId)) {
+        seen.set(row.categoryId, row.categoryName ?? '—');
+      }
+    }
+    return [...seen]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  });
+
+  /** The rows the filter lets through, in the table's order: the table shows these and paste fills down these. */
+  protected readonly visibleRows = computed<readonly EditorRow[]>(() => {
+    const type = this.typeFilter();
+    const category = this.categoryFilter();
+    const name = this.nameFilter().trim().toLocaleLowerCase();
+    const minimum = this.minLocations();
+    return this.rows().filter((row) => {
+      if (type !== 'ALL' && row.nodeType !== type) {
+        return false;
+      }
+      if (category === NO_CATEGORY) {
+        if (row.categoryId !== null) {
+          return false;
+        }
+      } else if (category !== '' && row.categoryId !== category) {
+        return false;
+      }
+      if (name !== '' && !row.name.toLocaleLowerCase().includes(name)) {
+        return false;
+      }
+      return row.locationCount >= minimum;
+    });
+  });
+
+  /** The ticked rows the filter still shows: apply acts on what is on the screen, never on a hidden row. */
+  protected readonly selectedRows = computed(() => {
+    const selection = this.selection();
+    return this.visibleRows().filter((row) => selection.has(row.nodeId));
+  });
+  protected readonly allVisibleSelected = computed(
+    () => this.visibleRows().length > 0 && this.selectedRows().length === this.visibleRows().length,
+  );
+  protected readonly filtered = computed(() => this.visibleRows().length !== this.rows().length);
+
+  protected readonly bulkMxikError = computed<MessageKey | null>(() => {
+    const code = this.bulkMxik();
+    return code === '' || MXIK_PATTERN.test(code)
+      ? null
+      : 'settings.fiscalization.backfill.error.mxik';
+  });
+  protected readonly bulkPackageError = computed<MessageKey | null>(() => {
+    const code = this.bulkPackage();
+    return code === '' || PACKAGE_CODE_PATTERN.test(code)
+      ? null
+      : 'settings.fiscalization.backfill.error.packageCode';
+  });
+  /** The package codes the chosen reference row lists when it lists several: a choice, never a guess. */
+  protected readonly bulkPackageSuggestions = computed<readonly string[]>(() => {
+    const pick = this.bulkPick();
+    return pick && pick.code === this.bulkMxik() && pick.defaultPackageCodes.length > 1
+      ? pick.defaultPackageCodes.filter((code) => code !== this.bulkPackage())
+      : [];
+  });
+  protected readonly canApplyBulk = computed(
+    () =>
+      !this.saving() &&
+      this.selectedRows().length > 0 &&
+      (this.bulkMxik() !== '' || this.bulkPackage() !== '') &&
+      this.bulkMxikError() === null &&
+      this.bulkPackageError() === null,
+  );
+
+  // ----------------------------------------------------- bulk assignment
+
+  protected setTypeFilter(value: string): void {
+    this.typeFilter.set(value === 'VARIANT' || value === 'MODIFIER_OPTION' ? value : 'ALL');
+  }
+
+  protected setMinLocations(raw: string): void {
+    const parsed = Number.parseInt(raw, 10);
+    this.minLocations.set(Number.isFinite(parsed) && parsed > 0 ? parsed : 0);
+  }
+
+  protected clearFilters(): void {
+    this.typeFilter.set('ALL');
+    this.categoryFilter.set('');
+    this.nameFilter.set('');
+    this.minLocations.set(0);
+  }
+
+  protected isSelected(nodeId: string): boolean {
+    return this.selection().has(nodeId);
+  }
+
+  protected toggleRow(nodeId: string, checked: boolean): void {
+    this.selection.update((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(nodeId);
+      } else {
+        next.delete(nodeId);
+      }
+      return next;
+    });
+  }
+
+  /** The header box: every row the filter shows, or none of them. Rows the filter hides keep their tick. */
+  protected toggleAllVisible(checked: boolean): void {
+    const ids = this.visibleRows().map((row) => row.nodeId);
+    this.selection.update((current) => {
+      const next = new Set(current);
+      ids.forEach((id) => (checked ? next.add(id) : next.delete(id)));
+      return next;
+    });
+  }
+
+  /** The bulk ИКПУ cell: digits, or `''` while a name is being looked up (the picker's own rule). */
+  protected onBulkMxik(code: string): void {
+    this.bulkMxik.set(normalize(code));
+    this.bulkSummary.set(null);
+  }
+
+  protected onBulkPicked(reference: MxikReferenceRow): void {
+    this.bulkPick.set(reference);
+    // Exactly one listed package code fills an empty package cell; several are offered beside it.
+    if (this.bulkPackage() === '' && reference.defaultPackageCodes.length === 1) {
+      this.bulkPackage.set(reference.defaultPackageCodes[0]);
+    }
+  }
+
+  protected onBulkPackage(raw: string): void {
+    this.bulkPackage.set(normalize(raw));
+    this.bulkSummary.set(null);
+  }
+
+  protected useBulkPackage(code: string): void {
+    this.bulkPackage.set(code);
+    this.bulkSummary.set(null);
+  }
+
+  /**
+   * Writes the chosen codes into the selected rows' empty cells as pending edits. A cell that holds a
+   * code (stored, or typed and not yet saved) is left alone and counted; nothing is sent here.
+   */
+  protected applyBulk(): void {
+    if (!this.canApplyBulk()) {
+      return;
+    }
+    const rows = this.selectedRows();
+    const mxik = this.bulkMxik();
+    const pkg = this.bulkPackage();
+    const pick = this.bulkPick();
+    let cells = 0;
+    let kept = 0;
+    const reached = new Set<string>();
+    this.edits.update((current) => {
+      let next = current;
+      for (const row of rows) {
+        if (mxik !== '') {
+          if (row.mxik === '') {
+            next = this.withCell(next, row.nodeId, 'mxik', mxik);
+            cells++;
+            reached.add(row.nodeId);
+          } else {
+            kept++;
+          }
+        }
+        if (pkg !== '') {
+          if (row.pkg === '') {
+            next = this.withCell(next, row.nodeId, 'pkg', pkg);
+            cells++;
+            reached.add(row.nodeId);
+          } else {
+            kept++;
+          }
+        }
+      }
+      return next;
+    });
+    if (pick !== null && pick.code === mxik) {
+      // The rows keep the reference row they were given, so a row left without a package code still
+      // offers the ones that ИКПУ lists, exactly as if the operator had picked it in that row.
+      this.picks.update((current) => {
+        const next = new Map(current);
+        reached.forEach((id) => next.set(id, pick));
+        return next;
+      });
+    }
+    reached.forEach((id) => {
+      this.releasePackage(id);
+      this.forget(id);
+    });
+    this.bulkSummary.set({ rows: reached.size, cells, kept });
+  }
 
   // ------------------------------------------------------------- editing
 
@@ -319,7 +558,8 @@ export class FiscalBackfillEditor {
     }
     const columns: readonly BackfillColumn[] = ['mxik', 'pkg'];
     const firstColumn = columns.indexOf(column);
-    const rows = this.rows();
+    // The rows on the screen: a paste fills down what the operator sees, which a filter has narrowed.
+    const rows = this.visibleRows();
     const touched: string[] = [];
     const pasted: { nodeId: string; column: BackfillColumn; value: string }[] = [];
     let skipped = 0;
@@ -379,6 +619,11 @@ export class FiscalBackfillEditor {
     this.picks.set(new Map());
     this.derivedPackages.set(new Map());
     this.epoch.update((value) => value + 1);
+    this.selection.set(new Set());
+    this.bulkMxik.set('');
+    this.bulkPick.set(null);
+    this.bulkPackage.set('');
+    this.bulkSummary.set(null);
     this.problems.set(new Map());
     this.saveError.set(null);
     this.summary.set(null);

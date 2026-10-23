@@ -102,6 +102,24 @@ export const posPaths = {
     return `${OPERATIONS}${tenant(scope)}/orders/${encodeURIComponent(orderId)}/pos-export`;
   },
 
+  /**
+   * `OrderPosRevisionController` (ADR 0137, gap map row `4.2c`): an order the till already holds whose
+   * total changed after a weight was captured, and what the till holds against what the order is worth.
+   */
+  orderTillRevision(scope: TenantScope, orderId: string): string {
+    return `${OPERATIONS}${tenant(scope)}/orders/${encodeURIComponent(orderId)}/till-revision`;
+  },
+
+  /** Tell the till the revised total, where its binding can take one. Mutation: key required. */
+  orderTillRevisionSend(scope: TenantScope, orderId: string): string {
+    return `${posPaths.orderTillRevision(scope, orderId)}/send`;
+  },
+
+  /** Say the till was changed by hand. Mutation: key required. */
+  orderTillRevisionAcknowledge(scope: TenantScope, orderId: string): string {
+    return `${posPaths.orderTillRevision(scope, orderId)}/acknowledge`;
+  },
+
   /** Push a pending export, or retry one the state machine still permits sending. Mutation: key and reason required. */
   orderPosExportPush(scope: TenantScope, orderId: string): string {
     return `${posPaths.orderPosExport(scope, orderId)}/push`;

@@ -88,6 +88,7 @@ public class CatalogAuthoringController {
     private final CatalogAuthoringService authoring;
     private final ChannelMediaOverrideService channelMedia;
     private final PhysicalAttributesAuthoringService physicalAttributes;
+    private final uz.horecaos.platform.catalog.api.NutritionNoticeSwitch nutritionNotice;
     private final CurrentActor currentActor;
     private final BrandLocaleLookup brandLocales;
     private final String defaultLocale;
@@ -104,7 +105,9 @@ public class CatalogAuthoringController {
             PhysicalAttributesAuthoringService physicalAttributes,
             CurrentActor currentActor,
             BrandLocaleLookup brandLocales,
+            uz.horecaos.platform.catalog.api.NutritionNoticeSwitch nutritionNotice,
             @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
+        this.nutritionNotice = nutritionNotice;
         this.authoring = authoring;
         this.channelMedia = channelMedia;
         this.physicalAttributes = physicalAttributes;
@@ -425,7 +428,7 @@ public class CatalogAuthoringController {
     public ResponseEntity<PhysicalAttributesResponse> physicalAttributes(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID variantId) {
         try {
-            return physicalResponse(physicalAttributes.read(tenantId, brandId, variantId));
+            return physicalResponse(tenantId, brandId, physicalAttributes.read(tenantId, brandId, variantId));
         } catch (CatalogAuthoringService.UnknownCatalogEntityException unknown) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
         }
@@ -452,13 +455,16 @@ public class CatalogAuthoringController {
             throw new ApiException(ErrorCode.INVALID_REQUEST, "If-Match must carry a version the editor read");
         }
         try {
-            return physicalResponse(physicalAttributes.replace(
+            return physicalResponse(
                     tenantId,
                     brandId,
-                    variantId,
-                    request.toAttributes(),
-                    (int) expected,
-                    currentActor.get().subject()));
+                    physicalAttributes.replace(
+                            tenantId,
+                            brandId,
+                            variantId,
+                            request.toAttributes(),
+                            (int) expected,
+                            currentActor.get().subject()));
         } catch (PhysicalAttributes.InvalidPhysicalAttributesException invalid) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage(), Map.of("reason", invalid.code()));
         } catch (PhysicalAttributesAuthoringService.StalePhysicalAttributesException stale) {
@@ -468,11 +474,11 @@ public class CatalogAuthoringController {
         }
     }
 
-    private static ResponseEntity<PhysicalAttributesResponse> physicalResponse(
-            PhysicalAttributesAuthoringService.View view) {
+    private ResponseEntity<PhysicalAttributesResponse> physicalResponse(
+            UUID tenantId, UUID brandId, PhysicalAttributesAuthoringService.View view) {
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(view.version()))
-                .body(PhysicalAttributesResponse.of(view));
+                .body(PhysicalAttributesResponse.of(view, nutritionNotice.enabled(tenantId, brandId)));
     }
 
     /**
@@ -518,7 +524,11 @@ public class CatalogAuthoringController {
         }
     }
 
-    /** @param version 0 when the variant carries no attributes */
+    /**
+     * @param version 0 when the variant carries no attributes
+     * @param nutritionAccuracyNotice whether the brand shows the code-owned accuracy line under the КБЖУ
+     *     (row 4.2c, {@code catalog.nutrition_accuracy_line_enabled}); the editor previews it when true
+     */
     public record PhysicalAttributesResponse(
             @Nullable Integer netWeightGrams,
             @Nullable Integer netVolumeMillilitres,
@@ -532,13 +542,28 @@ public class CatalogAuthoringController {
             @Nullable BigDecimal fatGramsPer100,
             @Nullable BigDecimal carbohydratesGramsPer100,
             @Nullable BigDecimal portionsPerUnit,
-            int version) {
+            int version,
+            boolean nutritionAccuracyNotice) {
 
-        static PhysicalAttributesResponse of(PhysicalAttributesAuthoringService.View view) {
+        static PhysicalAttributesResponse of(
+                PhysicalAttributesAuthoringService.View view, boolean nutritionAccuracyNotice) {
             PhysicalAttributes attributes = view.attributes();
             if (attributes == null) {
                 return new PhysicalAttributesResponse(
-                        null, null, false, null, null, false, null, null, null, null, null, null, view.version());
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        view.version(),
+                        nutritionAccuracyNotice);
             }
             return new PhysicalAttributesResponse(
                     attributes.netWeightGrams(),
@@ -553,7 +578,8 @@ public class CatalogAuthoringController {
                     attributes.fatGramsPer100(),
                     attributes.carbohydratesGramsPer100(),
                     attributes.portionsPerUnit(),
-                    view.version());
+                    view.version(),
+                    nutritionAccuracyNotice);
         }
     }
 

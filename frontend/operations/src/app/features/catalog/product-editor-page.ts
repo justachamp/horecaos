@@ -21,7 +21,6 @@ import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { ActorChip } from '../../shared/ui/actor-chip';
-import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
 import { LocalizedFieldGroup } from '../../shared/ui/localized-field-group';
 import { mediaUploaderRejectionMessageKey } from '../../shared/ui/media-uploader';
 import { ScheduleGrid } from '../../shared/ui/schedule-grid';
@@ -36,6 +35,7 @@ import {
   ItemSaleWindow,
   MediaRelation,
   ModifierGroupSummary,
+  MxikReferenceRow,
   MxikReferenceStatus,
   ProductDetail,
   PublicationResult,
@@ -58,6 +58,7 @@ import {
 } from './product-comment-presets-api';
 import { CommentPresetsApi, PresetResponse } from '../settings/comment-presets/comment-presets-api';
 import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
+import { MxikPicker } from './mxik-picker';
 import { ProductComboPanel } from './product-combo-panel';
 import { ProductEditorHeader } from './product-editor-header';
 import { ProductModifierPolicyPanel } from './product-modifier-policy-panel';
@@ -257,7 +258,7 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
     RouterLink,
     LocalizedFieldGroup,
     ActorChip,
-    Combobox,
+    MxikPicker,
     ProductComboPanel,
     ProductEditorHeader,
     ProductModifierPolicyPanel,
@@ -411,10 +412,17 @@ export class ProductEditorPage implements OnInit {
   });
   protected readonly statuses = STATUSES;
 
-  /** One combobox's search state per variant, keyed by `variantId` — IA 4.2e. */
-  protected readonly mxikQuery = signal<Readonly<Record<string, string>>>({});
-  protected readonly mxikOptions = signal<Readonly<Record<string, readonly ComboboxOption[]>>>({});
-  protected readonly mxikSearching = signal<Readonly<Record<string, boolean>>>({});
+  /**
+   * The ИКПУ each variant's `q-mxik-picker` holds, keyed by `variantId` — IA 4.2e. The same component the
+   * fiscalization settings' backfill editor puts in its cells (ADR 0173), so a chosen reference row offers its
+   * default package and unit codes here exactly as there, and a withdrawn code is hidden from both searches.
+   * `''` while the operator is looking something up by name: a half-typed name never reaches a save.
+   */
+  protected readonly mxikCodes = signal<Readonly<Record<string, string>>>({});
+  /** The package codes the chosen reference row lists, when it lists several: a choice offered beside the field. */
+  protected readonly packageSuggestions = signal<Readonly<Record<string, readonly string[]>>>({});
+  /** The unit codes the chosen reference row lists, when it lists several. */
+  protected readonly unitSuggestions = signal<Readonly<Record<string, readonly number[]>>>({});
 
   /** Row 4.2g's kitchen department picker — a brand-layer routing rule for this product. */
   protected readonly stationRoles = STATION_ROLES;
@@ -496,9 +504,11 @@ export class ProductEditorPage implements OnInit {
       const product = await firstValueFrom(this.api.productDetail(scope, productId));
       this.product.set(product);
       this.denied.set(false);
-      this.mxikQuery.set(
+      this.mxikCodes.set(
         Object.fromEntries(product.variants.map((v) => [v.variantId, v.fiscal?.mxikCode ?? ''])),
       );
+      this.packageSuggestions.set({});
+      this.unitSuggestions.set({});
       void this.loadMxikStatus(scope);
       void this.loadReadiness(product);
       void this.loadPrices(product);
@@ -1459,54 +1469,52 @@ export class ProductEditorPage implements OnInit {
     }
   }
 
-  /** `q-combobox`'s controlled `query`/`options` pair, one instance per variant row (IA 4.2e). */
-  protected mxikQueryFor(variantId: string): string {
-    return this.mxikQuery()[variantId] ?? '';
+  /** `q-mxik-picker`'s controlled code, one instance per variant row (IA 4.2e). */
+  protected mxikCodeFor(variantId: string): string {
+    return this.mxikCodes()[variantId] ?? '';
   }
 
-  protected mxikOptionsFor(variantId: string): readonly ComboboxOption[] {
-    return this.mxikOptions()[variantId] ?? [];
-  }
-
-  protected mxikSearchingFor(variantId: string): boolean {
-    return this.mxikSearching()[variantId] ?? false;
-  }
-
-  protected onMxikQueryChange(variantId: string, query: string): void {
-    this.mxikQuery.set({ ...this.mxikQuery(), [variantId]: query });
+  protected onMxikCodeChange(variantId: string, code: string): void {
+    this.mxikCodes.set({ ...this.mxikCodes(), [variantId]: code });
   }
 
   /**
-   * Debounced by `q-combobox` itself — see its own doc. Empty when the
-   * official ИКПУ/MXIK list has never been imported, which is a named,
-   * unresolved finance/owner input (`4.2e`), not a search that found nothing.
+   * A reference row was chosen for this variant (its code has already been written to
+   * {@link onMxikCodeChange}). The reference lists the package codes the good is sold in and the unit
+   * codes it is measured in: exactly one of either fills its field when that field is empty, several are
+   * offered as buttons beside it, and none leaves the field to be typed. A field that already holds a
+   * value is never overwritten by a pick, which is the backfill editor's rule too.
    */
-  protected async searchMxik(variantId: string, query: string): Promise<void> {
-    const scope = this.brand.scope();
-    if (!scope || query.trim().length < 2) {
-      this.mxikOptions.set({ ...this.mxikOptions(), [variantId]: [] });
-      return;
+  protected onMxikPicked(
+    variantId: string,
+    row: MxikReferenceRow,
+    packageInput: HTMLInputElement,
+    unitInput: HTMLInputElement,
+  ): void {
+    const packages = row.defaultPackageCodes;
+    if (packages.length === 1 && packageInput.value.trim() === '') {
+      packageInput.value = packages[0];
     }
-    this.mxikSearching.set({ ...this.mxikSearching(), [variantId]: true });
-    try {
-      const rows = await firstValueFrom(this.api.searchMxikReference(scope, query.trim()));
-      this.mxikOptions.set({
-        ...this.mxikOptions(),
-        [variantId]: rows.map((row) => ({
-          id: row.code,
-          label: `${row.code} — ${row.labelRu}`,
-          sublabel: row.labelUz,
-        })),
-      });
-    } catch {
-      this.mxikOptions.set({ ...this.mxikOptions(), [variantId]: [] });
-    } finally {
-      this.mxikSearching.set({ ...this.mxikSearching(), [variantId]: false });
+    this.packageSuggestions.set({
+      ...this.packageSuggestions(),
+      [variantId]: packages.length > 1 ? packages : [],
+    });
+    const units = row.defaultUnitCodes ?? [];
+    if (units.length === 1 && unitInput.value.trim() === '') {
+      unitInput.value = String(units[0]);
     }
+    this.unitSuggestions.set({
+      ...this.unitSuggestions(),
+      [variantId]: units.length > 1 ? units : [],
+    });
   }
 
-  protected onMxikOptionSelected(variantId: string, option: ComboboxOption): void {
-    this.onMxikQueryChange(variantId, option.id);
+  protected packageSuggestionsFor(variantId: string): readonly string[] {
+    return this.packageSuggestions()[variantId] ?? [];
+  }
+
+  protected unitSuggestionsFor(variantId: string): readonly number[] {
+    return this.unitSuggestions()[variantId] ?? [];
   }
 
   // ------------------------------------------------------------ Row 4.2g — Kitchen department (Tab 1)

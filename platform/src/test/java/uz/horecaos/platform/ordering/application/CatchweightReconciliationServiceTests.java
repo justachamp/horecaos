@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -85,6 +86,8 @@ class CatchweightReconciliationServiceTests {
     private final PromotionRedemptionPort promotions = mock(PromotionRedemptionPort.class);
     private final OrderSettlementPort settlement = mock(OrderSettlementPort.class);
     private final OrderDeliveryPoint deliveryPoint = mock(OrderDeliveryPoint.class);
+    private final PosExportStatus posExports = mock(PosExportStatus.class);
+    private final TillRevisionNoticeService tillNotices = mock(TillRevisionNoticeService.class);
     private final AuditRecorder audit = mock(AuditRecorder.class);
     private final Clock clock = Clock.fixed(WEIGHED_AT, ZoneOffset.UTC);
 
@@ -104,6 +107,8 @@ class CatchweightReconciliationServiceTests {
         when(quoteAcceptance.acceptQuote(any(), any(), any()))
                 .thenReturn(new QuoteAcceptance(QuoteAcceptance.Outcome.ACCEPTED, 0L, "UZS"));
         when(settlement.restateTotal(any(), any(), anyLong(), any())).thenReturn(true);
+        // No till by default: an order with no export is settled for any amendment, and raises no notice.
+        when(posExports.settledFor(any(), any())).thenReturn(true);
         when(orders.applyRevision(any(), any(), anyInt(), anyInt(), any(), any(), any()))
                 .thenReturn(Optional.of(3));
         when(orders.applyReconciledAmounts(any(), any(), any(), any(), anyLong(), anyLong(), anyLong()))
@@ -237,6 +242,30 @@ class CatchweightReconciliationServiceTests {
     }
 
     @Test
+    @DisplayName("ADR 0137 row 4.2c: a weight that moves the total of an order the till already holds opens a notice "
+            + "carrying what the till holds and the weighed total, in the same call")
+    void aWeightThatMovesATillHeldTotalOpensANotice() {
+        orderIs(FulfillmentMode.PICKUP, cake, soda);
+        when(posExports.settledFor(TENANT, ORDER)).thenReturn(false);
+
+        weigh(1_340);
+
+        verify(tillNotices).orderTotalMoved(TENANT, BRAND, LOCATION, ORDER, 2, "UZS", 215_000L, 208_000L, WEIGHED_AT);
+    }
+
+    @Test
+    @DisplayName("an order the till does not hold, or has not been sent yet, raises no notice")
+    void anOrderTheTillDoesNotHoldRaisesNoNotice() {
+        orderIs(FulfillmentMode.PICKUP, cake, soda);
+        when(posExports.settledFor(TENANT, ORDER)).thenReturn(true);
+
+        weigh(1_340);
+
+        verify(tillNotices, never())
+                .orderTotalMoved(any(), any(), any(), any(), anyInt(), any(), anyLong(), anyLong(), any());
+    }
+
+    @Test
     @DisplayName("a weight that is not the target line's is carried unchanged for the lines already weighed")
     void aLineAlreadyWeighedKeepsItsWeight() {
         OrderLineRow weighedCake = catchweightLine(1, CAKE_VARIANT, 150_000L, 1_000);
@@ -289,7 +318,17 @@ class CatchweightReconciliationServiceTests {
 
     private CatchweightReconciliationService service() {
         return new CatchweightReconciliationService(
-                orders, pricing, quoteAcceptance, promoCodes, promotions, settlement, deliveryPoint, audit, clock);
+                orders,
+                pricing,
+                quoteAcceptance,
+                promoCodes,
+                promotions,
+                settlement,
+                deliveryPoint,
+                posExports,
+                tillNotices,
+                audit,
+                clock);
     }
 
     private void orderIs(FulfillmentMode mode, OrderLineRow... lines) {

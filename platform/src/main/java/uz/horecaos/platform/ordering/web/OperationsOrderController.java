@@ -3556,7 +3556,8 @@ public class OperationsOrderController {
                                     : portionSteps.get(line.line().sourceVariantId()),
                             line.line().origin(),
                             line.line().autoAddMandatory(),
-                            LineMarkingResponse.of(marking.get(line.line().lineId()))))
+                            LineMarkingResponse.of(marking.get(line.line().lineId())),
+                            LineIntakeResponse.of(line.intakeFlag())))
                     .toList();
         }
     }
@@ -3815,7 +3816,26 @@ public class OperationsOrderController {
             boolean autoAddMandatory,
             // ADR 0161: present on a marked line while marked-goods capture is on -- how many units must be
             // scanned and how many are. Counts and nothing else: no screen shows a code.
-            @Nullable LineMarkingResponse marking) {}
+            @Nullable LineMarkingResponse marking,
+            // ADR 0040 / ADR 0141: present only on an aggregator line that arrived needing a person -- the
+            // catalogue does not carry the item (UNMAPPED) or the dish was stopped on this channel at this
+            // branch (STOPPED). The order was accepted either way; this is the flag for the pass.
+            @Nullable LineIntakeResponse intake) {}
+
+    /**
+     * Why an aggregator line needs a person before the food is cooked.
+     *
+     * @param status                {@code UNMAPPED} or {@code STOPPED}
+     * @param externalItemReference the partner's own identifier for the item, so the branch can name the SKU
+     *                              to fix or to stop on the aggregator's side
+     */
+    public record LineIntakeResponse(
+            String status, @Nullable String externalItemReference) {
+
+        static @Nullable LineIntakeResponse of(JdbcOrderStore.@Nullable LineIntakeFlag flag) {
+            return flag == null ? null : new LineIntakeResponse(flag.status(), flag.externalItemReference());
+        }
+    }
 
     /**
      * ADR 0161: the marking progress of one order line.

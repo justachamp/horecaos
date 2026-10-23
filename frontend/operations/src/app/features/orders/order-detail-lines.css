@@ -53,6 +53,12 @@
   color: var(--q-ink-muted);
 }
 
+.pane__line-intake {
+  margin-top: 2px;
+  color: var(--q-warning-text);
+  font-weight: 600;
+}
+
 .pane__line-note {
   margin: 4px 0 0;
   color: var(--q-ink-muted);

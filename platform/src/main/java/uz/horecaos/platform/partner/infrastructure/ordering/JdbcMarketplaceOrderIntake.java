@@ -162,7 +162,7 @@ public class JdbcMarketplaceOrderIntake implements MarketplaceOrderIntake {
             lineRow.put("amount", line.lineAmountMinor());
             lineRow.put("tax", line.taxAmountMinor());
             lineRow.put("externalItemReference", line.externalItemReference());
-            lineRow.put("mappingStatus", line.unmapped() ? "UNMAPPED" : "MAPPED");
+            lineRow.put("mappingStatus", line.mappingStatus());
 
             jdbc.sql("""
                     INSERT INTO ordering.order_lines (

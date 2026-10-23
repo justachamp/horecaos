@@ -312,6 +312,35 @@ describe('OrderDetailLines', () => {
     });
   });
 
+  describe('an aggregator line that arrived flagged (ADR 0040, ADR 0141)', () => {
+    it('says a dish stopped here was accepted anyway, and names the aggregator’s item', () => {
+      const { row } = render({
+        lines: [line({ intake: { status: 'STOPPED', externalItemReference: 'ye-4411' } })],
+      });
+
+      const flag = row(0).querySelector('[data-testid="order-detail-line-intake"]')!;
+      expect(flag.textContent).toContain('Stopped here');
+      expect(flag.textContent).toContain('ye-4411');
+    });
+
+    it('says an item the catalogue does not carry needs confirming with the aggregator', () => {
+      const { row } = render({
+        lines: [line({ intake: { status: 'UNMAPPED', externalItemReference: null } })],
+      });
+
+      const flag = row(0).querySelector('[data-testid="order-detail-line-intake"]')!;
+      expect(flag.textContent).toContain('Not in the catalogue');
+      expect(flag.textContent).not.toContain('Stopped here');
+    });
+
+    it('says nothing on a line that arrived sellable and mapped, or on a native one', () => {
+      const { row } = render({ lines: [line({ intake: null }), line({ lineId: 'l2' })] });
+
+      expect(row(0).querySelector('[data-testid="order-detail-line-intake"]')).toBeNull();
+      expect(row(1).querySelector('[data-testid="order-detail-line-intake"]')).toBeNull();
+    });
+  });
+
   it('says a rule added the line, and says nothing for a line the customer chose (ADR 0158)', () => {
     const { host } = render({
       lines: [

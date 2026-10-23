@@ -261,6 +261,17 @@ public final class ConfigurationKeys {
                     + "before it is treated as stale.")
             .build();
 
+    /** ADR 0141 Phase 3: the dry-run switch, declared identically in {@code integration.api.MarketplaceConfigurationKeys}. */
+    public static final ConfigurationKey<Boolean> MARKETPLACE_AVAILABILITY_DRY_RUN = ConfigurationKey.of(
+                    "marketplace.availability.dry_run", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("integration")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND, ScopeType.LOCATION)
+            .describedAs("Whether a marketplace binding rehearses its stop-list pushes without calling the "
+                    + "partner. On, the platform records what it would have sent; off, it sends. Switching it "
+                    + "off resends every item once.")
+            .build();
+
     /**
      * ADR 0021: the strongest enforcement mode entitlement checks may apply.
      *
@@ -887,6 +898,16 @@ public final class ConfigurationKeys {
                     + "published for this tenant. Written by a platform administrator on the owner's instruction.")
             .build();
 
+    /** ADR 0137 (row 4.2c), declared identically in {@code catalog.api.CatalogConfigurationKeys}. */
+    public static final ConfigurationKey<Boolean> CATALOG_NUTRITION_ACCURACY_LINE_ENABLED = ConfigurationKey.of(
+                    "catalog.nutrition_accuracy_line_enabled", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("catalog")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("Whether the storefront menu and the product editor show the code-owned line under "
+                    + "a nutrition table saying the figures are approximate. Off until the wording is settled.")
+            .build();
+
     /** ADR 0173, declared identically in {@code catalog.api.CatalogConfigurationKeys}. */
     public static final ConfigurationKey<Integer> CATALOG_MXIK_REFERENCE_MAX_AGE_DAYS = ConfigurationKey.of(
                     "catalog.mxik_reference_max_age_days", Integer.class)
@@ -1450,6 +1471,7 @@ public final class ConfigurationKeys {
             ORDERING_AUTO_ADD_SHADOW_ENABLED,
             ORDERING_AMENDMENT_LINE_REMOVAL_ENABLED,
             CATALOG_AUTO_ADD_MANDATORY_ALLOWED,
+            CATALOG_NUTRITION_ACCURACY_LINE_ENABLED,
             CATALOG_MXIK_REFERENCE_MAX_AGE_DAYS,
             CATALOG_MXIK_IMPORT_WITHDRAWAL_THRESHOLD_PERCENT,
             CATALOG_MXIK_IMPORT_MAX_BYTES,
@@ -1459,6 +1481,7 @@ public final class ConfigurationKeys {
             MARKETPLACE_AVAILABILITY_RECONCILE_ENABLED,
             MARKETPLACE_AVAILABILITY_RESYNC_INTERVAL_SECONDS,
             MARKETPLACE_AVAILABILITY_STALE_AFTER_SECONDS,
+            MARKETPLACE_AVAILABILITY_DRY_RUN,
             CATALOG_QR_KIOSK_PRICE_PLANE,
             NOTIFICATIONS_PAYMENT_LINK_AUTO_SEND,
             NOTIFICATIONS_AGGREGATOR_SHIFT_NOTIFICATIONS_ENABLED,
