@@ -266,6 +266,45 @@ class LoyaltyPosSyncStagingTests {
     }
 
     @Test
+    @DisplayName(
+            "a staged mode and its ADR 0027 fact are one commit: when the fact cannot be written, the mode does not move")
+    void aModeAndItsFactAreOneCommit() throws Exception {
+        long version = bindingVersion();
+        jdbc.sql("""
+                CREATE OR REPLACE FUNCTION audit.refuse_mode_fact() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN
+                    IF NEW.action_code = 'loyalty.pos_sync.mode.changed' THEN
+                        RAISE EXCEPTION 'the audit write is refused for this test';
+                    END IF;
+                    RETURN NEW;
+                END $$
+                """).update();
+        jdbc.sql("""
+                CREATE TRIGGER refuse_mode_fact BEFORE INSERT ON audit.audit_events
+                    FOR EACH ROW EXECUTE FUNCTION audit.refuse_mode_fact()
+                """).update();
+        try {
+            assertThatThrownBy(() -> sync.setMode(
+                            TENANT, BRAND, FAKE_BINDING, PosBalanceSyncService.Mode.PULL, version, "pilot", FINANCE))
+                    .hasMessageContaining("refused for this test");
+        } finally {
+            jdbc.sql("DROP TRIGGER refuse_mode_fact ON audit.audit_events").update();
+            jdbc.sql("DROP FUNCTION audit.refuse_mode_fact()").update();
+        }
+
+        assertThat(bindingVersion())
+                .as("the binding did not move without its fact")
+                .isEqualTo(version);
+        assertThat(configurationOverride(FAKE_BINDING)).doesNotContain("loyalty.sync.mode");
+        assertThat(count("audit.audit_events WHERE action_code = 'loyalty.pos_sync.mode.changed'"))
+                .isZero();
+        sync.setMode(TENANT, BRAND, FAKE_BINDING, PosBalanceSyncService.Mode.PULL, version, "pilot", FINANCE);
+        assertThat(bindingField("mode"))
+                .as("and the same request retried, the fact writable again, succeeds at the version it read")
+                .isEqualTo("PULL");
+    }
+
+    @Test
     @DisplayName("a change sent against an old binding version is STALE_VERSION and the mode does not move")
     void aStaleVersionIsRefused() throws Exception {
         long version = bindingVersion();

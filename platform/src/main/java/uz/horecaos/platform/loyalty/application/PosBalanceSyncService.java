@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.AuditClass;
@@ -74,7 +75,8 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * counting and listing every difference. A difference is never silently corrected.
  *
  * <p><strong>Not transactional on purpose.</strong> Every call to a till happens outside any database transaction;
- * the writes that must be atomic -- one imported movement -- are in {@link PosSyncMovementImporter}.
+ * the writes that must be atomic -- one imported movement -- are in {@link PosSyncMovementImporter}. The one exception
+ * is {@link #setMode}, which calls no till and so is a single transaction with its audit fact.
  *
  * <p><strong>Staged by binding.</strong> A binding's mode (configuration key {@code loyalty.sync.mode}) is {@code
  * REPORT_ONLY} until somebody sets otherwise: match and compare, apply nothing, push nothing. {@code PULL} adds the
@@ -254,9 +256,13 @@ public class PosBalanceSyncService {
      * apply and watches pulls before pushes. Anything above {@code REPORT_ONLY} needs a binding that can sync: capable,
      * enabled and active, so a mode is never staged for a till the platform cannot reach.
      *
+     * <p>One transaction, unlike a pass: the change and its ADR 0027 fact commit together, so a fact that cannot be written
+     * leaves the mode where it was and a retry is not a {@code STALE_VERSION}. Nothing in it calls a till.
+     *
      * @throws ApiException 404 for a binding that is not this brand's, 422 for a binding that cannot sync or a step up that
      *                      skips a stage, 409 {@code STALE_VERSION} when the binding has moved on
      */
+    @Transactional
     public BindingView setMode(
             UUID tenantId,
             UUID brandId,
