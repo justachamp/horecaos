@@ -31,28 +31,14 @@
   and not captured; the golden set and the live bake-off result do not exist; the old shared browser
   key is still live in the owner's Yandex account until it is restricted or rotated; the licence and
   how it is paid for from Uzbekistan are unanswered; 2GIS has no adapter; and the `GEOCODER` backfill
-  is not built (no row needs it).
-- Implementation status: Partial — the map layer and the platform's own geocoder are built, and
-  the persona the address pane was built for can now reach it. Built (batch 19, `w1-maps`): the
-  geocoding port and its Yandex adapter, proved against recorded provider bodies and a controlled
-  fake; `GET .../brands/{brandId}/map-config`; the three rate-limited lookups of
-  `OperationsGeocodeController` (`geo.lookup`, with the region box applied); `shared/ui/map`
-  (`q-map-canvas`, `q-map-pin`, `q-polygon-editor`, `q-bbox-editor`, `q-address-picker` over one
-  `MapProvider` token, with a null provider and a recording fake) and their call sites in the
-  delivery zones, the courier and dispatch maps, the branch detail and New order's address pane;
-  a pin a person confirmed is saved as `OPERATOR_PIN` and a geocoder's answer is never saved as
-  such. Since 2026-10-14 (ADR 0177) `LOCATION_STAFF` and `LOCATION_MANAGER` give a delivery address
-  from that pane through `customer.address.capture` and the location-scoped address routes; before
-  that the pane's routes were `TENANT`-scoped and only the tenant roles could use it. Not built:
-  the 200-address bake-off harness and its recorded result; moving both storefronts off their direct
-  Yandex calls and removing the browser key committed as a default in both images'
-  `docker-entrypoint.sh` and `public/config.json`; the entry in ADR 0034's processor register.
-  **Nothing has drawn a tile from the real vendor SDK or called the real geocoder:**
-  `HORECAOS_GEO_PROVIDER` defaults to `none` and no environment holds the server key reference or
-  the browser key, so every map screen says in words that no provider is configured and works from
-  its coordinate fields; the operator types the point. That, and finance's answer on paying for
-  the licence from Uzbekistan, is the external connection recorded in
-  `docs/runbooks/external-connections/w2-order-entry-policy.md`.
+  is not built (no row needs it). **Reaching the address pane:** since 2026-10-14 (ADR 0177)
+  `LOCATION_STAFF` and `LOCATION_MANAGER` give a phone order's delivery address through the narrow
+  `customer.address.capture` capability and the location-scoped address routes; before that the
+  pane's routes were `TENANT`-scoped and only the tenant roles could use it. **Switching it on:**
+  since 2026-10-23 `deploy/compose.production.yml` forwards `HORECAOS_GEO_PROVIDER`,
+  `HORECAOS_GEO_YANDEX_SECRET_REFERENCE` and `HORECAOS_GEO_YANDEX_BROWSER_KEY` to `platform-app`
+  (`ProductionComposeRunbookVariablesTests` fails if one is dropped); before that, setting them in
+  the environment file reached no container and `map-config` kept answering `configured: false`.
 - Date proposed: 2026-10-01
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (wave batch 17); Ayubkhon Abbosov (platform owner)
@@ -428,6 +414,24 @@ address; and watches couriers move on the same map. A customer picks an address
 on the storefront without their browser calling the vendor's geocoder, and the
 saved row is `CUSTOMER_PIN`. The 200-address result is on record. No map key
 remains in git.
+
+## Status addition (2026-10-23)
+
+The Implementation status in this record's header used to be two blocks: the batch-21 one (storefront
+moved, key removed, harness and register entry built) and the batch-19 one above it in the file
+(«Not built: the 200-address bake-off harness; moving both storefronts off their direct Yandex calls
+and removing the committed browser key; the entry in ADR 0034's processor register»). The second was
+never deleted when the first was written, so a reader of the header got both claims. The code settles
+it, and the one block that remains says so: `tools/geo/bake_off.py` with `tools/geo/test_bake_off.py`
+(the harness; the golden set and a live run do not exist), `StorefrontGeocodeController` and
+`frontend/storefront`'s address screen reading `map-config` (the storefront move),
+`tools/checks/repo_hygiene.py`'s `check_no_committed_map_key` (no key in git), and
+`docs/processor-register.md` (the register entry). That also corrects the last sentence of the
+2026-10-14 addition below, that the record «stays `Partial` for the bake-off, the storefront move and
+the register entry»: it stays `Partial` for the provider that no environment has connected, the golden
+set and its live result, the licence, and the rotation of the old shared key. `check_adr_statuses` in
+`tools/checks/repo_hygiene.py` now refuses a record with a second `- Implementation status:` block.
+This record's Decision, Alternatives and Consequences are unchanged.
 
 ## Status addition (2026-10-14)
 

@@ -62,8 +62,8 @@ routing-gate-test: ## Prove the routing accuracy gate can say no (ADR 0147)
 geo-bakeoff-test: ## Prove the map-provider bake-off can say no (ADR 0145 decision 3)
 	@cd tools/geo && python3 -m unittest test_bake_off
 
-hygiene-map-key-test: ## Prove the committed-map-key guard can say no (ADR 0145 decision 4)
-	@cd tools/checks && python3 -m unittest test_repo_hygiene_map_key
+hygiene-map-key-test: ## Prove the committed-map-key and one-status-block-per-ADR guards can say no (ADR 0145)
+	@cd tools/checks && python3 -m unittest test_repo_hygiene_map_key test_repo_hygiene_adr_statuses
 
 print-agent-test: ## Prove the reference print agent against a fake platform and a fake printer (ADR 0154; needs Node 20+)
 	@node --test tools/print-agent/print-agent.test.mjs

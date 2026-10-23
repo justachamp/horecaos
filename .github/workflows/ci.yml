@@ -74,10 +74,11 @@ jobs:
       - name: Documentation links
         run: python3 tools/checks/doc_links.py
 
-      - name: The committed-map-key guard can say no (ADR 0145 decision 4)
-        # repo_hygiene.py refuses a vendor map key committed as a default; this proves it does, against
-        # the shapes the defect had, so the guard cannot quietly stop checking.
-        run: cd tools/checks && python3 -m unittest test_repo_hygiene_map_key
+      - name: The committed-map-key and one-status-block guards can say no (ADR 0145)
+        # repo_hygiene.py refuses a vendor map key committed as a default, and an ADR with two
+        # `- Implementation status:` blocks; this proves each does, against the shapes the defects had,
+        # so a guard cannot quietly stop checking.
+        run: cd tools/checks && python3 -m unittest test_repo_hygiene_map_key test_repo_hygiene_adr_statuses
 
       - name: Guardrail hooks
         run: python3 .claude/hooks/test_hooks.py
