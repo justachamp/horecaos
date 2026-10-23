@@ -118,6 +118,7 @@ class ClickFakeProviderRoundTripTests {
         registry.add("horecaos.secrets.provider_payment.tenant.click", () -> CLICK_SECRET);
         // Ephemeral: this JVM may share a host with another agent's own fake provider.
         registry.add("horecaos.fake-providers.click.port", () -> "0");
+        registry.add("horecaos.fake-providers.aggregator.port", () -> "0");
         registry.add("horecaos.fake-providers.click.secret", () -> CLICK_SECRET);
         // The sweeper's methods are called directly (see #theWholeStory) rather
         // than waited on; its own @Scheduled wall clock is pushed out so a tick

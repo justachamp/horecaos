@@ -783,7 +783,7 @@ class CampaignPushDeliveryTests {
         subscribe(accountId, browser, "/wpush/a");
 
         var counts = new uz.horecaos.platform.notifications.application.PushSubscriptionErasureParticipant(
-                        subscriptions)
+                        new JdbcPushSubscriptionStore(jdbc), notifications, clock)
                 .erase(
                         TENANT,
                         accountId,

@@ -1,11 +1,15 @@
 package uz.horecaos.platform.notifications.application;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.customers.spi.CustomerErasureParticipant;
 import uz.horecaos.platform.customers.spi.ErasesCustomerData;
 import uz.horecaos.platform.customers.spi.ErasureCounts;
+import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
+import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcPushSubscriptionStore;
 
 /**
  * Ends an erased customer's Web Push subscriptions (ADR 0029, ADR 0182).
@@ -21,15 +25,23 @@ import uz.horecaos.platform.customers.spi.ErasureCounts;
         tables = {"notifications.push_subscriptions"})
 public class PushSubscriptionErasureParticipant implements CustomerErasureParticipant {
 
-    private final PushSubscriptionService subscriptions;
+    private final JdbcPushSubscriptionStore subscriptions;
+    private final JdbcNotificationStore notifications;
+    private final Clock clock;
 
-    public PushSubscriptionErasureParticipant(PushSubscriptionService subscriptions) {
+    public PushSubscriptionErasureParticipant(
+            JdbcPushSubscriptionStore subscriptions, JdbcNotificationStore notifications, Clock clock) {
         this.subscriptions = subscriptions;
+        this.notifications = notifications;
+        this.clock = clock;
     }
 
     @Override
     @Transactional
     public ErasureCounts erase(UUID tenantId, UUID customerAccountId, ErasedContacts held) {
-        return ErasureCounts.of("notifications.push_subscriptions", subscriptions.erase(tenantId, customerAccountId));
+        Instant now = clock.instant();
+        var ended = subscriptions.endAllOf(tenantId, customerAccountId, JdbcPushSubscriptionStore.ENDED_ERASED, now);
+        ended.forEach(subscriptionId -> notifications.retirePushEndpoint(tenantId, subscriptionId, now));
+        return ErasureCounts.of("notifications.push_subscriptions", ended.size());
     }
 }

@@ -63,7 +63,9 @@ import uz.horecaos.platform.marketing.application.MarketingErasureParticipant;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAudienceStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCustomerMetricStore;
 import uz.horecaos.platform.notifications.application.NotificationsErasureParticipant;
+import uz.horecaos.platform.notifications.application.PushSubscriptionErasureParticipant;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
+import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcPushSubscriptionStore;
 import uz.horecaos.platform.ordering.OrderBoardFixtures;
 import uz.horecaos.platform.ordering.application.OrderingErasureGuard;
 import uz.horecaos.platform.ordering.application.OrderingErasureParticipant;
@@ -198,6 +200,7 @@ class CustomerErasureParticipantsTests {
                         "pricing.benefit_grants",
                         "notifications.notification_preferences",
                         "notifications.recipient_endpoints",
+                        "notifications.push_subscriptions",
                         "ordering.order_customer_snapshots",
                         "ordering.order_lines",
                         "ordering.order_outcomes",
@@ -260,6 +263,8 @@ class CustomerErasureParticipantsTests {
                 new ReferralErasureParticipant(new JdbcReferralStore(app), clock),
                 new PricingErasureParticipant(new JdbcBenefitGrantStore(app), clock),
                 new NotificationsErasureParticipant(new JdbcNotificationStore(app), clock),
+                new PushSubscriptionErasureParticipant(
+                        new JdbcPushSubscriptionStore(app), new JdbcNotificationStore(app), clock),
                 new OrderingErasureParticipant(new JdbcOrderErasureStore(app), protection, clock),
                 new DineInErasureParticipant(
                         new JdbcDineInStore(app), Mockito.mock(TableSessionService.class), protection),
@@ -357,6 +362,15 @@ class CustomerErasureParticipantsTests {
                         customer))
                 .as("an endpoint that kept the old hash would still answer a search for her number")
                 .isNotEqualTo(hers.phoneHash);
+        // notifications-push (ADR 0182): the subscription ends and keeps no secret
+        assertThat(text("SELECT status FROM notifications.push_subscriptions WHERE customer_account_id = :id", customer))
+                .isEqualTo("REVOKED");
+        assertThat(text(
+                        "SELECT coalesce(secret_ciphertext, 'NULL') FROM notifications.push_subscriptions "
+                                + "WHERE customer_account_id = :id",
+                        customer))
+                .as("a push address is a capability that names a device: nothing of it outlives the erasure")
+                .isEqualTo("NULL");
         // ordering
         assertThat(text(
                         "SELECT anonymized_at::text FROM ordering.order_customer_snapshots WHERE order_id = :id",
@@ -818,6 +832,24 @@ class CustomerErasureParticipantsTests {
                 contactPoint,
                 "normalized_hash",
                 phoneHash);
+
+        // notifications-push: a live Web Push subscription (ADR 0182)
+        insert(
+                "notifications.push_subscriptions",
+                "id",
+                UUID.randomUUID(),
+                "tenant_id",
+                TENANT,
+                "brand_id",
+                BRAND,
+                "customer_account_id",
+                account,
+                "secret_ciphertext",
+                "ciphertext-" + tag,
+                "endpoint_hash",
+                (tag.equals("a") ? "e" : "f").repeat(64),
+                "status",
+                "ACTIVE");
 
         // ordering: a delivered order with its copies, an amendment, the cart it came from, and a cart left open
         UUID order = fixtures.insertOrder(OrderBoardFixtures.order("ORD-" + tag)
@@ -1343,6 +1375,11 @@ class CustomerErasureParticipantsTests {
             {
                 "endpoints",
                 "SELECT status || normalized_hash FROM notifications.recipient_endpoints WHERE customer_account_id = :a"
+            },
+            {
+                "push",
+                "SELECT status || coalesce(secret_ciphertext, 'NULL') FROM notifications.push_subscriptions "
+                        + "WHERE customer_account_id = :a"
             },
             {
                 "snapshot",

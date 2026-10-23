@@ -148,6 +148,14 @@ final class ExportInventoryExemptions {
                 "A projection audit: the metric, the value the projection held and the value recomputed, kept to detect a"
                         + " defect in the projection. It holds nothing that marketing.customer_metrics, exported, does not.");
 
+        // ------------------------------------------------------------------ notifications
+        REASONS.put(
+                "notifications.unsubscribe_tokens",
+                "The SHA-256 of an opaque token in a campaign email's way-out link, which authenticates a withdrawal of"
+                        + " consent and holds nothing about her beyond ids: no address, no name, no token. The messages that carried"
+                        + " the links are in marketing.marketing_sends and the consent she gave and withdrew is in"
+                        + " customer.consent_decisions, both exported.");
+
         // ------------------------------------------------------------------ ordering, pricing, reporting
         REASONS.put(
                 "ordering.order_line_marks",

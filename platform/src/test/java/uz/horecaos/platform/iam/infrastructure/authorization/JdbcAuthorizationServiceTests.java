@@ -481,7 +481,16 @@ class JdbcAuthorizationServiceTests {
                 // ADR 0156: a manager reading the rota and the timesheet, finance reading the hours
                 // that feed payroll. A suspended tenant reading what it already recorded takes
                 // nothing out; the clock, a manager's writes and the payroll export are not reads.
-                Capability.STAFF_SHIFT_READ);
+                Capability.STAFF_SHIFT_READ,
+                // ADR 0179: a courier reading their own record, held over it by relationship (ADR 0049) and
+                // never granted to a manager. A suspended tenant's courier still learns who they are and which
+                // shift is open; it takes nothing out.
+                Capability.COURIER_SELF_READ,
+                // ADR 0040, ADR 0138: an aggregator's machine principal reading the menu its channel serves.
+                // Names, prices and the partner's own ids, no personal data; it is held over the bindings of
+                // the caller's installation only, and a suspended tenant's menu staying readable by the partner
+                // it was already published to takes nothing out.
+                Capability.MARKETPLACE_MENU_READ);
 
         java.util.Set<Capability> classified = java.util.Arrays.stream(Capability.values())
                 .filter(Capability::isRead)

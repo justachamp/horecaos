@@ -83,6 +83,9 @@ final class StorefrontPublishedSurface {
             CART + "/payment-methods",
             CART + "/pricing",
             CART + "/promo-code",
+            // What of her points a customer may spend on this cart, offered before checkout and taken at it
+            // (ADR 0185, batch 21).
+            CART + "/redemption-offer",
             BRAND + "/checkouts",
             // Signing in, and who the customer is.
             BRAND + "/identity/registrations",
@@ -113,6 +116,9 @@ final class StorefrontPublishedSurface {
             BRAND + "/reviews",
             // The receipt of a paid order, as its customer may read it (ADR 0166).
             ORDER + "/receipts",
+            // How a paid order was split between points and money (ADR 0185, batch 21): the customer's own
+            // order, not bound to one channel.
+            ORDER + "/payment-split",
             // What is waiting to be rated, the public face a brand may switch on, and the tags offered
             // with a review (ADR 0159).
             BRAND + "/reviews/pending",
@@ -123,6 +129,14 @@ final class StorefrontPublishedSurface {
             // What the customer earns.
             ROOT + "/loyalty/tenants/{tenantId}/accounts/{accountId}",
             ROOT + "/loyalty/tenants/{tenantId}/accounts/{accountId}/entries",
+            // The customer's own spendable balance at this brand, which the cart's redemption offer is drawn
+            // from (ADR 0046, ADR 0185, batch 21).
+            BRAND + "/loyalty/balance",
+            // Promotional Web Push, opted into from a browser storefront (ADR 0182 D14, batch 21): whether it is
+            // offered and on, and turning it on and off. Not bound to one channel -- any browser storefront has
+            // a profile page -- so not internal under ADR 0070's rule.
+            BRAND + "/push",
+            BRAND + "/push/subscription",
             BRAND + "/referrals/me",
             BRAND + "/referrals/redemptions",
             // The banners the restaurant chose to show this guest, and the guest's own dismissal (ADR 0112).

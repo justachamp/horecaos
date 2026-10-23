@@ -1415,7 +1415,7 @@ public final class ConfigurationKeys {
             .tenantVisible()
             .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
             .describedAs("Whether a customer must have consented before their balance is synced with the point-of-sale "
-                    + "terminal.")
+                    + "till.")
             .build();
 
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
