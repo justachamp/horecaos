@@ -70,6 +70,9 @@ import uz.horecaos.platform.ordering.OrderBoardFixtures;
 import uz.horecaos.platform.ordering.application.OrderingErasureGuard;
 import uz.horecaos.platform.ordering.application.OrderingErasureParticipant;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderErasureStore;
+import uz.horecaos.platform.pos.application.PosErasureParticipant;
+import uz.horecaos.platform.pos.domain.LineFingerprint;
+import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosExportStore;
 import uz.horecaos.platform.pricing.application.PricingErasureParticipant;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcBenefitGrantStore;
 import uz.horecaos.platform.referral.application.ReferralErasureParticipant;
@@ -215,6 +218,7 @@ class CustomerErasureParticipantsTests {
                         "conversations.flow_runs",
                         "voice.call_events",
                         "assistant.turns",
+                        "integration.pos_order_exports",
                         "integration.telegram_pending_links",
                         "integration.sendpulse_import_runs",
                         "integration.sendpulse_import_run_rows",
@@ -271,7 +275,8 @@ class CustomerErasureParticipantsTests {
                 new ConversationsErasureParticipant(app),
                 new VoiceErasureParticipant(new JdbcVoiceStore(app, objectMapper), protection),
                 new AssistantErasureParticipant(app, protection),
-                new TelegramErasureParticipant(app));
+                new TelegramErasureParticipant(app),
+                new PosErasureParticipant(new JdbcPosExportStore(app)));
     }
 
     // ------------------------------------------------------------------------------------------ the tests
@@ -427,6 +432,17 @@ class CustomerErasureParticipantsTests {
                         .single())
                 .as("a clear coordinate would still point at the building")
                 .isZero();
+        // pos: the digest of her number on each export of her orders (ADR 0029)
+        assertThat(text("SELECT customer_phone_hash FROM integration.pos_order_exports WHERE id = :id", hers.posExport))
+                .as("an unsalted SHA-256 of a Uzbek mobile number is recovered by trying them all: it is her number")
+                .isNotEqualTo(hers.posPhoneHash)
+                .matches("[0-9a-f]{64}");
+        assertThat(owner.sql("SELECT state FROM integration.pos_order_exports WHERE id = :id")
+                        .param("id", hers.posExport)
+                        .query(String.class)
+                        .single())
+                .as("the export is the record that a ticket was sent; only the copy of her number goes")
+                .isEqualTo("PENDING");
         // dinein: the booking she made with her account, and the one a host typed for her number
         assertThat(reveal("dinein.reservations", "guest_name_encrypted", hers.reservationByAccount))
                 .isEqualTo("ERASED");
@@ -605,7 +621,9 @@ class CustomerErasureParticipantsTests {
             UUID turn,
             UUID importRow,
             String bundleKey,
-            UUID correction) {}
+            UUID correction,
+            UUID posExport,
+            String posPhoneHash) {}
 
     Footprint seedFootprint(UUID account, String tag) {
         String phoneHash = "phone-hash-" + tag;
@@ -1264,6 +1282,32 @@ class CustomerErasureParticipantsTests {
                 "corrected_at",
                 NOW.minusSeconds(120));
 
+        // pos: what production writes when the order is exported, the unsalted digest of the order's number
+        UUID posExport = UUID.randomUUID();
+        String posPhoneHash = LineFingerprint.phoneHash("+998901112233");
+        insert(
+                "integration.pos_order_exports",
+                "id",
+                posExport,
+                "tenant_id",
+                TENANT,
+                "order_id",
+                order,
+                "binding_id",
+                UUID.randomUUID(),
+                "installation_id",
+                UUID.randomUUID(),
+                "state",
+                "PENDING",
+                "line_fingerprint",
+                "fingerprint-" + tag,
+                "customer_phone_hash",
+                posPhoneHash,
+                "external_venue_reference",
+                "venue-" + tag,
+                "requested_at",
+                NOW.minusSeconds(300));
+
         return new Footprint(
                 account,
                 tag,
@@ -1281,7 +1325,9 @@ class CustomerErasureParticipantsTests {
                 turn,
                 importRow,
                 bundleKey,
-                correction);
+                correction,
+                posExport,
+                posPhoneHash);
     }
 
     private void insertReservation(UUID id, @Nullable UUID account, String phoneHash, String guestName) {
@@ -1420,6 +1466,11 @@ class CustomerErasureParticipantsTests {
                 "reservations",
                 "SELECT string_agg(guest_name_encrypted || guest_phone_lookup_hash || coalesce(customer_account_id::text, '-'), "
                         + "'|' ORDER BY id) FROM dinein.reservations WHERE customer_account_id = :a OR guest_phone_lookup_hash = :h"
+            },
+            {
+                "posExports",
+                "SELECT string_agg(e.state || e.customer_phone_hash, '|' ORDER BY e.id) FROM integration.pos_order_exports e "
+                        + "JOIN ordering.orders o ON o.id = e.order_id WHERE o.customer_account_id = :a"
             },
             {"conversations", "SELECT count(*)::text FROM conversations.conversations WHERE customer_account_id = :a"},
             {

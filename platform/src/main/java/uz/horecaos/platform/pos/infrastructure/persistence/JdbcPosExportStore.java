@@ -516,6 +516,39 @@ public class JdbcPosExportStore {
         return value == null ? null : value.toInstant();
     }
 
+    /**
+     * Replaces the phone hash on every export of one customer's orders with a fresh random value (ADR 0029).
+     *
+     * <p>The column holds an unsalted SHA-256 of the digits of a telephone number (V0036, {@code
+     * LineFingerprint#phoneHash}), and there are only about a billion Uzbek mobile numbers: the digest is not
+     * enough to call anybody, as the column's comment says, but it is enough to <em>confirm</em> a number somebody
+     * already suspects, and to recover one by trying them all. A customer who asked to be forgotten is therefore
+     * not forgotten while this survives.
+     *
+     * <p>A value per row, drawn from {@code gen_random_uuid()} (volatile, so evaluated for each row), and never a
+     * fixed marker: two erased customers must not share a value, which would still say "these two used to be
+     * one number". The column is NOT NULL and sixty-four characters wide, so two uuids' hex make exactly that. The
+     * rest of the row stays: the state, the attempts and the fingerprint of the lines are the record that a
+     * kitchen ticket was sent, and nothing in them names a person.
+     *
+     * <p>Reaches the exports through the order's {@code customer_account_id}, not through a hash: the keyed
+     * lookup hashes an erasure is handed cannot match an unkeyed digest, and a guest's order, which has no account,
+     * is not reachable from one. Idempotent only in effect: a retry replaces the values again.
+     */
+    public int anonymizePhoneHashesOfCustomer(UUID tenantId, UUID customerAccountId) {
+        return jdbc.sql("""
+                UPDATE integration.pos_order_exports e
+                   SET customer_phone_hash =
+                       replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '')
+                  FROM ordering.orders o
+                 WHERE o.tenant_id = :tenantId AND o.customer_account_id = :accountId
+                   AND e.tenant_id = :tenantId AND e.order_id = o.id
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", customerAccountId)
+                .update();
+    }
+
     /** One PENDING export a sweep found, past its staleness threshold. */
     public record StaleExport(UUID tenantId, UUID exportId) {}
 
