@@ -47,6 +47,19 @@
   as the revision acted on (`JdbcTillRevisionNoticeStore.resolve`). If the order is weighed again while the
   till is being asked, the till keeps what it was told, the newer notice stays open carrying that as what the
   till holds, and the send answers the new outcome `SUPERSEDED` (`PosOrderRevisionService.told`).
+  Corrected 2026-10-23 (Implementation status, same review fix): the Specification's Events paragraph says
+  `CatalogDraftChanged` goes out "one per transaction however many writes it holds". That is not what the
+  code does, and a consumer sized from it would be wrong by the size of the batch. What is built: the fact
+  is appended to the outbox by `CatalogOutboxEventListener.append` (`BEFORE_COMMIT`) once for each fact the
+  authoring service publishes, and `CatalogDraftSignal.alreadySaid` drops a fact only when it is identical
+  to one that same authoring service instance already published in the same transaction (same tenant,
+  brand, entity type, entity, change and channel). Distinct entities are distinct facts, so a `REPLACE`-mode
+  bulk classification of N nodes (`CatalogAuthoringService.bulkClassify` through `classify`) is N facts, one
+  per node, plus one batch fact with no `entityId`; creating a product is two facts (the product's
+  `CREATED` and its default variant's `CLASSIFIED`); and the four authoring services each keep their own
+  memory. The sentence to rely on is: one fact per distinct entity and change, per authoring service, per
+  transaction. All of them are keyed by brand, so a bulk write is a burst on one partition, and a consumer
+  that re-projects a channel's menu must coalesce a burst itself. Pinned by `CatalogDraftSignalTests`.
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: proposed by Claude (batch 21, wave `w5-catalog-stops-fiscal`); Ayubkhon Abbosov

@@ -107,9 +107,11 @@ public final class KafkaTopicCatalog {
             // business-fact topic there is and shares tenancy's partition count; keyed by item, so
             // one item's facts stay in order. Nothing on it is text.
             new TopicSpecification(CONTENT_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
-            // ADR 0016. One record per draft write, keyed by brand so one brand's changes stay in order,
-            // and an import is suppressed rather than announced row by row; an operator editing a menu
-            // produces a handful a minute, so this shares tenancy's partition count.
+            // ADR 0016. One record per distinct entity and change a write touches (identical facts in one
+            // transaction are one; a bulk classification of N dishes is N plus one for the batch, ADR 0180),
+            // keyed by brand so one brand's changes stay in order, and an import is suppressed rather than
+            // announced row by row; an operator editing a menu produces a handful a minute and a bulk write
+            // is a burst on one brand's partition, so this shares tenancy's partition count.
             new TopicSpecification(CATALOG_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
             // ADR 0040. A confirmed availability push is one record per dish per binding and
             // a brand-wide stop across a pilot's bound venues is hundreds, not thousands a
