@@ -849,7 +849,9 @@ class PartnerFiscalizationBridgeTests {
 
         Outcome outcome = bridge.retry(TENANT, documentId, "idem-marked-3");
 
-        assertThat(outcome).isEqualTo(Outcome.REJECTED);
+        assertThat(outcome)
+                .as("nothing was asked of Payme: not a refusal by it, which would leave the claimed document SUBMITTED")
+                .isEqualTo(Outcome.NOT_SENDABLE);
         assertThat(fiscalService.find(TENANT, documentId).orElseThrow().lines())
                 .as("no synthetic line was written for the marked good either")
                 .isEmpty();
@@ -927,7 +929,7 @@ class PartnerFiscalizationBridgeTests {
 
         Outcome outcome = markedBridge(click, completeVodka(2)).retry(TENANT, documentId, "idem-no-snapshot");
 
-        assertThat(outcome).isEqualTo(Outcome.REJECTED);
+        assertThat(outcome).isEqualTo(Outcome.NOT_SENDABLE);
         assertThat(click.sent)
                 .as("a real receipt with real codes is never filed under a TIN of zeros")
                 .isEmpty();
@@ -961,7 +963,7 @@ class PartnerFiscalizationBridgeTests {
 
         Outcome outcome = capturingBridge(click).retry(TENANT, documentId, "idem-ordinary-no-snapshot");
 
-        assertThat(outcome).isEqualTo(Outcome.REJECTED);
+        assertThat(outcome).isEqualTo(Outcome.NOT_SENDABLE);
         assertThat(click.sent).isEmpty();
     }
 
@@ -1482,6 +1484,43 @@ class PartnerFiscalizationBridgeTests {
         assertThat(terminal.issueCalls())
                 .as("read before write: a receipt may already exist and the read could not say")
                 .isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "a cash document that holds no seller snapshot is not issued under zeros, and is not reported as the terminal's refusal")
+    void aCashDocumentWithNoSellerSnapshotIsNotSendable() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        withoutSellerSnapshot(documentId);
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+
+        assertThat(terminalBridge(terminal, true).retry(TENANT, documentId, "idem-no-seller"))
+                .as("REJECTED would say the terminal refused, and leave the claimed document SUBMITTED to be "
+                        + "blocked an hour later as 'the provider did not report' about a terminal nobody asked")
+                .isEqualTo(Outcome.NOT_SENDABLE);
+
+        assertThat(terminal.issueCalls()).isZero();
+        assertThat(sentRequestsOf(documentId)).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "a marked good paid in cash at a branch with a terminal is not sendable: no terminal carries a code yet")
+    void aMarkedGoodThroughATerminalIsNotSendable() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        world.marks = completeVodka(1);
+        world.orderFromMarks(world.marks);
+        world.classes.put(
+                VODKA_VARIANT,
+                new FiscalClassificationFacts("22030000000000000", "123456", 796, "Vodka", "4600000000015", true));
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+
+        assertThat(terminalBridge(terminal, true).retry(TENANT, documentId, "idem-marked-terminal"))
+                .isEqualTo(Outcome.NOT_SENDABLE);
+
+        assertThat(terminal.issueCalls()).isZero();
     }
 
     @Test

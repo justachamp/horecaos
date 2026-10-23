@@ -117,7 +117,20 @@ public interface PartnerFiscalizationPort {
          * ({@code OrderMarksCompleted}). Also the defence in depth for an order that completed through a
          * path the handover guard did not see.
          */
-        BLOCKED_MARKS
+        BLOCKED_MARKS,
+
+        /**
+         * The document cannot be sent as it stands, for a reason that is neither its lines nor an answer from a
+         * provider or a terminal: it holds no seller snapshot to file under, or the order holds goods the path that
+         * would issue the receipt cannot carry (a marked good through a provider with no field for a code, or
+         * through a terminal). Nothing was built and nothing was sent.
+         *
+         * <p>Blocked with {@code NO_FISCAL_PATH}: no path can discharge this obligation as it stands. It used to be
+         * answered {@link #REJECTED}, which this module reads as «payments wrote the outcome»; nothing was written,
+         * the claimed document stayed {@code SUBMITTED}, and an hour later the reporting sweep blocked it as «the
+         * provider did not report» about a provider, or a terminal, nobody had asked.
+         */
+        NOT_SENDABLE
     }
 
     /**

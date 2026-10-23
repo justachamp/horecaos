@@ -622,6 +622,32 @@ class FiscalObligationTests {
     }
 
     @Test
+    @DisplayName(
+            "a document that cannot be sent as it stands is blocked at once, not left SUBMITTED to be blocked later as the provider's silence")
+    void aDocumentThatCannotBeSentIsBlockedNotLeftSubmitted() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        UUID order = completedOrder("N-1", "CLICK", "PAID", NOW.minusSeconds(3600));
+        obligations.openObligations(50);
+
+        partner.answers = PartnerFiscalizationPort.Outcome.NOT_SENDABLE;
+        sweeper.submitCapturedObligations();
+
+        FiscalDocumentRow document = onlyDocument(order);
+        assertThat(document.state())
+                .as("SUBMITTED would hand it to the reporting sweep, which blocks it as PROVIDER_REPORT_OVERDUE, "
+                        + "'the provider did not report', about a provider nobody asked")
+                .isEqualTo(FiscalDocumentState.BLOCKED);
+        assertThat(document.reasonCode()).isEqualTo(FiscalReasonCode.NO_FISCAL_PATH);
+        assertThat(document.reasonNote()).contains("nothing was sent");
+
+        sweeper.submitCapturedObligations();
+
+        assertThat(partner.asks)
+                .as("a blocked document is not asked again into the same refusal")
+                .containsExactly(document.id());
+    }
+
+    @Test
     @DisplayName("when the marks complete the blocked document is reopened for the next submission pass")
     void completedMarksReopenTheBlockedDocument() {
         UUID order = blockedForMarks("M-2");

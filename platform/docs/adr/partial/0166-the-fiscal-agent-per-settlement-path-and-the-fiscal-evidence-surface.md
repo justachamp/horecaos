@@ -52,6 +52,11 @@
   already holds before it rebuilds the lines (`FiscalReceiptPort.heldReceipt`, Click's `ofd_data`), so an order that can no
   longer be built does not hide a receipt Click filed; and a document blocked as `PROVIDER_REPORT_OVERDUE` keeps that reason
   when a retry cannot rebuild its receipt, rather than being restated as «nothing was sent».
+  The two exits that send nothing and are neither a builder obstacle nor an answer (a document with no seller snapshot, and a
+  marked good through a path that cannot carry a code, which a terminal never can yet) return `NOT_SENDABLE` and are blocked at
+  once as `NO_FISCAL_PATH`; they used to return `REJECTED`, which left the claimed document `SUBMITTED` to be blocked an hour
+  later as «the provider did not report» about a provider or terminal nobody had asked. No vendor adapter for `FiscalTerminalPort`
+  is wired outside the local profile, so the terminal half cannot be reached in a deployed profile yet; the provider half is the same defect on a path that is wired.
   `FiscalNodeFacts.requiresMarkingCapablePayment` is called from `CartPaymentOptions` and
   `CheckoutEligibilityGuard` (while `feature.marked_goods` is on for the tenant), so Payme is neither
   offered nor accepted for a basket holding a marked node, and `OrderAmendmentService` refuses

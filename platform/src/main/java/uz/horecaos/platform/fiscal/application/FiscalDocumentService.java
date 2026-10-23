@@ -321,7 +321,7 @@ public class FiscalDocumentService {
             case BLOCKED_CLASSIFICATION -> FiscalReasonCode.CLASSIFICATION_MISSING;
             case BLOCKED_TAX -> FiscalReasonCode.VAT_NOT_EXPRESSIBLE;
             case BLOCKED_RECONCILIATION -> FiscalReasonCode.RECEIPT_DOES_NOT_RECONCILE;
-            case NO_TERMINAL -> FiscalReasonCode.NO_FISCAL_PATH;
+            case NO_TERMINAL, NOT_SENDABLE -> FiscalReasonCode.NO_FISCAL_PATH;
             case TERMINAL_UNREACHABLE -> FiscalReasonCode.TERMINAL_OFFLINE;
             default -> null;
         };
@@ -332,6 +332,7 @@ public class FiscalDocumentService {
         return switch (outcome) {
             case NO_TERMINAL -> "no active fiscal terminal of the selling legal entity is bound to this location";
             case TERMINAL_UNREACHABLE -> "the tenant's fiscal terminal could not be reached; nothing was issued";
+            case NOT_SENDABLE -> FiscalObligationService.NOT_SENDABLE_NOTE;
             default -> "the receipt could not be built on retry; nothing was sent";
         };
     }

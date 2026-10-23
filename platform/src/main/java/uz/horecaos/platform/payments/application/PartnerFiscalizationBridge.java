@@ -158,7 +158,7 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
                         "Fiscal document {} for order {} was not sent: it holds no seller snapshot",
                         documentId,
                         document.orderId());
-                return unlessAlreadyHeld(document, binding.get(), Outcome.REJECTED);
+                return unlessAlreadyHeld(document, binding.get(), Outcome.NOT_SENDABLE);
             }
             switch (lines.build(document, filedUnder.get())) {
                 case ReceiptLineBuilder.Result.MarksIncomplete incomplete -> {
@@ -170,7 +170,7 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
                             documentId,
                             document.orderId(),
                             unprojectable.reason());
-                    return unlessAlreadyHeld(document, binding.get(), Outcome.REJECTED);
+                    return unlessAlreadyHeld(document, binding.get(), Outcome.NOT_SENDABLE);
                 }
                 case ReceiptLineBuilder.Result.Blocked blocked -> {
                     return unlessAlreadyHeld(
