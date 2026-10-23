@@ -39,6 +39,7 @@ import uz.horecaos.platform.customers.application.CustomerProfileService;
 import uz.horecaos.platform.customers.application.CustomerProfileService.ContactType;
 import uz.horecaos.platform.customers.application.RecipientContactService;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
+import uz.horecaos.platform.customers.spi.CustomerErasureParticipant;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 import uz.horecaos.platform.iam.infrastructure.protection.DataEncryptionKeyProvider;
@@ -71,8 +72,10 @@ import uz.horecaos.platform.notifications.application.NotificationEligibilitySer
 import uz.horecaos.platform.notifications.application.NotificationTemplateService;
 import uz.horecaos.platform.notifications.application.NotificationTemplateService.Wording;
 import uz.horecaos.platform.notifications.application.NotificationWorker;
+import uz.horecaos.platform.notifications.application.NotificationsErasureParticipant;
 import uz.horecaos.platform.notifications.application.OperationsAlertFanoutService;
 import uz.horecaos.platform.notifications.application.TelegramOperationsEntitlementGate;
+import uz.horecaos.platform.notifications.application.UnsubscribeTokenSweeper;
 import uz.horecaos.platform.notifications.domain.MessageLocale;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
@@ -343,6 +346,55 @@ class CampaignEmailDeliveryTests {
     }
 
     @Test
+    @DisplayName("a token past its life is removed by the sweep, and one still in force is kept")
+    void expiredUnsubscribeTokensAreSwept() {
+        grantEmailConsent();
+        enqueue("m1");
+        worker.drain();
+        String token = tokenOf(relay.sent.getFirst());
+        UnsubscribeTokenSweeper sweeper = new UnsubscribeTokenSweeper(unsubscribes);
+        assertThat(rowsIn("notifications.unsubscribe_tokens")).isEqualTo(1);
+
+        assertThat(sweeper.purgeExpired()).as("nothing has expired yet").isZero();
+        assertThat(unsubscribes.preview(token))
+                .as("and the way out still works")
+                .isPresent();
+
+        clock.advance(Duration.ofDays(401));
+        assertThat(sweeper.purgeExpired()).isEqualTo(1);
+        assertThat(rowsIn("notifications.unsubscribe_tokens"))
+                .as("an expired token answers as an unknown one, so the row holds an account and a message for nothing")
+                .isZero();
+        assertThat(sweeper.purgeExpired())
+                .as("and a second pass has nothing left to do")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("erasing the customer deletes the tokens minted for her, not another customer's")
+    void erasureDeletesTheCustomersUnsubscribeTokens() {
+        grantEmailConsent();
+        UUID notificationId = enqueue("m1");
+        worker.drain();
+        String hers = tokenOf(relay.sent.getFirst());
+        UUID bystander = UUID.randomUUID();
+        String theirs = unsubscribes.issue(TENANT, BRAND, bystander, notificationId, "MARKETING_PROMOTIONS", "uz");
+        assertThat(rowsIn("notifications.unsubscribe_tokens")).isEqualTo(2);
+
+        var erased = new NotificationsErasureParticipant(notifications, new JdbcUnsubscribeTokenStore(jdbc), clock)
+                .erase(TENANT, accountId, CustomerErasureParticipant.ErasedContacts.none());
+
+        assertThat(erased.rowsByTable()).containsEntry("notifications.unsubscribe_tokens", 1);
+        assertThat(unsubscribes.preview(hers))
+                .as("her link answers as an unknown one does")
+                .isEmpty();
+        assertThat(unsubscribes.preview(theirs))
+                .as("another customer's link is untouched")
+                .isPresent();
+        assertThat(rowsIn("notifications.unsubscribe_tokens")).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("a relay that refuses the address for good suppresses the customer, once")
     void aRefusedAddressSuppresses() {
         grantEmailConsent();
@@ -603,6 +655,12 @@ class CampaignEmailDeliveryTests {
                 .param("id", notificationId)
                 .param("now", OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC))
                 .update();
+    }
+
+    private long rowsIn(String table) {
+        return jdbc.sql("SELECT count(*) FROM %s".formatted(table))
+                .query(Long.class)
+                .single();
     }
 
     private String everythingIn(String table) {

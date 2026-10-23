@@ -66,6 +66,7 @@ import uz.horecaos.platform.notifications.application.NotificationsErasurePartic
 import uz.horecaos.platform.notifications.application.PushSubscriptionErasureParticipant;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcPushSubscriptionStore;
+import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcUnsubscribeTokenStore;
 import uz.horecaos.platform.ordering.OrderBoardFixtures;
 import uz.horecaos.platform.ordering.application.OrderingErasureGuard;
 import uz.horecaos.platform.ordering.application.OrderingErasureParticipant;
@@ -204,6 +205,7 @@ class CustomerErasureParticipantsTests {
                         "notifications.notification_preferences",
                         "notifications.recipient_endpoints",
                         "notifications.push_subscriptions",
+                        "notifications.unsubscribe_tokens",
                         "ordering.order_customer_snapshots",
                         "ordering.order_lines",
                         "ordering.order_outcomes",
@@ -266,7 +268,8 @@ class CustomerErasureParticipantsTests {
                 new LoyaltyErasureParticipant(new JdbcLoyaltyStore(app), new JdbcPosBalanceSyncStore(app), clock),
                 new ReferralErasureParticipant(new JdbcReferralStore(app), clock),
                 new PricingErasureParticipant(new JdbcBenefitGrantStore(app), clock),
-                new NotificationsErasureParticipant(new JdbcNotificationStore(app), clock),
+                new NotificationsErasureParticipant(
+                        new JdbcNotificationStore(app), new JdbcUnsubscribeTokenStore(app), clock),
                 new PushSubscriptionErasureParticipant(
                         new JdbcPushSubscriptionStore(app), new JdbcNotificationStore(app), clock),
                 new OrderingErasureParticipant(new JdbcOrderErasureStore(app), protection, clock),
@@ -367,6 +370,9 @@ class CustomerErasureParticipantsTests {
                         customer))
                 .as("an endpoint that kept the old hash would still answer a search for her number")
                 .isNotEqualTo(hers.phoneHash);
+        assertThat(count("notifications.unsubscribe_tokens", "customer_account_id", customer))
+                .as("a campaign email's way out names her account and is a working capability for 400 days")
+                .isZero();
         // notifications-push (ADR 0182): the subscription ends and keeps no secret
         assertThat(text(
                         "SELECT status FROM notifications.push_subscriptions WHERE customer_account_id = :id",
@@ -870,6 +876,26 @@ class CustomerErasureParticipantsTests {
                 (tag.equals("a") ? "e" : "f").repeat(64),
                 "status",
                 "ACTIVE");
+
+        // notifications-email: the way out a campaign email carried (V0671), valid for 400 days
+        insert(
+                "notifications.unsubscribe_tokens",
+                "token_hash",
+                (tag.equals("a") ? "c" : "d").repeat(64),
+                "tenant_id",
+                TENANT,
+                "brand_id",
+                BRAND,
+                "customer_account_id",
+                account,
+                "notification_id",
+                UUID.randomUUID(),
+                "consent_purpose",
+                "MARKETING_PROMOTIONS",
+                "created_at",
+                NOW,
+                "expires_at",
+                NOW.plusSeconds(400L * 86_400));
 
         // ordering: a delivered order with its copies, an amendment, the cart it came from, and a cart left open
         UUID order = fixtures.insertOrder(OrderBoardFixtures.order("ORD-" + tag)
@@ -1423,6 +1449,10 @@ class CustomerErasureParticipantsTests {
             {
                 "endpoints",
                 "SELECT status || normalized_hash FROM notifications.recipient_endpoints WHERE customer_account_id = :a"
+            },
+            {
+                "unsubscribeTokens",
+                "SELECT count(*)::text FROM notifications.unsubscribe_tokens WHERE customer_account_id = :a"
             },
             {
                 "push",
