@@ -136,7 +136,8 @@ export const couriersUzLatn: AreaMessages<typeof couriersEn> = {
   'couriers.access.state.SENT': 'Havola SMS orqali yuborilgan va hali ishlatilmagan.',
   'couriers.access.state.EXPIRED': 'Havola ishlatilmasdan muddati tugadi.',
   'couriers.access.state.ACCEPTED': 'Kuryer parolni oʻrnatdi.',
-  'couriers.access.state.VOIDED': 'Yangiroq havola bilan almashtirilgan yoki kuryer undan foydalanmay ketgan.',
+  'couriers.access.state.VOIDED':
+    'Yangiroq havola bilan almashtirilgan yoki kuryer undan foydalanmay ketgan.',
   'couriers.access.state.FAILED': 'SMS yuborib boʻlmadi.',
   'couriers.access.invite': 'Taklif yuborish',
   'couriers.access.reset': 'Kirishni tiklash',

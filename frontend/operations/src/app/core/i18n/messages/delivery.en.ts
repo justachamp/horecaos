@@ -887,7 +887,8 @@ export const deliveryEn = {
     '{couriers} couriers, {total} in all, over {windows} shifts or periods in the last {days} days.',
   'delivery.rates.reasons.sim.openPeriod':
     'A period that is still open is shown as it stands today and may change before it closes.',
-  'delivery.rates.reasons.sim.truncated': 'The preview is partial: more couriers would be hit than are listed, or more shifts closed than it could replay. The real figure may be higher.',
+  'delivery.rates.reasons.sim.truncated':
+    'The preview is partial: more couriers would be hit than are listed, or more shifts closed than it could replay. The real figure may be higher.',
   'delivery.rates.reasons.sim.courier': 'Courier',
   'delivery.rates.reasons.sim.reading': 'Reading',
   'delivery.rates.reasons.sim.amount': 'Would post',

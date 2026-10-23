@@ -888,7 +888,8 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
     'Курьеров: {couriers}, всего {total}, по {windows} сменам или периодам за {days} дн.',
   'delivery.rates.reasons.sim.openPeriod':
     'Незакрытый период показан как сейчас и может измениться до закрытия.',
-  'delivery.rates.reasons.sim.truncated': 'Проверка неполная: правило заденет больше курьеров, чем показано, или закрыто больше смен, чем удалось проверить. Реальная цифра может быть выше.',
+  'delivery.rates.reasons.sim.truncated':
+    'Проверка неполная: правило заденет больше курьеров, чем показано, или закрыто больше смен, чем удалось проверить. Реальная цифра может быть выше.',
   'delivery.rates.reasons.sim.courier': 'Курьер',
   'delivery.rates.reasons.sim.reading': 'Показатель',
   'delivery.rates.reasons.sim.amount': 'Было бы начислено',

@@ -897,7 +897,8 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
     'Kuryerlar: {couriers}, jami {total}, oxirgi {days} kunda {windows} ta smena yoki davr boʻyicha.',
   'delivery.rates.reasons.sim.openPeriod':
     'Hali yopilmagan davr hozirgi holatida koʻrsatilgan va yopilguncha oʻzgarishi mumkin.',
-  'delivery.rates.reasons.sim.truncated': 'Koʻrib chiqish toʻliq emas: qoida koʻrsatilganidan koʻproq kuryerga tegadi yoki tekshirib boʻlinganidan koʻproq smena yopilgan. Haqiqiy raqam yuqoriroq boʻlishi mumkin.',
+  'delivery.rates.reasons.sim.truncated':
+    'Koʻrib chiqish toʻliq emas: qoida koʻrsatilganidan koʻproq kuryerga tegadi yoki tekshirib boʻlinganidan koʻproq smena yopilgan. Haqiqiy raqam yuqoriroq boʻlishi mumkin.',
   'delivery.rates.reasons.sim.courier': 'Kuryer',
   'delivery.rates.reasons.sim.reading': 'Koʻrsatkich',
   'delivery.rates.reasons.sim.amount': 'Hisoblangan boʻlardi',
