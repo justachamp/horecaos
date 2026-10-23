@@ -83,8 +83,12 @@ runs them; what they cover differs by app.
   "deliberately unused"). `control-plane` also runs operations' `horecaos/no-raw-px-font-size`
   — imported from `frontend/operations/tools/eslint-plugin-horecaos`, not copied — because it
   vendors the closed type scale; the two storefronts are Tailwind/SCSS apps with no such scale,
-  so the rule is not applied there. Angular templates are not linted (`angular-eslint` needs
-  ESLint 9; operations is on 8.57, so the upgrade is one change across the apps).
+  so the rule is not applied there. Every app, the storefronts' `.scss` included, also runs
+  operations' `horecaos/no-physical-direction` over its stylesheets: `margin-left` is a finding,
+  `eslint --fix` rewrites it to `margin-inline-start`, and a declaration that must stay physical
+  says why with `physical-ok: <reason>` (ADR 0149, X.40; `operations/README.md` has the detail).
+  Angular templates are not linted (`angular-eslint` needs ESLint 9; operations is on 8.57, so
+  the upgrade is one change across the apps).
   `npm run lint:rules` runs `tools/lint-config.test.mjs`, which feeds the configured linter code
   that is wrong and code that is fine, so a config that silently lost its rules fails instead of
   passing for ever.

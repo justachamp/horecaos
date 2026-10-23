@@ -6,10 +6,12 @@
  * Run with `node tools/eslint-plugin-horecaos/no-physical-direction.test.js` from
  * `frontend/operations/`, the way its sibling is run (`npm run lint:rules`).
  *
- * Three things are proved: the rule names each physical spelling and the logical one it becomes; it
- * lets a logical stylesheet through (and does not mistake `left: auto` or a class called
- * `.table-left-column` for an offset); and the baseline is a ratchet that can only shrink, because a
- * stylesheet listed in it that no longer needs to be is a failure here.
+ * Four things are proved: the rule names each physical spelling and the logical one it becomes, and
+ * `--fix` rewrites it; it lets a logical stylesheet through (and does not mistake `left: auto` or a
+ * class called `.table-left-column` for an offset); a declaration that says `physical-ok: <why>`
+ * is allowed and one with no reason is not; and, whatever any app's lint config says, no
+ * stylesheet of any app says `margin-left` any more -- the ratchet has no baseline list, only the
+ * reasoned exceptions, and their number is capped here so it cannot grow unseen.
  */
 
 const assert = require('assert');
@@ -124,43 +126,67 @@ ruleTester.run('no-physical-direction', rule, {
   ],
 });
 
-// The ratchet, per app: every file on a baseline exists and still needs to be there.
-const apps = [
-  { app: 'operations', dir: process.cwd() },
-  { app: 'control-plane', dir: path.join(process.cwd(), '..', 'control-plane') },
-  { app: 'storefront', dir: path.join(process.cwd(), '..', 'storefront') },
-  { app: 'storefront-milliy', dir: path.join(process.cwd(), '..', 'storefront-milliy') },
-];
-const sizes = [];
-for (const { app, dir } of apps) {
-  const baseline = rule.loadBaseline(app);
-  const stale = [];
-  const missing = [];
-  for (const file of baseline) {
-    const full = path.join(dir, file);
-    if (!fs.existsSync(full)) {
-      missing.push(file);
-      continue;
-    }
-    if (rule.findPhysical(fs.readFileSync(full, 'utf8')).length === 0) {
-      stale.push(file);
+// The ratchet, across the apps: every stylesheet under every app's `src/`, read from disk.
+// `lint:rules` of an app proves that app's lint config still carries the rule
+// (`frontend/tools/lint-config.test.mjs`); this proves the tree is clean whichever config is read.
+const FRONTEND = path.join(__dirname, '..', '..', '..');
+const APPS = ['operations', 'control-plane', 'storefront', 'storefront-milliy', 'courier'];
+const STYLESHEET = /\.(?:css|scss)$/u;
+
+/** The exceptions that were agreed, by file. Growing this list is a decision a reviewer sees. */
+const ALLOWED = {
+  'operations/src/app/shared/ui/charts/donut-chart.css': 1,
+  'operations/src/app/shared/ui/kiosk-frame.css': 1,
+  'operations/src/app/shared/ui/phone-frame.css': 1,
+  'operations/src/app/shared/ui/telegram-mini-app-frame.css': 1,
+};
+
+function stylesheets(dir) {
+  const found = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...stylesheets(full));
+    } else if (STYLESHEET.test(entry.name)) {
+      found.push(full);
     }
   }
-  assert.deepStrictEqual(
-    missing,
-    [],
-    `${app}'s physical-direction baseline names files that do not exist: ${missing}`,
-  );
-  assert.deepStrictEqual(
-    stale,
-    [],
-    `${app}'s physical-direction baseline lists stylesheets that no longer use a physical direction; remove them so the list only shrinks: ${stale}`,
-  );
-  // Sorted and free of duplicates, so a diff of it reads as additions and removals only.
-  assert.deepStrictEqual([...baseline], [...baseline].sort(), `${app}'s baseline must stay sorted`);
-  sizes.push(`${app} ${baseline.size}`);
+  return found;
 }
 
+const violations = [];
+const allowed = {};
+let scanned = 0;
+for (const app of APPS) {
+  for (const file of stylesheets(path.join(FRONTEND, app, 'src'))) {
+    scanned += 1;
+    const key = path.relative(FRONTEND, file).split(path.sep).join('/');
+    for (const hit of rule.findPhysical(fs.readFileSync(file, 'utf8'))) {
+      if (hit.allowed) {
+        allowed[key] = (allowed[key] ?? 0) + 1;
+      } else {
+        violations.push(`${key}: ${hit.found} (use ${hit.logical})`);
+      }
+    }
+  }
+}
+assert.deepStrictEqual(
+  violations,
+  [],
+  `physical directions in a stylesheet: run \`npx eslint --fix "src/**/*.{css,scss}"\` in the app, or say why it must stay with a \`physical-ok: <reason>\` comment`,
+);
+assert.deepStrictEqual(
+  allowed,
+  ALLOWED,
+  'the stylesheets that keep a physical declaration with a reason changed: update ALLOWED here, so the exception is seen in review',
+);
+
+// The old escape hatch is gone and stays gone: a per-app baseline list is a silent exception.
+const leftovers = fs
+  .readdirSync(__dirname)
+  .filter((name) => name.startsWith('physical-direction-baseline'));
+assert.deepStrictEqual(leftovers, [], 'the physical-direction baselines were removed (X.40)');
+
 console.log(
-  `no-physical-direction: fixtures pass; stylesheets remaining on the baselines (${sizes.join(', ')}) and none of them is stale.`,
+  `no-physical-direction: fixtures pass; ${scanned} stylesheets across ${APPS.length} apps, no physical declaration, ${Object.keys(allowed).length} stylesheets with a stated exception (${Object.values(allowed).reduce((a, b) => a + b, 0)} declarations).`,
 );

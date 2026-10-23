@@ -12,11 +12,12 @@
  * `inset-inline-start`, `text-align: start`) says the same thing now and follows the writing
  * direction later.
  *
- * **A ratchet, not a purge.** A hundred and forty-odd stylesheets already say it the physical way,
- * and rewriting them is a visual change nobody has asked for. So the rule fails on a stylesheet that
- * is not on `physical-direction-baseline.json`: new files, and any file somebody touches and
- * removes from the list by cleaning it. The test beside it (`no-physical-direction.test.js`) fails
- * when a listed file no longer needs to be, so the list can only shrink.
+ * **A ratchet that has run out of slack.** The stylesheets that predated the rule were converted in
+ * one pass (batch 21, row X.40: 142 operations, 38 control-plane and 20 storefront stylesheets),
+ * so there is no baseline list any more: the rule fails on any physical declaration in any
+ * stylesheet of the four apps (and the courier), new or old. The test beside it
+ * (`no-physical-direction.test.js`) reads every stylesheet of every app, so an app whose lint
+ * config quietly lost the rule still fails here.
  *
  * Deliberately dumb, like its sibling: a regex over the raw text, the same parser.
  *
@@ -26,9 +27,6 @@
  * comment on the declaration's line (or the line above) that says `physical-ok: <why>`, with a
  * reason. A comment with no reason allows nothing.
  */
-
-const fs = require('fs');
-const path = require('path');
 
 /** Each pattern is one physical spelling and the logical one it becomes. */
 const PHYSICAL = [
@@ -70,29 +68,6 @@ const PHYSICAL = [
  * the point: without one the comment is just a way to silence the rule.
  */
 const ALLOW = /physical-ok:\s*(?!\*\/)\S/u;
-
-/**
- * One baseline per app, because a path in it is relative to that app: the operations console's
- * is `physical-direction-baseline.json`, any other app's is `physical-direction-baseline.<app>.json`
- * beside it (the control plane shares this plugin). An app with no baseline file has no exceptions.
- */
-function baselineFileFor(app) {
-  const name =
-    app === 'operations'
-      ? 'physical-direction-baseline.json'
-      : `physical-direction-baseline.${app}.json`;
-  return path.join(__dirname, '..', name);
-}
-
-function loadBaseline(app = path.basename(process.cwd())) {
-  const file = baselineFileFor(app);
-  return new Set(fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : []);
-}
-
-/** The path the baseline lists: relative to `frontend/operations`, forward slashes. */
-function baselineKey(filename) {
-  return path.relative(process.cwd(), filename).split(path.sep).join('/');
-}
 
 /**
  * The text a physical spelling is rewritten to. The match is `margin-left:`, `left: ` or
@@ -157,28 +132,22 @@ function findPhysical(text) {
 
 module.exports = {
   findPhysical,
-  baselineKey,
-  loadBaseline,
-  baselineFileFor,
   meta: {
     type: 'problem',
     docs: {
       description:
-        "Ban a physical left/right offset, margin, padding, border or alignment in a stylesheet that is not on the baseline: the writing direction is the registry's to state (ADR 0149).",
+        "Ban a physical left/right offset, margin, padding, border, radius or alignment in a stylesheet unless the declaration says why in a `physical-ok:` comment: the writing direction is the registry's to state (ADR 0149).",
     },
     fixable: 'code',
     schema: [],
     messages: {
       physicalDirection:
-        'Physical direction ("{{found}}") is a layout that does not follow the writing direction. Use the logical property ({{logical}}) -- `eslint --fix` does it; or, to leave a stylesheet as it is, it must be listed in its app baseline (frontend/operations/tools/eslint-plugin-horecaos/physical-direction-baseline*.json), or the declaration must say why in a comment: `physical-ok: <reason>`.',
+        'Physical direction ("{{found}}") is a layout that does not follow the writing direction. Use the logical property ({{logical}}) -- `eslint --fix` does it; or, if the declaration must stay physical (centring beside translateX(-50%), a device edge), say why in a comment on its line or the line above: `physical-ok: <reason>`.',
     },
   },
   create(context) {
     return {
       Program() {
-        if (loadBaseline().has(baselineKey(context.getFilename()))) {
-          return;
-        }
         const sourceCode = context.getSourceCode();
         const text = sourceCode.getText();
         for (const hit of findPhysical(text)) {

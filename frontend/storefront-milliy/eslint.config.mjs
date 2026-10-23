@@ -32,8 +32,8 @@ export default [
     // ADR 0149, Decision 6: the writing direction is the registry's to state, so a stylesheet says
     // `margin-inline-start`, not `margin-left`. The storefronts' layout is mostly Tailwind
     // utilities (already logical where it matters); this covers the hand-written component SCSS.
-    // A ratchet: the stylesheets that predate it are listed in the plugin's per-app baseline,
-    // which can only shrink.
+    // No stylesheet is exempt (the baseline list is gone, X.40); a declaration that must stay
+    // physical says why with `physical-ok: <reason>`.
     files: ['**/*.css', '**/*.scss'],
     plugins: { horecaos },
     languageOptions: { parser: rawTextParser },

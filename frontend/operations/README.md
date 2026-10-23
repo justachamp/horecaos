@@ -235,10 +235,19 @@ codes all read the registry's other tiers. A language the registry **declares bu
 
 `<html dir>` follows `<html lang>` (`core/i18n/document-direction.ts`): every entry says `LTR`, the
 document says so, and new or touched CSS uses logical properties (`margin-inline-start`,
-`inset-inline-end`, `text-align: start`). `no-physical-direction` (ESLint, `npm run lint`) fails a
-stylesheet that is not on `tools/eslint-plugin-horecaos/physical-direction-baseline.json` and says
-`margin-left`; the list can only shrink, and `npm run lint:rules` fails when a listed file no longer
-needs to be there.
+`inset-inline-end`, `text-align: start`). `no-physical-direction` (ESLint, `npm run lint`) fails any
+stylesheet that says `margin-left`, `padding-right`, `left:`, `text-align: right`, a `border-left`,
+a `float` or a corner radius by its physical name, in all four apps (the consoles' `.css`, the
+storefronts' `.css` and `.scss`) and the courier; `eslint --fix` rewrites it. There is no baseline
+list: the stylesheets that predated the rule were converted in one pass (X.40), and `npm run
+lint:rules` reads every stylesheet of every app, so it fails whichever lint config an app carries.
+A declaration that must stay physical -- `left: 50%` beside `translateX(-50%)` centres the same way
+in either direction -- says why in a comment on its line or the line above, `physical-ok: <reason>`;
+a comment with no reason allows nothing, and the exceptions are listed in
+`tools/eslint-plugin-horecaos/no-physical-direction.test.js`, so a new one is seen in review.
+Not covered, because the rule reads declarations and not values: a four-value `margin`, `padding` or
+`border-radius` shorthand, `translateX`, `background-position` and a `style=` attribute or a
+component's inline `styles:` in a `.ts` file.
 
 ### Activating a language
 
