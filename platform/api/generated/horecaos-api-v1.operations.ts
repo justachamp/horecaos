@@ -9590,6 +9590,10 @@ export interface TicketResponse {
   version?: number;
 }
 
+export interface TillRevisionActionRequest {
+  expectedRevision: number;
+}
+
 export interface TillRevisionNoticeView {
   attemptCount?: number;
   currency?: string;
@@ -9599,6 +9603,7 @@ export interface TillRevisionNoticeView {
   openedAt?: string;
   resolvedAt?: string;
   revisedTotalMinor?: number;
+  revision?: number;
   source?: string;
   status?: string;
   tillTotalMinor?: number;
@@ -10294,8 +10299,8 @@ export interface Operations {
   "externalCourier": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/external-courier"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } }; body: ExternalCourierRequest }; responses: { "200": ExternalCourierResponse } };
   "severity": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/lateness"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": OrderLatenessResponse } };
   "tillRevisionForOrder": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/till-revision"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": TillRevisionResponse } };
-  "acknowledgeTillRevision": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/till-revision/acknowledge"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": TillRevisionResponse } };
-  "sendTillRevision": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/till-revision/send"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": TillRevisionSendResponse } };
+  "acknowledgeTillRevision": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/till-revision/acknowledge"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } }; body: TillRevisionActionRequest }; responses: { "200": TillRevisionResponse } };
+  "sendTillRevision": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/till-revision/send"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } }; body: TillRevisionActionRequest }; responses: { "200": TillRevisionSendResponse } };
   "replacePreparationBands": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/preparation-bands"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BandsRequest }; responses: { "200": unknown } };
   "listForLocation": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/recovery-cases"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { cursor?: string; limit?: number; maxRating?: number; minRating?: number; ownerStaffMemberId?: string; slaState?: "ON_TRACK" | "AT_RISK" | "BREACHED" | "MET"; state?: "NEW" | "IN_PROGRESS" | "RESOLVED" | "CLOSED_UNRESOLVED" } } }; responses: { "200": PageCaseSummaryResponse } };
   "open_3": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/recovery-cases"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: OpenCaseRequest }; responses: { "200": CaseMutationResponse } };

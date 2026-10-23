@@ -39,6 +39,14 @@
   `wouldPush` count, both built from one predicate (`JdbcMarketplaceAvailabilityStore.wouldPushPredicate`).
   The stop list's banner offers it beside the count. Leaving the dry run clears the recorded decisions
   (`forgetConfirmations`), and the items of a binding that is not rehearsing no longer carry them.
+  Corrected 2026-10-23 (Implementation status, same review fix): the route table's two till-revision POSTs
+  took no body and closed whichever notice was open when the request landed, so a second weighing
+  between the operator's look and their click had them confirm, or tell the till, a total they never saw.
+  Both now carry `expectedRevision`, the `revision` the read returns for the notice on screen, and answer
+  `409 STALE_VERSION` (nothing sent, nothing closed) when the open notice has moved. A notice is closed only
+  as the revision acted on (`JdbcTillRevisionNoticeStore.resolve`). If the order is weighed again while the
+  till is being asked, the till keeps what it was told, the newer notice stays open carrying that as what the
+  till holds, and the send answers the new outcome `SUPERSEDED` (`PosOrderRevisionService.told`).
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: proposed by Claude (batch 21, wave `w5-catalog-stops-fiscal`); Ayubkhon Abbosov

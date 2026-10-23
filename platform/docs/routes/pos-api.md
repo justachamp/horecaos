@@ -78,6 +78,11 @@ starts unassessed (the binding trigger refuses an unassessed capability), and Cl
 `PUT /orders/{id}` accepts only `IGNORE` and a line count is an integer (Q10). A refusal, an unreachable till
 and an unknown outcome leave the notice open with a stable code and never the vendor's words.
 
+Both actions name the notice the person looked at (`expectedRevision`, the `revision` the read returns): a notice
+that a second weighing has moved since is refused `409 STALE_VERSION` with nothing sent and nothing closed, and a
+notice that moves while the vendor is being asked stays open as `SUPERSEDED`, carrying the amount the till took as
+what the till holds.
+
 ## Rollout
 
 Per ADR 0007: ships with its bindings disabled, enabled for one test tenant and

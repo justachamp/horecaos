@@ -125,6 +125,7 @@ public final class FakePosAdapter implements PosAdapter {
     private final Set<String> appliedRevisionKeys = ConcurrentHashMap.newKeySet();
     private @Nullable ProviderOutcome nextRevisionOutcome;
     private boolean loseNextRevisionReply;
+    private @Nullable Runnable duringNextRevision;
 
     /** One revised total the fake applied. */
     public record RecordedRevision(String externalOrderId, PosAdapter.TillRevision revision) {}
@@ -369,6 +370,16 @@ public final class FakePosAdapter implements PosAdapter {
     }
 
     /** The next revision is applied and the reply is lost: the platform sees an unknown outcome. */
+    /**
+     * Runs {@code action} while the next revision is in flight, after the platform has chosen what to send and
+     * before the vendor answers: another request's write landing in the middle of a call that is outside any
+     * transaction (the second weighing the operator never saw).
+     */
+    public synchronized FakePosAdapter duringNextRevision(Runnable action) {
+        this.duringNextRevision = action;
+        return this;
+    }
+
     public synchronized FakePosAdapter loseNextRevisionReply() {
         this.loseNextRevisionReply = true;
         return this;
@@ -382,6 +393,11 @@ public final class FakePosAdapter implements PosAdapter {
     @Override
     public synchronized ProviderOutcome reviseExportedOrder(
             PosContext context, String externalOrderId, TillRevision revision) {
+        Runnable during = duringNextRevision;
+        duringNextRevision = null;
+        if (during != null) {
+            during.run();
+        }
         ProviderOutcome scripted = nextRevisionOutcome;
         nextRevisionOutcome = null;
         if (scripted != null) {

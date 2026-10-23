@@ -2,6 +2,8 @@ package uz.horecaos.platform.pos.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
@@ -11,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -93,17 +96,26 @@ public class OrderPosRevisionController {
     @Operation(
             summary = "Tell the till the order's revised total",
             description = "Only where the binding can take one (ORDER_REVISION). Sent under a key built from "
-                    + "the notice, so a repeat is the same send. Answers 200 with the outcome in the body: a "
-                    + "refusal, an unreachable till and an unknown outcome are ordinary answers, and in each "
-                    + "the notice stays open with a stable failure code.")
+                    + "the notice, so a repeat is the same send. The body names the revision of the notice the "
+                    + "operator saw: 409 STALE_VERSION, with nothing sent and nothing closed, when the order has "
+                    + "been weighed again since. Otherwise answers 200 with the outcome in the body: a "
+                    + "refusal, an unreachable till, an unknown outcome and a notice that moved while the till "
+                    + "was being asked (SUPERSEDED) are ordinary answers, and in each the notice stays open "
+                    + "with a stable failure code.")
     public ResponseEntity<TillRevisionSendResponse> sendTillRevision(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
-            @PathVariable UUID orderId) {
+            @PathVariable UUID orderId,
+            @Valid @RequestBody TillRevisionActionRequest request) {
         requireOrderAtLocation(tenantId, brandId, locationId, orderId);
         String subject = currentActor.get().subject();
-        PosOrderRevisionService.Result result = revisions.tell(tenantId, orderId, subject);
+        PosOrderRevisionService.Result result;
+        try {
+            result = revisions.tell(tenantId, orderId, subject, request.expectedRevision());
+        } catch (PosOrderRevisionService.StaleNoticeException stale) {
+            throw ApiException.staleVersion(stale.expectedRevision(), stale.actualRevision());
+        }
         Notice notice = result.view().notice();
         if (notice != null) {
             audit(tenantId, notice, "pos.order_revision_send_requested", "TILL_REVISION_SENT", subject, result);
@@ -117,20 +129,30 @@ public class OrderPosRevisionController {
     @Operation(
             summary = "Say the till now agrees with the order",
             description = "A person changed the till by hand. Closes the open notice as ACKNOWLEDGED, audited "
-                    + "against the person. 409 when no notice is open.")
+                    + "against the person. The body names the revision of the notice the person saw: 409 "
+                    + "STALE_VERSION, with the notice left open, when the order has been weighed again since, "
+                    + "because what they changed the till to is not the total the order is worth now. 409 "
+                    + "NO_OPEN_NOTICE when none is open.")
     public ResponseEntity<TillRevisionResponse> acknowledgeTillRevision(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
-            @PathVariable UUID orderId) {
+            @PathVariable UUID orderId,
+            @Valid @RequestBody TillRevisionActionRequest request) {
         requireOrderAtLocation(tenantId, brandId, locationId, orderId);
         String subject = currentActor.get().subject();
         Notice before = revisions.view(tenantId, orderId).notice();
-        if (before == null || !before.open() || !revisions.acknowledge(tenantId, orderId, subject)) {
-            throw new ApiException(
-                    ErrorCode.RESOURCE_CONFLICT,
-                    "This order has no open till revision to acknowledge",
-                    Map.of("conflict", "NO_OPEN_NOTICE"));
+        if (before == null || !before.open()) {
+            throw noOpenNotice();
+        }
+        boolean closed;
+        try {
+            closed = revisions.acknowledge(tenantId, orderId, subject, request.expectedRevision());
+        } catch (PosOrderRevisionService.StaleNoticeException stale) {
+            throw ApiException.staleVersion(stale.expectedRevision(), stale.actualRevision());
+        }
+        if (!closed) {
+            throw noOpenNotice();
         }
         PosOrderRevisionService.View after = revisions.view(tenantId, orderId);
         audit.record(AuditFact.of("pos.order_revision_acknowledged", AuditClass.BUSINESS)
@@ -147,6 +169,13 @@ public class OrderPosRevisionController {
                 .occurredAt(clock.instant())
                 .build());
         return ResponseEntity.ok(TillRevisionResponse.of(after));
+    }
+
+    private static ApiException noOpenNotice() {
+        return new ApiException(
+                ErrorCode.RESOURCE_CONFLICT,
+                "This order has no open till revision to acknowledge",
+                Map.of("conflict", "NO_OPEN_NOTICE"));
     }
 
     private void audit(
@@ -202,10 +231,21 @@ public class OrderPosRevisionController {
             case RETRYABLE -> "The till could not be reached. Try again, or change it by hand.";
             case UNCERTAIN ->
                 "The till may or may not have the new total. Check it before sending again; sending again is the same send.";
+            case SUPERSEDED ->
+                "The till was sent the total as it stood, but the order was weighed again meanwhile. Check the new total, then tell the till again or change it by hand.";
         };
     }
 
     // ----------------------------------------------------------- payloads
+
+    /**
+     * The body of both actions.
+     *
+     * @param expectedRevision the {@code revision} of the notice the person looked at (ADR 0031's expected
+     *     version, as a field because these are commands and not a resource). Required: an action that does not
+     *     say which notice it is about would close whichever is open when it lands.
+     */
+    public record TillRevisionActionRequest(@NotNull Integer expectedRevision) {}
 
     /**
      * @param notice the order's open notice, or the latest closed one; null when there never was one
@@ -220,6 +260,8 @@ public class OrderPosRevisionController {
     }
 
     /**
+     * @param revision the order revision whose total the till does not hold; it moves when the order is weighed
+     *     again, and an action quotes it (see {@link TillRevisionActionRequest})
      * @param status {@code OPEN}, {@code TOLD} (the platform sent it) or {@code ACKNOWLEDGED} (a person changed
      *     the till)
      * @param tillTotalMinor what the till holds
@@ -228,6 +270,7 @@ public class OrderPosRevisionController {
      */
     public record TillRevisionNoticeView(
             UUID noticeId,
+            int revision,
             String status,
             String source,
             String currency,
@@ -242,6 +285,7 @@ public class OrderPosRevisionController {
         static TillRevisionNoticeView of(Notice notice) {
             return new TillRevisionNoticeView(
                     notice.id(),
+                    notice.revision(),
                     notice.status(),
                     notice.source(),
                     notice.currency(),
@@ -257,7 +301,7 @@ public class OrderPosRevisionController {
 
     /**
      * @param outcome {@code TOLD}, {@code NO_OPEN_NOTICE}, {@code NOT_AVAILABLE}, {@code REJECTED},
-     *     {@code RETRYABLE} or {@code UNCERTAIN}
+     *     {@code RETRYABLE}, {@code UNCERTAIN} or {@code SUPERSEDED}
      * @param message a fixed sentence for the outcome, null when it was told
      */
     public record TillRevisionSendResponse(

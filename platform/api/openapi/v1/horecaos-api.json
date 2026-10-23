@@ -44743,6 +44743,16 @@
         },
         "type" : "object"
       },
+      "TillRevisionActionRequest" : {
+        "properties" : {
+          "expectedRevision" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "expectedRevision" ],
+        "type" : "object"
+      },
       "TillRevisionNoticeView" : {
         "properties" : {
           "attemptCount" : {
@@ -44773,6 +44783,10 @@
           },
           "revisedTotalMinor" : {
             "format" : "int64",
+            "type" : "integer"
+          },
+          "revision" : {
+            "format" : "int32",
             "type" : "integer"
           },
           "source" : {
@@ -70075,7 +70089,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/till-revision/acknowledge" : {
       "post" : {
-        "description" : "A person changed the till by hand. Closes the open notice as ACKNOWLEDGED, audited against the person. 409 when no notice is open.",
+        "description" : "A person changed the till by hand. Closes the open notice as ACKNOWLEDGED, audited against the person. The body names the revision of the notice the person saw: 409 STALE_VERSION, with the notice left open, when the order has been weighed again since, because what they changed the till to is not the total the order is worth now. 409 NO_OPEN_NOTICE when none is open.",
         "operationId" : "acknowledgeTillRevision",
         "parameters" : [ {
           "in" : "path",
@@ -70110,6 +70124,16 @@
             "type" : "string"
           }
         } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TillRevisionActionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
         "responses" : {
           "200" : {
             "content" : {
@@ -70128,7 +70152,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/till-revision/send" : {
       "post" : {
-        "description" : "Only where the binding can take one (ORDER_REVISION). Sent under a key built from the notice, so a repeat is the same send. Answers 200 with the outcome in the body: a refusal, an unreachable till and an unknown outcome are ordinary answers, and in each the notice stays open with a stable failure code.",
+        "description" : "Only where the binding can take one (ORDER_REVISION). Sent under a key built from the notice, so a repeat is the same send. The body names the revision of the notice the operator saw: 409 STALE_VERSION, with nothing sent and nothing closed, when the order has been weighed again since. Otherwise answers 200 with the outcome in the body: a refusal, an unreachable till, an unknown outcome and a notice that moved while the till was being asked (SUPERSEDED) are ordinary answers, and in each the notice stays open with a stable failure code.",
         "operationId" : "sendTillRevision",
         "parameters" : [ {
           "in" : "path",
@@ -70163,6 +70187,16 @@
             "type" : "string"
           }
         } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TillRevisionActionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
         "responses" : {
           "200" : {
             "content" : {

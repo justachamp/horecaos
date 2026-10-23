@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 
 import { LocationScope } from '../../core/api/operations-paths';
+import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
@@ -23,7 +24,13 @@ const OUTCOME_MESSAGES: Readonly<Record<string, MessageKey>> = {
   REJECTED: 'orders.tillRevision.outcome.REJECTED',
   RETRYABLE: 'orders.tillRevision.outcome.RETRYABLE',
   UNCERTAIN: 'orders.tillRevision.outcome.UNCERTAIN',
+  SUPERSEDED: 'orders.tillRevision.outcome.SUPERSEDED',
 };
+
+/** The platform refused an action because the notice moved since the operator looked at it. */
+function isStale(error: unknown): boolean {
+  return error instanceof ApiError && error.code === ApiErrorCode.STALE_VERSION;
+}
 
 /**
  * An order the till already holds whose total moved after a weight was captured (ADR 0137, gap map row
@@ -107,13 +114,16 @@ export class TillRevisionBanner {
   }
 
   protected async send(): Promise<void> {
-    if (this.busy()) {
+    const notice = this.open();
+    if (this.busy() || notice === null) {
       return;
     }
     this.busy.set(true);
     this.message.set(null);
     try {
-      const result = await this.api.send(this.scope(), this.orderId());
+      // The revision of the notice on screen: the platform tells the till that notice's total, and closes that
+      // notice, or refuses when the order has been weighed again since.
+      const result = await this.api.send(this.scope(), this.orderId(), notice.revision);
       this.view.set(result.revision);
       if (result.outcome === 'TOLD') {
         this.justClosed.set('TOLD');
@@ -121,28 +131,43 @@ export class TillRevisionBanner {
         const key = OUTCOME_MESSAGES[result.outcome];
         this.message.set(key === undefined ? null : this.i18n.t(key));
       }
-    } catch {
-      this.message.set(this.i18n.t('orders.tillRevision.outcome.RETRYABLE'));
+    } catch (error) {
+      if (isStale(error)) {
+        await this.reread();
+      } else {
+        this.message.set(this.i18n.t('orders.tillRevision.outcome.RETRYABLE'));
+      }
     } finally {
       this.busy.set(false);
     }
   }
 
   protected async acknowledge(): Promise<void> {
-    if (this.busy()) {
+    const notice = this.open();
+    if (this.busy() || notice === null) {
       return;
     }
     this.busy.set(true);
     this.message.set(null);
     try {
-      this.view.set(await this.api.acknowledge(this.scope(), this.orderId()));
+      this.view.set(await this.api.acknowledge(this.scope(), this.orderId(), notice.revision));
       this.justClosed.set('ACKNOWLEDGED');
-    } catch {
-      // Nothing to acknowledge any more, or the platform could not be asked: read it again and show what is true.
+    } catch (error) {
+      // The order was weighed again since the operator looked, or there is nothing left to acknowledge, or the
+      // platform could not be asked: read it again and show what is true, saying so when the total moved.
+      if (isStale(error)) {
+        this.message.set(this.i18n.t('orders.tillRevision.stale'));
+      }
       await this.load(this.scope(), this.orderId());
     } finally {
       this.busy.set(false);
     }
+  }
+
+  /** The order moved under the operator's click: show the notice as it is now, and say it changed. */
+  private async reread(): Promise<void> {
+    await this.load(this.scope(), this.orderId());
+    this.message.set(this.i18n.t('orders.tillRevision.stale'));
   }
 
   private clear(): void {

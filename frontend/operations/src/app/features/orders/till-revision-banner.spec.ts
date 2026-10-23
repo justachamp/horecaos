@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
+import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { Capability, SessionCapabilities } from '../../core/auth/session-capabilities';
 import { I18n } from '../../core/i18n/i18n';
 import {
@@ -17,6 +18,7 @@ const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' }
 function notice(overrides: Partial<TillRevisionNotice> = {}): TillRevisionNotice {
   return {
     noticeId: 'n1',
+    revision: 2,
     status: 'OPEN',
     source: 'CATCHWEIGHT',
     currency: 'UZS',
@@ -115,7 +117,7 @@ describe('TillRevisionBanner (ADR 0137, row 4.2c)', () => {
     q('till-revision-send')!.click();
 
     await settle(fixture, () => expect(q('till-revision-closed')).not.toBeNull());
-    expect(send).toHaveBeenCalledWith(SCOPE, 'o1');
+    expect(send).toHaveBeenCalledWith(SCOPE, 'o1', 2);
     expect(q('till-revision-closed')!.textContent).toContain('The till was sent the new total');
     expect(q('till-revision-banner')).toBeNull();
   });
@@ -160,8 +162,90 @@ describe('TillRevisionBanner (ADR 0137, row 4.2c)', () => {
     q('till-revision-acknowledge')!.click();
 
     await settle(fixture, () => expect(q('till-revision-closed')).not.toBeNull());
-    expect(acknowledge).toHaveBeenCalledWith(SCOPE, 'o1');
+    expect(acknowledge).toHaveBeenCalledWith(SCOPE, 'o1', 2);
     expect(q('till-revision-closed')!.textContent).toContain('the till was changed by hand');
+  });
+
+  describe('an order weighed again under the operator click', () => {
+    const stale = () => new ApiError(ApiErrorCode.STALE_VERSION, 409, null, null);
+
+    it('quotes the revision of the notice on screen, not whichever is open when the request lands', async () => {
+      const acknowledge = vi
+        .fn()
+        .mockResolvedValue(view({ notice: notice({ revision: 3, status: 'ACKNOWLEDGED' }) }));
+      const { fixture, q } = mount({
+        forOrder: vi.fn().mockResolvedValue(view({ notice: notice({ revision: 3 }) })),
+        acknowledge,
+      });
+      await settle(fixture, () => expect(q('till-revision-acknowledge')).not.toBeNull());
+
+      q('till-revision-acknowledge')!.click();
+
+      await settle(fixture, () => expect(acknowledge).toHaveBeenCalledWith(SCOPE, 'o1', 3));
+    });
+
+    it('on acknowledge, reads the order again, shows the notice as it is now and says the total changed', async () => {
+      const forOrder = vi
+        .fn()
+        .mockResolvedValueOnce(
+          view({ notice: notice({ revision: 2, revisedTotalMinor: 207_000 }) }),
+        )
+        .mockResolvedValue(view({ notice: notice({ revision: 3, revisedTotalMinor: 212_000 }) }));
+      const acknowledge = vi.fn().mockRejectedValue(stale());
+      const { fixture, q } = mount({ forOrder, acknowledge });
+      await settle(fixture, () => expect(q('till-revision-acknowledge')).not.toBeNull());
+
+      q('till-revision-acknowledge')!.click();
+
+      await settle(fixture, () => expect(q('till-revision-message')).not.toBeNull());
+      expect(q('till-revision-message')!.textContent).toContain('weighed again');
+      expect(q('till-revision-closed')).toBeNull();
+      expect(q('till-revision-banner')).not.toBeNull();
+      expect(flat(q('till-revision-body')!.textContent)).toContain('212000');
+    });
+
+    it('on send, does the same: nothing is closed and the new total is shown', async () => {
+      const forOrder = vi
+        .fn()
+        .mockResolvedValueOnce(view({ canTell: true, notice: notice({ revision: 2 }) }))
+        .mockResolvedValue(
+          view({ canTell: true, notice: notice({ revision: 3, revisedTotalMinor: 212_000 }) }),
+        );
+      const send = vi.fn().mockRejectedValue(stale());
+      const { fixture, q } = mount({ forOrder, send });
+      await settle(fixture, () => expect(q('till-revision-send')).not.toBeNull());
+
+      q('till-revision-send')!.click();
+
+      await settle(fixture, () => expect(q('till-revision-message')).not.toBeNull());
+      expect(q('till-revision-message')!.textContent).toContain('weighed again');
+      expect(q('till-revision-closed')).toBeNull();
+      expect(flat(q('till-revision-body')!.textContent)).toContain('212000');
+    });
+
+    it('keeps the notice open and says so when the till took an amount that is already out of date', async () => {
+      const send = vi.fn().mockResolvedValue({
+        outcome: 'SUPERSEDED',
+        code: 'NOTICE_MOVED',
+        message: 'The till was sent the total as it stood.',
+        revision: view({
+          canTell: true,
+          notice: notice({ revision: 3, tillTotalMinor: 208_000, revisedTotalMinor: 212_000 }),
+        }),
+      } satisfies TillRevisionSendResult);
+      const { fixture, q } = mount({
+        forOrder: vi.fn().mockResolvedValue(view({ canTell: true })),
+        send,
+      });
+      await settle(fixture, () => expect(q('till-revision-send')).not.toBeNull());
+
+      q('till-revision-send')!.click();
+
+      await settle(fixture, () => expect(q('till-revision-message')).not.toBeNull());
+      expect(q('till-revision-message')!.textContent).toContain('weighed again meanwhile');
+      expect(q('till-revision-closed')).toBeNull();
+      expect(flat(q('till-revision-body')!.textContent)).toContain('212000');
+    });
   });
 
   it('shows the floor the difference but offers it no way to close it, and says who can', async () => {

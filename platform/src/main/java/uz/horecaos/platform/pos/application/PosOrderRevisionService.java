@@ -77,7 +77,40 @@ public class PosOrderRevisionService {
         /** The vendor could not be reached. The notice stays open. */
         RETRYABLE,
         /** The vendor may or may not have applied it. The notice stays open; sending again is the same send. */
-        UNCERTAIN
+        UNCERTAIN,
+        /**
+         * The vendor took the total the operator saw, but the order was weighed again while it was being asked.
+         * The till holds that total now and the notice stays open for the newer one: telling the till again is a
+         * new send of the new total, and nothing was closed on the strength of the old one.
+         */
+        SUPERSEDED
+    }
+
+    /**
+     * The notice the operator acted on is not the one that is open now: the order was weighed again between
+     * their look and their click. Nothing was sent and nothing was closed. The console answers {@code 409
+     * STALE_VERSION} so the screen reads the notice again.
+     */
+    public static final class StaleNoticeException extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+
+        private final int expectedRevision;
+        private final int actualRevision;
+
+        public StaleNoticeException(int expectedRevision, int actualRevision) {
+            super("The till revision moved from revision %d to %d".formatted(expectedRevision, actualRevision));
+            this.expectedRevision = expectedRevision;
+            this.actualRevision = actualRevision;
+        }
+
+        public int expectedRevision() {
+            return expectedRevision;
+        }
+
+        public int actualRevision() {
+            return actualRevision;
+        }
     }
 
     public record Result(Outcome outcome, @Nullable String code, View view) {}
@@ -91,13 +124,19 @@ public class PosOrderRevisionService {
                 notice, open.isPresent() && resolveTarget(tenantId, orderId).isPresent());
     }
 
-    /** Sends the revised total to the till, where the binding can take one. */
-    public Result tell(UUID tenantId, UUID orderId, String actor) {
+    /**
+     * Sends the revised total of the notice the operator saw to the till, where the binding can take one.
+     *
+     * @param expectedRevision the revision of the notice the operator looked at; a notice that has moved since
+     *     is refused with {@link StaleNoticeException} before anything is sent
+     */
+    public Result tell(UUID tenantId, UUID orderId, String actor, int expectedRevision) {
         Optional<Notice> open = notices.openFor(tenantId, orderId);
         if (open.isEmpty()) {
             return new Result(Outcome.NO_OPEN_NOTICE, null, view(tenantId, orderId));
         }
         Notice notice = open.get();
+        requireRevision(expectedRevision, notice);
         Optional<Target> target = resolveTarget(tenantId, orderId);
         if (target.isEmpty()) {
             return new Result(Outcome.NOT_AVAILABLE, "ORDER_REVISION_NOT_AVAILABLE", view(tenantId, orderId));
@@ -115,8 +154,7 @@ public class PosOrderRevisionService {
 
         switch (outcome.status()) {
             case SUCCESS -> {
-                notices.markTold(tenantId, notice.id(), actor, clock.instant());
-                return new Result(Outcome.TOLD, null, view(tenantId, orderId));
+                return told(tenantId, orderId, notice, actor);
             }
             case REJECTED -> {
                 String code = codeOf(outcome);
@@ -136,11 +174,55 @@ public class PosOrderRevisionService {
         throw new IllegalStateException("Unreachable: every provider outcome status is handled");
     }
 
-    /** A person says the till now agrees with the platform. False when the notice was no longer open. */
-    public boolean acknowledge(UUID tenantId, UUID orderId, String actor) {
-        return notices.openFor(tenantId, orderId)
-                .map(notice -> notices.markAcknowledged(tenantId, notice.id(), actor, clock.instant()))
-                .orElse(false);
+    /**
+     * The vendor accepted the total of {@code sent}. Closes that notice as it stood when it was read. If it
+     * has moved on in the meantime, the vendor still took the old total, which is what the till holds now;
+     * the newer notice stays open and carries it.
+     */
+    private Result told(UUID tenantId, UUID orderId, Notice sent, String actor) {
+        if (notices.markTold(tenantId, sent.id(), sent.revision(), actor, clock.instant())) {
+            return new Result(Outcome.TOLD, null, view(tenantId, orderId));
+        }
+        notices.recordTold(tenantId, sent.id(), sent.revision(), sent.revisedTotalMinor(), actor, clock.instant());
+        View after = view(tenantId, orderId);
+        Notice latest = after.notice();
+        if (latest != null && latest.open()) {
+            return new Result(Outcome.SUPERSEDED, "NOTICE_MOVED", after);
+        }
+        // Closed by somebody else while the till was being asked, or the newer total turned out to be the very
+        // amount the till took: nothing is left to tell.
+        return new Result(
+                latest != null && "TOLD".equals(latest.status()) ? Outcome.TOLD : Outcome.NO_OPEN_NOTICE, null, after);
+    }
+
+    /**
+     * A person says the till now agrees with the notice they saw. False when no notice is open.
+     *
+     * @param expectedRevision the revision of the notice the person looked at; a notice that has moved since is
+     *     refused with {@link StaleNoticeException} and left open, because what they confirmed was another total
+     */
+    public boolean acknowledge(UUID tenantId, UUID orderId, String actor, int expectedRevision) {
+        Optional<Notice> open = notices.openFor(tenantId, orderId);
+        if (open.isEmpty()) {
+            return false;
+        }
+        Notice notice = open.get();
+        requireRevision(expectedRevision, notice);
+        if (notices.markAcknowledged(tenantId, notice.id(), notice.revision(), actor, clock.instant())) {
+            return true;
+        }
+        // Lost a race between the read and the write: either somebody closed it, or it moved on.
+        Optional<Notice> moved = notices.openFor(tenantId, orderId);
+        if (moved.isPresent()) {
+            throw new StaleNoticeException(expectedRevision, moved.get().revision());
+        }
+        return false;
+    }
+
+    private static void requireRevision(int expectedRevision, Notice open) {
+        if (open.revision() != expectedRevision) {
+            throw new StaleNoticeException(expectedRevision, open.revision());
+        }
     }
 
     // ------------------------------------------------------------------ plumbing

@@ -137,15 +137,48 @@ public class JdbcTillRevisionNoticeStore {
                 == 1;
     }
 
-    public boolean resolve(UUID tenantId, UUID noticeId, String status, String actor, Instant now) {
+    /**
+     * Closes the notice as {@code status}, but only as the revision the caller acted on: a notice that a second
+     * weighing has since moved is a different statement about the till, and closing it would say the till agrees
+     * with a total nobody looked at.
+     */
+    public boolean resolve(UUID tenantId, UUID noticeId, int revision, String status, String actor, Instant now) {
         return jdbc.sql("""
                 UPDATE ordering.order_till_revision_notices
                    SET status = :status, resolved_at = :now, resolved_by = :actor, updated_at = :now
-                 WHERE tenant_id = :tenantId AND id = :id AND status = 'OPEN'
+                 WHERE tenant_id = :tenantId AND id = :id AND status = 'OPEN' AND revision = :revision
                 """)
                         .param("tenantId", tenantId)
                         .param("id", noticeId)
+                        .param("revision", revision)
                         .param("status", status)
+                        .param("actor", actor)
+                        .param("now", at(now))
+                        .update()
+                == 1;
+    }
+
+    /**
+     * The till accepted {@code toldTotalMinor} for a revision of this notice that has since been superseded.
+     * What the till holds is now that amount, unless it is also what the order is worth now, in which case
+     * nothing is left to correct and the notice closes as told. Only a later revision of an open notice is
+     * touched.
+     */
+    public boolean recordToldBeforeItMoved(
+            UUID tenantId, UUID noticeId, int toldRevision, long toldTotalMinor, String actor, Instant now) {
+        return jdbc.sql("""
+                UPDATE ordering.order_till_revision_notices
+                   SET till_total_minor = CASE WHEN revised_total_minor <> :told THEN :told ELSE till_total_minor END,
+                       status = CASE WHEN revised_total_minor = :told THEN 'TOLD' ELSE status END,
+                       resolved_at = CASE WHEN revised_total_minor = :told THEN :now ELSE resolved_at END,
+                       resolved_by = CASE WHEN revised_total_minor = :told THEN :actor ELSE resolved_by END,
+                       updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id AND status = 'OPEN' AND revision > :toldRevision
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", noticeId)
+                        .param("toldRevision", toldRevision)
+                        .param("told", toldTotalMinor)
                         .param("actor", actor)
                         .param("now", at(now))
                         .update()

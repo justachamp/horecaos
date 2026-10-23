@@ -22,6 +22,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -56,6 +57,9 @@ class OrderPosRevisionControllerEndpointTests {
 
     /** A second branch of the same brand: its people and its orders are not this branch's. */
     private static final UUID OTHER_LOCATION = UUID.fromString("018fb900-a000-7000-8000-0000000000c4");
+
+    /** What the console sends: the revision of the notice it showed (the seeded notice is revision 2). */
+    private static final String SAW_REVISION_2 = "{\"expectedRevision\":2}";
 
     private static final String MANAGER = "till-revision-http-manager";
     private static final String STAFF = "till-revision-http-staff";
@@ -142,7 +146,9 @@ class OrderPosRevisionControllerEndpointTests {
 
         MvcResult acknowledge = mvc.perform(post(path(LOCATION, orderId) + "/acknowledge")
                         .with(tokenFor(STAFF))
-                        .header("Idempotency-Key", UUID.randomUUID().toString()))
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(SAW_REVISION_2))
                 .andReturn();
         assertThat(acknowledge.getResponse().getStatus()).isEqualTo(403);
         assertThat(acknowledge.getResponse().getContentAsString())
@@ -151,7 +157,9 @@ class OrderPosRevisionControllerEndpointTests {
 
         MvcResult send = mvc.perform(post(path(LOCATION, orderId) + "/send")
                         .with(tokenFor(STAFF))
-                        .header("Idempotency-Key", UUID.randomUUID().toString()))
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(SAW_REVISION_2))
                 .andReturn();
         assertThat(send.getResponse().getStatus()).isEqualTo(403);
         assertThat(noticeStatus(orderId)).as("the notice is still open").isEqualTo("OPEN");
@@ -165,7 +173,9 @@ class OrderPosRevisionControllerEndpointTests {
 
         MvcResult result = mvc.perform(post(path(LOCATION, orderId) + "/acknowledge")
                         .with(tokenFor(MANAGER))
-                        .header("Idempotency-Key", UUID.randomUUID().toString()))
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(SAW_REVISION_2))
                 .andReturn();
 
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
@@ -186,13 +196,96 @@ class OrderPosRevisionControllerEndpointTests {
 
         MvcResult result = mvc.perform(post(path(LOCATION, orderId) + "/send")
                         .with(tokenFor(MANAGER))
-                        .header("Idempotency-Key", UUID.randomUUID().toString()))
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(SAW_REVISION_2))
                 .andReturn();
 
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
         assertThat(result.getResponse().getContentAsString())
                 .as("no till binding is wired for this fixture, so the platform says it cannot tell it")
                 .contains("\"outcome\":\"NOT_AVAILABLE\"");
+    }
+
+    // ------------------------------------------------------------------ the notice the operator saw
+
+    @Test
+    @DisplayName("an order weighed again since the operator looked: acknowledging is a 409 STALE_VERSION and the "
+            + "newer notice stays open")
+    void aStaleAcknowledgementIsAConflict() throws Exception {
+        UUID orderId = seedConfirmedOrder(LOCATION, "TR-3001");
+        seedOpenNotice(orderId, LOCATION);
+        jdbc.sql("UPDATE ordering.order_till_revision_notices SET revision = 3, revised_total_minor = 203000 "
+                        + "WHERE order_id = :o")
+                .param("o", orderId)
+                .update();
+
+        MvcResult result = mvc.perform(post(path(LOCATION, orderId) + "/acknowledge")
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(SAW_REVISION_2))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(409);
+        assertThat(result.getResponse().getContentAsString())
+                .contains("STALE_VERSION")
+                .contains("\"expectedVersion\":2")
+                .contains("\"currentVersion\":3");
+        assertThat(noticeStatus(orderId)).isEqualTo("OPEN");
+    }
+
+    @Test
+    @DisplayName(
+            "sending a total the operator saw after the order was weighed again is a 409 and tells the till nothing")
+    void aStaleSendIsAConflict() throws Exception {
+        UUID orderId = seedConfirmedOrder(LOCATION, "TR-3002");
+        seedOpenNotice(orderId, LOCATION);
+        jdbc.sql("UPDATE ordering.order_till_revision_notices SET revision = 3, revised_total_minor = 203000 "
+                        + "WHERE order_id = :o")
+                .param("o", orderId)
+                .update();
+
+        MvcResult result = mvc.perform(post(path(LOCATION, orderId) + "/send")
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(SAW_REVISION_2))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(409);
+        assertThat(result.getResponse().getContentAsString()).contains("STALE_VERSION");
+        assertThat(noticeStatus(orderId)).isEqualTo("OPEN");
+    }
+
+    @Test
+    @DisplayName("an action that does not say which notice it is about is refused, not read as whichever is open")
+    void anActionWithoutARevisionIsRefused() throws Exception {
+        UUID orderId = seedConfirmedOrder(LOCATION, "TR-3003");
+        seedOpenNotice(orderId, LOCATION);
+
+        for (String action : List.of("/acknowledge", "/send")) {
+            MvcResult result = mvc.perform(post(path(LOCATION, orderId) + action)
+                            .with(tokenFor(MANAGER))
+                            .header("Idempotency-Key", UUID.randomUUID().toString())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andReturn();
+            assertThat(result.getResponse().getStatus()).as(action).isEqualTo(400);
+        }
+        assertThat(noticeStatus(orderId)).isEqualTo("OPEN");
+    }
+
+    @Test
+    @DisplayName("the read says which revision the notice is, because that is what an action quotes")
+    void theReadCarriesTheRevision() throws Exception {
+        UUID orderId = seedConfirmedOrder(LOCATION, "TR-3004");
+        seedOpenNotice(orderId, LOCATION);
+
+        MvcResult result = mvc.perform(get(path(LOCATION, orderId)).with(tokenFor(MANAGER)))
+                .andReturn();
+
+        assertThat(result.getResponse().getContentAsString()).contains("\"revision\":2");
     }
 
     // ------------------------------------------------------------------ the branch boundary
@@ -223,7 +316,9 @@ class OrderPosRevisionControllerEndpointTests {
 
         MvcResult acknowledge = mvc.perform(post(path(LOCATION, foreignOrderId) + "/acknowledge")
                         .with(tokenFor(MANAGER))
-                        .header("Idempotency-Key", UUID.randomUUID().toString()))
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(SAW_REVISION_2))
                 .andReturn();
         assertThat(acknowledge.getResponse().getStatus()).isEqualTo(404);
         assertThat(noticeStatus(foreignOrderId)).isEqualTo("OPEN");
