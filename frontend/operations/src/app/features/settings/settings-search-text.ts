@@ -29,6 +29,8 @@ type Phrase =
   | 'detail.more'
   | 'detail.notSet'
   | 'detail.notSetDefault'
+  | 'detail.unknown'
+  | 'detail.unknownDefault'
   | 'detail.onlyBrandUp'
   | 'detail.onlyTenant'
   | 'detail.locked'
@@ -116,6 +118,8 @@ export const settingsSearchText = localMessages<Key>({
     'detail.more': 'ещё {count}',
     'detail.notSet': 'не задано',
     'detail.notSetDefault': 'не задано · по умолчанию {value}',
+    'detail.unknown': 'где задано — неизвестно',
+    'detail.unknownDefault': 'где задано — неизвестно · по умолчанию {value}',
     'detail.onlyBrandUp': 'только бренд и выше',
     'detail.onlyTenant': 'только компания',
     'detail.locked': 'закрыто тарифом: {feature}',
@@ -200,6 +204,8 @@ export const settingsSearchText = localMessages<Key>({
     'detail.more': 'yana {count}',
     'detail.notSet': 'belgilanmagan',
     'detail.notSetDefault': 'belgilanmagan · odatiy {value}',
+    'detail.unknown': 'qayerda belgilangani nomaʻlum',
+    'detail.unknownDefault': 'qayerda belgilangani nomaʻlum · odatiy {value}',
     'detail.onlyBrandUp': 'faqat brend va yuqori',
     'detail.onlyTenant': 'faqat kompaniya',
     'detail.locked': 'tarif yopgan: {feature}',
@@ -283,6 +289,8 @@ export const settingsSearchText = localMessages<Key>({
     'detail.more': '{count} more',
     'detail.notSet': 'not set',
     'detail.notSetDefault': 'not set · default {value}',
+    'detail.unknown': 'where it is set: unknown',
+    'detail.unknownDefault': 'where it is set: unknown · default {value}',
     'detail.onlyBrandUp': 'brand and above only',
     'detail.onlyTenant': 'company only',
     'detail.locked': 'locked by plan: {feature}',

@@ -68,6 +68,8 @@ export class BranchStateDialog implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly summary = signal<ServiceSummaryResponse | null>(null);
+  /** The branch's own name, from its profile: the picker lists none for a branch manager's direct grant. */
+  private readonly profileName = signal<string | null>(null);
   protected readonly timeZone = signal('Asia/Tashkent');
   protected readonly mode = signal<ServiceMode>('FORCE_CLOSED');
   protected readonly reason = signal<BranchReason | ''>('');
@@ -86,6 +88,7 @@ export class BranchStateDialog implements OnInit {
   protected readonly name = computed(
     () =>
       this.location.options().find((option) => option.id === this.locationId())?.displayName ??
+      this.profileName() ??
       this.locationId(),
   );
 
@@ -287,14 +290,16 @@ export class BranchStateDialog implements OnInit {
     }
     const scope = { ...base, locationId: this.locationId() };
     try {
-      const [summary, locations] = await Promise.all([
+      // Both reads are the branch's own (`location.read` at the branch): the brand's list is refused to a
+      // branch manager, who is the person this dialog is for.
+      const [summary, profile] = await Promise.all([
         this.api.serviceSummary(scope),
-        this.api.list(scope),
+        this.api.profile(scope),
       ]);
       this.summary.set(summary);
-      const zone = locations.find((candidate) => candidate.id === this.locationId())?.timezone;
-      if (zone) {
-        this.timeZone.set(zone);
+      this.profileName.set(profile.displayName);
+      if (profile.timezone) {
+        this.timeZone.set(profile.timezone);
       }
       // Closed already: the meaningful act is reopening. Shut by the schedule: opening it takes force.
       if (summary.effectiveMode === 'FORCE_CLOSED') {

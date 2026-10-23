@@ -95,11 +95,18 @@ against, and what to do the day the real thing is connected.
   the caller has `print.reprint` at the branch, the tenant has `feature.printing`
   switched on (it is dark by default, ADR 0154) and the branch has an active
   printer (`OrderReprintPort`). The key presses the row's own button, so a row
-  without the action has no key.
+  without the action has no key. The order detail's print section is drawn from
+  that same `REPRINT` in the order's `actions[]`, not only from the tenant's flag
+  read: the flag read is `tenant.read` at the tenant, which a cashier or a branch
+  manager does not hold, so for them every flag reads off while the server has
+  just offered them the action.
 - **Connect later.** Follow `print-agent-and-printers.md` to install the agent and
   register a printer, then switch on `feature.printing` for the tenant. **Check:**
   `p` on a board row prints the same document as the order detail's print panel; with
-  the flag off, neither the button nor the key exists.
+  the flag off, neither the button nor the key exists. Check it signed in as a cashier
+  (location staff) as well as a manager: the row's «Печать» (or `p`) must open the
+  order with the print section drawn, though that person cannot read the tenant's
+  flags.
 
 ## Locked by plan («Закрыто тарифом»)
 
@@ -126,4 +133,9 @@ against, and what to do the day the real thing is connected.
   without an expiry.
 - **Check.** Close a pilot branch «до отмены» from the header (`c`), confirm the
   strip appears at the top of the live board and the branch list and cannot be
-  dismissed, then reopen it from the strip.
+  dismissed, then reopen it from the strip. Do it signed in as a branch manager
+  whose only grant is at that branch (`location-manager` at `LOCATION` scope) as
+  well as a brand manager: the batched read behind the strip is brand-scoped and
+  refused to the branch manager, so the console reads that branch's own
+  `service-summary` and profile instead, and the control, `c` and the strip must
+  still appear for the one branch they can see.

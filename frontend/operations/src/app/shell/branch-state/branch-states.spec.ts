@@ -8,6 +8,7 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import {
   LocationServiceStateView,
   LocationsApi,
+  ServiceSummaryResponse,
 } from '../../features/settings/locations/locations-api';
 import { BRANCH_STATE_POLL_MS, BranchStates } from './branch-states';
 
@@ -24,17 +25,45 @@ function state(overrides: Partial<LocationServiceStateView>): LocationServiceSta
   };
 }
 
+function summary(overrides: Partial<ServiceSummaryResponse> = {}): ServiceSummaryResponse {
+  return {
+    mode: 'FOLLOW_SCHEDULE',
+    effectiveMode: 'FOLLOW_SCHEDULE',
+    reasonCode: null,
+    effectiveUntil: null,
+    maxConcurrentOrders: null,
+    openOrderCount: 0,
+    bindings: [],
+    preparationBands: [],
+    ...overrides,
+  };
+}
+
+const PICKER_OPTIONS = [
+  { id: 'l1', displayName: 'Chilonzor', status: 'ACTIVE' },
+  { id: 'l2', displayName: 'Yunusobod', status: 'ACTIVE' },
+];
+
 describe('BranchStates', () => {
   let api: {
     serviceStates: ReturnType<typeof vi.fn>;
+    serviceSummary: ReturnType<typeof vi.fn>;
+    profile: ReturnType<typeof vi.fn>;
     list: ReturnType<typeof vi.fn>;
     changeServiceState: ReturnType<typeof vi.fn>;
   };
   let service: BranchStates;
 
-  function setUp(initial: readonly LocationServiceStateView[]): void {
+  function setUp(
+    initial: readonly LocationServiceStateView[],
+    options: readonly { id: string; displayName: string; status: string }[] = PICKER_OPTIONS,
+  ): void {
     api = {
       serviceStates: vi.fn().mockResolvedValue(initial),
+      serviceSummary: vi.fn().mockResolvedValue(summary()),
+      profile: vi
+        .fn()
+        .mockResolvedValue({ id: 'l1', displayName: 'Chilonzor', timezone: 'Asia/Samarkand' }),
       list: vi.fn().mockResolvedValue([
         { id: 'l1', timezone: 'Asia/Tashkent' },
         { id: 'l2', timezone: 'Asia/Samarkand' },
@@ -48,10 +77,7 @@ describe('BranchStates', () => {
           provide: CurrentLocation,
           useValue: {
             scope: signal<LocationScope | null>(SCOPE),
-            options: signal([
-              { id: 'l1', displayName: 'Chilonzor', status: 'ACTIVE' },
-              { id: 'l2', displayName: 'Yunusobod', status: 'ACTIVE' },
-            ]),
+            options: signal(options),
             ensureLoaded: () => Promise.resolve(),
           },
         },
@@ -129,15 +155,111 @@ describe('BranchStates', () => {
     expect(api.list).toHaveBeenCalledTimes(1);
   });
 
-  it('is denied, and empty, when the read is refused', async () => {
+  it('is denied, and empty, when neither the brand’s read nor the branch’s own is allowed', async () => {
     setUp([]);
     api.serviceStates.mockRejectedValue(new ApiError('INSUFFICIENT_CAPABILITY', 403, null, null));
+    api.serviceSummary.mockRejectedValue(new ApiError('INSUFFICIENT_CAPABILITY', 403, null, null));
 
     await service.refresh();
 
     expect(service.denied()).toBe(true);
     expect(service.closed()).toEqual([]);
     expect(service.loaded()).toBe(true);
+  });
+
+  describe('a branch manager, whose grants are all at the branch', () => {
+    // LOCATION_MANAGER holds location.service-state.change at LOCATION scope and nothing over the brand, so the
+    // brand-wide batched read is refused while the branch's own summary and profile are served. The picker's
+    // list is empty for a direct grant (CurrentLocation.options), so the name has to come from the profile.
+    function setUpBranchManager(own: Partial<ServiceSummaryResponse> = {}): void {
+      setUp([], []);
+      api.serviceStates.mockRejectedValue(new ApiError('INSUFFICIENT_CAPABILITY', 403, null, null));
+      api.list.mockRejectedValue(new ApiError('INSUFFICIENT_CAPABILITY', 403, null, null));
+      api.serviceSummary.mockResolvedValue(summary(own));
+    }
+
+    it('reads their own branch instead, so the control and the strip still draw', async () => {
+      setUpBranchManager({
+        mode: 'FORCE_CLOSED',
+        effectiveMode: 'FORCE_CLOSED',
+        reasonCode: 'EQUIPMENT_FAILURE',
+        effectiveUntil: null,
+      });
+
+      await service.refresh();
+
+      expect(service.denied()).toBe(false);
+      expect(service.current()?.effectiveMode).toBe('FORCE_CLOSED');
+      expect(service.current()?.reasonCode).toBe('EQUIPMENT_FAILURE');
+      expect(api.serviceSummary).toHaveBeenCalledWith(SCOPE);
+    });
+
+    it('names the branch and gives its zone from the branch’s own profile, not the brand’s list', async () => {
+      setUpBranchManager({ mode: 'FORCE_CLOSED', effectiveMode: 'FORCE_CLOSED' });
+
+      await service.refresh();
+
+      expect(service.closed().map((branch) => [branch.name, branch.timeZone])).toEqual([
+        ['Chilonzor', 'Asia/Samarkand'],
+      ]);
+      expect(api.list).not.toHaveBeenCalled();
+    });
+
+    it('does not ask the brand again on every poll, and reads the profile once', async () => {
+      setUpBranchManager();
+
+      await service.refresh();
+      await service.refresh();
+      await service.refresh();
+
+      expect(api.serviceStates).toHaveBeenCalledTimes(1);
+      expect(api.serviceSummary).toHaveBeenCalledTimes(3);
+      expect(api.profile).toHaveBeenCalledTimes(1);
+    });
+
+    it('follows the branch being reopened', async () => {
+      setUpBranchManager({ mode: 'FORCE_CLOSED', effectiveMode: 'FORCE_CLOSED' });
+      await service.refresh();
+      api.serviceSummary.mockResolvedValue(summary());
+
+      await service.reopen('l1');
+
+      expect(api.changeServiceState).toHaveBeenCalledWith(SCOPE, { mode: 'FOLLOW_SCHEDULE' });
+      expect(service.closed()).toEqual([]);
+      expect(service.current()?.effectiveMode).toBe('FOLLOW_SCHEDULE');
+    });
+
+    it('keeps the last answer when a later poll of the branch fails for another reason', async () => {
+      setUpBranchManager({ mode: 'FORCE_CLOSED', effectiveMode: 'FORCE_CLOSED' });
+      await service.refresh();
+      api.serviceSummary.mockRejectedValue(new ApiError('SERVICE_UNAVAILABLE', 503, null, null));
+
+      await service.refresh();
+
+      expect(service.denied()).toBe(false);
+      expect(service.closed()).toHaveLength(1);
+    });
+
+    it('still draws the state when only the profile cannot be read: the zone is the reader’s own', async () => {
+      setUpBranchManager({ mode: 'FORCE_CLOSED', effectiveMode: 'FORCE_CLOSED' });
+      api.profile.mockRejectedValue(new ApiError('SERVICE_UNAVAILABLE', 503, null, null));
+
+      await service.refresh();
+
+      expect(service.denied()).toBe(false);
+      expect(service.closed()).toHaveLength(1);
+    });
+  });
+
+  it('does not take a failed brand read for a branch grant: a 503 keeps the last answer and asks nothing else', async () => {
+    setUp([state({ mode: 'FORCE_CLOSED', effectiveMode: 'FORCE_CLOSED' })]);
+    await service.refresh();
+    api.serviceStates.mockRejectedValue(new ApiError('SERVICE_UNAVAILABLE', 503, null, null));
+
+    await service.refresh();
+
+    expect(api.serviceSummary).not.toHaveBeenCalled();
+    expect(service.closed()).toHaveLength(1);
   });
 
   it('keeps the last answer when a poll fails for any other reason: a strip that vanishes hides a closed branch', async () => {

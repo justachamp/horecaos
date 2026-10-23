@@ -38,23 +38,48 @@ describe('ClosedBranchStrip', () => {
   let api: {
     serviceStates: ReturnType<typeof vi.fn>;
     list: ReturnType<typeof vi.fn>;
+    serviceSummary: ReturnType<typeof vi.fn>;
+    profile: ReturnType<typeof vi.fn>;
     changeServiceState: ReturnType<typeof vi.fn>;
   };
   let mayChange: boolean;
 
   async function render(
     states: readonly LocationServiceStateView[],
-    options: { refused?: boolean } = {},
+    options: { refused?: boolean; branchOnly?: boolean } = {},
   ): Promise<ComponentFixture<ClosedBranchStrip>> {
+    const refusal = (): Promise<never> =>
+      Promise.reject(new ApiError('INSUFFICIENT_CAPABILITY', 403, null, null));
+    const brandWideRefused = options.refused === true || options.branchOnly === true;
+    // A branch manager (branchOnly): the brand's batched read and list are refused, their own branch is served.
+    const own = states.find((candidate) => candidate.locationId === SCOPE.locationId);
     api = {
-      serviceStates:
-        options.refused === true
-          ? vi.fn().mockRejectedValue(new ApiError('INSUFFICIENT_CAPABILITY', 403, null, null))
-          : vi.fn().mockResolvedValue(states),
-      list: vi.fn().mockResolvedValue([
-        { id: 'l1', timezone: 'Asia/Tashkent' },
-        { id: 'l2', timezone: 'Asia/Tashkent' },
-      ]),
+      serviceStates: brandWideRefused ? vi.fn(refusal) : vi.fn().mockResolvedValue(states),
+      list: brandWideRefused
+        ? vi.fn(refusal)
+        : vi.fn().mockResolvedValue([
+            { id: 'l1', timezone: 'Asia/Tashkent' },
+            { id: 'l2', timezone: 'Asia/Tashkent' },
+          ]),
+      serviceSummary:
+        options.branchOnly === true
+          ? vi.fn().mockResolvedValue({
+              mode: own?.mode ?? 'FOLLOW_SCHEDULE',
+              effectiveMode: own?.effectiveMode ?? 'FOLLOW_SCHEDULE',
+              reasonCode: own?.reasonCode ?? null,
+              effectiveUntil: own?.effectiveUntil ?? null,
+              maxConcurrentOrders: null,
+              openOrderCount: 0,
+              bindings: [],
+              preparationBands: [],
+            })
+          : vi.fn(refusal),
+      profile:
+        options.branchOnly === true
+          ? vi
+              .fn()
+              .mockResolvedValue({ id: 'l1', displayName: 'Chilonzor', timezone: 'Asia/Tashkent' })
+          : vi.fn(refusal),
       changeServiceState: vi.fn().mockResolvedValue(undefined),
     };
     await TestBed.configureTestingModule({
@@ -65,10 +90,14 @@ describe('ClosedBranchStrip', () => {
           provide: CurrentLocation,
           useValue: {
             scope: signal<LocationScope | null>(SCOPE),
-            options: signal([
-              { id: 'l1', displayName: 'Chilonzor', status: 'ACTIVE' },
-              { id: 'l2', displayName: 'Yunusobod', status: 'ACTIVE' },
-            ]),
+            options: signal(
+              options.branchOnly === true
+                ? []
+                : [
+                    { id: 'l1', displayName: 'Chilonzor', status: 'ACTIVE' },
+                    { id: 'l2', displayName: 'Yunusobod', status: 'ACTIVE' },
+                  ],
+            ),
             ensureLoaded: () => Promise.resolve(),
           },
         },
@@ -177,6 +206,41 @@ describe('ClosedBranchStrip', () => {
 
     expect(host(fixture).querySelector('[data-testid="closed-branch-strip"]')).not.toBeNull();
     expect(host(fixture).querySelector('[data-testid="closed-branch-reopen"]')).toBeNull();
+  });
+
+  it('shows a branch manager their own branch shut until cancelled: the brand-wide read is refused, the branch’s own is not', async () => {
+    const fixture = await render([closed('l1')], { branchOnly: true });
+
+    const items = [...host(fixture).querySelectorAll('[data-testid="closed-branch-item"]')];
+    expect(items.map((item) => item.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+      'Chilonzor (до отмены) Открыть',
+    ]);
+    expect(host(fixture).querySelector('.closed-strip__until--open-ended')).not.toBeNull();
+  });
+
+  it('lets a branch manager reopen their branch from the strip', async () => {
+    const fixture = await render([closed('l1')], { branchOnly: true });
+    api.serviceSummary.mockResolvedValue({
+      mode: 'FOLLOW_SCHEDULE',
+      effectiveMode: 'FOLLOW_SCHEDULE',
+      reasonCode: null,
+      effectiveUntil: null,
+      maxConcurrentOrders: null,
+      openOrderCount: 0,
+      bindings: [],
+      preparationBands: [],
+    });
+
+    (
+      host(fixture).querySelector('[data-testid="closed-branch-reopen"]') as HTMLButtonElement
+    ).click();
+    await settle(fixture);
+
+    expect(api.changeServiceState).toHaveBeenCalledWith(
+      { tenantId: 't1', brandId: 'b1', locationId: 'l1' },
+      { mode: 'FOLLOW_SCHEDULE' },
+    );
+    expect(host(fixture).querySelector('[data-testid="closed-branch-strip"]')).toBeNull();
   });
 
   it('draws nothing for someone the read is refused to', async () => {

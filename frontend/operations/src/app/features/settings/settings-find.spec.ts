@@ -214,6 +214,30 @@ describe('keyDetail', () => {
     expect(keyDetail(key({ defaultValue: '' }), 'text', [], HERE, 'en')).toBe('not set');
   });
 
+  it('does not say it is not set when where it is stored could not be read: it says it does not know', () => {
+    expect(keyDetail(key(), 'minutes', null, HERE, 'en')).toBe(
+      'where it is set: unknown · default 10 min',
+    );
+    expect(keyDetail(key(), 'minutes', null, HERE, 'ru')).toBe(
+      'где задано — неизвестно · по умолчанию 10 мин',
+    );
+    expect(keyDetail(key(), 'minutes', null, HERE, 'uz-Latn')).toBe(
+      'qayerda belgilangani nomaʻlum · odatiy 10 daq.',
+    );
+    expect(keyDetail(key({ defaultValue: null }), 'minutes', null, HERE, 'en')).toBe(
+      'where it is set: unknown',
+    );
+    expect(
+      keyDetail(
+        key({ settableScopes: ['PLATFORM', 'TENANT', 'BRAND'] }),
+        'minutes',
+        null,
+        HERE,
+        'en',
+      ),
+    ).toBe('where it is set: unknown · default 10 min · brand and above only');
+  });
+
   it('says which levels may set it when that is fewer than all of them', () => {
     expect(
       keyDetail(
@@ -237,6 +261,7 @@ describe('keyDetail', () => {
     expect(keyDetail(locked, 'toggle', [MY_BRAND], HERE, 'en')).toBe(
       'locked by plan: the assistant',
     );
+    expect(keyDetail(locked, 'toggle', null, HERE, 'en')).toBe('locked by plan: the assistant');
   });
 });
 
@@ -275,6 +300,11 @@ describe('policyDetail', () => {
 
   it('says nothing is published when nothing is', () => {
     expect(policyDetail([], HERE, 'en')).toBe('not published');
+  });
+
+  it('does not say nothing is published when where it is stored could not be read', () => {
+    expect(policyDetail(null, HERE, 'en')).toBe('where it is set: unknown');
+    expect(policyDetail(null, HERE, 'ru')).toBe('где задано — неизвестно');
   });
 });
 
@@ -339,11 +369,19 @@ describe('findSettings', () => {
     expect(find('kechikish', { locale: 'uz-Latn' })[0].label).toBe('Buyurtma kechikish chegarasi');
   });
 
-  it('still finds it, with what it can say, when the placements could not be read', () => {
+  it('still finds it, and says it does not know where it is set, when the placements could not be read', () => {
     const [found] = find('late-order', { placements: null });
 
-    expect(found.detail).toBe('not set · default 10 min');
+    // «not set» would be a statement of fact about a read that never came back: a brand may hold 15.
+    expect(found.detail).toBe('where it is set: unknown · default 10 min');
+    expect(found.detail).not.toContain('not set');
     expect(found.queryParams).toEqual({});
+  });
+
+  it('says it is not set, with its default, when the placements were read and hold nothing for it', () => {
+    const [found] = find('late-order', { placements: { keys: [], policies: [] } });
+
+    expect(found.detail).toBe('not set · default 10 min');
   });
 
   it('opens a key only the company can set at the company level, since no other bar can edit it', () => {
@@ -390,10 +428,18 @@ describe('findSettings', () => {
   });
 
   it('lists a policy nobody has published, as not published, and opens its screen without a bar', () => {
-    const [found] = find('dispatch rules', { placements: null });
+    const [found] = find('dispatch rules', { placements: { keys: [], policies: [] } });
 
     expect(found.id).toBe('policy:fulfillment.dispatch_rules');
     expect(found.detail).toBe('not published');
+    expect(found.queryParams).toEqual({});
+  });
+
+  it('does not call a policy unpublished when the placements could not be read', () => {
+    const [found] = find('dispatch rules', { placements: null });
+
+    expect(found.id).toBe('policy:fulfillment.dispatch_rules');
+    expect(found.detail).toBe('where it is set: unknown');
     expect(found.queryParams).toEqual({});
   });
 });

@@ -54,6 +54,7 @@ class OperationsBrandControllerEndpointTests {
 
     private static final String FULL = "operations-brand-full";
     private static final String LOCATION_ONLY = "operations-brand-location-only";
+    private static final String BRANCH_ONLY = "operations-brand-branch-only";
 
     private static final String BRANDS = "/api/v1/operations/tenants/" + TENANT + "/brands";
 
@@ -101,6 +102,9 @@ class OperationsBrandControllerEndpointTests {
         // which are declared at BRAND scope precisely because they list every
         // location in the brand, not one.
         grant(LOCATION_ONLY, PlatformRole.LOCATION_MANAGER, "BRAND", BRAND);
+        // The same role at its own native scope: the branch manager of brands-and-locations.md §6, who closes her
+        // branch when the fryer dies and holds nothing over the network.
+        grant(BRANCH_ONLY, PlatformRole.LOCATION_MANAGER, "LOCATION", LOCATION);
     }
 
     @Test
@@ -129,6 +133,40 @@ class OperationsBrandControllerEndpointTests {
                         get(BRANDS + "/" + BRAND + "/locations/service-states").with(tokenFor(LOCATION_ONLY)))
                 .andReturn();
         assertThat(states.getResponse().getStatus()).isEqualTo(200);
+    }
+
+    /**
+     * The shell's branch open/closed control is for exactly this operator, and its batched read is brand-scoped: a
+     * branch manager whose only grant is at the branch is refused it, and is served the same state, name and time
+     * zone at the branch itself. The console reads the latter when it gets the former's 403
+     * ({@code BranchStates}); this pins both halves of that premise.
+     */
+    @Test
+    void aBranchManagerHoldingOnlyTheBranchIsRefusedTheBatchedReadAndServedTheBranchsOwn() throws Exception {
+        MvcResult batched = mvc.perform(
+                        get(BRANDS + "/" + BRAND + "/locations/service-states").with(tokenFor(BRANCH_ONLY)))
+                .andReturn();
+        assertThat(batched.getResponse().getStatus()).isEqualTo(403);
+        assertThat(batched.getResponse().getContentAsString()).contains("INSUFFICIENT_CAPABILITY");
+        assertThat(mvc.perform(get(BRANDS + "/" + BRAND + "/locations").with(tokenFor(BRANCH_ONLY)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(403);
+
+        MvcResult summary = mvc.perform(get(BRANDS + "/" + BRAND + "/locations/" + LOCATION + "/service-summary")
+                        .with(tokenFor(BRANCH_ONLY)))
+                .andReturn();
+        assertThat(summary.getResponse().getStatus()).isEqualTo(200);
+        assertThat(summary.getResponse().getContentAsString()).contains("\"effectiveMode\":\"FOLLOW_SCHEDULE\"");
+
+        MvcResult profile = mvc.perform(
+                        get(BRANDS + "/" + BRAND + "/locations/" + LOCATION).with(tokenFor(BRANCH_ONLY)))
+                .andReturn();
+        assertThat(profile.getResponse().getStatus()).isEqualTo(200);
+        assertThat(profile.getResponse().getContentAsString())
+                .contains("\"displayName\":\"Centre\"")
+                .contains("\"timezone\":\"Asia/Tashkent\"");
     }
 
     @Test

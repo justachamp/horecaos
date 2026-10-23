@@ -46,7 +46,7 @@ function summary(overrides: Partial<ServiceSummaryResponse> = {}): ServiceSummar
 describe('BranchStateDialog', () => {
   let api: {
     serviceSummary: ReturnType<typeof vi.fn>;
-    list: ReturnType<typeof vi.fn>;
+    profile: ReturnType<typeof vi.fn>;
     serviceStates: ReturnType<typeof vi.fn>;
     changeServiceState: ReturnType<typeof vi.fn>;
   };
@@ -56,10 +56,15 @@ describe('BranchStateDialog', () => {
   async function render(
     state: ServiceSummaryResponse = summary(),
     locationId = 'l1',
+    pickerOptions: readonly { id: string; displayName: string; status: string }[] = [
+      { id: 'l1', displayName: 'Chilonzor', status: 'ACTIVE' },
+    ],
   ): Promise<void> {
     api = {
       serviceSummary: vi.fn().mockResolvedValue(state),
-      list: vi.fn().mockResolvedValue([{ id: 'l1', timezone: 'Asia/Tashkent' }]),
+      profile: vi
+        .fn()
+        .mockResolvedValue({ id: 'l1', displayName: 'Chilonzor', timezone: 'Asia/Tashkent' }),
       serviceStates: vi.fn().mockResolvedValue([]),
       changeServiceState: vi.fn().mockResolvedValue(undefined),
     };
@@ -71,7 +76,7 @@ describe('BranchStateDialog', () => {
           provide: CurrentLocation,
           useValue: {
             scope: signal<LocationScope | null>(SCOPE),
-            options: signal([{ id: 'l1', displayName: 'Chilonzor', status: 'ACTIVE' }]),
+            options: signal(pickerOptions),
             ensureLoaded: () => Promise.resolve(),
           },
         },
@@ -123,6 +128,20 @@ describe('BranchStateDialog', () => {
     await render();
 
     expect(host().textContent).toContain('Branch status — Chilonzor');
+  });
+
+  it('names the branch from its own profile when the picker has none: a branch manager’s grant lists no branches', async () => {
+    await render(summary(), 'l1', []);
+
+    expect(host().textContent).toContain('Branch status — Chilonzor');
+    expect(host().textContent).not.toContain('Branch status — l1');
+  });
+
+  it('asks for the branch’s own profile and never for the brand’s list, which a branch manager may not read', async () => {
+    await render();
+
+    expect(api.profile).toHaveBeenCalledWith({ ...SCOPE, locationId: 'l1' });
+    expect(byId('branch-state-mode-FORCE_CLOSED')).not.toBeNull();
   });
 
   it('starts on «Close» for a branch that is open, and the button says nothing until a reason is chosen', async () => {

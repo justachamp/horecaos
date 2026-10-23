@@ -871,9 +871,13 @@
     }
 
     <!-- ================================================================ Печать (ADR 0154) -->
-    <!-- Hidden by the panel itself while `feature.printing` is off for the tenant. It is not the POS export section above: that one sends the order to the till, this one prints on paper (ADR 0154 decision 11). -->
+    <!-- Hidden by the panel itself while `feature.printing` is off for the tenant, unless the server offered REPRINT (a cashier cannot read the tenant's flags). It is not the POS export section above: that one sends the order to the till, this one prints on paper (ADR 0154 decision 11). -->
     @if (printScope(); as scope) {
-      <q-order-print-panel [scope]="scope" [orderId]="detail.value.summary.orderId" />
+      <q-order-print-panel
+        [scope]="scope"
+        [orderId]="detail.value.summary.orderId"
+        [reprintOffered]="reprintOffered()"
+      />
     }
 
     <!-- ================================================================ Атрибуция (§3.12) -->

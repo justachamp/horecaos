@@ -2703,6 +2703,53 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
     expect(host.querySelector('[data-testid="order-payment-reissue-form"]')).not.toBeNull();
   });
 
+  /**
+   * ADR 0154: the server offers `REPRINT` to anyone holding `print.reprint` at the branch, a cashier included,
+   * while the tenant's flags are `tenant.read` at TENANT scope and refused to them. The print section the action
+   * opens is drawn from the action, not from a read the person it was offered to cannot make. Here the flags
+   * read is not served at all (`apiGet` answers an unknown path with an error), as it would not be for a cashier.
+   */
+  it('draws the print section from the REPRINT the server offered, with the tenant flags unreadable', async () => {
+    configure({
+      get: apiGet({
+        value: detail({
+          summary: { ...detail().summary, status: 'CONFIRMED', actions: [{ action: 'REPRINT' }] },
+        }),
+        version: 3,
+      }),
+    });
+    const fixture = await render();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelector('[data-testid="order-detail-print"]')).not.toBeNull();
+    host.querySelectorAll('q-order-print-panel').forEach((panel) => {
+      (panel as HTMLElement).scrollIntoView = vi.fn();
+    });
+    (
+      host.querySelector('[data-testid="order-detail-primary-action"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(document.activeElement).toBe(host.querySelector('[data-testid="order-print-document"]'));
+  });
+
+  it('draws no print section when the server offered no REPRINT and the tenant flags are unreadable', async () => {
+    configure({ get: apiGet({ value: detail(), version: 3 }) });
+    const fixture = await render();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('q-order-print-panel'),
+    ).not.toBeNull();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="order-detail-print"]'),
+    ).toBeNull();
+  });
+
   it('the header RESOLVE action does nothing if the history no longer names an amendment still carrying RESOLVE', async () => {
     const history = vi
       .fn()

@@ -6,6 +6,8 @@ import {
   PolicyPlacementView,
 } from '../../core/api/configuration';
 import { Locale } from '../../core/i18n/i18n';
+import { MessageKey } from '../../core/i18n/messages.en';
+import { SETTINGS_NAVIGATION } from './settings-nav';
 import {
   POLICY_ROUTES,
   PolicyCode,
@@ -166,11 +168,17 @@ function more(others: number, locale: Locale): string {
     : ` · ${settingsSearchText.text(locale, 'detail.more', { count: others })}`;
 }
 
-/** The third column of a configuration key's result. */
+/**
+ * The third column of a configuration key's result.
+ *
+ * `placements` is where the key is stored, or **null when that could not be read** (the read failed, or has not
+ * come back yet). Null is not «nowhere»: it says where it is set is unknown, because «not set · default 10 min»
+ * about a threshold a brand has set to 15 is a false statement an operator would act on.
+ */
 export function keyDetail(
   key: ConfigurationKeyView,
   unit: SettingUnit,
-  placements: readonly ConfigurationPlacementView[],
+  placements: readonly ConfigurationPlacementView[] | null,
   scope: FindScope,
   locale: Locale,
 ): string {
@@ -179,7 +187,7 @@ export function keyDetail(
   if (key.lockedByPlan) {
     return text('detail.locked', { feature: key.lockedByPlan.description });
   }
-  const nearest = nearestPlacement(placements, scope);
+  const nearest = placements === null ? null : nearestPlacement(placements, scope);
   if (nearest !== null) {
     const { chosen, others } = nearest;
     const line = chosen.explicitNull
@@ -196,22 +204,28 @@ export function keyDetail(
     return `${line}${more(others, locale)}`;
   }
   const fallback = key.defaultValue;
-  const base =
-    fallback === null || fallback === undefined || fallback === ''
-      ? text('detail.notSet')
-      : text('detail.notSetDefault', {
-          value: formatSettingValue(String(fallback), unit, locale),
-        });
+  const hasDefault = fallback !== null && fallback !== undefined && fallback !== '';
+  const known = placements !== null;
+  const value = hasDefault ? formatSettingValue(String(fallback), unit, locale) : '';
+  const base = hasDefault
+    ? text(known ? 'detail.notSetDefault' : 'detail.unknownDefault', { value })
+    : text(known ? 'detail.notSet' : 'detail.unknown');
   const limit = restriction(key.settableScopes, locale);
   return limit === null ? base : `${base} · ${limit}`;
 }
 
-/** The third column of a policy's result: its newest version nearest the operator, who published it. */
+/**
+ * The third column of a policy's result: its newest version nearest the operator, who published it. A null
+ * `placements` (could not be read) says it is unknown, not that nothing is published.
+ */
 export function policyDetail(
-  placements: readonly PolicyPlacementView[],
+  placements: readonly PolicyPlacementView[] | null,
   scope: FindScope,
   locale: Locale,
 ): string {
+  if (placements === null) {
+    return settingsSearchText.text(locale, 'detail.unknown');
+  }
   const nearest = nearestPlacement(placements, scope);
   if (nearest === null) {
     return settingsSearchText.text(locale, 'detail.policyNone');
@@ -223,6 +237,32 @@ export function policyDetail(
     where: where(chosen, locale),
     by,
   })}${more(others, locale)}`;
+}
+
+/**
+ * «Group → Screen» for a route the index names: the Settings rail's own labels for a screen in the rail, and for
+ * one outside it (Staff, Kitchen, Delivery, Marketing...) the section the index writes for it, in the operator's
+ * language. One function for both places that print it, the Settings home and the command palette, so a result
+ * reads the same in each and can be found by the section's name; a bare route (`/staff`) is never what is shown.
+ *
+ * `translate` is the catalogue's `t`, passed in so the caller's own language signal is what a computed reads.
+ */
+export function settingsBreadcrumb(
+  route: string,
+  locale: Locale,
+  translate: (key: MessageKey) => string,
+): string {
+  const arrow = settingsSearchText.text(locale, 'breadcrumb.arrow');
+  for (const group of SETTINGS_NAVIGATION) {
+    const item = group.items.find((candidate) => candidate.path === route);
+    if (item !== undefined) {
+      return `${translate(group.label)}${arrow}${translate(item.label)}`;
+    }
+  }
+  return settingsSearchText.text(
+    locale,
+    `dest.${route}` as Parameters<typeof settingsSearchText.text>[1],
+  );
 }
 
 export interface FindInput {
@@ -265,8 +305,8 @@ export function findSettings(input: FindInput): readonly FoundSetting[] {
     if (!matches(needle, label, key.code, key.description, breadcrumb)) {
       continue;
     }
-    const stored = byKey.get(key.code) ?? [];
-    const nearest = nearestPlacement(stored, scope);
+    const stored = placements === null ? null : (byKey.get(key.code) ?? []);
+    const nearest = stored === null ? null : nearestPlacement(stored, scope);
     found.push({
       id: `configurationKey:${key.code}`,
       label,
@@ -291,8 +331,8 @@ export function findSettings(input: FindInput): readonly FoundSetting[] {
     if (!matches(needle, label, code, breadcrumb)) {
       continue;
     }
-    const stored = byPolicy.get(code) ?? [];
-    const nearest = nearestPlacement(stored, scope);
+    const stored = placements === null ? null : (byPolicy.get(code) ?? []);
+    const nearest = stored === null ? null : nearestPlacement(stored, scope);
     found.push({
       id: `policy:${code}`,
       label,
