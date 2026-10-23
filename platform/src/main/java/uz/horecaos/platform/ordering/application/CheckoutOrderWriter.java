@@ -427,9 +427,6 @@ class CheckoutOrderWriter {
                         orderLineId,
                         preset.presetId(),
                         preset.code(),
-                        preset.labelRu(),
-                        preset.labelUz(),
-                        preset.labelEn(),
                         preset.labels(),
                         sortOrder++);
             }

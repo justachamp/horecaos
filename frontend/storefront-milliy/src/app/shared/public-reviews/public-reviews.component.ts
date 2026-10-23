@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
 import { IconComponent } from '../icon/icon.component';
-import { LangService } from '../../services/lang.service';
+import { LangService, platformTag } from '../../services/lang.service';
 import {
   type PublicComment,
   type PublicSummary,
@@ -120,7 +120,8 @@ export class PublicReviewsComponent {
     if (Number.isNaN(parsed.getTime())) {
       return isoDate;
     }
-    const locale = this.lang.langId() === 'uz' ? 'uz-Latn' : this.lang.langId();
-    return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(parsed);
+    return new Intl.DateTimeFormat(platformTag(this.lang.langId()), { dateStyle: 'medium' }).format(
+      parsed,
+    );
   }
 }

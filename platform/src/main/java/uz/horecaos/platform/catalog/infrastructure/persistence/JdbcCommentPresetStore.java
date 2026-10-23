@@ -40,17 +40,14 @@ public class JdbcCommentPresetStore {
     public void insert(PresetRow preset) {
         jdbc.sql("""
                 INSERT INTO catalog.comment_presets (
-                    id, tenant_id, code, label_ru, label_uz, label_en, pos_modifier_code,
+                    id, tenant_id, code, pos_modifier_code,
                     sort_order, status, version, created_at, updated_at)
-                VALUES (:id, :tenantId, :code, :labelRu, :labelUz, :labelEn, :posModifierCode,
+                VALUES (:id, :tenantId, :code, :posModifierCode,
                     :sortOrder, :status, 1, :now, :now)
                 """)
                 .param("id", preset.id())
                 .param("tenantId", preset.tenantId())
                 .param("code", preset.code())
-                .param("labelRu", preset.labelRu())
-                .param("labelUz", preset.labelUz())
-                .param("labelEn", preset.labelEn())
                 .param("posModifierCode", preset.posModifierCode())
                 .param("sortOrder", preset.sortOrder())
                 .param("status", preset.status())
@@ -92,22 +89,17 @@ public class JdbcCommentPresetStore {
     }
 
     /**
-     * Corrects a preset's labels, POS mapping, sort order or status,
-     * conditional on the version the caller last saw.
-     *
-     * <p>A null label leaves that column exactly as it was (row 10.12): an editor
-     * that shows only the locales a tenant supports sends no wording for the others,
-     * and a write that blanked or replaced them would delete a translation nobody
-     * chose to delete.
+     * Corrects a preset's POS mapping, sort order or status, conditional on the version
+     * the caller last saw. Its wording is written separately ({@link #upsertTranslations}),
+     * which touches only the locales it names: an editor that shows only the locales a
+     * tenant supports sends no wording for the others, and a write that replaced the set
+     * would delete a translation nobody chose to delete (row 10.12).
      *
      * @return the new version, or empty when the row moved since it was read
      */
     public Optional<Integer> update(
             UUID tenantId,
             UUID presetId,
-            @Nullable String labelRu,
-            @Nullable String labelUz,
-            @Nullable String labelEn,
             @Nullable String posModifierCode,
             int sortOrder,
             String status,
@@ -115,18 +107,13 @@ public class JdbcCommentPresetStore {
             Instant now) {
         return jdbc.sql("""
                 UPDATE catalog.comment_presets
-                SET label_ru = COALESCE(:labelRu, label_ru), label_uz = COALESCE(:labelUz, label_uz),
-                    label_en = COALESCE(:labelEn, label_en),
-                    pos_modifier_code = :posModifierCode, sort_order = :sortOrder, status = :status,
+                SET pos_modifier_code = :posModifierCode, sort_order = :sortOrder, status = :status,
                     version = version + 1, updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
                 RETURNING version
                 """)
                 .param("tenantId", tenantId)
                 .param("id", presetId)
-                .param("labelRu", labelRu)
-                .param("labelUz", labelUz)
-                .param("labelEn", labelEn)
                 .param("posModifierCode", posModifierCode)
                 .param("sortOrder", sortOrder)
                 .param("status", status)
@@ -286,7 +273,7 @@ public class JdbcCommentPresetStore {
     public List<ProductPresetRow> listForProduct(UUID tenantId, UUID brandId, UUID productId) {
         return jdbc.sql("""
                 SELECT pp.preset_id, pp.sort_order,
-                       p.code, p.label_ru, p.label_uz, p.label_en, p.pos_modifier_code, p.status
+                       p.code, p.pos_modifier_code, p.status
                 FROM catalog.product_comment_presets pp
                 JOIN catalog.comment_presets p ON p.id = pp.preset_id AND p.tenant_id = pp.tenant_id
                 WHERE pp.tenant_id = :tenantId AND pp.brand_id = :brandId AND pp.product_id = :productId
@@ -299,9 +286,6 @@ public class JdbcCommentPresetStore {
                         row.getObject("preset_id", UUID.class),
                         row.getInt("sort_order"),
                         row.getString("code"),
-                        row.getString("label_ru"),
-                        row.getString("label_uz"),
-                        row.getString("label_en"),
                         row.getString("pos_modifier_code"),
                         row.getString("status")))
                 .list();
@@ -320,7 +304,7 @@ public class JdbcCommentPresetStore {
         return jdbc
                 .sql("""
                 SELECT pp.product_id, pp.preset_id, pp.sort_order,
-                       p.code, p.label_ru, p.label_uz, p.label_en, p.pos_modifier_code, p.status
+                       p.code, p.pos_modifier_code, p.status
                 FROM catalog.product_comment_presets pp
                 JOIN catalog.comment_presets p ON p.id = pp.preset_id AND p.tenant_id = pp.tenant_id
                 WHERE pp.tenant_id = :tenantId AND pp.brand_id = :brandId AND pp.product_id = ANY(:productIds)
@@ -336,9 +320,6 @@ public class JdbcCommentPresetStore {
                                 row.getObject("preset_id", UUID.class),
                                 row.getInt("sort_order"),
                                 row.getString("code"),
-                                row.getString("label_ru"),
-                                row.getString("label_uz"),
-                                row.getString("label_en"),
                                 row.getString("pos_modifier_code"),
                                 row.getString("status"))))
                 .list()
@@ -353,7 +334,7 @@ public class JdbcCommentPresetStore {
     // ------------------------------------------------------------------- mapping
 
     private static final String SELECT_PRESET = """
-            SELECT id, tenant_id, code, label_ru, label_uz, label_en, pos_modifier_code,
+            SELECT id, tenant_id, code, pos_modifier_code,
                    sort_order, status, version, created_at
             FROM catalog.comment_presets
             """;
@@ -363,9 +344,6 @@ public class JdbcCommentPresetStore {
                 row.getObject("id", UUID.class),
                 row.getObject("tenant_id", UUID.class),
                 row.getString("code"),
-                row.getString("label_ru"),
-                row.getString("label_uz"),
-                row.getString("label_en"),
                 row.getString("pos_modifier_code"),
                 row.getInt("sort_order"),
                 row.getString("status"),
@@ -383,9 +361,6 @@ public class JdbcCommentPresetStore {
             UUID id,
             UUID tenantId,
             String code,
-            String labelRu,
-            String labelUz,
-            String labelEn,
             @Nullable String posModifierCode,
             int sortOrder,
             String status,
@@ -397,9 +372,6 @@ public class JdbcCommentPresetStore {
             UUID presetId,
             int sortOrder,
             String code,
-            String labelRu,
-            String labelUz,
-            String labelEn,
             @Nullable String posModifierCode,
             String status) {}
 }

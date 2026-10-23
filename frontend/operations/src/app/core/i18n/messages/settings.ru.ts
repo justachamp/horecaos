@@ -832,6 +832,48 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.notifications.routing.topic.prompt':
     'ID темы форума — оставьте пустым для обычного чата',
   'settings.notifications.routing.topic.save': 'Сохранить',
+  'settings.notifications.field.notificationClass.hint':
+    'Сообщение с одноразовым кодом принадлежит платформе и здесь не редактируется; оно показано ниже только для чтения.',
+  'settings.notifications.field.consentPurpose': 'Цель согласия',
+  'settings.notifications.field.consentPurpose.hint':
+    'Цель, по которой проверяется согласие клиента перед отправкой. Необязательное сообщение без цели отклоняется. Для сообщений о ходе заказа используется ORDER_PROGRESS_UPDATES.',
+  'settings.notifications.marketing.notice': 'Отправляется только клиентам с согласием.',
+  'settings.notifications.marketing.evidence':
+    'Отписка меняет, кому можно писать дальше, и никогда не стирает следы уже доставленного.',
+  'settings.notifications.marketing.link': 'Согласие клиента смотрите в его карточке',
+  'settings.notifications.marketing.chip': 'только по согласию',
+  'settings.notifications.column.languages': 'Языки',
+  'settings.notifications.column.moderation': 'Модерация',
+  'settings.notifications.column.origin': 'Источник',
+  'settings.notifications.languages.missing': 'не хватает языка',
+  'settings.notifications.origin.BRAND': 'Бренд',
+  'settings.notifications.origin.TENANT': 'Организация',
+  'settings.notifications.origin.PLATFORM': 'Платформа',
+  'settings.notifications.defaults.title': 'Текст платформы по умолчанию',
+  'settings.notifications.defaults.lead':
+    'Что получает клиент по этим событиям, пока ни бренд, ни организация ничего не написали. Это последний уровень: активированный вами шаблон сразу его перекрывает. Менять его нельзя; «Настроить» копирует его в шаблон этого бренда.',
+  'settings.notifications.defaults.customise': 'Настроить',
+  'settings.notifications.defaults.editOwn': 'Открыть ваш шаблон',
+  'settings.notifications.defaults.overridden': 'перекрыт',
+  'settings.notifications.otp.title': 'Сообщение с одноразовым кодом',
+  'settings.notifications.otp.lead':
+    'Фраза, которую клиент читает вместе с кодом входа, принадлежит платформе: она короткая намеренно, чтобы укладываться в одно SMS, и это не шаблон, поэтому здесь нечего создавать и активировать.',
+  'settings.notifications.otp.gateway.GATEWAY_MODERATES':
+    'Ваш SMS-шлюз утверждает тексты: фразы платформы должны быть утверждены им, прежде чем коды дойдут до телефона',
+  'settings.notifications.otp.gateway.NOT_MODERATED': 'Ваш SMS-шлюз не модерирует тексты',
+  'settings.notifications.otp.characters': '{count} симв.',
+  'settings.notifications.testSend.chat': 'Привязанный чат',
+  'settings.notifications.testSend.chat.choose': 'Выберите один из чатов этого бренда…',
+  'settings.notifications.testSend.chat.none':
+    'Ни один чат ещё не привязан — привяжите его на вкладке «Маршрутизация».',
+  'settings.notifications.editor.copy.label': 'Начать другой язык с этого текста:',
+  'settings.notifications.editor.copy.into': 'Скопировать в {locale}',
+  'settings.notifications.editor.copy.replace': 'Заменить {locale} этим текстом',
+  'settings.notifications.editor.personal.note':
+    'Имя клиента и имя курьера подставляются при отправке сообщения и нигде не хранятся.',
+  'settings.notifications.editor.showItemPrices': 'Показывать цены товаров в списке',
+  'settings.notifications.editor.showItemPrices.unused':
+    'Ни один язык не использует {{productList}}, поэтому этот переключатель ничего не изменит.',
 
   // 10.10 Справочные данные
   'settings.referenceData.title': 'Справочные данные',
@@ -852,9 +894,7 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.referenceData.empty': 'Пока нет.',
   'settings.referenceData.field.internalName': 'Внутреннее название',
   'settings.referenceData.field.customerText': 'Текст для клиента',
-  'settings.referenceData.field.customerTextRu': 'Текст для клиента (русский)',
-  'settings.referenceData.field.customerTextUz': 'Текст для клиента (узбекский)',
-  'settings.referenceData.field.customerTextEn': 'Текст для клиента (английский)',
+  'settings.referenceData.field.customerTextIn': 'Текст для клиента ({language})',
   'settings.referenceData.field.systemCategory': 'Платформенная категория',
   'settings.referenceData.field.stockDisposition': 'Что со списанием',
   'settings.referenceData.field.liabilityParty': 'Кто несёт затраты',
@@ -1405,9 +1445,7 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
     'Перед первым ответом в чате помощник говорит это на языке клиента. Напишите текст для своих клиентов. Если оставить пустым, используется формулировка HorecaOS; отключить это сообщение нельзя.',
   'settings.assistant.disclosure.legal':
     'Формулировка HorecaOS по умолчанию не является юридической консультацией. Что именно вы обязаны сообщать клиентам об автоматических ответах и сторонних обработчиках, определяете вы сами.',
-  'settings.assistant.disclosure.field.ru': 'Говорит по-русски',
-  'settings.assistant.disclosure.field.uz': 'Говорит по-узбекски',
-  'settings.assistant.disclosure.field.en': 'Говорит по-английски',
+  'settings.assistant.disclosure.field': 'Сказано на языке: {language}',
   'settings.assistant.disclosure.blank': 'Формулировка HorecaOS по умолчанию',
   'settings.assistant.disclosure.default': 'Формулировка по умолчанию: {text}',
   'settings.assistant.disclosure.counter': '{count} из {max} знаков',
@@ -1445,9 +1483,6 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.assistant.notes.history.reason': 'Причина: {reason}',
   'settings.assistant.notes.version': 'версия {version}',
   'settings.assistant.notes.by': '{author}, {when}',
-  'settings.assistant.notes.locale.ru': 'Русский',
-  'settings.assistant.notes.locale.uz': 'Узбекский',
-  'settings.assistant.notes.locale.en': 'Английский',
   'settings.assistant.notes.scope.TENANT': 'Вся компания',
   'settings.assistant.notes.scope.BRAND': 'Весь бренд',
   'settings.assistant.notes.scope.LOCATION': 'Филиал «{name}»',
@@ -1720,9 +1755,6 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.printing.profile.logo': 'Печатать логотип бренда сверху',
   'settings.printing.profile.logoNote':
     'Он превращается в чёрно-белые точки. Лучше всего печатается простой контрастный логотип.',
-  'settings.printing.profile.locale.ru': 'Русский',
-  'settings.printing.profile.locale.uzLatn': 'Узбекский (латиница)',
-  'settings.printing.profile.locale.en': 'Английский',
   'settings.printing.profile.footerLine': 'Строка подвала {n}',
   'settings.printing.profile.footerNote':
     'До трёх строк на язык, по {max} символов, чтобы строка помещалась на ленту 80 мм. Документ печатается на одном языке — филиала, а не клиента.',

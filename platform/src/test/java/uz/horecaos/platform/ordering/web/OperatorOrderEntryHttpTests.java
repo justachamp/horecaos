@@ -64,6 +64,7 @@ import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchro
 import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.application.InventoryService;
 import uz.horecaos.platform.pricing.application.PromoCodeAuthoringService;
+import uz.horecaos.platform.support.LocaleNames;
 import uz.horecaos.platform.support.SignedInStaff;
 import uz.horecaos.platform.support.StubJwtIssuer;
 import uz.horecaos.platform.support.TestDatabase;
@@ -942,7 +943,8 @@ class OperatorOrderEntryHttpTests {
                 actor);
         tariffs.activate(TENANT, BRAND, tariffId, drafted.version(), actor);
 
-        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "DEFAULT", "Default", "Default", "Default");
+        UUID zoneId = zones.createZone(
+                TENANT, BRAND, ZoneRole.DELIVERY, "DEFAULT", LocaleNames.triple("Default", "Default", "Default"));
         var version = zones.draftCircleVersion(
                 new ServiceZoneService.NewVersion(
                         TENANT, BRAND, zoneId, ZoneRole.DELIVERY, null, 0, "UZS", tariffId, null, null, actor),

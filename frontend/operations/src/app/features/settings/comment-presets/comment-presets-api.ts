@@ -19,14 +19,10 @@ const CONTROL_PLANE = '/api/v1/control-plane';
 export interface PresetResponse {
   readonly presetId: string;
   readonly code: string;
-  readonly labelRu: string;
-  readonly labelUz: string;
-  readonly labelEn: string;
   /**
    * Every language the preset has wording in (row 10.12): the platform triple
-   * from its columns, then any other from the per-locale table, each once.
-   * A screen reads this, not the three fields above, which stay for callers
-   * that predate it.
+   * first, then any other by code, each once. The only shape of the wording
+   * since V0678; the `labelRu`/`labelUz`/`labelEn` fields it replaced are gone.
    */
   readonly labels: LabelsByLocale;
   readonly posModifierCode: string | null;
@@ -37,18 +33,12 @@ export interface PresetResponse {
 }
 
 /**
- * `labelRu`/`labelUz`/`labelEn` are the platform triple and stay *required* —
- * the OpenAPI contract cannot relax a published required request field — so an
- * editor that offers only some of the platform languages fills the others (see
- * `platformColumns`). `labels` is wording by locale, additive: the way to word
- * a language beyond the triple, and what the tenant's default language is
- * checked against.
+ * `labels` is the wording by locale, the only shape a preset's wording has: the
+ * tenant's default language must be in it, every other language is optional,
+ * and a language the tenant does not serve is simply left out.
  */
 export interface NewPreset {
   readonly code: string;
-  readonly labelRu: string;
-  readonly labelUz: string;
-  readonly labelEn: string;
   readonly labels: LabelsByLocale;
   readonly posModifierCode?: string | null;
   readonly sortOrder?: number;
@@ -56,15 +46,10 @@ export interface NewPreset {
 
 /**
  * Whole-record edit: POS mapping, sort order and status together, with an
- * expected version. The platform triple is always named — for a language the
- * editor does not offer, with the wording the preset already has, unchanged —
- * and `labels` names only the offered languages the operator filled in, so a
- * language beyond the triple that is not offered keeps its wording.
+ * expected version. `labels` names only the offered languages the operator
+ * filled in, so a language that is not offered keeps its wording.
  */
 export interface PresetEdit {
-  readonly labelRu: string;
-  readonly labelUz: string;
-  readonly labelEn: string;
   readonly labels: LabelsByLocale;
   readonly posModifierCode?: string | null;
   readonly sortOrder: number;

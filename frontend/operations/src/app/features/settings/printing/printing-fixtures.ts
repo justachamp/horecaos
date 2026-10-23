@@ -1,3 +1,5 @@
+import { signal } from '@angular/core';
+
 import { StationResponse } from '../../kitchen/kitchen-api';
 import {
   AgentView,
@@ -8,6 +10,19 @@ import {
 } from './printing-api';
 
 /** Plain data builders for the printing specs. No test framework is imported, so the app's own type check accepts the file. */
+
+/**
+ * The brand's language set as the printing cards read it (the real `LocaleSet` reads the brand over HTTP):
+ * the platform's three, default first, unless a spec narrows or widens `locales`.
+ */
+export class FakeBrandLocales {
+  readonly locales = signal<readonly string[]>(['ru', 'uz-Latn', 'en']);
+  readonly defaultLocale = signal('ru');
+  readonly isConfigured = signal(false);
+  ensureLoaded(): Promise<void> {
+    return Promise.resolve();
+  }
+}
 
 export function printer(overrides: Partial<PrinterView> = {}): PrinterView {
   return {

@@ -15,6 +15,7 @@ import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
+import { presetLabelFor } from '../../core/i18n/locale-labels';
 import { LocaleSet } from '../../core/i18n/locale-set';
 import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { MessageKey } from '../../core/i18n/messages.en';
@@ -1850,21 +1851,12 @@ export class ProductEditorPage implements OnInit {
     }
   }
 
-  /** A preset's label in this editor's own {@link editingLocale} — presets carry one label per locale directly (`labelRu`/`labelUz`/`labelEn`), not the `translations` map every other entity here uses. */
+  /** A preset's label in this editor's own {@link editingLocale} — presets carry a `labels` map keyed by platform tag, not the `translations` map every other entity here uses. */
   protected localizedPresetLabel(preset: {
-    readonly labelRu: string;
-    readonly labelUz: string;
-    readonly labelEn: string;
+    readonly labels: Readonly<Record<string, string>>;
   }): string {
-    // The three label columns are the platform tags' (ADR 0149): the editor holds catalog codes.
-    switch (this.registry.tagOfCatalogCode(this.editingLocale())) {
-      case 'uz-Latn':
-        return preset.labelUz;
-      case 'en':
-        return preset.labelEn;
-      default:
-        return preset.labelRu;
-    }
+    // The map is keyed by the platform's tags (ADR 0149): the editor holds catalog codes.
+    return presetLabelFor({ labels: preset.labels }, this.registry.tagOfCatalogCode(this.editingLocale()));
   }
 
   /** Attaches the preset the picker's `<select>` currently names, or re-sorts it if already attached — the same call. */

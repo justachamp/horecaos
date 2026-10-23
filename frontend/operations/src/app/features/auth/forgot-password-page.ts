@@ -201,7 +201,9 @@ export class ForgotPasswordPage {
     this.busy.set(true);
     this.errorKey.set(null);
     try {
-      await this.resets.request(this.login().trim(), localeParameter(this.i18n.locale()));
+      // The tag as it is: the API reads a registered alias and resolves a language the platform does not
+      // send in to its fallback, so this console no longer decides what a reader of `kk` is sent (ADR 0149).
+      await this.resets.request(this.login().trim(), this.i18n.locale());
       this.sent.set(true);
     } catch (failure) {
       this.errorKey.set(messageFor(failure));
@@ -227,12 +229,4 @@ function messageFor(failure: unknown): MessageKey {
     }
   }
   return 'forgotPassword.failed';
-}
-
-/** The catalogue's locale in the three-value shape the platform's email renderer takes. */
-function localeParameter(locale: string): string {
-  if (locale === 'uz-Latn') {
-    return 'uz';
-  }
-  return locale === 'en' ? 'en' : 'ru';
 }

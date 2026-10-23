@@ -268,6 +268,7 @@ export interface AddVariantRequest {
 }
 
 export interface AddVersionRequest {
+  showItemPrices?: boolean;
   variablesSchema: { [key: string]: string };
   wordings: { [key: string]: WordingRequest };
 }
@@ -581,6 +582,16 @@ export interface AssistantKnowledgeControllerVersionResponse {
   reason?: string;
   status?: string;
   version?: number;
+}
+
+export interface AssistantLanguageResponse {
+  code?: string;
+  disclosureKey?: string;
+  locale?: string;
+}
+
+export interface AssistantLanguagesResponse {
+  languages?: Array<AssistantLanguageResponse>;
 }
 
 export interface AssistantUsageControllerUsageResponse {
@@ -1092,9 +1103,7 @@ export interface BatchImportZoneRow {
   code: string;
   currency: string;
   deliveryTariffId?: string;
-  displayNameEn: string;
-  displayNameRu: string;
-  displayNameUz: string;
+  displayNames?: { [key: string]: string };
   externalRef: string;
   freeDeliveryFromMinor?: number;
   geoJson: string;
@@ -1292,6 +1301,12 @@ export interface BrandLocaleView {
   description?: string;
   isDefault?: boolean;
   locale?: string;
+}
+
+export interface BrandLocalesResponse {
+  configured?: boolean;
+  defaultLocale?: string;
+  locales?: Array<string>;
 }
 
 export interface BrandOrderCountsResponse {
@@ -2340,9 +2355,6 @@ export interface ComboSalesRowResponse {
 
 export interface CommentPresetChip {
   code?: string;
-  labelEn?: string;
-  labelRu?: string;
-  labelUz?: string;
   labels?: { [key: string]: string };
 }
 
@@ -2355,9 +2367,6 @@ export interface CommentPresetControllerLocaleSetResponse {
 export interface CommentPresetOption {
   code?: string;
   label?: string;
-  labelEn?: string;
-  labelRu?: string;
-  labelUz?: string;
   labels?: { [key: string]: string };
 }
 
@@ -3477,9 +3486,6 @@ export interface CreateTenantRequest {
 
 export interface CreateZoneRequest {
   code: string;
-  displayNameEn: string;
-  displayNameRu: string;
-  displayNameUz: string;
   displayNames?: { [key: string]: string };
   role: "DELIVERY" | "CATCHMENT";
 }
@@ -6781,9 +6787,6 @@ export interface NewFeedbackTagRequest {
 
 export interface NewPresetRequest {
   code: string;
-  labelEn: string;
-  labelRu: string;
-  labelUz: string;
   labels?: { [key: string]: string };
   posModifierCode?: string;
   sortOrder?: number;
@@ -6829,6 +6832,7 @@ export interface NotificationResponse {
   locale?: string;
   locationId?: string;
   notificationClass?: string;
+  platformDefaultVersion?: number;
   recipientEndpointId?: string;
   renderedContentHash?: string;
   status?: string;
@@ -7268,6 +7272,12 @@ export interface OperationsOrderControllerOrderSummaryResponse {
 export interface OperationsOrderControllerStateActionRequest {
   reasonCode: string;
   targetStatus: "RECEIVED" | "PAYMENT_AUTHORIZING" | "AWAITING_APPROVAL" | "PAYMENT_FAILED" | "CONFIRMED" | "REJECTED" | "EXPIRED" | "PREPARING" | "READY" | "FULFILLING" | "COMPLETED" | "CANCELLED";
+}
+
+export interface OperationsOrderOutcomeReasonControllerLocaleSetResponse {
+  configured?: boolean;
+  defaultLocale?: string;
+  locales?: Array<string>;
 }
 
 export interface OperationsPaymentControllerPaymentSessionResponse {
@@ -7766,6 +7776,17 @@ export interface OrderTable {
 export interface OriginCountResponse {
   origin?: string;
   registered?: number;
+}
+
+export interface OtpSentenceResponse {
+  characters?: number;
+  locale?: string;
+  text?: string;
+}
+
+export interface OtpWordingResponse {
+  gatewayApproval?: string;
+  sentences?: Array<OtpSentenceResponse>;
 }
 
 export interface OutboxFailureDetail {
@@ -8738,6 +8759,16 @@ export interface PlatformCustomerLookupControllerCustomerLookupRequest {
   reason: string;
 }
 
+export interface PlatformDefaultResponse {
+  bodies?: { [key: string]: string };
+  channels?: Array<string>;
+  consentPurpose?: string;
+  notificationClass?: string;
+  templateKey?: string;
+  variables?: Array<string>;
+  version?: number;
+}
+
 export interface PlatformGrantControllerReasonRequest {
   reason: string;
 }
@@ -9041,9 +9072,6 @@ export interface PresentationRequest {
 
 export interface PresetResponse {
   code?: string;
-  labelEn?: string;
-  labelRu?: string;
-  labelUz?: string;
   labels?: { [key: string]: string };
   posModifierCode?: string;
   presetId?: string;
@@ -9339,9 +9367,7 @@ export interface ProductDetailResponse {
 
 export interface ProductPresetResponse {
   code?: string;
-  labelEn?: string;
-  labelRu?: string;
-  labelUz?: string;
+  labels?: { [key: string]: string };
   posModifierCode?: string;
   presetId?: string;
   sortOrder?: number;
@@ -10360,9 +10386,6 @@ export interface RegionGeographyRequest {
   centreLat?: number;
   centreLon?: number;
   code: string;
-  displayNameEn: string;
-  displayNameRu: string;
-  displayNameUz: string;
   displayNames?: { [key: string]: string };
   expectedVersion?: number;
 }
@@ -10380,9 +10403,6 @@ export interface RegionResponse {
   centreLat?: number;
   centreLon?: number;
   code?: string;
-  displayNameEn?: string;
-  displayNameRu?: string;
-  displayNameUz?: string;
   displayNames?: { [key: string]: string };
   platform?: boolean;
   regionId?: string;
@@ -10572,9 +10592,6 @@ export interface RemoveTenantCalendarHolidayRequest {
 }
 
 export interface RenameZoneRequest {
-  displayNameEn?: string;
-  displayNameRu?: string;
-  displayNameUz?: string;
   displayNames?: { [key: string]: string };
 }
 
@@ -12890,9 +12907,14 @@ export interface TemplateResponse {
   fulfillmentMode?: string;
   id?: string;
   notificationClass?: string;
+  origin?: string;
+  providerReview?: string;
+  requiredLocales?: Array<string>;
+  shownVersion?: number;
   status?: string;
   templateKey?: string;
   version?: number;
+  versionLocales?: Array<string>;
 }
 
 export interface TemplateReviewView {
@@ -13614,9 +13636,6 @@ export interface UpdatePaymentMethodRequest {
 
 export interface UpdatePresetRequest {
   expectedVersion: number;
-  labelEn: string;
-  labelRu: string;
-  labelUz: string;
   labels?: { [key: string]: string };
   posModifierCode?: string;
   sortOrder?: number;
@@ -13963,6 +13982,7 @@ export interface WordingResponse {
   providerReviewNote?: string;
   providerReviewReference?: string;
   providerReviewUpdatedAt?: string;
+  showItemPrices?: boolean;
   status?: string;
   subject?: string;
   variablesSchema?: { [key: string]: string };
@@ -13995,9 +14015,7 @@ export interface ZoneOption {
   brandId?: string;
   code?: string;
   id?: string;
-  nameEn?: string;
-  nameRu?: string;
-  nameUz?: string;
+  names?: { [key: string]: string };
   status?: string;
 }
 
@@ -14017,9 +14035,6 @@ export interface ZoneSummaryResponse {
   code?: string;
   currency?: string;
   deliveryTariffId?: string;
-  displayNameEn?: string;
-  displayNameRu?: string;
-  displayNameUz?: string;
   displayNames?: { [key: string]: string };
   freeDeliveryFromMinor?: number;
   minBasketMinor?: number;
@@ -14304,7 +14319,7 @@ export interface Operations {
   "setBusinessType": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/business-type"; request: { parameters: { path: { tenantId: string } }; body: BusinessTypeRequest }; responses: { "200": unknown } };
   "list_37": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<PresetResponse> } };
   "create_19": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets"; request: { parameters: { path: { tenantId: string } }; body: NewPresetRequest }; responses: { "200": PresetResponse } };
-  "localeSet_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets/locale-set"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CommentPresetControllerLocaleSetResponse } };
+  "localeSet_3": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets/locale-set"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CommentPresetControllerLocaleSetResponse } };
   "update_13": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets/{presetId}"; request: { parameters: { path: { presetId: string; tenantId: string } }; body: UpdatePresetRequest }; responses: { "200": PresetResponse } };
   "changeCountry": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/country-change"; request: { parameters: { path: { tenantId: string } }; body: CountryChangeRequest }; responses: { "200": CountryChangeView } };
   "due": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/credentials-due"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CredentialsDue } };
@@ -14449,6 +14464,7 @@ export interface Operations {
   "endBreak": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/breaks/end"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } } }; responses: { "200": unknown } };
   "close_4": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/close"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } }; body: CloseShiftRequest }; responses: { "200": CloseResponse } };
   "me_1": { method: "GET"; path: "/api/v1/devices/me"; request: { parameters: Record<string, never> }; responses: { "200": DeviceSelfResponse } };
+  "languages": { method: "GET"; path: "/api/v1/operations/assistant/languages"; request: { parameters: Record<string, never> }; responses: { "200": AssistantLanguagesResponse } };
   "ownOperations": { method: "GET"; path: "/api/v1/operations/auth/mfa/authenticators"; request: { parameters: Record<string, never> }; responses: { "200": OwnMfaResponse } };
   "removeOperations": { method: "DELETE"; path: "/api/v1/operations/auth/mfa/authenticators/{authenticatorId}"; request: { parameters: { path: { authenticatorId: string } }; body: RemoveAuthenticatorRequest }; responses: { "200": unknown } };
   "beginOperations": { method: "POST"; path: "/api/v1/operations/auth/mfa/enrolments"; request: { parameters: Record<string, never>; body: BeginEnrolmentRequest }; responses: { "200": Enrolment } };
@@ -14792,6 +14808,7 @@ export interface Operations {
   "list_17": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string }; query: { activeOnly?: boolean; kind: "CANCELLATION" | "COMPLETION" | "LINE_REMOVAL" } } }; responses: { "200": Array<ReasonResponse> } };
   "create_9": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerIdResponse } };
   "categories_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/categories"; request: { parameters: { path: { tenantId: string }; query: { kind: "CANCELLATION" | "COMPLETION" | "LINE_REMOVAL" } } }; responses: { "200": Array<string> } };
+  "localeSet_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/locale-set"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OperationsOrderOutcomeReasonControllerLocaleSetResponse } };
   "reorder_1": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/reorder"; request: { parameters: { path: { tenantId: string } }; body: OrderOutcomeReasonControllerReorderRequest }; responses: { "200": Array<ReasonResponse> } };
   "archive": { method: "DELETE"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } } }; responses: { "200": unknown } };
   "update_4": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerVersionResponse } };
@@ -14987,6 +15004,7 @@ export interface Operations {
   "signOut": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/sessions/current"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": unknown } };
   "requestCode": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/verification-challenges"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RequestCodeRequest }; responses: { "200": ChallengeResponse } };
   "submitCode": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/verification-challenges/{challengeId}/attempts"; request: { parameters: { path: { brandId: string; challengeId: string; tenantId: string } }; body: SubmitCodeRequest }; responses: { "200": GrantResponse } };
+  "brandLocales": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locales"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": BrandLocalesResponse } };
   "quote_1": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/delivery-fee"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: DeliveryFeeQuoteRequest }; responses: { "200": DeliveryFeeView } };
   "fulfillmentModes": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/fulfillment-modes"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channel: string } } }; responses: { "200": FulfillmentModesResponse } };
   "menu": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/menu"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channel: string; locale?: string } } }; responses: { "200": StorefrontMenu } };
@@ -15305,7 +15323,9 @@ export interface Operations {
   "eventClasses": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-routing/event-classes"; request: { parameters: Record<string, never> }; responses: { "200": Array<EventClassResponse> } };
   "list_2": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<TemplateResponse> } };
   "create": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateTemplateRequest }; responses: { "200": NotificationTemplateControllerIdResponse } };
-  "variableCatalogue": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/variable-catalogue"; request: { parameters: Record<string, never> }; responses: { "200": Array<VariableCatalogueEntry> } };
+  "otpWording": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/otp-wording"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OtpWordingResponse } };
+  "platformDefaults": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/platform-defaults"; request: { parameters: Record<string, never> }; responses: { "200": Array<PlatformDefaultResponse> } };
+  "variableCatalogue": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/variable-catalogue"; request: { parameters: { query: { templateKey?: string } } }; responses: { "200": Array<VariableCatalogueEntry> } };
   "versions": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/{templateId}/versions"; request: { parameters: { path: { brandId: string; templateId: string; tenantId: string } } }; responses: { "200": Array<WordingResponse> } };
   "addVersion": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/{templateId}/versions"; request: { parameters: { path: { brandId: string; templateId: string; tenantId: string } }; body: AddVersionRequest }; responses: { "200": NotificationTemplateControllerVersionResponse } };
   "version": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/{templateId}/versions/{versionNumber}"; request: { parameters: { path: { brandId: string; templateId: string; tenantId: string; versionNumber: number } } }; responses: { "200": Array<WordingResponse> } };

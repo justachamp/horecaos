@@ -230,7 +230,8 @@ export class StaffInviteDialog {
       locationId: this.selectedLocationId() ?? undefined,
       reason,
       validUntil: this.validUntil() ? new Date(this.validUntil()).toISOString() : undefined,
-      locale: localeCodeOf(this.i18n.locale()),
+      // The tag as it is; the invitation resolves it against the platform's message tier (ADR 0149).
+      locale: this.i18n.locale(),
     });
   }
 
@@ -306,11 +307,4 @@ export class StaffInviteDialog {
 function formatUzPhone(digits: string): string {
   const groups = [digits.slice(0, 2), digits.slice(2, 5), digits.slice(5, 7), digits.slice(7, 9)];
   return groups.filter((group) => group !== '').join(' ');
-}
-
-function localeCodeOf(locale: string): 'uz' | 'ru' | 'en' {
-  if (locale === 'uz-Latn') {
-    return 'uz';
-  }
-  return locale === 'en' ? 'en' : 'ru';
 }

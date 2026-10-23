@@ -9,7 +9,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { LangService, LANG_LABELS } from '../../../services/lang.service';
+import { LangService } from '../../../services/lang.service';
 import { ThemeService, type ThemeMode } from '../../../services/theme.service';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import { FEATURES } from '../../../core/config/features';
@@ -76,7 +76,7 @@ export class ProfileMenuComponent implements OnInit {
       list = list.filter((i) => i.id !== 'favorites');
     }
     const id = this.lang.langId();
-    const langValue = LANG_LABELS[id] ?? LANG_LABELS['ru'];
+    const langValue = this.lang.labelOf(id);
     return list.map((item) => (item.id === 'language' ? { ...item, value: langValue } : item));
   });
 

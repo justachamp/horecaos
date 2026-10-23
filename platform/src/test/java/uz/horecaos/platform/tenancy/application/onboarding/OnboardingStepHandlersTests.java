@@ -35,6 +35,7 @@ import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.media.api.MediaAvailability;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcMediaAssetStore;
+import uz.horecaos.platform.support.LocaleNames;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler.StepResult;
@@ -960,7 +961,8 @@ class OnboardingStepHandlersTests {
         var zoneStore = new JdbcServiceZoneStore(jdbc);
         var zones = new ServiceZoneService(zoneStore, JsonMapper.builder().build(), CLOCK, NO_OP_AUDIT, TEST_ACTOR);
         UUID actor = UUID.randomUUID();
-        UUID zoneId = zones.createZone(tenantId, brandId, ZoneRole.DELIVERY, "ZONE1", "Zone", "Zone", "Zone");
+        UUID zoneId = zones.createZone(
+                tenantId, brandId, ZoneRole.DELIVERY, "ZONE1", LocaleNames.triple("Zone", "Zone", "Zone"));
         var drafted = zones.draftCircleVersion(
                 new ServiceZoneService.NewVersion(
                         tenantId, brandId, zoneId, ZoneRole.DELIVERY, null, 100, "UZS", tariffId, null, null, actor),

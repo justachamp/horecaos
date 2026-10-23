@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import { ConfigurationApi } from '../configuration-api';
 import { ApiError } from '../../../core/api/problem-details';
@@ -20,25 +21,40 @@ import {
   FULFILLMENT_MODES,
   NOTIFICATION_CHANNELS,
   NotificationsApi,
+  OtpWording,
+  PlatformDefault,
   RoutingBinding,
   TemplateResponse,
   TestSendResult,
   VersionGroup,
   WIRED_CHANNELS,
-  WordingResponse,
 } from './notifications-api';
-import { TemplateEditor } from './template-editor';
+import { TemplateEditor, PrefillWording } from './template-editor';
+import { isWithheld, missingLocales, severityOf, sortTemplates } from './template-list-order';
 
 type NotificationsTab = 'templates' | 'routing';
 type DrawerMode = 'versions' | 'editor' | null;
 
+/**
+ * The classes a template can be created in. `SECURITY` is not one of them (ADR 0184, D19): the sentence a
+ * customer reads with a one-time code is the platform's, sent without a template, so an operator who
+ * authored one would be writing wording nothing ever sends. It is shown read-only in its own card.
+ */
 const NOTIFICATION_CLASSES: readonly string[] = [
   'TRANSACTIONAL_REQUIRED',
   'TRANSACTIONAL_OPTIONAL',
   'MARKETING',
-  'SECURITY',
   'OPERATIONS_ALERT',
 ];
+
+/** The classes whose template names the consent purpose it is checked against (V0026's check). */
+const CLASSES_NEEDING_A_PURPOSE: ReadonlySet<string> = new Set([
+  'TRANSACTIONAL_OPTIONAL',
+  'MARKETING',
+]);
+
+/** The platform's own purpose for the optional order milestones (`PlatformDefaultTemplates`). */
+const ORDER_PROGRESS_PURPOSE = 'ORDER_PROGRESS_UPDATES';
 
 const PAYMENT_LINK_CODE = 'notifications.payment_link_auto_send';
 const AGGREGATOR_SHIFT_CODE = 'notifications.aggregator_shift_notifications_enabled';
@@ -55,6 +71,13 @@ const AGGREGATOR_SHIFT_CODE = 'notifications.aggregator_shift_notifications_enab
  * so. Authoring itself moved to `TemplateEditor` (`X.27`), which fixes the
  * defect underneath: this page no longer hard-codes `variablesSchema: {}`.
  *
+ * **ADR 0184 (row 10.9a)** finishes Tab 1. The list carries the languages each template has (and the ones its
+ * brand serves that it lacks), the gateway's moderation state, and the order ADR 0020's spec asks for: what
+ * is wrong first, then the order's life. Beneath the brand's and the tenant's templates sit the platform's own
+ * default wording, read-only with an origin chip and a «customise» that copies it into a brand template, and
+ * the one-time-code sentence, which is the platform's and cannot be authored (D19). A test send reaches a
+ * Telegram template too, through one of the brand's bound chats.
+ *
  * **Tab 2 (Маршрутизация)** is built for the first time, over
  * `TelegramRoutingController` (`10.9b`).
  *
@@ -64,7 +87,16 @@ const AGGREGATOR_SHIFT_CODE = 'notifications.aggregator_shift_notifications_enab
  */
 @Component({
   selector: 'q-notifications-page',
-  imports: [TPipe, ActionMenu, Combobox, ConfirmDialog, Drawer, StatusPill, TemplateEditor],
+  imports: [
+    TPipe,
+    ActionMenu,
+    Combobox,
+    ConfirmDialog,
+    Drawer,
+    RouterLink,
+    StatusPill,
+    TemplateEditor,
+  ],
   templateUrl: './notifications-page.html',
   styleUrl: './notifications-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -89,6 +121,15 @@ export class NotificationsPage {
   protected readonly denied = signal(false);
   protected readonly loadError = signal<string | null>(null);
   protected readonly templates = signal<readonly TemplateResponse[]>([]);
+  /** Severity first, then the order's life (settings.md 10.9): what is wrong is at the top. */
+  protected readonly sortedTemplates = computed(() => sortTemplates(this.templates()));
+
+  /** ADR 0184: the platform's own wording, read-only beneath the brand's and the tenant's. */
+  protected readonly platformDefaults = signal<readonly PlatformDefault[]>([]);
+  protected readonly customiseBusy = signal<string | null>(null);
+  protected readonly customiseError = signal<string | null>(null);
+  /** ADR 0184, D19: the one-time-code sentence, read-only. Null while loading or when it cannot be read. */
+  protected readonly otpWording = signal<OtpWording | null>(null);
 
   protected readonly showCreateForm = signal(false);
   protected readonly createSubmitting = signal(false);
@@ -99,6 +140,15 @@ export class NotificationsPage {
   /** `''` is "every fulfilment mode" / "every channel source" — the wildcard row, sent as `null`. */
   protected readonly newFulfilmentMode = signal('');
   protected readonly newChannelSource = signal('');
+  /** The ADR 0015 purpose an optional or marketing template is checked against; the others name none. */
+  protected readonly newConsentPurpose = signal('');
+  protected readonly newTemplateNeedsPurpose = computed(() =>
+    CLASSES_NEEDING_A_PURPOSE.has(this.newNotificationClass()),
+  );
+  protected readonly newTemplateIsMarketing = computed(
+    () => this.newNotificationClass() === 'MARKETING',
+  );
+  protected readonly progressPurpose = ORDER_PROGRESS_PURPOSE;
 
   // ------------------------------------------------------------ automation
 
@@ -116,7 +166,7 @@ export class NotificationsPage {
   protected readonly versions = signal<readonly VersionGroup[]>([]);
   protected readonly versionsLoading = signal(false);
   protected readonly versionsError = signal<string | null>(null);
-  protected readonly editingPrefill = signal<readonly WordingResponse[] | null>(null);
+  protected readonly editingPrefill = signal<readonly PrefillWording[] | null>(null);
   protected readonly openTemplateMenu = signal<string | null>(null);
   protected readonly openVersionMenu = signal<number | null>(null);
 
@@ -187,7 +237,21 @@ export class NotificationsPage {
   // ------------------------------------------------------------- create
 
   protected canCreate(): boolean {
-    return !this.createSubmitting() && this.newTemplateKey().trim().length > 0;
+    return (
+      !this.createSubmitting() &&
+      this.newTemplateKey().trim().length > 0 &&
+      (!this.newTemplateNeedsPurpose() || this.newConsentPurpose().trim().length > 0)
+    );
+  }
+
+  /** Picking a class that needs a consent purpose offers the platform's own for order milestones. */
+  protected onClassChange(value: string): void {
+    this.newNotificationClass.set(value);
+    if (!CLASSES_NEEDING_A_PURPOSE.has(value)) {
+      this.newConsentPurpose.set('');
+    } else if (value === 'TRANSACTIONAL_OPTIONAL' && this.newConsentPurpose().trim().length === 0) {
+      this.newConsentPurpose.set(ORDER_PROGRESS_PURPOSE);
+    }
   }
 
   protected async submitCreate(): Promise<void> {
@@ -202,11 +266,15 @@ export class NotificationsPage {
         templateKey: this.newTemplateKey().trim(),
         notificationClass: this.newNotificationClass(),
         channel: this.newChannel(),
+        consentPurpose: this.newTemplateNeedsPurpose()
+          ? this.newConsentPurpose().trim()
+          : undefined,
         fulfillmentMode: this.newFulfilmentMode() === '' ? null : this.newFulfilmentMode(),
         channelSource: this.newChannelSource() === '' ? null : this.newChannelSource(),
       });
       this.showCreateForm.set(false);
       this.newTemplateKey.set('');
+      this.newConsentPurpose.set('');
       this.newFulfilmentMode.set('');
       this.newChannelSource.set('');
       await this.reload(scope);
@@ -284,7 +352,9 @@ export class NotificationsPage {
     if (group.status === 'DRAFT') {
       items.push({ id: 'activate', label: this.i18n.t('settings.notifications.action.activate') });
     }
-    if (this.selectedTemplate()?.channel === 'SMS') {
+    // ADR 0184: a Telegram template can be tested too, through one of the brand's bound chats.
+    const channel = this.selectedTemplate()?.channel;
+    if (channel === 'SMS' || channel === 'TELEGRAM') {
       items.push({ id: 'testSend', label: this.i18n.t('settings.notifications.action.testSend') });
     }
     return items;
@@ -342,12 +412,23 @@ export class NotificationsPage {
 
   // ----------------------------------------------------------- test send
 
+  /** The chats a Telegram test can go to: the brand's own bound ones, not an address someone types. */
+  protected readonly testSendChats = computed(() =>
+    this.routingBindings().filter((binding) => binding.retiredAt === null),
+  );
+  protected readonly testSendIsTelegram = computed(
+    () => this.selectedTemplate()?.channel === 'TELEGRAM',
+  );
+
   protected openTestSend(group: VersionGroup): void {
     this.testSendTarget.set(group);
     this.testSendLocale.set(this.registry.fallback());
     this.testSendDestination.set('');
     this.testSendError.set(null);
     this.testSendResult.set(null);
+    if (this.selectedTemplate()?.channel === 'TELEGRAM' && this.routingBindings().length === 0) {
+      void this.loadRouting();
+    }
   }
 
   protected closeTestSend(): void {
@@ -382,6 +463,116 @@ export class NotificationsPage {
     } finally {
       this.testSendSubmitting.set(false);
     }
+  }
+
+  // ---------------------------------------------------- platform defaults (ADR 0184)
+
+  /**
+   * The brand's or the tenant's own template that already stands in for this default on SMS, the
+   * channel «customise» creates on, if there is one. A default whose key and channel have a template of
+   * the brand's or the tenant's is the layer below it: still shown, marked overridden.
+   */
+  protected ownTemplateFor(platformDefault: PlatformDefault): TemplateResponse | null {
+    return (
+      this.templates().find(
+        (row) =>
+          row.templateKey === platformDefault.templateKey &&
+          row.channel === 'SMS' &&
+          row.fulfillmentMode === null &&
+          row.channelSource === null,
+      ) ?? null
+    );
+  }
+
+  /** True while an active template of the brand's or the tenant's answers instead of the platform's. */
+  protected isOverridden(platformDefault: PlatformDefault): boolean {
+    return this.templates().some(
+      (row) =>
+        row.templateKey === platformDefault.templateKey &&
+        row.status === 'ACTIVE' &&
+        platformDefault.channels.includes(row.channel),
+    );
+  }
+
+  /** The languages the platform wrote this sentence in, which the console shows as chips. */
+  protected defaultLocales(platformDefault: PlatformDefault): readonly string[] {
+    return Object.keys(platformDefault.bodies);
+  }
+
+  /**
+   * Copies the platform's sentence into a template of this brand and opens the editor on it (ADR 0184):
+   * the brand registers its own template for the key, the editor starts from the platform's wording in
+   * every language, and from the moment the brand activates a version it outranks the default.
+   */
+  protected async customise(platformDefault: PlatformDefault): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope || this.customiseBusy() !== null) {
+      return;
+    }
+    const existing = this.ownTemplateFor(platformDefault);
+    this.customiseBusy.set(platformDefault.templateKey);
+    this.customiseError.set(null);
+    try {
+      let template = existing;
+      if (template === null) {
+        const templateId = await this.api.create(scope, {
+          templateKey: platformDefault.templateKey,
+          notificationClass: platformDefault.notificationClass,
+          channel: 'SMS',
+          consentPurpose: platformDefault.consentPurpose ?? undefined,
+        });
+        await this.reload(scope);
+        template = this.templates().find((row) => row.id === templateId) ?? null;
+      }
+      if (template === null) {
+        return;
+      }
+      await this.openVersions(template);
+      this.editingPrefill.set(
+        Object.entries(platformDefault.bodies).map(([locale, body]) => ({
+          locale,
+          body,
+          subject: null,
+        })),
+      );
+      this.drawerMode.set('editor');
+    } catch (error) {
+      this.customiseError.set(this.describe(error));
+    } finally {
+      this.customiseBusy.set(null);
+    }
+  }
+
+  // ------------------------------------------------------------- list helpers
+
+  /** One chip per language the template's brand serves: written, or missing (ADR 0184, settings.md 10.9). */
+  protected languageChips(
+    template: TemplateResponse,
+  ): readonly { tag: string; present: boolean }[] {
+    const required = template.requiredLocales;
+    const extra = template.versionLocales.filter((tag) => !required.includes(tag));
+    return [...required, ...extra].map((tag) => ({
+      tag,
+      present: template.versionLocales.includes(tag),
+    }));
+  }
+
+  protected hasMissingLanguage(template: TemplateResponse): boolean {
+    return template.status === 'ACTIVE' && missingLocales(template).length > 0;
+  }
+
+  protected severityOf(template: TemplateResponse): number {
+    return severityOf(template);
+  }
+
+  protected isWithheld(review: string): boolean {
+    return isWithheld(review);
+  }
+
+  protected originLabel(template: TemplateResponse): string {
+    return template.origin === 'BRAND'
+      ? this.i18n.t('settings.notifications.origin.BRAND')
+      : this.i18n.t('settings.notifications.origin.TENANT');
   }
 
   // ------------------------------------------------------------- labels
@@ -679,6 +870,7 @@ export class NotificationsPage {
     try {
       this.templates.set(await this.api.list(scope));
       void this.loadAutomation(scope);
+      void this.loadReadOnlyLayers(scope);
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
         this.denied.set(true);
@@ -688,6 +880,29 @@ export class NotificationsPage {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /**
+   * The two layers the operator cannot edit: the platform's default wording and the one-time-code
+   * sentence. Failing to read either leaves the editable part of the screen working and the card out,
+   * which is better than the whole tab refusing to open for a card.
+   */
+  private async loadReadOnlyLayers(
+    scope: NonNullable<ReturnType<CurrentLocation['scope']>>,
+  ): Promise<void> {
+    const attempt = async <T>(read: () => Promise<T>): Promise<T | null> => {
+      try {
+        return await read();
+      } catch {
+        return null;
+      }
+    };
+    const [defaults, otp] = await Promise.all([
+      attempt(() => this.api.platformDefaults(scope)),
+      attempt(() => this.api.otpWording(scope)),
+    ]);
+    this.platformDefaults.set(defaults ?? []);
+    this.otpWording.set(otp);
   }
 
   private async reload(scope: NonNullable<ReturnType<CurrentLocation['scope']>>): Promise<void> {

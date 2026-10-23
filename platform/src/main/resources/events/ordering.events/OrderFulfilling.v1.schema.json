@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/ordering.events/OrderFulfilling.v1.schema.json",
+  "title": "OrderFulfilling v1 payload",
+  "description": "The order left the pass with a courier (ADR 0019 FULFILLING, entered from READY, delivery only). The milestone ADR 0045 names as the one that replaces the map: a recorded business transition, not something derived from a position. Carries no courier and no customer; a consumer that tells the customer «on the way» resolves the courier's first name through its own authorized port when it renders.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "orderId",
+    "fulfillmentMode",
+    "handedOverAt",
+    "status",
+    "orderVersion"
+  ],
+  "properties": {
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "brandId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "locationId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "fulfillmentMode": {
+      "type": "string",
+      "enum": [
+        "DELIVERY",
+        "PICKUP",
+        "DINE_IN"
+      ]
+    },
+    "handedOverAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "FULFILLING"
+      ]
+    },
+    "orderVersion": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

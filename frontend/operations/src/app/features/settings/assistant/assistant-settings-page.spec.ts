@@ -11,6 +11,7 @@ import { ConfigurationApi } from '../configuration-api';
 import { SavedTarget } from '../settings-saved';
 import { SettingsScope } from '../settings-scope';
 import { AssistantApi, AssistantUsageResponse } from './assistant-api';
+import { AssistantKnowledgeApi, AssistantLanguage } from './assistant-knowledge-api';
 import { AssistantSettingsPage, DISCLOSURE_MAXIMUM_CHARACTERS } from './assistant-settings-page';
 
 const TENANT_ID = 'tenant-1';
@@ -61,6 +62,13 @@ function resolution(
   };
 }
 
+/** What `GET .../assistant/languages` answers today: the detector's three vocabularies. */
+const LANGUAGES: readonly AssistantLanguage[] = [
+  { code: 'ru', locale: 'ru', disclosureKey: 'assistant.disclosure_text_ru' },
+  { code: 'uz', locale: 'uz-Latn', disclosureKey: 'assistant.disclosure_text_uz' },
+  { code: 'en', locale: 'en', disclosureKey: 'assistant.disclosure_text_en' },
+];
+
 const DEFAULTS: Readonly<Record<string, unknown>> = {
   'assistant.enabled': false,
   'assistant.disclosure_text_ru': '',
@@ -105,6 +113,7 @@ async function render(
     resolutionError?: Error;
     level?: 'TENANT' | 'BRAND' | 'LOCATION';
     setValue?: ReturnType<typeof vi.fn>;
+    languages?: readonly AssistantLanguage[];
   } = {},
 ): Promise<Harness> {
   const scope = new FakeSettingsScope();
@@ -128,12 +137,17 @@ async function render(
         result instanceof Error ? Promise.reject(result) : Promise.resolve(result),
       ),
   };
+  const languages = options.languages ?? LANGUAGES;
+  const knowledge = {
+    languages: vi.fn().mockResolvedValue(languages),
+  };
   await TestBed.configureTestingModule({
     imports: [AssistantSettingsPage],
     providers: [
       provideRouter([]),
       { provide: ConfigurationApi, useValue: config },
       { provide: AssistantApi, useValue: assistant },
+      { provide: AssistantKnowledgeApi, useValue: knowledge },
       { provide: CurrentTenant, useValue: new FakeCurrentTenant() },
       { provide: SettingsScope, useValue: scope },
     ],
@@ -452,6 +466,37 @@ describe('AssistantSettingsPage: the switch', () => {
 });
 
 describe('AssistantSettingsPage: what customers are told first', () => {
+  // ADR 0149, Decision 3: the languages are the detector's, served by the backend. A language the
+  // platform adds arrives here as a field with its own key, named by the registry, with no change
+  // to this page.
+  it('derives one field per language the platform says the assistant answers in, keyed as the platform says', async () => {
+    const harness = await render({
+      languages: [
+        { code: 'ru', locale: 'ru', disclosureKey: 'assistant.disclosure_text_ru' },
+        { code: 'zz', locale: 'zz', disclosureKey: 'assistant.disclosure_text_zz' },
+      ],
+      resolutions: {
+        'assistant.disclosure_text_zz': resolution('assistant.disclosure_text_zz', ''),
+      },
+    });
+
+    expect(harness.host.querySelector('[data-testid="assistant-disclosure-uz"]')).toBeNull();
+    expect(harness.host.querySelector('[data-testid="assistant-disclosure-zz"]')).not.toBeNull();
+    expect(harness.config.resolution).toHaveBeenCalledWith(
+      TENANT_ID,
+      'assistant.disclosure_text_zz',
+      'BRAND',
+      BRAND_ID,
+    );
+    expect(harness.config.resolution).not.toHaveBeenCalledWith(
+      TENANT_ID,
+      'assistant.disclosure_text_uz',
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(text(harness.host, 'assistant-disclosure-ru')).toContain('Said in Russian');
+  });
+
   it('lists the three languages, with the platform’s wording beside each so a blank is not a mystery', async () => {
     const { host } = await render();
 

@@ -415,30 +415,18 @@
           }
         </div>
 
-        <label class="q-caption" for="rule-text-ru">{{ 'catalog.autoAdd.field.textRu' | t }}</label>
-        <input
-          id="rule-text-ru"
-          class="q-body field"
-          type="text"
-          [value]="draft().textRu"
-          (input)="patch({ textRu: $any($event.target).value })"
-        />
-        <label class="q-caption" for="rule-text-uz">{{ 'catalog.autoAdd.field.textUz' | t }}</label>
-        <input
-          id="rule-text-uz"
-          class="q-body field"
-          type="text"
-          [value]="draft().textUz"
-          (input)="patch({ textUz: $any($event.target).value })"
-        />
-        <label class="q-caption" for="rule-text-en">{{ 'catalog.autoAdd.field.textEn' | t }}</label>
-        <input
-          id="rule-text-en"
-          class="q-body field"
-          type="text"
-          [value]="draft().textEn"
-          (input)="patch({ textEn: $any($event.target).value })"
-        />
+        @for (locale of textLocales(); track locale) {
+          <label class="q-caption" [attr.for]="'rule-text-' + locale">{{
+            'catalog.autoAdd.field.textIn' | t: { language: localeLabel(locale) }
+          }}</label>
+          <input
+            [id]="'rule-text-' + locale"
+            class="q-body field"
+            type="text"
+            [value]="draft().texts[locale] ?? ''"
+            (input)="setText(locale, $any($event.target).value)"
+          />
+        }
 
         @if (!isCreate()) {
           <label class="q-caption" for="rule-status">{{

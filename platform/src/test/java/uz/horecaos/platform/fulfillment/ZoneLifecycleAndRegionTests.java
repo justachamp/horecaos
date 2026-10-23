@@ -49,6 +49,7 @@ import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcRegionSto
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.support.LocaleNames;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcBrandLocaleLookup;
@@ -212,7 +213,8 @@ class ZoneLifecycleAndRegionTests {
     @DisplayName("a CATCHMENT draft carrying a tariff is refused by the database, not by a validator")
     void aCatchmentZoneCannotCarryATariff() {
         UUID tariffId = flatTariff("PRICED", 5_000L);
-        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.CATCHMENT, "GUARD", "RU", "UZ", "EN");
+        UUID zoneId =
+                zones.createZone(TENANT, BRAND, ZoneRole.CATCHMENT, "GUARD", LocaleNames.triple("RU", "UZ", "EN"));
 
         Throwable failure = catchThrowable(() -> zones.draftCircleVersion(
                 new ServiceZoneService.NewVersion(
@@ -290,7 +292,8 @@ class ZoneLifecycleAndRegionTests {
     @Test
     @DisplayName("unbinding a branch that was never bound is refused, not silently accepted")
     void unbindingAnUnboundBranchIsRefused() {
-        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "UNBOUND", "RU", "UZ", "EN");
+        UUID zoneId =
+                zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "UNBOUND", LocaleNames.triple("RU", "UZ", "EN"));
 
         assertThat(catchThrowable(() -> zones.unbindLocation(TENANT, BRAND, zoneId, locatedBranch)))
                 .isInstanceOf(ServiceZoneService.DeliveryResourceNotFoundException.class);
@@ -324,7 +327,7 @@ class ZoneLifecycleAndRegionTests {
     @Test
     @DisplayName("the version list carries the lifecycle, newest first")
     void theVersionListShowsWhatWasLiveAndWhatIsNow() {
-        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "CITY", "RU", "UZ", "EN");
+        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "CITY", LocaleNames.triple("RU", "UZ", "EN"));
         UUID tariffId = flatTariff("CITY-RATE", 4_000L);
         draftCircle(zoneId, 3_000, 0, tariffId);
         zones.activate(TENANT, BRAND, zoneId, 1, ACTOR);
@@ -470,7 +473,8 @@ class ZoneLifecycleAndRegionTests {
     @Test
     @DisplayName("an inverted bounding box is refused with a sentence, not a constraint name")
     void anInvertedBoxIsRefusedReadably() {
-        var inverted = new RegionGeography("BROKEN", "RU", "UZ", "EN", 41.31, 69.24, 42.0, 70.0, 40.5, 68.5);
+        var inverted = new RegionGeography(
+                "BROKEN", 41.31, 69.24, 42.0, 70.0, 40.5, 68.5, LocaleNames.triple("RU", "UZ", "EN"));
 
         Throwable refusal = catchThrowable(() -> regions.create(TENANT, inverted));
 
@@ -486,7 +490,8 @@ class ZoneLifecycleAndRegionTests {
     @Test
     @DisplayName("a centre outside its own box is refused")
     void aCentreOutsideItsBoxIsRefused() {
-        var displaced = new RegionGeography("DISPLACED", "RU", "UZ", "EN", 55.75, 37.61, 40.5, 68.5, 42.0, 70.0);
+        var displaced = new RegionGeography(
+                "DISPLACED", 55.75, 37.61, 40.5, 68.5, 42.0, 70.0, LocaleNames.triple("RU", "UZ", "EN"));
 
         assertThat(catchThrowable(() -> regions.create(TENANT, displaced)))
                 .isInstanceOf(RegionService.RegionRefusedException.class)
@@ -500,8 +505,11 @@ class ZoneLifecycleAndRegionTests {
         // makes ServiceZoneService.activate's box check non-vacuous — with no
         // region in the table it passes for every polygon anyone draws.
         UUID samarkandOnly = regions.create(
-                TENANT, new RegionGeography("SAMARKAND", "RU", "UZ", "EN", 39.65, 66.96, 39.5, 66.8, 39.8, 67.1));
-        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "TASHKENT-ZONE", "RU", "UZ", "EN");
+                TENANT,
+                new RegionGeography(
+                        "SAMARKAND", 39.65, 66.96, 39.5, 66.8, 39.8, 67.1, LocaleNames.triple("RU", "UZ", "EN")));
+        UUID zoneId = zones.createZone(
+                TENANT, BRAND, ZoneRole.DELIVERY, "TASHKENT-ZONE", LocaleNames.triple("RU", "UZ", "EN"));
         zones.draftCircleVersion(
                 new ServiceZoneService.NewVersion(
                         TENANT, BRAND, zoneId, ZoneRole.DELIVERY, samarkandOnly, 0, "UZS", null, null, null, ACTOR),
@@ -579,16 +587,16 @@ class ZoneLifecycleAndRegionTests {
 
     @Test
     @DisplayName(
-            "a region must be named in the tenant's default language, and the other platform columns take that name")
-    void aRegionNeedsTheTenantsDefaultLanguageAndFillsTheOtherColumnsFromIt() {
+            "a region must be named in the tenant's default language, and a language it does not name stays absent")
+    void aRegionNeedsTheTenantsDefaultLanguageAndLeavesTheOthersAbsent() {
         brandOffers("uz-Latn", "en");
         CurrentActor actor = () -> new AuthenticatedActor(ACTOR.toString(), Set.of(), Map.of());
         var service =
                 new RegionService(new JdbcRegionStore(jdbc), clock, audit, actor, new JdbcBrandLocaleLookup(jdbc));
 
         // English alone: the tenant's default is Uzbek (its first brand's), so this is refused.
-        var englishOnly = new RegionGeography(
-                "SAMARKAND", null, null, null, 39.65, 66.96, 39.5, 66.8, 39.8, 67.1, Map.of("en", "Samarkand"));
+        var englishOnly =
+                new RegionGeography("SAMARKAND", 39.65, 66.96, 39.5, 66.8, 39.8, 67.1, Map.of("en", "Samarkand"));
         Throwable refused = catchThrowable(() -> service.create(TENANT, englishOnly));
         assertThat(refused).isInstanceOf(RegionService.RegionRefusedException.class);
         assertThat(refused.getMessage()).contains("uz-Latn");
@@ -597,21 +605,33 @@ class ZoneLifecycleAndRegionTests {
                         .single())
                 .isZero();
 
-        // Uzbek and English: the Russian column is NOT NULL and not offered, so it takes the
-        // default (Uzbek) name.
+        // Uzbek and English: Russian is not offered, so it is simply absent -- since V0679 no NOT NULL
+        // column forces the default name into it.
         var withDefault = new RegionGeography(
-                "SAMARKAND", null, "Samarqand", null, 39.65, 66.96, 39.5, 66.8, 39.8, 67.1, Map.of("en", "Samarkand"));
+                "SAMARKAND", 39.65, 66.96, 39.5, 66.8, 39.8, 67.1, Map.of("uz-Latn", "Samarqand", "en", "Samarkand"));
         UUID id = service.create(TENANT, withDefault);
-        assertThat(jdbc.sql("""
-                        SELECT display_name_ru || '|' || display_name_uz || '|' || display_name_en
-                          FROM fulfillment.regions WHERE id = :id
-                        """).param("id", id).query(String.class).single())
-                .isEqualTo("Samarqand|Samarqand|Samarkand");
+        assertThat(regionNames(id)).containsExactly("en=Samarkand", "uz-Latn=Samarqand");
+    }
+
+    /** The region's per-locale names (V0431, the only place a name lives since V0679), "locale=name", by locale. */
+    private java.util.List<String> regionNames(UUID regionId) {
+        return jdbc.sql("""
+                        SELECT locale || '=' || display_name FROM fulfillment.region_translations
+                         WHERE region_id = :id ORDER BY locale
+                        """).param("id", regionId).query(String.class).list();
+    }
+
+    /** The zone's per-locale names, "locale=name", by locale. */
+    private java.util.List<String> zoneNames(UUID zoneId) {
+        return jdbc.sql("""
+                        SELECT locale || '=' || display_name FROM fulfillment.service_zone_translations
+                         WHERE zone_id = :id ORDER BY locale
+                        """).param("id", zoneId).query(String.class).list();
     }
 
     @Test
-    @DisplayName("a zone must be named in its brand's default language, and the other platform columns take that name")
-    void aZoneNeedsTheBrandsDefaultLanguageAndFillsTheOtherColumnsFromIt() {
+    @DisplayName("a zone must be named in its brand's default language, and a language it does not name stays absent")
+    void aZoneNeedsTheBrandsDefaultLanguageAndLeavesTheOthersAbsent() {
         brandOffers("uz-Latn", "en");
         CurrentActor actor = () -> new AuthenticatedActor(ACTOR.toString(), Set.of(), Map.of());
         var service = new ServiceZoneService(
@@ -622,8 +642,8 @@ class ZoneLifecycleAndRegionTests {
                 actor,
                 new JdbcBrandLocaleLookup(jdbc));
 
-        Throwable refused = catchThrowable(() -> service.createZone(
-                TENANT, BRAND, ZoneRole.DELIVERY, "CENTRE", null, null, null, Map.of("en", "Centre")));
+        Throwable refused = catchThrowable(
+                () -> service.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "CENTRE", Map.of("en", "Centre")));
         assertThat(refused).isInstanceOf(ApiException.class);
         assertThat(((ApiException) refused).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
         assertThat(refused.getMessage()).contains("uz-Latn");
@@ -633,60 +653,38 @@ class ZoneLifecycleAndRegionTests {
                 .isZero();
 
         UUID id = service.createZone(
-                TENANT, BRAND, ZoneRole.DELIVERY, "CENTRE", null, "Markaz", null, Map.of("en", "Centre"));
-        assertThat(jdbc.sql("""
-                        SELECT display_name_ru || '|' || display_name_uz || '|' || display_name_en
-                          FROM fulfillment.service_zones WHERE id = :id
-                        """).param("id", id).query(String.class).single()).isEqualTo("Markaz|Markaz|Centre");
+                TENANT, BRAND, ZoneRole.DELIVERY, "CENTRE", Map.of("uz-Latn", "Markaz", "en", "Centre"));
+        assertThat(zoneNames(id)).containsExactly("en=Centre", "uz-Latn=Markaz");
     }
 
     @Test
-    @DisplayName(
-            "a rewrite that names no language for a column leaves that column, and a language it does not name, as they were")
+    @DisplayName("a rewrite leaves every language it does not name as it was")
     void aRegionRewriteLeavesWhatItDoesNotName() {
         UUID id = regions.create(
                 TENANT,
                 new RegionGeography(
                         "SAMARKAND",
-                        "Самарканд",
-                        "Samarqand",
-                        "Samarkand",
                         39.65,
                         66.96,
                         39.5,
                         66.8,
                         39.8,
                         67.1,
-                        Map.of("kaa", "Samarqand-kaa")));
+                        Map.of(
+                                "kaa", "Samarqand-kaa",
+                                "ru", "Самарканд",
+                                "uz-Latn", "Samarqand",
+                                "en", "Samarkand")));
 
-        // Only English is named (and re-worded): the Russian and Uzbek columns, and the
-        // Karakalpak row only the translations table holds, must all survive.
+        // Only English is named (and re-worded): the Russian, Uzbek and Karakalpak rows must all survive.
         regions.update(
                 TENANT,
                 id,
-                new RegionGeography(
-                        "SAMARKAND",
-                        null,
-                        null,
-                        null,
-                        39.65,
-                        66.96,
-                        39.5,
-                        66.8,
-                        39.8,
-                        67.1,
-                        Map.of("en", "Samarkand city")),
+                new RegionGeography("SAMARKAND", 39.65, 66.96, 39.5, 66.8, 39.8, 67.1, Map.of("en", "Samarkand city")),
                 1);
 
-        assertThat(jdbc.sql("""
-                        SELECT display_name_ru || '|' || display_name_uz || '|' || display_name_en
-                          FROM fulfillment.regions WHERE id = :id
-                        """).param("id", id).query(String.class).single())
-                .isEqualTo("Самарканд|Samarqand|Samarkand city");
-        assertThat(jdbc.sql("""
-                        SELECT display_name FROM fulfillment.region_translations
-                         WHERE region_id = :id AND locale = 'kaa'
-                        """).param("id", id).query(String.class).single()).isEqualTo("Samarqand-kaa");
+        assertThat(regionNames(id))
+                .containsExactly("en=Samarkand city", "kaa=Samarqand-kaa", "ru=Самарканд", "uz-Latn=Samarqand");
     }
 
     private DeliveryFeeQuery feeQuery(GeoPoint destination) {
@@ -695,7 +693,8 @@ class ZoneLifecycleAndRegionTests {
     }
 
     private static RegionGeography tashkent(String code) {
-        return new RegionGeography(code, "Ташкент", "Toshkent", "Tashkent", 41.31, 69.24, 40.5, 68.5, 42.0, 70.0);
+        return new RegionGeography(
+                code, 41.31, 69.24, 40.5, 68.5, 42.0, 70.0, LocaleNames.triple("Ташкент", "Toshkent", "Tashkent"));
     }
 
     @SuppressWarnings("unchecked")
@@ -713,7 +712,7 @@ class ZoneLifecycleAndRegionTests {
             @Nullable UUID tariffId,
             @Nullable Long freeFrom,
             @Nullable Long minBasket) {
-        UUID zoneId = zones.createZone(TENANT, BRAND, role, code, code, code, code);
+        UUID zoneId = zones.createZone(TENANT, BRAND, role, code, LocaleNames.triple(code, code, code));
         var drafted = zones.draftCircleVersion(
                 new ServiceZoneService.NewVersion(
                         TENANT, BRAND, zoneId, role, null, priority, "UZS", tariffId, freeFrom, minBasket, ACTOR),
@@ -760,9 +759,9 @@ class ZoneLifecycleAndRegionTests {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO fulfillment.regions (
-                    id, tenant_id, code, display_name_ru, display_name_uz, display_name_en,
+                    id, tenant_id, code,
                     centre_lat, centre_lon, bbox_sw_lat, bbox_sw_lon, bbox_ne_lat, bbox_ne_lon)
-                VALUES (:id, NULL, :code, 'RU', 'UZ', 'EN', 41.31, 69.24, 40.5, 68.5, 42.0, 70.0)
+                VALUES (:id, NULL, :code, 41.31, 69.24, 40.5, 68.5, 42.0, 70.0)
                 """).param("id", id).param("code", code).update();
         return id;
     }

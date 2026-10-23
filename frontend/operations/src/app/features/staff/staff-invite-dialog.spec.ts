@@ -179,6 +179,23 @@ describe('StaffInviteDialog', () => {
     ]);
   });
 
+  // ADR 0149, Decision 5: the invitation's language is the tag the operator reads, not a bare `uz`.
+  it('names the invitation language by the console tag, uz-Latn included', () => {
+    TestBed.inject(I18n).setLocale('uz-Latn');
+    const fixture = render();
+    const submissions: StaffInvitationRequest[] = [];
+    fixture.componentInstance.submitted.subscribe((s) => submissions.push(s));
+
+    fillValidForm(fixture);
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="staff-invite-dialog-confirm"]',
+      ) as HTMLButtonElement
+    ).click();
+
+    expect(submissions.map((s) => s.locale)).toEqual(['uz-Latn']);
+  });
+
   it('locks every field while submitting', () => {
     const fixture = render();
     fixture.componentRef.setInput('busy', true);

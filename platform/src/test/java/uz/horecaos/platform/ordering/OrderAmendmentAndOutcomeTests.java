@@ -102,6 +102,7 @@ import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingCon
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
 import uz.horecaos.platform.support.FakeConfigurationResolver;
+import uz.horecaos.platform.support.LocaleNames;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.application.ServiceabilityService;
@@ -3659,6 +3660,27 @@ class OrderAmendmentAndOutcomeTests {
     }
 
     @Test
+    @DisplayName(
+            "a compensating override says nothing: the customer is not told twice, and not told falsely (ADR 0184)")
+    void aCompensatingOverridePublishesNoMilestone() {
+        UUID reasonId = operatorErrorReason();
+        UUID orderId = seedFulfillingOrder("idem-quiet-override");
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+        published.events.clear();
+
+        tx(() -> outcomes.override(
+                TENANT,
+                orderId,
+                OrderStatus.READY,
+                version,
+                new OrderOutcomeService.OverrideCommand(reasonId, "USER", "sharif", null)));
+
+        assertThat(published.events)
+                .as("FULFILLING back to READY is a correction through override(), not a forward edge")
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("overriding FULFILLING back to READY is refused once the branch has since filled up, "
             + "and leaves the order exactly as it was")
     void overridingFulfillingToReadyRefusesWhenTheBranchIsAtCapacity() {
@@ -3835,9 +3857,7 @@ class OrderAmendmentAndOutcomeTests {
                 BRAND,
                 uz.horecaos.platform.fulfillment.domain.zone.ZoneRole.DELIVERY,
                 "AMEND-ZONE",
-                "Zone",
-                "Zone",
-                "Zone");
+                LocaleNames.triple("Zone", "Zone", "Zone"));
         var draftedZone = zoneService.draftCircleVersion(
                 new uz.horecaos.platform.fulfillment.application.ServiceZoneService.NewVersion(
                         TENANT,

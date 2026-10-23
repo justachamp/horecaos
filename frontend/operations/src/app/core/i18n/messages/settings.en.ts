@@ -832,6 +832,48 @@ export const settingsEn = {
   'settings.notifications.routing.unbind.confirm.confirm': 'Unbind',
   'settings.notifications.routing.topic.prompt': 'Forum topic id — leave empty for the flat chat',
   'settings.notifications.routing.topic.save': 'Save',
+  'settings.notifications.field.notificationClass.hint':
+    'The one-time-code message is the platform’s and is not authored here; it is shown below, read-only.',
+  'settings.notifications.field.consentPurpose': 'Consent purpose',
+  'settings.notifications.field.consentPurpose.hint':
+    'The purpose the customer’s consent is checked against before this is sent. An optional message that names none is refused. Order progress messages use ORDER_PROGRESS_UPDATES.',
+  'settings.notifications.marketing.notice': 'Sent only to customers who have consented.',
+  'settings.notifications.marketing.evidence':
+    'Unsubscribing changes who is eligible from then on and never erases the evidence of what was already delivered.',
+  'settings.notifications.marketing.link': 'See a customer’s consent on their card',
+  'settings.notifications.marketing.chip': 'consent only',
+  'settings.notifications.column.languages': 'Languages',
+  'settings.notifications.column.moderation': 'Moderation',
+  'settings.notifications.column.origin': 'Origin',
+  'settings.notifications.languages.missing': 'a language is missing',
+  'settings.notifications.origin.BRAND': 'Brand',
+  'settings.notifications.origin.TENANT': 'Tenant',
+  'settings.notifications.origin.PLATFORM': 'Platform',
+  'settings.notifications.defaults.title': 'Platform default wording',
+  'settings.notifications.defaults.lead':
+    'What a customer is sent for these events when neither this brand nor the tenant has written anything. It is the last layer: a template you activate outranks it at once. It cannot be edited; customise copies it into a template of this brand.',
+  'settings.notifications.defaults.customise': 'Customise',
+  'settings.notifications.defaults.editOwn': 'Open your template',
+  'settings.notifications.defaults.overridden': 'overridden',
+  'settings.notifications.otp.title': 'One-time code message',
+  'settings.notifications.otp.lead':
+    'The sentence a customer reads with a sign-in code belongs to the platform: it is short on purpose so it stays one SMS, and it is not a template, so there is nothing to author or activate here.',
+  'settings.notifications.otp.gateway.GATEWAY_MODERATES':
+    'Your SMS gateway approves wordings: the platform’s sentences must be approved by it before codes reach a handset',
+  'settings.notifications.otp.gateway.NOT_MODERATED': 'Your SMS gateway does not moderate wordings',
+  'settings.notifications.otp.characters': '{count} characters',
+  'settings.notifications.testSend.chat': 'Bound chat',
+  'settings.notifications.testSend.chat.choose': 'Choose one of this brand’s chats…',
+  'settings.notifications.testSend.chat.none':
+    'No chat is bound yet — bind one on the Routing tab.',
+  'settings.notifications.editor.copy.label': 'Start another language from this text:',
+  'settings.notifications.editor.copy.into': 'Copy into {locale}',
+  'settings.notifications.editor.copy.replace': 'Replace {locale} with this text',
+  'settings.notifications.editor.personal.note':
+    'The customer’s name and the courier’s first name are looked up when the message is sent and are never stored.',
+  'settings.notifications.editor.showItemPrices': 'Show item prices in the product list',
+  'settings.notifications.editor.showItemPrices.unused':
+    'No language uses {{productList}}, so this switch would change nothing.',
 
   // 10.10 Reference data
   'settings.referenceData.title': 'Reference data',
@@ -852,9 +894,7 @@ export const settingsEn = {
   'settings.referenceData.empty': 'None yet.',
   'settings.referenceData.field.internalName': 'Internal name',
   'settings.referenceData.field.customerText': 'Customer-facing text',
-  'settings.referenceData.field.customerTextRu': 'Customer text (Russian)',
-  'settings.referenceData.field.customerTextUz': 'Customer text (Uzbek)',
-  'settings.referenceData.field.customerTextEn': 'Customer text (English)',
+  'settings.referenceData.field.customerTextIn': 'Customer text ({language})',
   'settings.referenceData.field.systemCategory': 'Platform category',
   'settings.referenceData.field.stockDisposition': 'Stock disposition',
   'settings.referenceData.field.liabilityParty': 'Who bears the cost',
@@ -1409,9 +1449,7 @@ export const settingsEn = {
     'Before its first answer in a conversation the assistant says this, in the customer’s language. Write it for your own customers. Left blank, HorecaOS’s wording is used; it cannot be switched off.',
   'settings.assistant.disclosure.legal':
     'HorecaOS’s default wording is not legal advice. What you must tell your customers about automated answers and outside processors is your own obligation.',
-  'settings.assistant.disclosure.field.ru': 'Said in Russian',
-  'settings.assistant.disclosure.field.uz': 'Said in Uzbek',
-  'settings.assistant.disclosure.field.en': 'Said in English',
+  'settings.assistant.disclosure.field': 'Said in {language}',
   'settings.assistant.disclosure.blank': 'HorecaOS’s default wording',
   'settings.assistant.disclosure.default': 'Default wording: {text}',
   'settings.assistant.disclosure.counter': '{count} of {max} characters',
@@ -1449,9 +1487,6 @@ export const settingsEn = {
   'settings.assistant.notes.history.reason': 'Why: {reason}',
   'settings.assistant.notes.version': 'version {version}',
   'settings.assistant.notes.by': '{author}, {when}',
-  'settings.assistant.notes.locale.ru': 'Russian',
-  'settings.assistant.notes.locale.uz': 'Uzbek',
-  'settings.assistant.notes.locale.en': 'English',
   'settings.assistant.notes.scope.TENANT': 'Whole company',
   'settings.assistant.notes.scope.BRAND': 'Whole brand',
   'settings.assistant.notes.scope.LOCATION': 'Branch “{name}”',
@@ -1723,9 +1758,6 @@ export const settingsEn = {
   'settings.printing.profile.logo': 'Print the brand logo at the top',
   'settings.printing.profile.logoNote':
     'It is turned into black and white dots. A simple, high-contrast logo prints best.',
-  'settings.printing.profile.locale.ru': 'Russian',
-  'settings.printing.profile.locale.uzLatn': 'Uzbek (Latin)',
-  'settings.printing.profile.locale.en': 'English',
   'settings.printing.profile.footerLine': 'Footer line {n}',
   'settings.printing.profile.footerNote':
     'Up to three lines per language, {max} characters each, so a line fits an 80 mm roll. A document prints in one language, the branch’s, never the customer’s.',

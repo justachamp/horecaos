@@ -527,6 +527,21 @@ public class JdbcCustomerStore {
     }
 
     /**
+     * The name the customer gave themselves, for the one message that greets them (ADR 0184, D21).
+     * Null for an account that gave none; an anonymised account has had it cleared.
+     */
+    public Optional<String> displayName(UUID tenantId, UUID accountId) {
+        return jdbc.sql("""
+                SELECT display_name FROM customer.customer_accounts
+                WHERE tenant_id = :tenantId AND id = :accountId AND display_name IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .query(String.class)
+                .optional();
+    }
+
+    /**
      * The account row itself, for the customer reading their own profile.
      *
      * <p>{@code identity_partition_brand_id} comes back with it because it is the

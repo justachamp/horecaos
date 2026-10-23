@@ -148,12 +148,10 @@ export interface MenuProduct {
  */
 export interface CommentPresetOption {
   readonly code: string;
-  readonly labelRu: string;
-  readonly labelUz: string;
-  readonly labelEn: string;
   /**
    * Every wording the preset has, keyed by locale — the triple plus any language a tenant's
-   * brands offer beyond it (row 10.12). Optional so a fixture, or an older platform, still reads.
+   * brands offer beyond it (row 10.12; the only shape of it since V0678). Optional so a fixture,
+   * or an older platform, still reads.
    */
   readonly labels?: Readonly<Record<string, string>>;
   /** The wording the platform resolved for the language the menu was requested in, then the brand's default. */

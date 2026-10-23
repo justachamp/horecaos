@@ -58,6 +58,51 @@ public interface OrderDirectory {
     record NotificationContext(FulfillmentMode fulfillmentMode, SalesChannelSystemType channelSource) {}
 
     /**
+     * What an order message may say about the order beyond its number and total (ADR 0184, gap-map row
+     * {@code 10.9a}): the restaurant's name, the promise, the discount, the fee and the items.
+     *
+     * <p>A third narrow read beside {@link #summary} and {@link #notificationContext}, for the reason
+     * those two give: a consumer that fills in a message has no business reading the customer, the
+     * address, the notes or the payment, and widening {@code OrderSummary} would hand every one of its
+     * existing callers a list of lines it never asked for. Nothing personal is on it. The customer's
+     * name and the courier's first name are not facts of the order, and they do not come from here.
+     *
+     * <p>Defaulted to empty for the same reason {@link #notificationContext} is: the hand-written
+     * {@code OrderDirectory} test doubles that predate this read need no implementation of it.
+     *
+     * @return empty when no order of that id belongs to this tenant
+     */
+    default Optional<NotificationFacts> notificationFacts(UUID tenantId, UUID orderId) {
+        return Optional.empty();
+    }
+
+    /**
+     * @param brandDisplayName the brand's display name, which is what a customer calls the restaurant
+     * @param timezone the location's IANA zone, for the promised time to read on the branch's own clock
+     * @param promisedAt null when no promise was made (ADR 0036's {@code NOT_PROMISED})
+     * @param prepMinutes the kitchen component of the promise, null when it was not derived from a duration
+     * @param feeMinor the order's fee line (delivery and service), in minor units
+     * @param lines the live lines, by line number
+     */
+    record NotificationFacts(
+            String brandDisplayName,
+            String timezone,
+            @Nullable Instant promisedAt,
+            @Nullable Integer prepMinutes,
+            String currency,
+            long discountMinor,
+            long feeMinor,
+            List<NotificationLine> lines) {
+
+        public NotificationFacts {
+            lines = List.copyOf(lines);
+        }
+    }
+
+    /** One item of an order for a message: what it is called, how many, and what the line came to. */
+    record NotificationLine(String name, java.math.BigDecimal quantity, long lineTotalMinor) {}
+
+    /**
      * Orders whose approval deadline falls inside {@code (now, now + within]} —
      * the board's own severity threshold for "about to breach"
      * (docs/operations-spec/orders.md §2.6: {@code AWAITING_APPROVAL with < 2 min

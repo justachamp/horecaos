@@ -841,6 +841,49 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.notifications.routing.topic.prompt':
     'Forum mavzusi IDsi — oddiy chat uchun boʻsh qoldiring',
   'settings.notifications.routing.topic.save': 'Saqlash',
+  'settings.notifications.field.notificationClass.hint':
+    'Bir martalik kodli xabar platformaga tegishli va bu yerda tahrirlanmaydi; u quyida faqat oʻqish uchun koʻrsatilgan.',
+  'settings.notifications.field.consentPurpose': 'Rozilik maqsadi',
+  'settings.notifications.field.consentPurpose.hint':
+    'Yuborishdan oldin mijozning roziligi shu maqsad boʻyicha tekshiriladi. Maqsadsiz ixtiyoriy xabar rad etiladi. Buyurtma holati xabarlari ORDER_PROGRESS_UPDATES dan foydalanadi.',
+  'settings.notifications.marketing.notice': 'Faqat rozilik bergan mijozlarga yuboriladi.',
+  'settings.notifications.marketing.evidence':
+    'Obunani bekor qilish keyingi yuborishlarga taʻsir qiladi va allaqachon yetkazilganlarning izini hech qachon oʻchirmaydi.',
+  'settings.notifications.marketing.link': 'Mijozning roziligini uning kartasida koʻring',
+  'settings.notifications.marketing.chip': 'faqat rozilik bilan',
+  'settings.notifications.column.languages': 'Tillar',
+  'settings.notifications.column.moderation': 'Moderatsiya',
+  'settings.notifications.column.origin': 'Manba',
+  'settings.notifications.languages.missing': 'til yetishmaydi',
+  'settings.notifications.origin.BRAND': 'Brend',
+  'settings.notifications.origin.TENANT': 'Tashkilot',
+  'settings.notifications.origin.PLATFORM': 'Platforma',
+  'settings.notifications.defaults.title': 'Platformaning standart matni',
+  'settings.notifications.defaults.lead':
+    'Brend ham, tashkilot ham hech narsa yozmagan boʻlsa, mijoz shu hodisalar boʻyicha nimani oladi. Bu oxirgi qatlam: siz faollashtirgan shablon uni darhol bosib oʻtadi. Uni tahrirlab boʻlmaydi; «Moslash» uni shu brendning shabloniga nusxalaydi.',
+  'settings.notifications.defaults.customise': 'Moslash',
+  'settings.notifications.defaults.editOwn': 'Shabloningizni ochish',
+  'settings.notifications.defaults.overridden': 'bosib oʻtilgan',
+  'settings.notifications.otp.title': 'Bir martalik kodli xabar',
+  'settings.notifications.otp.lead':
+    'Mijoz kirish kodi bilan birga oʻqiydigan gap platformaga tegishli: u bitta SMS ga sigʻishi uchun ataylab qisqa va u shablon emas, shuning uchun bu yerda yaratadigan yoki faollashtiradigan narsa yoʻq.',
+  'settings.notifications.otp.gateway.GATEWAY_MODERATES':
+    'SMS shlyuzingiz matnlarni tasdiqlaydi: kodlar telefonga yetishidan oldin platforma gaplarini shlyuz tasdiqlagan boʻlishi kerak',
+  'settings.notifications.otp.gateway.NOT_MODERATED':
+    'SMS shlyuzingiz matnlarni moderatsiya qilmaydi',
+  'settings.notifications.otp.characters': '{count} belgi',
+  'settings.notifications.testSend.chat': 'Bogʻlangan chat',
+  'settings.notifications.testSend.chat.choose': 'Shu brendning chatlaridan birini tanlang…',
+  'settings.notifications.testSend.chat.none':
+    'Hali hech bir chat bogʻlanmagan — uni «Marshrutlash» boʻlimida bogʻlang.',
+  'settings.notifications.editor.copy.label': 'Boshqa tilni shu matndan boshlash:',
+  'settings.notifications.editor.copy.into': '{locale} ga nusxalash',
+  'settings.notifications.editor.copy.replace': '{locale} ni shu matn bilan almashtirish',
+  'settings.notifications.editor.personal.note':
+    'Mijozning ismi va kuryerning ismi xabar yuborilayotganda qoʻyiladi va hech qayerda saqlanmaydi.',
+  'settings.notifications.editor.showItemPrices': 'Mahsulotlar roʻyxatida narxlarni koʻrsatish',
+  'settings.notifications.editor.showItemPrices.unused':
+    'Hech bir til {{productList}} dan foydalanmaydi, shuning uchun bu tugma hech narsani oʻzgartirmaydi.',
 
   // 10.10 Maʻlumotnoma maʻlumotlari
   'settings.referenceData.title': 'Maʻlumotnoma maʻlumotlari',
@@ -861,9 +904,7 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.referenceData.empty': 'Hali yoʻq.',
   'settings.referenceData.field.internalName': 'Ichki nomi',
   'settings.referenceData.field.customerText': 'Mijoz uchun matn',
-  'settings.referenceData.field.customerTextRu': 'Mijoz uchun matn (rus tilida)',
-  'settings.referenceData.field.customerTextUz': 'Mijoz uchun matn (oʻzbek tilida)',
-  'settings.referenceData.field.customerTextEn': 'Mijoz uchun matn (ingliz tilida)',
+  'settings.referenceData.field.customerTextIn': 'Mijoz uchun matn ({language})',
   'settings.referenceData.field.systemCategory': 'Platforma kategoriyasi',
   'settings.referenceData.field.stockDisposition': 'Ombordan yechish',
   'settings.referenceData.field.liabilityParty': 'Kim xarajatni koʻtaradi',
@@ -1422,9 +1463,7 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
     'Suhbatdagi birinchi javobidan oldin yordamchi buni mijoz tilida aytadi. Matnni oʻz mijozlaringiz uchun yozing. Boʻsh qoldirilsa, HorecaOS iborasi ishlatiladi; bu xabarni oʻchirib boʻlmaydi.',
   'settings.assistant.disclosure.legal':
     'HorecaOS ning standart iborasi huquqiy maslahat emas. Avtomatik javoblar va tashqi qayta ishlovchilar haqida mijozlarga nimani aytishingiz kerakligi oʻzingizning majburiyatingiz.',
-  'settings.assistant.disclosure.field.ru': 'Rus tilida aytadi',
-  'settings.assistant.disclosure.field.uz': 'Oʻzbek tilida aytadi',
-  'settings.assistant.disclosure.field.en': 'Ingliz tilida aytadi',
+  'settings.assistant.disclosure.field': 'Aytiladigan til: {language}',
   'settings.assistant.disclosure.blank': 'HorecaOS ning standart iborasi',
   'settings.assistant.disclosure.default': 'Standart ibora: {text}',
   'settings.assistant.disclosure.counter': '{max} belgidan {count} tasi',
@@ -1462,9 +1501,6 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.assistant.notes.history.reason': 'Sababi: {reason}',
   'settings.assistant.notes.version': '{version}-versiya',
   'settings.assistant.notes.by': '{author}, {when}',
-  'settings.assistant.notes.locale.ru': 'Rus tili',
-  'settings.assistant.notes.locale.uz': 'Oʻzbek tili',
-  'settings.assistant.notes.locale.en': 'Ingliz tili',
   'settings.assistant.notes.scope.TENANT': 'Butun kompaniya',
   'settings.assistant.notes.scope.BRAND': 'Butun brend',
   'settings.assistant.notes.scope.LOCATION': '«{name}» filiali',
@@ -1744,9 +1780,6 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.printing.profile.logo': 'Brend logotipini yuqorida chop etish',
   'settings.printing.profile.logoNote':
     'U qora-oq nuqtalarga aylantiriladi. Oddiy, kontrastli logotip eng yaxshi chop etiladi.',
-  'settings.printing.profile.locale.ru': 'Ruscha',
-  'settings.printing.profile.locale.uzLatn': 'Oʻzbekcha (lotin)',
-  'settings.printing.profile.locale.en': 'Inglizcha',
   'settings.printing.profile.footerLine': 'Pastki matn {n}-qator',
   'settings.printing.profile.footerNote':
     'Har bir til uchun uchtagacha qator, har biri {max} belgigacha, shunda qator 80 mm lentaga sigʻadi. Hujjat bitta tilda — filial tilida chop etiladi, mijoz tilida emas.',

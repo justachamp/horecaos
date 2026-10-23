@@ -18,7 +18,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.customers.api.OtpWording;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
@@ -31,6 +33,7 @@ import uz.horecaos.platform.notifications.domain.MessageLocale;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
 import uz.horecaos.platform.notifications.domain.NotificationVariableCatalog;
+import uz.horecaos.platform.notifications.domain.PlatformDefaultTemplates;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore.VersionRow;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
@@ -74,14 +77,65 @@ public class NotificationTemplateController {
             description = "Fixes the defect that made the editor create-only in practice: the console used "
                     + "to save every version with an empty schema, and the renderer correctly refuses any "
                     + "placeholder that schema does not declare. This is what an author now picks from.")
-    public ResponseEntity<List<VariableCatalogueEntry>> variableCatalogue() {
-        return ResponseEntity.ok(NotificationVariableCatalog.all().entrySet().stream()
-                .map(entry -> new VariableCatalogueEntry(
-                        entry.getKey().name(),
-                        entry.getValue().stream()
-                                .map(variable -> new VariableCatalogueVariable(variable.name(), variable.description()))
-                                .toList()))
+    public ResponseEntity<List<VariableCatalogueEntry>> variableCatalogue(
+            @RequestParam(required = false) @Nullable @Size(max = 64) String templateKey) {
+        // ADR 0184, D21: one variable, courierFirstName, exists for one template key only, so the editor
+        // names the key it is editing and the catalogue answers for it. Without a key the answer is the
+        // class's own list, as it always was.
+        return ResponseEntity.ok(NotificationVariableCatalog.all().keySet().stream()
+                .sorted()
+                .map(notificationClass -> new VariableCatalogueEntry(
+                        notificationClass.name(),
+                        (templateKey == null
+                                        ? NotificationVariableCatalog.forClass(notificationClass)
+                                        : NotificationVariableCatalog.forTemplate(notificationClass, templateKey))
+                                .stream()
+                                        .map(variable ->
+                                                new VariableCatalogueVariable(variable.name(), variable.description()))
+                                        .toList()))
                 .toList());
+    }
+
+    @GetMapping("/platform-defaults")
+    @RequiresCapability(value = Capability.NOTIFICATION_TEMPLATE_AUTHOR, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "The wording the platform sends when a brand and its tenant have written none",
+            description = "ADR 0020's last resolution layer (ADR 0184): bundled ru, uz-Latn and en wording for each "
+                    + "order milestone, read-only. A brand customises one by registering its own template for the "
+                    + "key and saving a version, which from then on outranks it. ORDER_COMPLETED has no default: "
+                    + "the rating prompt is opt-in by activating a template (ADR 0075).")
+    public ResponseEntity<List<PlatformDefaultResponse>> platformDefaults() {
+        return ResponseEntity.ok(PlatformDefaultTemplates.all().stream()
+                .map(entry -> new PlatformDefaultResponse(
+                        entry.templateKey(),
+                        entry.notificationClass().name(),
+                        entry.consentPurpose(),
+                        PlatformDefaultTemplates.CHANNELS.stream()
+                                .map(NotificationChannel::name)
+                                .toList(),
+                        PlatformDefaultTemplates.VERSION,
+                        new LinkedHashMap<>(entry.bodies()),
+                        List.copyOf(entry.variables())))
+                .toList());
+    }
+
+    @GetMapping("/otp-wording")
+    @RequiresCapability(value = Capability.NOTIFICATION_TEMPLATE_AUTHOR, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "The sentence a customer reads with a one-time code, read-only",
+            description = "The platform's, not the tenant's (ADR 0184, D19): the sentence is sent by the customers "
+                    + "module without a template, so there is nothing to edit and no SECURITY template can be created. "
+                    + "gatewayApproval says whether this tenant's SMS gateway moderates wordings, in which case the "
+                    + "gateway must have approved the platform's sentences before a code reaches a handset.")
+    public ResponseEntity<OtpWordingResponse> otpWording(@PathVariable UUID tenantId) {
+        return ResponseEntity.ok(new OtpWordingResponse(
+                OtpWording.sentences().stream()
+                        .map(sentence -> new OtpSentenceResponse(
+                                sentence.locale(),
+                                sentence.pattern(),
+                                sentence.pattern().length()))
+                        .toList(),
+                templates.smsGatewayModerates(tenantId) ? "GATEWAY_MODERATES" : "NOT_MODERATED"));
     }
 
     @GetMapping
@@ -93,19 +147,27 @@ public class NotificationTemplateController {
                     + "picks, and showing only the overrides hides half the answer.")
     public ResponseEntity<List<TemplateResponse>> list(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
 
-        return ResponseEntity.ok(templates.forBrand(tenantId, brandId).stream()
-                .map(row -> new TemplateResponse(
-                        row.id(),
-                        row.brandId(),
-                        row.templateKey(),
-                        row.notificationClass(),
-                        row.channel(),
-                        row.consentPurpose(),
-                        row.status(),
-                        row.activeVersion(),
-                        row.version(),
-                        row.fulfillmentMode(),
-                        row.channelSource()))
+        return ResponseEntity.ok(templates.listing(tenantId, brandId).stream()
+                .map(listing -> {
+                    var row = listing.template();
+                    return new TemplateResponse(
+                            row.id(),
+                            row.brandId(),
+                            row.templateKey(),
+                            row.notificationClass(),
+                            row.channel(),
+                            row.consentPurpose(),
+                            row.status(),
+                            row.activeVersion(),
+                            row.version(),
+                            row.fulfillmentMode(),
+                            row.channelSource(),
+                            row.isTenantWide() ? "TENANT" : "BRAND",
+                            listing.shownVersion(),
+                            listing.locales(),
+                            listing.requiredLocales(),
+                            listing.providerReview());
+                })
                 .toList());
     }
 
@@ -163,8 +225,13 @@ public class NotificationTemplateController {
         });
 
         try {
-            int versionNumber =
-                    templates.addVersion(tenantId, brandId, templateId, wordings, request.variablesSchema());
+            int versionNumber = templates.addVersion(
+                    tenantId,
+                    brandId,
+                    templateId,
+                    wordings,
+                    request.variablesSchema(),
+                    Boolean.TRUE.equals(request.showItemPrices()));
             // ADR 0091: told here, immediately, rather than left for the author
             // to discover after activating — the exact silent failure this
             // wave's row exists to close. Read back rather than threaded through
@@ -287,7 +354,8 @@ public class NotificationTemplateController {
                 row.providerReviewNote(),
                 row.providerReviewUpdatedAt() == null
                         ? null
-                        : row.providerReviewUpdatedAt().toString());
+                        : row.providerReviewUpdatedAt().toString(),
+                row.showItemPrices());
     }
 
     /**
@@ -314,7 +382,13 @@ public class NotificationTemplateController {
      */
     public record AddVersionRequest(
             @NotEmpty Map<String, WordingRequest> wordings,
-            @NotNull Map<String, String> variablesSchema) {}
+            @NotNull Map<String, String> variablesSchema,
+            /**
+             * ADR 0184: whether {{productList}} follows each item with its line total. Boxed, because
+             * Jackson 3 refuses a body that omits a primitive and the console's older drafts omit it;
+             * absent reads as off.
+             */
+            @Nullable Boolean showItemPrices) {}
 
     public record WordingRequest(
             @Nullable @Size(max = 200) String subject,
@@ -356,7 +430,8 @@ public class NotificationTemplateController {
             String providerReview,
             @Nullable String providerReviewReference,
             @Nullable String providerReviewNote,
-            @Nullable String providerReviewUpdatedAt) {}
+            @Nullable String providerReviewUpdatedAt,
+            boolean showItemPrices) {}
 
     /**
      * @param fulfillmentMode gap-map row 10.9a: null when this row resolves for
@@ -374,7 +449,39 @@ public class NotificationTemplateController {
             @Nullable Integer activeVersion,
             int version,
             @Nullable String fulfillmentMode,
-            @Nullable String channelSource) {}
+            @Nullable String channelSource,
+            String origin,
+            @Nullable Integer shownVersion,
+            List<String> versionLocales,
+            List<String> requiredLocales,
+            String providerReview) {}
+
+    /**
+     * @param channels the customer channels the wording is offered on
+     * @param version {@code PlatformDefaultTemplates#VERSION}, the handle a sent message freezes
+     * @param bodies locale tag to the platform's sentence
+     * @param variables the merge variables the sentences name
+     */
+    public record PlatformDefaultResponse(
+            String templateKey,
+            String notificationClass,
+            @Nullable String consentPurpose,
+            List<String> channels,
+            int version,
+            Map<String, String> bodies,
+            List<String> variables) {}
+
+    /**
+     * @param gatewayApproval {@code GATEWAY_MODERATES} when the tenant's SMS gateway refuses wordings it has not
+     *                        approved, {@code NOT_MODERATED} when it does not
+     */
+    public record OtpWordingResponse(List<OtpSentenceResponse> sentences, String gatewayApproval) {}
+
+    /**
+     * @param text the sentence with {{code}} and {{minutes}} still in it
+     * @param characters its length with the placeholders, the figure to keep under one SMS segment
+     */
+    public record OtpSentenceResponse(String locale, String text, int characters) {}
 
     /** One class's merge variables, for the editor's VariableChip picker. */
     public record VariableCatalogueEntry(String notificationClass, List<VariableCatalogueVariable> variables) {}
@@ -383,7 +490,7 @@ public class NotificationTemplateController {
 
     public record TestSendRequest(
             @NotBlank String locale,
-            @NotBlank @Size(max = 32) String destination) {}
+            @NotBlank @Size(max = 64) String destination) {}
 
     /**
      * What the real send answered. Never the destination — see {@link

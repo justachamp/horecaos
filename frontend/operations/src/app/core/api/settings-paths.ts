@@ -655,9 +655,19 @@ export const settingsPaths = {
 
   // ---------------------------------------------------------- 10.9 Notifications
 
-  /** `NotificationTemplateController` — already operations surface (`/api/v1/tenants/**`). */
+  /**
+   * `NotificationTemplateController`, mapped at
+   * `/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates`.
+   *
+   * It sat on `${OPERATIONS}/tenants/...` until wave 21: a prefix the platform serves nothing under (the
+   * `/api/v1/operations` surface is `/api/v1/operations/tenants/{t}/<resource>` for the controllers that
+   * were mirrored there, and this one never was), so every call of the template editor answered 404 and
+   * no spec noticed, because none asserted the literal path. `settings-paths.spec.ts` now does, and
+   * `path-builders-resolve.spec.ts` resolves every builder of every `*-paths.ts` against the OpenAPI
+   * baseline so the next one cannot do it quietly.
+   */
   notificationTemplates(scope: LocationScope): string {
-    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/notification-templates`;
+    return `${TENANT}/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/notification-templates`;
   },
 
   notificationTemplate(scope: LocationScope, templateId: string): string {
@@ -698,8 +708,29 @@ export const settingsPaths = {
    * `X.27`: fixes the `variablesSchema: {}` defect that made the editor
    * unable to author a variable-bearing template at all.
    */
-  notificationVariableCatalogue(scope: LocationScope): string {
-    return `${this.notificationTemplates(scope)}/variable-catalogue`;
+  notificationVariableCatalogue(scope: LocationScope, templateKey?: string): string {
+    const path = `${this.notificationTemplates(scope)}/variable-catalogue`;
+    // One variable (the courier's first name) exists for one template key only (ADR 0184, D21), so the
+    // editor names the key it is editing and the platform answers for it.
+    return templateKey === undefined
+      ? path
+      : `${path}?templateKey=${encodeURIComponent(templateKey)}`;
+  },
+
+  /**
+   * `NotificationTemplateController.platformDefaults` — ADR 0184: the wording the platform sends when a
+   * brand and its tenant have written none, read-only.
+   */
+  notificationPlatformDefaults(scope: LocationScope): string {
+    return `${this.notificationTemplates(scope)}/platform-defaults`;
+  },
+
+  /**
+   * `NotificationTemplateController.otpWording` — ADR 0184, D19: the sentence a customer reads with a
+   * one-time code. The platform's, so read-only.
+   */
+  notificationOtpWording(scope: LocationScope): string {
+    return `${this.notificationTemplates(scope)}/otp-wording`;
   },
 
   // ------------------------------------------- 10.9 Notifications, Tab 2 routing
@@ -747,6 +778,14 @@ export const settingsPaths = {
    */
   orderOutcomeReasons(scope: LocationScope): string {
     return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/order-outcome-reasons`;
+  },
+
+  /**
+   * `OperationsOrderOutcomeReasonController.localeSet` — the languages a reason's customer wording is
+   * authored in (the union of the tenant's brands', default first). Needs `order.read`.
+   */
+  orderOutcomeReasonLocaleSet(scope: LocationScope): string {
+    return `${this.orderOutcomeReasons(scope)}/locale-set`;
   },
 
   orderOutcomeReasonCategories(scope: LocationScope): string {
@@ -865,6 +904,16 @@ export const settingsPaths = {
    */
   assistantUsage(tenantId: string): string {
     return `${OPERATIONS}/tenants/${enc(tenantId)}/assistant/usage`;
+  },
+
+  /**
+   * `AssistantLanguageController.languages` — the languages the assistant answers in (its detector's
+   * vocabulary, ADR 0069), each with the platform language it is and the configuration key that holds
+   * the disclosure in it. A read of code, answered to any signed-in principal: a brand manager's grant
+   * stops at the brand and needs the list to write a note there.
+   */
+  assistantLanguages(): string {
+    return `${OPERATIONS}/assistant/languages`;
   },
 
   /**

@@ -27,6 +27,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.application.InventoryService;
+import uz.horecaos.platform.support.CommentPresetRows;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -292,11 +293,8 @@ class StorefrontCatalogControllerEndpointTests {
     void anEditedPresetWordingChangesTheETag() throws Exception {
         UUID productId = productIdOf(publishOneProduct("BURGER"));
         UUID presetId = UUID.randomUUID();
-        jdbc.sql("""
-                INSERT INTO catalog.comment_presets (
-                    id, tenant_id, code, label_ru, label_uz, label_en, sort_order, status, version)
-                VALUES (:id, :tenantId, 'NO_ONION', 'Без лука', 'Piyozsiz', 'No onion', 0, 'ACTIVE', 1)
-                """).param("id", presetId).param("tenantId", tenant).update();
+        CommentPresetRows.insertPreset(
+                jdbc, presetId, tenant, "NO_ONION", CommentPresetRows.triple("Без лука", "Piyozsiz", "No onion"));
         jdbc.sql("""
                 INSERT INTO catalog.product_comment_presets (
                     id, tenant_id, brand_id, product_id, preset_id, sort_order, version)
@@ -314,8 +312,11 @@ class StorefrontCatalogControllerEndpointTests {
                 .andExpect(jsonPath("$.products[0].commentPresets[0].label").value("No onion"))
                 .andReturn();
 
-        jdbc.sql("UPDATE catalog.comment_presets SET label_en = 'Hold the onion', version = version + 1 "
-                        + "WHERE id = :id")
+        jdbc.sql("UPDATE catalog.comment_preset_translations SET label = 'Hold the onion' "
+                        + "WHERE preset_id = :id AND locale = 'en'")
+                .param("id", presetId)
+                .update();
+        jdbc.sql("UPDATE catalog.comment_presets SET version = version + 1 WHERE id = :id")
                 .param("id", presetId)
                 .update();
 

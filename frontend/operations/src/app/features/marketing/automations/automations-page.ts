@@ -9,6 +9,7 @@ import {
 
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentBrand } from '../../../core/auth/current-brand';
+import { formatDateTime } from '../../../core/format/datetime';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
@@ -34,6 +35,9 @@ import {
   AutomationTriggerKind,
   AutomationsApi,
 } from './automations-api';
+
+/** The console's clock until a screen reads the tenant's own zone (ADR 0055: every tenant trades in Tashkent). */
+const PLACEHOLDER_TIME_ZONE = 'Asia/Tashkent';
 
 /**
  * Marketing §6.5 Automations (gap-map row 6.5, ADR 0044 Triggers) —
@@ -483,7 +487,7 @@ export class AutomationsPage implements OnInit {
   }
 
   protected formatMoment(iso: string): string {
-    return new Date(iso).toLocaleString(this.i18n.locale() === 'en' ? 'en-GB' : 'ru-RU');
+    return formatDateTime(new Date(iso), PLACEHOLDER_TIME_ZONE);
   }
 
   private describe(error: unknown): string {

@@ -7,7 +7,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +30,7 @@ import uz.horecaos.platform.web.api.ApiException;
  * Authoring the geography a geocoder is allowed to answer inside (ADR 0037,
  * ADR 0104).
  *
- * <p>A region is a code, a tri-lingual name, a centre and a SW/NE bounding
+ * <p>A region is a code, a name per language, a centre and a SW/NE bounding
  * box, and the box is the whole point of the row: V0025's own comment says an
  * unconstrained geocoder asked for a Tashkent street name "will return a
  * plausible street of the same name in another country", and {@link
@@ -51,7 +50,7 @@ import uz.horecaos.platform.web.api.ApiException;
 @Service
 public class RegionService {
 
-    /** {@code display_name_*} and a translation row all fit this. */
+    /** A translation row's name ({@code region_translations.display_name}) fits this. */
     static final int MAX_NAME_LENGTH = 200;
 
     private final JdbcRegionStore store;
@@ -86,15 +85,19 @@ public class RegionService {
     }
 
     /**
-     * {@link #list} with each region's name merged from the platform columns and
-     * the per-locale table, each locale once (row 10.12). A platform region has no
-     * translation rows, so it answers its columns alone.
+     * {@link #list} with each region's name per locale, each locale once (row 10.12): a tenant's own
+     * region from {@code region_translations}, a platform region from {@code platform_region_names}
+     * (V0679; a platform region has no tenant to own a translation row).
      */
     @Transactional(readOnly = true)
     public List<RegionView> listWithNames(UUID tenantId) {
         Map<UUID, Map<String, String>> translations = store.translationsForTenant(tenantId);
+        Map<UUID, Map<String, String>> platform = store.platformNames();
         return store.list(tenantId).stream()
-                .map(row -> new RegionView(row, mergedNames(row, translations.getOrDefault(row.regionId(), Map.of()))))
+                .map(row -> new RegionView(
+                        row,
+                        LocalizedLabels.merge(
+                                (row.platform() ? platform : translations).getOrDefault(row.regionId(), Map.of()))))
                 .toList();
     }
 
@@ -113,20 +116,15 @@ public class RegionService {
     @Transactional
     public UUID create(UUID tenantId, RegionGeography requested) {
         refuseBadGeography(requested);
-        // Row 10.12: the tenant's default language is the one name a region must have;
-        // the three platform columns are NOT NULL, so a triple locale not supplied is
-        // filled with it.
+        // Row 10.12: the tenant's default language is the one name a region must have; a language it
+        // does not serve is simply absent (since V0679 no NOT NULL column forces the default name in).
         Map<String, String> names = suppliedNames(requested);
         String defaultLocale = brandLocales.tenantLocaleSet(tenantId).defaultLocale();
-        String defaultName = names.get(defaultLocale);
-        if (defaultName == null) {
+        if (names.get(defaultLocale) == null) {
             throw new RegionRefusedException(
                     List.of("A region needs its name in the tenant's default language (%s)".formatted(defaultLocale)));
         }
-        RegionGeography geography = requested.withTriple(
-                names.getOrDefault(LocalizedLabels.RU, defaultName),
-                names.getOrDefault(LocalizedLabels.UZ_LATN, defaultName),
-                names.getOrDefault(LocalizedLabels.EN, defaultName));
+        RegionGeography geography = requested;
         UUID id = Ids.newId();
         Instant now = clock.instant();
         store.insert(id, tenantId, geography, now);
@@ -138,7 +136,7 @@ public class RegionService {
                 .target("Region", id)
                 .because("Registered region '%s'".formatted(geography.code()))
                 // Staff 9.3a: a freshly inserted region has no prior state.
-                .changed(ChangeDocuments.created(withNames(boxOf(geography), geography, names)))
+                .changed(ChangeDocuments.created(withNames(boxOf(geography), names)))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -179,16 +177,7 @@ public class RegionService {
         Map<String, String> names = suppliedNames(geography);
         Map<String, String> existingTranslations = store.translationsFor(tenantId, regionId);
         Instant now = clock.instant();
-        if (store.update(
-                        tenantId,
-                        regionId,
-                        geography.withTriple(
-                                names.get(LocalizedLabels.RU),
-                                names.get(LocalizedLabels.UZ_LATN),
-                                names.get(LocalizedLabels.EN)),
-                        expectedVersion,
-                        now)
-                != 1) {
+        if (store.update(tenantId, regionId, geography, expectedVersion, now) != 1) {
             throw ApiException.staleVersion(expectedVersion, current.version());
         }
         store.upsertTranslations(tenantId, regionId, names, now);
@@ -196,7 +185,7 @@ public class RegionService {
         Map<String, Object> before = boxOf(current);
         Map<String, Object> after = boxOf(geography);
         names.forEach((locale, name) -> {
-            before.put("displayName." + locale, currentName(current, existingTranslations, locale));
+            before.put("displayName." + locale, existingTranslations.get(locale));
             after.put("displayName." + locale, name);
         });
         audit.record(AuditFact.of("delivery.region.updated", AuditClass.BUSINESS)
@@ -212,44 +201,17 @@ public class RegionService {
                 .build());
     }
 
-    /** What the region was called in this locale before the write: the column for the triple, else its translation row. */
-    private static @Nullable String currentName(RegionRow region, Map<String, String> translationRows, String locale) {
-        return switch (locale) {
-            case LocalizedLabels.RU -> region.displayNameRu();
-            case LocalizedLabels.UZ_LATN -> region.displayNameUz();
-            case LocalizedLabels.EN -> region.displayNameEn();
-            default -> translationRows.get(locale);
-        };
-    }
-
     private static Map<String, String> suppliedNames(RegionGeography geography) {
         try {
-            return LocalizedLabels.supplied(
-                    geography.displayNameRu(),
-                    geography.displayNameUz(),
-                    geography.displayNameEn(),
-                    geography.names(),
-                    MAX_NAME_LENGTH);
+            return LocalizedLabels.supplied(geography.names(), MAX_NAME_LENGTH);
         } catch (IllegalArgumentException invalid) {
             throw new RegionRefusedException(List.of(invalid.getMessage()));
         }
     }
 
-    private static Map<String, String> mergedNames(RegionRow row, Map<String, String> translationRows) {
-        return LocalizedLabels.merge(row.displayNameRu(), row.displayNameUz(), row.displayNameEn(), translationRows);
-    }
-
-    private static Map<String, Object> withNames(
-            Map<String, Object> box, RegionGeography geography, Map<String, String> names) {
+    private static Map<String, Object> withNames(Map<String, Object> box, Map<String, String> names) {
         Map<String, Object> changed = new LinkedHashMap<>(box);
-        changed.put("displayNameRu", geography.displayNameRu());
-        changed.put("displayNameUz", geography.displayNameUz());
-        changed.put("displayNameEn", geography.displayNameEn());
-        names.forEach((locale, name) -> {
-            if (!LocalizedLabels.PLATFORM_TRIPLE.contains(locale)) {
-                changed.put("displayName." + locale, name);
-            }
-        });
+        names.forEach((locale, name) -> changed.put("displayName." + locale, name));
         return changed;
     }
 

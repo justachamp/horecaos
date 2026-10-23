@@ -118,9 +118,6 @@ describe('MenuService.item: row 10.12 comment preset wording', () => {
           commentPresets: [
             {
               code: 'NO_ONIONS',
-              labelRu: 'Без лука',
-              labelUz: 'Piyozsiz',
-              labelEn: 'No onions',
               labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions', kaa: 'Piyazsiz' },
               label: 'Piyozsiz',
             },
@@ -134,9 +131,6 @@ describe('MenuService.item: row 10.12 comment preset wording', () => {
     expect(item?.commentPresets).toEqual([
       {
         code: 'NO_ONIONS',
-        labelRu: 'Без лука',
-        labelUz: 'Piyozsiz',
-        labelEn: 'No onions',
         labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions', kaa: 'Piyazsiz' },
         label: 'Piyozsiz',
       },
@@ -158,7 +152,10 @@ describe('MenuService.item: row 10.12 comment preset wording', () => {
           variants: [],
           modifierGroupIds: [],
           commentPresets: [
-            { code: 'NO_ONIONS', labelRu: 'Без лука', labelUz: 'Piyozsiz', labelEn: 'No onions' },
+            {
+              code: 'NO_ONIONS',
+              labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions' },
+            },
           ],
         },
       ],
@@ -167,7 +164,7 @@ describe('MenuService.item: row 10.12 comment preset wording', () => {
     const item = await service.item('p1', 'uz');
 
     expect(item?.commentPresets).toEqual([
-      { code: 'NO_ONIONS', labelRu: 'Без лука', labelUz: 'Piyozsiz', labelEn: 'No onions' },
+      { code: 'NO_ONIONS', labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions' } },
     ]);
   });
 });

@@ -23,6 +23,7 @@ import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { formatMoney } from '../../core/format/money';
 import { I18n, Locale } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { PhonePipe } from '../../core/format/phone.pipe';
 import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
@@ -260,6 +261,7 @@ export class OrderDetailPane {
   private readonly channelsApi = inject(SalesChannelsApi);
   private readonly router = inject(Router);
   private readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
   private readonly toasts = inject(Toasts);
 
   /** Bound from the route parameter by `withComponentInputBinding()`. */
@@ -1298,9 +1300,9 @@ export class OrderDetailPane {
 
   // ------------------------------------------------------------ wave 10 financial commands (rows 1.2c/2.1d)
 
-  /** `catalog.md` §4.6's `locale` — the menu endpoint speaks `ru`/`uz`/`en`, `new-order-page.ts`'s own `menuLocale` maps `uz-Latn` the same way. */
+  /** `catalog.md` §4.6's `locale` — the menu endpoint speaks the catalog's code, which the registry names (`uz` for `uz-Latn`, ADR 0149). */
   private menuLocale(): string {
-    return this.i18n.locale() === 'uz-Latn' ? 'uz' : this.i18n.locale();
+    return this.registry.catalogCode(this.i18n.locale());
   }
 
   protected openAddLinesDialog(): void {

@@ -65,7 +65,7 @@ public class JdbcDispatchRuleStore {
      */
     public List<ZoneRow> deliveryZones(UUID tenantId, @Nullable UUID brandId) {
         return jdbc.sql("""
-                SELECT id, brand_id, code, display_name_en, display_name_ru, display_name_uz, status
+                SELECT id, brand_id, code, status
                 FROM fulfillment.service_zones
                 WHERE tenant_id = :tenantId AND zone_role = 'DELIVERY'
                   AND (CAST(:brandId AS uuid) IS NULL OR brand_id = CAST(:brandId AS uuid))
@@ -77,11 +77,28 @@ public class JdbcDispatchRuleStore {
                         row.getObject("id", UUID.class),
                         row.getObject("brand_id", UUID.class),
                         row.getString("code"),
-                        row.getString("display_name_en"),
-                        row.getString("display_name_ru"),
-                        row.getString("display_name_uz"),
                         row.getString("status")))
                 .list();
+    }
+
+    /**
+     * The names of this tenant's zones, per locale (V0431, the only place a zone's name lives since V0679),
+     * grouped by zone.
+     */
+    public java.util.Map<UUID, java.util.Map<String, String>> zoneNames(UUID tenantId) {
+        java.util.Map<UUID, java.util.Map<String, String>> byZone = new java.util.LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT zone_id, locale, display_name FROM fulfillment.service_zone_translations
+                WHERE tenant_id = :tenantId ORDER BY zone_id, locale
+                """)
+                .param("tenantId", tenantId)
+                .query((row, number) -> {
+                    byZone.computeIfAbsent(row.getObject("zone_id", UUID.class), id -> new java.util.LinkedHashMap<>())
+                            .put(row.getString("locale"), row.getString("display_name"));
+                    return row.getString("locale");
+                })
+                .list();
+        return byZone;
     }
 
     public List<ChannelRow> channels(UUID tenantId) {
@@ -208,8 +225,7 @@ public class JdbcDispatchRuleStore {
         return highest == null ? 0 : highest;
     }
 
-    public record ZoneRow(
-            UUID id, UUID brandId, String code, String nameEn, String nameRu, String nameUz, String status) {}
+    public record ZoneRow(UUID id, UUID brandId, String code, String status) {}
 
     public record ChannelRow(UUID id, String code, String systemType, String displayName, String status) {}
 

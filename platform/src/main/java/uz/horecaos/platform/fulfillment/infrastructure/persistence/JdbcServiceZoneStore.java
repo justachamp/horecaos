@@ -57,8 +57,7 @@ public class JdbcServiceZoneStore {
      */
     public List<ZoneSummaryRow> listZones(UUID tenantId, UUID brandId) {
         return jdbc.sql("""
-                SELECT z.id, z.zone_role, z.code,
-                       z.display_name_ru, z.display_name_uz, z.display_name_en, z.status,
+                SELECT z.id, z.zone_role, z.code, z.status,
                        v.version, v.priority, v.currency, v.delivery_tariff_id,
                        v.free_delivery_from_minor, v.min_basket_minor, v.area_sq_meters
                   FROM fulfillment.service_zones z
@@ -73,9 +72,6 @@ public class JdbcServiceZoneStore {
                         row.getObject("id", UUID.class),
                         ZoneRole.valueOf(row.getString("zone_role")),
                         row.getString("code"),
-                        row.getString("display_name_ru"),
-                        row.getString("display_name_uz"),
-                        row.getString("display_name_en"),
                         row.getString("status"),
                         row.getObject("version", Integer.class),
                         row.getObject("priority", Integer.class),
@@ -90,8 +86,7 @@ public class JdbcServiceZoneStore {
     /** One zone's lineage row, for the detail screen's header. */
     public Optional<ZoneSummaryRow> findZone(UUID tenantId, UUID brandId, UUID zoneId) {
         return jdbc.sql("""
-                SELECT z.id, z.zone_role, z.code,
-                       z.display_name_ru, z.display_name_uz, z.display_name_en, z.status,
+                SELECT z.id, z.zone_role, z.code, z.status,
                        v.version, v.priority, v.currency, v.delivery_tariff_id,
                        v.free_delivery_from_minor, v.min_basket_minor, v.area_sq_meters
                   FROM fulfillment.service_zones z
@@ -106,9 +101,6 @@ public class JdbcServiceZoneStore {
                         row.getObject("id", UUID.class),
                         ZoneRole.valueOf(row.getString("zone_role")),
                         row.getString("code"),
-                        row.getString("display_name_ru"),
-                        row.getString("display_name_uz"),
-                        row.getString("display_name_en"),
                         row.getString("status"),
                         row.getObject("version", Integer.class),
                         row.getObject("priority", Integer.class),
@@ -537,62 +529,35 @@ public class JdbcServiceZoneStore {
     }
 
     /**
-     * Updates the platform-triple name columns a caller supplied and leaves the
-     * others exactly as they were (row 10.12).
+     * Stamps a zone as renamed (row 10.12). The names themselves are in the translation table
+     * ({@link #upsertTranslations}, V0679); the lineage row only moves its {@code updated_at}.
      *
      * @return 1 when the brand has this zone, 0 otherwise
      */
-    public int updateNames(
-            UUID tenantId,
-            UUID brandId,
-            UUID zoneId,
-            @Nullable String nameRu,
-            @Nullable String nameUz,
-            @Nullable String nameEn,
-            Instant now) {
+    public int touch(UUID tenantId, UUID brandId, UUID zoneId, Instant now) {
         return jdbc.sql("""
                 UPDATE fulfillment.service_zones
-                   SET display_name_ru = COALESCE(:nameRu, display_name_ru),
-                       display_name_uz = COALESCE(:nameUz, display_name_uz),
-                       display_name_en = COALESCE(:nameEn, display_name_en),
-                       updated_at = :now
+                   SET updated_at = :now
                  WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :zoneId
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("zoneId", zoneId)
-                .param("nameRu", nameRu)
-                .param("nameUz", nameUz)
-                .param("nameEn", nameEn)
                 .param("now", timestamp(now))
                 .update();
     }
 
-    public void insertZone(
-            UUID id,
-            UUID tenantId,
-            UUID brandId,
-            ZoneRole role,
-            String code,
-            String nameRu,
-            String nameUz,
-            String nameEn,
-            Instant now) {
+    public void insertZone(UUID id, UUID tenantId, UUID brandId, ZoneRole role, String code, Instant now) {
         jdbc.sql("""
                 INSERT INTO fulfillment.service_zones (
-                    id, tenant_id, brand_id, zone_role, code,
-                    display_name_ru, display_name_uz, display_name_en, created_at, updated_at)
-                VALUES (:id, :tenantId, :brandId, :role, :code,
-                    :nameRu, :nameUz, :nameEn, :now, :now)
+                    id, tenant_id, brand_id, zone_role, code, created_at, updated_at)
+                VALUES (:id, :tenantId, :brandId, :role, :code, :now, :now)
                 """)
                 .param("id", id)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("role", role.name())
                 .param("code", code)
-                .param("nameRu", nameRu)
-                .param("nameUz", nameUz)
-                .param("nameEn", nameEn)
                 .param("now", timestamp(now))
                 .update();
     }
@@ -836,9 +801,6 @@ public class JdbcServiceZoneStore {
             UUID id,
             ZoneRole role,
             String code,
-            String displayNameRu,
-            String displayNameUz,
-            String displayNameEn,
             String status,
             @Nullable Integer activeVersion,
             @Nullable Integer priority,

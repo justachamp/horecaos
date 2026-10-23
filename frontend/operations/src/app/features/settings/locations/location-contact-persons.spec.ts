@@ -1,9 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { SessionCapabilities } from '../../../core/auth/session-capabilities';
+import { applyRegionalFormats, resetRegionalFormats } from '../../../core/format/regional-format';
 import { I18n } from '../../../core/i18n/i18n';
 import { staffMember } from '../../staff/staff-member.testing';
 import { StaffMembersApi } from '../../staff/staff-members-api';
@@ -134,6 +135,19 @@ describe('LocationContactPersons (row 9.2b)', () => {
     });
 
     expect(all(fixture, 'location-contacts-item')[0].textContent).toContain('S-0001');
+  });
+
+  describe('the call link follows the brand’s display pattern (row 10.12)', () => {
+    afterEach(() => resetRegionalFormats());
+
+    it('shows the number in the pattern and still dials the number as stored', async () => {
+      applyRegionalFormats({ phoneDisplayPattern: '+### (##) ###-##-##' });
+      const { fixture } = await setUp();
+
+      const link = all(fixture, 'location-contacts-item')[0].querySelector('a');
+      expect(link?.textContent?.trim()).toBe('+998 (90) 123-45-42');
+      expect(link?.getAttribute('href')).toBe('tel:+998901234542');
+    });
   });
 
   it('marks a colleague who left, with the reference and no call link or number', async () => {

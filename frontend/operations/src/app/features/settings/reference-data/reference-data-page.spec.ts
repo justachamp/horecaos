@@ -22,7 +22,11 @@ const CANCELLATION_REASON: ReasonResponse = {
   liabilityParty: 'CUSTOMER',
   customerRefund: 'NONE',
   allowedFulfillmentModes: null,
-  customerTexts: { ru: 'Не удалось связаться с вами', 'uz-Latn': '...', en: '...' },
+  customerTexts: {
+    ru: 'Не удалось связаться с вами',
+    'uz-Latn': 'Siz bilan bogʻlana olmadik',
+    en: 'We could not reach you',
+  },
   status: 'ACTIVE',
   version: 1,
   updatedAt: '2026-08-01T00:00:00Z',
@@ -150,6 +154,7 @@ describe('ReferenceDataPage', () => {
   let api: {
     list: ReturnType<typeof vi.fn>;
     categories: ReturnType<typeof vi.fn>;
+    localeSet: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     archive: ReturnType<typeof vi.fn>;
@@ -186,6 +191,11 @@ describe('ReferenceDataPage', () => {
               : ['OUT_OF_STOCK', 'CUSTOMER_UNREACHABLE'],
           ),
         ),
+      localeSet: vi.fn().mockResolvedValue({
+        locales: ['ru', 'uz-Latn', 'en'],
+        defaultLocale: 'ru',
+        configured: false,
+      }),
       create: vi.fn().mockResolvedValue('reason-3'),
       update: vi.fn().mockResolvedValue(2),
       archive: vi.fn().mockResolvedValue(undefined),
@@ -228,7 +238,9 @@ describe('ReferenceDataPage', () => {
   it('lists cancellation reasons with both the internal name and the customer text side by side', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain('Не дозвонились');
-    expect(text).toContain('Не удалось связаться с вами');
+    // The wording in the operator's own language (this spec reads the console in English), not a fixed ru.
+    expect(text).toContain('We could not reach you');
+    expect(text).not.toContain('Не удалось связаться с вами');
   });
 
   it("renders a completion reason's allowed fulfilment modes, once typed on both sides and shown nowhere", () => {
@@ -245,6 +257,19 @@ describe('ReferenceDataPage', () => {
     expect(text).toContain('Version 1');
     expect(text).toContain('Branch tags');
     expect(text).toContain('Есть парковка');
+  });
+
+  it('pins ADR 0107 Decision 4: the SLA card is a version card, with no input and no button in it', () => {
+    const card = (fixture.nativeElement as HTMLElement).querySelector('#sla-boundaries');
+    expect(card, 'the SLA card is on the screen').not.toBeNull();
+    // What it does carry: the version it was read at and one row per bucket the platform published.
+    expect(card?.textContent).toContain('Version 1');
+    expect(card?.querySelectorAll('tbody tr').length).toBe(SLA_BUCKET_SET.buckets.length);
+    // What it must never carry: a control. The buckets are platform-fixed and versioned (ADR 0043), so a
+    // field or a save button here would promise a tenant a boundary it cannot set.
+    expect(
+      card?.querySelectorAll('input, select, textarea, button, [contenteditable]').length,
+    ).toBe(0);
   });
 
   it('builds the branch-tag matrix from the brand-wide location list, not the shell scope-bar signal', () => {
@@ -300,7 +325,7 @@ describe('ReferenceDataPage', () => {
     };
     setValue('#reason-internal-name', 'Ошибка кухни');
     setValue('#reason-text-ru', 'Блюдо убрано: ошибка на кухне');
-    setValue('#reason-text-uz', '...');
+    setValue('#reason-text-uz-Latn', '...');
     setValue('#reason-text-en', '...');
     const stock = host.querySelector('#reason-stock') as HTMLSelectElement;
     stock.value = 'WRITE_OFF';
@@ -333,7 +358,7 @@ describe('ReferenceDataPage', () => {
     };
     setValue('#reason-internal-name', 'Закончилось');
     setValue('#reason-text-ru', 'Блюдо закончилось');
-    setValue('#reason-text-uz', '...');
+    setValue('#reason-text-uz-Latn', '...');
     setValue('#reason-text-en', '...');
     const category = host.querySelector('#reason-category') as HTMLSelectElement;
     category.value = 'ITEM_UNAVAILABLE';
@@ -368,7 +393,7 @@ describe('ReferenceDataPage', () => {
     };
     setValue('#reason-internal-name', 'Ресторан закрыт');
     setValue('#reason-text-ru', 'Ресторан временно не принимает заказы');
-    setValue('#reason-text-uz', '...');
+    setValue('#reason-text-uz-Latn', '...');
     setValue('#reason-text-en', '...');
     fixture.detectChanges();
 
@@ -405,7 +430,7 @@ describe('ReferenceDataPage', () => {
     };
     setValue('#reason-internal-name', 'Заказ забран');
     setValue('#reason-text-ru', 'Заказ забран курьером');
-    setValue('#reason-text-uz', '...');
+    setValue('#reason-text-uz-Latn', '...');
     setValue('#reason-text-en', '...');
     fixture.detectChanges();
 
@@ -449,6 +474,136 @@ describe('ReferenceDataPage', () => {
       expect.objectContaining({ internalName: 'Не дозвонились' }),
       1,
     );
+  });
+
+  // Row 10.12 (ADR 0149, Decisions 4 and 5): the reason forms author in the tenant's languages.
+
+  function fieldValues(host: HTMLElement, ids: readonly string[]): void {
+    ids.forEach((id) => {
+      const el = host.querySelector(id) as HTMLInputElement;
+      el.value = 'text for ' + id;
+      el.dispatchEvent(new Event('input'));
+    });
+  }
+
+  async function reopenWithLocaleSet(
+    locales: readonly string[],
+    defaultLocale = locales[0],
+  ): Promise<void> {
+    api.localeSet.mockResolvedValue({ locales, defaultLocale, configured: true });
+    fixture = TestBed.createComponent(ReferenceDataPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  }
+
+  it('asks the backend for the tenant’s languages and draws one customer-text field per language, in its order', async () => {
+    await reopenWithLocaleSet(['uz-Latn', 'ru', 'kk']);
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('#completion-reasons .card__header .link') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(api.localeSet).toHaveBeenCalledWith(SCOPE);
+    const labels = Array.from(host.querySelectorAll('label[for^="reason-text-"]')).map((label) =>
+      label.textContent?.trim(),
+    );
+    expect(labels).toEqual([
+      'Customer text (Uzbek (Latin))',
+      'Customer text (Russian)',
+      'Customer text (Kazakh)',
+    ]);
+    expect(host.querySelector('#reason-text-en')).toBeNull();
+  });
+
+  it('will not create a reason until every language of the tenant is worded, and sends exactly those wordings', async () => {
+    await reopenWithLocaleSet(['ru', 'uz-Latn', 'en', 'kk']);
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('#removal-reasons .card__header .link') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    fieldValues(host, [
+      '#reason-internal-name',
+      '#reason-text-ru',
+      '#reason-text-uz-Latn',
+      '#reason-text-en',
+    ]);
+    fixture.detectChanges();
+    const submit = Array.from(host.querySelectorAll('.dialog__actions button')).find((button) =>
+      button.textContent?.includes('Create'),
+    ) as HTMLButtonElement;
+    expect(
+      submit.disabled,
+      'three of four languages is the body the service answers with a 400',
+    ).toBe(true);
+
+    fieldValues(host, ['#reason-text-kk']);
+    fixture.detectChanges();
+    expect(submit.disabled).toBe(false);
+    submit.click();
+    await flushMicrotasks();
+
+    expect(api.create.mock.calls[0][1].customerTexts).toEqual({
+      ru: 'text for #reason-text-ru',
+      'uz-Latn': 'text for #reason-text-uz-Latn',
+      en: 'text for #reason-text-en',
+      kk: 'text for #reason-text-kk',
+    });
+  });
+
+  it('prefills an edit from the reason and sends back a wording in a language the form does not offer, unchanged', async () => {
+    await reopenWithLocaleSet(['ru', 'uz-Latn', 'en']);
+    api.list.mockImplementation((_scope: LocationScope, kind: string) =>
+      Promise.resolve(
+        kind === 'CANCELLATION'
+          ? [
+              {
+                ...CANCELLATION_REASON,
+                customerTexts: { ...CANCELLATION_REASON.customerTexts, kk: 'Жабылды' },
+              },
+            ]
+          : [],
+      ),
+    );
+    await reopenWithLocaleSet(['ru', 'uz-Latn', 'en']);
+    const host = fixture.nativeElement as HTMLElement;
+    (
+      Array.from(host.querySelectorAll('.link')).find((el) =>
+        el.textContent?.includes('Edit'),
+      ) as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+
+    expect((host.querySelector('#edit-text-ru') as HTMLInputElement).value).toBe(
+      'Не удалось связаться с вами',
+    );
+    expect(host.querySelector('#edit-text-kk')).toBeNull();
+    (
+      Array.from(host.querySelectorAll('button')).find(
+        (button) => button.textContent?.trim() === 'Save',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(api.update.mock.calls[0][2].customerTexts).toEqual({
+      ru: 'Не удалось связаться с вами',
+      'uz-Latn': 'Siz bilan bogʻlana olmadik',
+      en: 'We could not reach you',
+      kk: 'Жабылды',
+    });
+  });
+
+  it('falls back to the registry’s content languages when the tenant’s set cannot be read', async () => {
+    api.localeSet.mockRejectedValue(new Error('offline'));
+    fixture = TestBed.createComponent(ReferenceDataPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('#removal-reasons .card__header .link') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(
+      Array.from(host.querySelectorAll('input[id^="reason-text-"]')).map((input) => input.id),
+    ).toEqual(['reason-text-ru', 'reason-text-uz-Latn', 'reason-text-en']);
   });
 
   // Row 10.10a: reasons can be reordered.

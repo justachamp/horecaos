@@ -425,7 +425,7 @@ class OperationsServiceZoneControllerEndpointTests {
                         .with(tokenFor(OWNER))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"role":"DELIVERY","code":"NOKEY","displayNameRu":"R","displayNameUz":"U","displayNameEn":"E"}
+                                {"role":"DELIVERY","code":"NOKEY","displayNames":{"ru":"R","uz-Latn":"U","en":"E"}}
                                 """))
                 .andReturn();
 
@@ -587,28 +587,15 @@ class OperationsServiceZoneControllerEndpointTests {
         assertThat(listRefused.getResponse().getStatus()).isEqualTo(403);
     }
 
-    /**
-     * Registers a zone named in {@code displayNamesJson}. The contract keeps the platform triple
-     * required, so a language the JSON does not name is filled with the {@code ru} name -- what the
-     * console does for a language the brand does not offer.
-     */
-    @SuppressWarnings("unchecked")
+    /** Registers a zone named in {@code displayNamesJson}, one entry per language and no other. */
     private UUID registerZoneNamed(String code, String displayNamesJson) throws Exception {
-        Map<String, String> names = JSON.readValue(displayNamesJson, Map.class);
-        String ru = names.get("ru");
         MvcResult created = mvc.perform(post(zonesPath(TENANT))
                         .with(tokenFor(OWNER))
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "register-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"role":"DELIVERY","code":"%s","displayNameRu":"%s","displayNameUz":"%s",
-                                 "displayNameEn":"%s","displayNames":%s}
-                                """.formatted(
-                                        code,
-                                        ru,
-                                        names.getOrDefault("uz-Latn", ru),
-                                        names.getOrDefault("en", ru),
-                                        displayNamesJson)))
+                                {"role":"DELIVERY","code":"%s","displayNames":%s}
+                                """.formatted(code, displayNamesJson)))
                 .andReturn();
         assertThat(created.getResponse().getStatus())
                 .as(created.getResponse().getContentAsString())
@@ -648,28 +635,15 @@ class OperationsServiceZoneControllerEndpointTests {
     }
 
     @Test
-    void aZoneNamedPerLocaleWritesTheColumnsAndTheTableAndReadsBackMerged() throws Exception {
+    void aZoneNamedPerLocaleWritesTheTableAndReadsBackMerged() throws Exception {
         // No brand locale set, so the brand's default is the platform's ru.
         UUID zoneId = registerZoneNamed("CENTRE", "{\"ru\":\"Центр\",\"en\":\"Centre\",\"kaa\":\"Orayı\"}");
 
-        assertThat(jdbc.sql("""
-                        SELECT display_name_ru || '|' || display_name_uz || '|' || display_name_en
-                          FROM fulfillment.service_zones WHERE id = :id
-                        """).param("id", zoneId).query(String.class).single())
-                .isEqualTo("Центр|Центр|Centre");
         assertThat(zoneTranslationRows(zoneId))
-                .as("written alongside the columns: the triple, and the language only the table can hold")
-                .containsOnly(
-                        Map.entry("ru", "Центр"),
-                        Map.entry("uz-Latn", "Центр"),
-                        Map.entry("en", "Centre"),
-                        Map.entry("kaa", "Orayı"));
+                .as("exactly the languages the request named: the table is the only place a name lives (V0679)")
+                .containsOnly(Map.entry("ru", "Центр"), Map.entry("en", "Centre"), Map.entry("kaa", "Orayı"));
         assertThat(listedNamesOf("CENTRE"))
-                .containsExactly(
-                        Map.entry("ru", "Центр"),
-                        Map.entry("uz-Latn", "Центр"),
-                        Map.entry("en", "Centre"),
-                        Map.entry("kaa", "Orayı"));
+                .containsExactly(Map.entry("ru", "Центр"), Map.entry("en", "Centre"), Map.entry("kaa", "Orayı"));
 
         MvcResult detail = mvc.perform(get(zonesPath(TENANT) + "/" + zoneId).with(tokenFor(OWNER)))
                 .andReturn();
@@ -699,11 +673,6 @@ class OperationsServiceZoneControllerEndpointTests {
                         Map.entry("uz-Latn", "Markaz"),
                         Map.entry("en", "City centre"),
                         Map.entry("kaa", "Orayı"));
-        assertThat(jdbc.sql("SELECT display_name_uz FROM fulfillment.service_zones WHERE id = :id")
-                        .param("id", zoneId)
-                        .query(String.class)
-                        .single())
-                .isEqualTo("Markaz");
         assertThat(auditActionCounts()).containsEntry("delivery.zone.renamed", 1L);
     }
 
@@ -769,8 +738,7 @@ class OperationsServiceZoneControllerEndpointTests {
                 .andReturn();
 
         assertThat(refused.getResponse().getStatus()).isEqualTo(400);
-        assertThat(zoneTranslationRows(zoneId))
-                .containsOnly(Map.entry("ru", "Центр"), Map.entry("uz-Latn", "Центр"), Map.entry("en", "Центр"));
+        assertThat(zoneTranslationRows(zoneId)).containsOnly(Map.entry("ru", "Центр"));
     }
 
     @Test
@@ -802,11 +770,7 @@ class OperationsServiceZoneControllerEndpointTests {
 
         assertThat(zoneTranslationRows(zoneId))
                 .as("neither attempt touched a name")
-                .containsOnly(
-                        Map.entry("ru", "Центр"),
-                        Map.entry("uz-Latn", "Центр"),
-                        Map.entry("en", "Центр"),
-                        Map.entry("kaa", "Orayı"));
+                .containsOnly(Map.entry("ru", "Центр"), Map.entry("kaa", "Orayı"));
     }
 
     @Test
@@ -832,8 +796,7 @@ class OperationsServiceZoneControllerEndpointTests {
         assertThat(noKey.getResponse().getStatus())
                 .as("a mutating endpoint requires an Idempotency-Key (ADR 0031)")
                 .isEqualTo(400);
-        assertThat(zoneTranslationRows(zoneId))
-                .containsOnly(Map.entry("ru", "Центр"), Map.entry("uz-Latn", "Центр"), Map.entry("en", "Центр"));
+        assertThat(zoneTranslationRows(zoneId)).containsOnly(Map.entry("ru", "Центр"));
     }
 
     private UUID registerZone(String subject) throws Exception {
@@ -844,7 +807,7 @@ class OperationsServiceZoneControllerEndpointTests {
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "register-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"role":"DELIVERY","code":"%s","displayNameRu":"R","displayNameUz":"U","displayNameEn":"E"}
+                                {"role":"DELIVERY","code":"%s","displayNames":{"ru":"R","uz-Latn":"U","en":"E"}}
                                 """.formatted(code)))
                 .andReturn();
         assertThat(created.getResponse().getStatus()).isEqualTo(200);

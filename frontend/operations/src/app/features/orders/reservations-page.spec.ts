@@ -1,11 +1,12 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { zonedTimeToInstant } from '../../core/format/datetime';
+import { applyRegionalFormats, resetRegionalFormats } from '../../core/format/regional-format';
 import { I18n } from '../../core/i18n/i18n';
 import {
   LocationView,
@@ -548,6 +549,37 @@ describe('ReservationsPage', () => {
     expect(guest?.textContent).toContain('Dilnoza');
     expect(guest?.textContent).toContain('998901234567');
     expect(guest?.textContent).toContain('Window seat');
+  });
+
+  describe('the revealed guest phone follows the brand’s display pattern (row 10.12)', () => {
+    afterEach(() => resetRegionalFormats());
+
+    it('writes the guest phone in the pattern once revealed', async () => {
+      applyRegionalFormats({ phoneDisplayPattern: '+### (##) ###-##-##' });
+      const find = vi
+        .fn()
+        .mockReturnValue(
+          Promise.resolve(reservation({ guestName: 'Dilnoza', guestPhone: '998901234567' })),
+        );
+      await render({
+        availability: () => Promise.resolve([table()]),
+        listForDay: () => Promise.resolve([reservation()]),
+        find,
+      });
+
+      const host = fixture.nativeElement as HTMLElement;
+      (host.querySelector('[data-testid="reservations-cell-booked"]') as HTMLElement).click();
+      fixture.detectChanges();
+      (
+        host.querySelector('[data-testid="reservations-reveal-guest"]') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(host.querySelector('[data-testid="reservations-guest"]')?.textContent).toContain(
+        '998 (90) 123-45-67',
+      );
+    });
   });
 
   it('creates a new booking from the form', async () => {

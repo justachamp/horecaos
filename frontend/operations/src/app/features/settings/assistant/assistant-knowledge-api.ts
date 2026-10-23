@@ -5,8 +5,25 @@ import { ApiClient } from '../../../core/api/api-client';
 import { command } from '../../../core/api/idempotency';
 import { settingsPaths } from '../../../core/api/settings-paths';
 
-/** The three languages the assistant answers in (`ReplyLocale`). */
-export type KnowledgeLocale = 'ru' | 'uz' | 'en';
+/**
+ * The assistant's own code for a language: an ISO 639 code (`ru`, `uz`, `en`), which is what a note's
+ * `locale` holds and why a bare `uz` is right here and not a platform tag (ADR 0149, Decision 3).
+ * Which codes exist is the backend's to say (`AssistantLanguage`), not this file's.
+ */
+export type KnowledgeLocale = string;
+
+/**
+ * Mirrors `AssistantKnowledgeController.AssistantLanguageResponse`: one language the assistant's
+ * detector has a vocabulary for.
+ */
+export interface AssistantLanguage {
+  /** The assistant's stored code: what a note's `locale` holds. */
+  readonly code: KnowledgeLocale;
+  /** The platform language it is, as the registry tags it (`uz` is `uz-Latn`), for naming it to an operator. */
+  readonly locale: string;
+  /** The configuration key that holds the disclosure sentence in this language. */
+  readonly disclosureKey: string;
+}
 
 /** Mirrors `AssistantKnowledgeController.EntryResponse`: an entry at its current version. */
 export interface KnowledgeEntry {
@@ -73,6 +90,16 @@ export const KNOWLEDGE_REASON_MAX = 1_000;
 @Injectable({ providedIn: 'root' })
 export class AssistantKnowledgeApi {
   private readonly api = inject(ApiClient);
+
+  /** The languages the assistant answers in: a read of the detector's vocabulary, not a list kept here. */
+  async languages(): Promise<readonly AssistantLanguage[]> {
+    const result = await firstValueFrom(
+      this.api.get<{ readonly languages: readonly AssistantLanguage[] }>(
+        settingsPaths.assistantLanguages(),
+      ),
+    );
+    return result.value?.languages ?? [];
+  }
 
   async list(tenantId: string, brandId: string | null): Promise<readonly KnowledgeEntry[]> {
     const result = await firstValueFrom(

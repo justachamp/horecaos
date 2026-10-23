@@ -4048,21 +4048,6 @@
             "minLength" : 0,
             "type" : "string"
           },
-          "displayNameEn" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "displayNameRu" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "displayNameUz" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
           "displayNames" : {
             "additionalProperties" : {
               "type" : "string"
@@ -4074,7 +4059,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "code", "displayNameEn", "displayNameRu", "displayNameUz", "role" ],
+        "required" : [ "code", "role" ],
         "type" : "object"
       },
       "CredentialResponse" : {
@@ -7552,21 +7537,6 @@
             "pattern" : "^[A-Z0-9][A-Z0-9_-]{0,31}$",
             "type" : "string"
           },
-          "labelEn" : {
-            "maxLength" : 120,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "labelRu" : {
-            "maxLength" : 120,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "labelUz" : {
-            "maxLength" : 120,
-            "minLength" : 0,
-            "type" : "string"
-          },
           "labels" : {
             "additionalProperties" : {
               "type" : "string"
@@ -7583,7 +7553,7 @@
             "type" : "integer"
           }
         },
-        "required" : [ "code", "labelEn", "labelRu", "labelUz" ],
+        "required" : [ "code" ],
         "type" : "object"
       },
       "NoteRequest" : {
@@ -9496,15 +9466,6 @@
           "code" : {
             "type" : "string"
           },
-          "labelEn" : {
-            "type" : "string"
-          },
-          "labelRu" : {
-            "type" : "string"
-          },
-          "labelUz" : {
-            "type" : "string"
-          },
           "labels" : {
             "additionalProperties" : {
               "type" : "string"
@@ -9820,14 +9781,11 @@
           "code" : {
             "type" : "string"
           },
-          "labelEn" : {
-            "type" : "string"
-          },
-          "labelRu" : {
-            "type" : "string"
-          },
-          "labelUz" : {
-            "type" : "string"
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           },
           "posModifierCode" : {
             "type" : "string"
@@ -13435,21 +13393,6 @@
             "format" : "int32",
             "type" : "integer"
           },
-          "labelEn" : {
-            "maxLength" : 120,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "labelRu" : {
-            "maxLength" : 120,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "labelUz" : {
-            "maxLength" : 120,
-            "minLength" : 0,
-            "type" : "string"
-          },
           "labels" : {
             "additionalProperties" : {
               "type" : "string"
@@ -13472,7 +13415,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "expectedVersion", "labelEn", "labelRu", "labelUz", "status" ],
+        "required" : [ "expectedVersion", "status" ],
         "type" : "object"
       },
       "UpdateVariantRequest" : {
@@ -13947,15 +13890,6 @@
           },
           "deliveryTariffId" : {
             "format" : "uuid",
-            "type" : "string"
-          },
-          "displayNameEn" : {
-            "type" : "string"
-          },
-          "displayNameRu" : {
-            "type" : "string"
-          },
-          "displayNameUz" : {
             "type" : "string"
           },
           "displayNames" : {
@@ -24733,7 +24667,7 @@
         "tags" : [ "Preset product comments" ]
       },
       "post" : {
-        "description" : "Refused (409) when the code is already registered for this tenant. pos_modifier_code is the coded value a POS export maps this preset to where it expects a modifier; left null, the preset still renders on the KDS and exports nowhere. labelRu/labelUz/labelEn are the platform triple and stay required; `labels` (row 10.12, optional) carries wording by locale for any language beyond them and wins where both name a locale. The tenant's default language must have wording, in one or the other.",
+        "description" : "Refused (409) when the code is already registered for this tenant. pos_modifier_code is the coded value a POS export maps this preset to where it expects a modifier; left null, the preset still renders on the KDS and exports nowhere. `labels` carries the wording by locale (row 10.12, ADR 0149; the only shape a preset's wording has since V0678): the tenant's default language must have wording, every other language is optional.",
         "operationId" : "create_6",
         "parameters" : [ {
           "in" : "path",
@@ -24801,7 +24735,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/comment-presets/{presetId}" : {
       "put" : {
-        "description" : "Whole-record PUT with an expected version, the same discipline every other versioned reference table in this platform uses. Archiving is status=ARCHIVED here, not a DELETE: a preset already selected on an open order's line must stay resolvable. A language beyond the platform triple that the request does not name in `labels` keeps its wording, so an editor that shows only some languages never deletes the others; the triple is always named (it is required), and an editor keeps a language it does not show by sending the wording the preset already has.",
+        "description" : "Whole-record PUT with an expected version, the same discipline every other versioned reference table in this platform uses. Archiving is status=ARCHIVED here, not a DELETE: a preset already selected on an open order's line must stay resolvable. A language that the request does not name in `labels` keeps its wording, so an editor that shows only some languages never deletes the others.",
         "operationId" : "update_6",
         "parameters" : [ {
           "in" : "path",

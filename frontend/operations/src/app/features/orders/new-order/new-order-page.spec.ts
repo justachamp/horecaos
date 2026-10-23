@@ -71,8 +71,8 @@ const MENU: StorefrontMenu = {
 
 /** Row 2.1b's fixture: two presets `v-1`'s product offers. */
 const PRESETS: StorefrontMenu['products'][number]['commentPresets'] = [
-  { code: 'NO_ONIONS', labelRu: 'Без лука', labelUz: 'Piyozsiz', labelEn: 'No onions' },
-  { code: 'EXTRA_SPICY', labelRu: 'Поострее', labelUz: 'Achchiqroq', labelEn: 'Extra spicy' },
+  { code: 'NO_ONIONS', labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions' } },
+  { code: 'EXTRA_SPICY', labels: { ru: 'Поострее', 'uz-Latn': 'Achchiqroq', en: 'Extra spicy' } },
 ];
 
 /**
@@ -1242,9 +1242,6 @@ describe('NewOrderPage', () => {
         menuWith({}, [
           {
             code: 'NO_ONIONS',
-            labelRu: '',
-            labelUz: '',
-            labelEn: '',
             labels: { kaa: 'Piyazsiz' },
             label: 'Piyazsiz',
           },

@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { dispatchRulesPaths } from '../../core/api/delivery-paths';
 import { command } from '../../core/api/idempotency';
+import { LabelsByLocale } from '../../core/i18n/locale-labels';
 
 /**
  * The dispatch rules, the sourcing timings and the unpaid-order window (IA 3.8, ADR 0142).
@@ -147,9 +148,8 @@ export interface ZoneOption {
   readonly id: string;
   readonly brandId: string;
   readonly code: string;
-  readonly nameEn: string;
-  readonly nameRu: string;
-  readonly nameUz: string;
+  /** The zone's name per locale (V0679): the only shape it has. */
+  readonly names: LabelsByLocale;
   readonly status: string;
 }
 

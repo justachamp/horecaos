@@ -14,6 +14,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
+import uz.horecaos.platform.support.CommentPresetRows;
 
 /**
  * The rows a printing test needs and nothing else (ADR 0154): a tenant with two branches, a sales channel and a
@@ -455,21 +456,21 @@ final class PrintingWorld {
         }
         int sort = 0;
         for (String code : line.presetCodes()) {
+            UUID snapshotId = UUID.randomUUID();
             jdbc.sql("""
                     INSERT INTO ordering.order_line_comment_presets (id, tenant_id, order_line_id, source_preset_id,
-                        code_snapshot, label_ru_snapshot, label_uz_snapshot, label_en_snapshot, sort_order)
-                    VALUES (:id, :tenantId, :lineId, :preset, :code, :ru, :uz, :en, :sort)
+                        code_snapshot, sort_order)
+                    VALUES (:id, :tenantId, :lineId, :preset, :code, :sort)
                     """)
-                    .param("id", UUID.randomUUID())
+                    .param("id", snapshotId)
                     .param("tenantId", TENANT)
                     .param("lineId", lineId)
                     .param("preset", UUID.randomUUID())
                     .param("code", code)
-                    .param("ru", "Без лука")
-                    .param("uz", "Piyozsiz")
-                    .param("en", "No onion")
                     .param("sort", sort++)
                     .update();
+            CommentPresetRows.insertSnapshotLabels(
+                    jdbc, snapshotId, TENANT, CommentPresetRows.triple("Без лука", "Piyozsiz", "No onion"));
         }
     }
 

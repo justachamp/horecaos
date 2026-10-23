@@ -143,7 +143,7 @@
                 <dt class="q-caption">{{ 'reservations.detail.guestName' | t }}</dt>
                 <dd class="q-body-sm">{{ guest.guestName }}</dd>
                 <dt class="q-caption">{{ 'reservations.detail.guestPhone' | t }}</dt>
-                <dd class="q-body-sm">{{ guest.guestPhone }}</dd>
+                <dd class="q-body-sm q-tnum">{{ guest.guestPhone | phone }}</dd>
                 @if (guest.note) {
                   <dt class="q-caption">{{ 'reservations.detail.guestNote' | t }}</dt>
                   <dd class="q-body-sm">{{ guest.note }}</dd>

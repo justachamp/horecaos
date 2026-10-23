@@ -11,7 +11,6 @@ import {
   labelDrafts,
   labelsToSend,
   localeDisplayName,
-  platformColumns,
 } from '../../../core/i18n/locale-labels';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
@@ -36,12 +35,9 @@ const STATUSES = ['ACTIVE', 'ARCHIVED'] as const;
  * `GET .../comment-presets/locale-set`). One field per offered language; the
  * default language is the one wording a preset must have. **A language the
  * tenant does not offer is never touched by an edit**: `labels` carries only
- * the offered, filled-in languages ({@link labelsToSend}) so the server keeps
- * every other one beyond the platform triple, and the three platform fields —
- * which the OpenAPI contract keeps required — go back for a language the
- * tenant does not offer with the wording the preset already has, unchanged
- * ({@link platformColumns}). Narrowing the brands' languages later therefore
- * cannot silently delete a translation.
+ * the offered, filled-in languages ({@link labelsToSend}) and the server keeps
+ * every language the request does not name. Narrowing the brands' languages
+ * later therefore cannot silently delete a translation.
  *
  * **Not built here, honestly**: no screen yet selects a preset on an order
  * line, no KDS renders one, and no POS export maps `posModifierCode` to a
@@ -178,12 +174,8 @@ export class CommentPresetsPage {
     if (!tenantId || !this.formValid()) {
       return;
     }
-    const columns = platformColumns(this.locales(), this.formLabels(), this.defaultLocale());
     const body: NewPreset = {
       code: this.formCode(),
-      labelRu: columns.ru,
-      labelUz: columns['uz-Latn'],
-      labelEn: columns.en,
       labels: labelsToSend(this.locales(), this.formLabels()),
       posModifierCode: this.formPosModifierCode().trim() || null,
       sortOrder: this.formSortOrder(),
@@ -231,18 +223,8 @@ export class CommentPresetsPage {
     if (!tenantId) {
       return;
     }
-    // The contract keeps the platform triple required, so a platform language the
-    // tenant does not offer goes back exactly as the preset has it; a language
-    // beyond the triple that is not offered is simply not in `labels`.
-    const columns = platformColumns(this.locales(), this.editLabels(), this.defaultLocale(), {
-      ru: preset.labelRu,
-      'uz-Latn': preset.labelUz,
-      en: preset.labelEn,
-    });
+    // A language the tenant does not offer is simply not in `labels`, and the server keeps its wording.
     const body: PresetEdit = {
-      labelRu: columns.ru,
-      labelUz: columns['uz-Latn'],
-      labelEn: columns.en,
       labels: labelsToSend(this.locales(), this.editLabels()),
       posModifierCode: this.editPosModifierCode().trim() || null,
       sortOrder: this.editSortOrder(),

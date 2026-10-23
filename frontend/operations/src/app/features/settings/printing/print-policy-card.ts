@@ -15,12 +15,15 @@ import {
 } from '../../../core/api/configuration';
 import { LocationScope } from '../../../core/api/operations-paths';
 import { I18n } from '../../../core/i18n/i18n';
+import { localeDisplayName } from '../../../core/i18n/locale-labels';
+import { LocaleSet } from '../../../core/i18n/locale-set';
 import { MessageKey } from '../../../core/i18n/messages.en';
+import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { InheritedField } from '../../../shared/ui/inherited-field/inherited-field';
 import { ConfigurationApi } from '../configuration-api';
 import { describePrintError } from './printing-errors';
-import { FOOTER_LOCALES } from './receipt-profile-card';
+import { documentLocales } from './document-locales';
 
 interface PolicyField {
   readonly code: string;
@@ -82,7 +85,13 @@ export class PrintPolicyCard {
   readonly scope = input.required<LocationScope>();
 
   protected readonly fields = FIELDS;
-  protected readonly locales = FOOTER_LOCALES;
+  private readonly registry = inject(PlatformLocales);
+  private readonly brandLocales = inject(LocaleSet);
+
+  /** The languages a brand's documents can be in: the registry's messages tier narrowed to the brand's set. */
+  protected readonly locales = computed(() =>
+    documentLocales(this.registry, this.brandLocales.locales()),
+  );
   protected readonly settable = SETTABLE;
 
   protected readonly resolutions = signal<ReadonlyMap<string, ConfigurationResolutionView>>(
@@ -109,6 +118,7 @@ export class PrintPolicyCard {
   private seq = 0;
 
   constructor() {
+    void this.brandLocales.ensureLoaded();
     effect(() => {
       const scope = this.scope();
       untracked(() => void this.load(scope));
@@ -119,6 +129,11 @@ export class PrintPolicyCard {
     return this.resolutions().get(code) ?? null;
   }
 
+  /** A language's name in the console's own language, from the registry. */
+  protected localeLabel(code: string): string {
+    return localeDisplayName(this.i18n, code, this.registry);
+  }
+
   protected formatter(field: PolicyField): (value: unknown) => string {
     return (value) => {
       if (value === null || value === undefined) {
@@ -127,8 +142,7 @@ export class PrintPolicyCard {
       if (field.kind === 'minutes') {
         return this.i18n.t('settings.printing.policy.minutes', { n: String(value) });
       }
-      const known = FOOTER_LOCALES.find((locale) => locale.code === value);
-      return known ? this.i18n.t(known.labelKey) : String(value);
+      return localeDisplayName(this.i18n, String(value), this.registry);
     };
   }
 

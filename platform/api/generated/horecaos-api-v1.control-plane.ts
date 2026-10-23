@@ -1269,9 +1269,6 @@ export interface CreateTenantRequest {
 
 export interface CreateZoneRequest {
   code: string;
-  displayNameEn: string;
-  displayNameRu: string;
-  displayNameUz: string;
   displayNames?: { [key: string]: string };
   role: "DELIVERY" | "CATCHMENT";
 }
@@ -2380,9 +2377,6 @@ export interface MxikUploadTicketResponse {
 
 export interface NewPresetRequest {
   code: string;
-  labelEn: string;
-  labelRu: string;
-  labelUz: string;
   labels?: { [key: string]: string };
   posModifierCode?: string;
   sortOrder?: number;
@@ -3026,9 +3020,6 @@ export interface PresentationRequest {
 
 export interface PresetResponse {
   code?: string;
-  labelEn?: string;
-  labelRu?: string;
-  labelUz?: string;
   labels?: { [key: string]: string };
   posModifierCode?: string;
   presetId?: string;
@@ -3131,9 +3122,7 @@ export interface ProductDetailResponse {
 
 export interface ProductPresetResponse {
   code?: string;
-  labelEn?: string;
-  labelRu?: string;
-  labelUz?: string;
+  labels?: { [key: string]: string };
   posModifierCode?: string;
   presetId?: string;
   sortOrder?: number;
@@ -4286,9 +4275,6 @@ export interface UpdateMenuRequest {
 
 export interface UpdatePresetRequest {
   expectedVersion: number;
-  labelEn: string;
-  labelRu: string;
-  labelUz: string;
   labels?: { [key: string]: string };
   posModifierCode?: string;
   sortOrder?: number;
@@ -4452,9 +4438,6 @@ export interface ZoneSummaryResponse {
   code?: string;
   currency?: string;
   deliveryTariffId?: string;
-  displayNameEn?: string;
-  displayNameRu?: string;
-  displayNameUz?: string;
   displayNames?: { [key: string]: string };
   freeDeliveryFromMinor?: number;
   minBasketMinor?: number;

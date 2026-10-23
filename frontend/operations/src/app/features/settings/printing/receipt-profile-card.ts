@@ -12,23 +12,14 @@ import {
 import { BrandScope } from '../../../core/api/catalog-paths';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { I18n } from '../../../core/i18n/i18n';
+import { localeDisplayName } from '../../../core/i18n/locale-labels';
+import { LocaleSet } from '../../../core/i18n/locale-set';
+import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { formatDateTime } from '../../../core/format/datetime';
+import { documentLocales } from './document-locales';
 import { PrintingApi, ReceiptProfileView } from './printing-api';
 import { describePrintError } from './printing-errors';
-
-/** The languages a footer is written in (ADR 0154 decision 4: a footer of up to three lines per locale). */
-export const FOOTER_LOCALES: readonly {
-  readonly code: string;
-  readonly labelKey:
-    | 'settings.printing.profile.locale.ru'
-    | 'settings.printing.profile.locale.uzLatn'
-    | 'settings.printing.profile.locale.en';
-}[] = [
-  { code: 'ru', labelKey: 'settings.printing.profile.locale.ru' },
-  { code: 'uz-Latn', labelKey: 'settings.printing.profile.locale.uzLatn' },
-  { code: 'en', labelKey: 'settings.printing.profile.locale.en' },
-];
 
 const LINES = 3;
 const LINE_LENGTH = 48;
@@ -53,11 +44,19 @@ const LINE_LENGTH = 48;
 })
 export class ReceiptProfileCard {
   private readonly api = inject(PrintingApi);
+  private readonly registry = inject(PlatformLocales);
+  private readonly brandLocales = inject(LocaleSet);
   protected readonly i18n = inject(I18n);
 
   readonly scope = input.required<BrandScope>();
 
-  protected readonly locales = FOOTER_LOCALES;
+  /**
+   * The languages a footer is written in (ADR 0154 decision 4: up to three lines per language): the
+   * registry's messages tier narrowed to the brand's own set (ADR 0149, Decision 5).
+   */
+  protected readonly locales = computed(() =>
+    documentLocales(this.registry, this.brandLocales.locales()),
+  );
   protected readonly lineIndexes: readonly number[] = [0, 1, 2];
   protected readonly lineLength = LINE_LENGTH;
 
@@ -89,10 +88,16 @@ export class ReceiptProfileCard {
   private seq = 0;
 
   constructor() {
+    void this.brandLocales.ensureLoaded();
     effect(() => {
       const scope = this.scope();
       untracked(() => void this.load(scope));
     });
+  }
+
+  /** A language's name in the console's own language, from the registry. */
+  protected localeLabel(code: string): string {
+    return localeDisplayName(this.i18n, code, this.registry);
   }
 
   protected line(code: string, index: number): string {
@@ -175,12 +180,20 @@ export class ReceiptProfileCard {
     this.footers.set(view.footerTexts);
   }
 
-  /** Only non-empty lines, trimmed, at most three per language; a language with none is left out. */
+  /**
+   * Only non-empty lines, trimmed, at most three per language; a language with none is left out. A footer
+   * the brand wrote in a language this form does not offer (the brand no longer serves it, or it left the
+   * messages tier) is kept as it is: saving the others must not erase it.
+   */
   private normalised(
     all: Readonly<Record<string, readonly string[]>>,
   ): Record<string, readonly string[]> {
     const result: Record<string, readonly string[]> = {};
-    for (const { code } of FOOTER_LOCALES) {
+    const offered = this.locales();
+    for (const code of [
+      ...offered,
+      ...Object.keys(all).filter((code) => !offered.includes(code)),
+    ]) {
       const lines = (all[code] ?? []).map((line) => line.trim()).filter((line) => line.length > 0);
       if (lines.length > 0) {
         result[code] = lines.slice(0, LINES);

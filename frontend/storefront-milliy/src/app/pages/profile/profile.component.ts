@@ -14,7 +14,7 @@ import { CustomerProfileService } from '../../services/customer-profile.service'
 import { HorecaOSApiError, messageKeyFor } from '../../core/api/problem-details';
 import { ConsentBoxComponent } from '../../shared/consent-box/consent-box.component';
 import { IconComponent } from '../../shared/icon/icon.component';
-import { LANG_LABELS, LangService } from '../../services/lang.service';
+import { LangService } from '../../services/lang.service';
 import { OrdersService } from '../../services/orders.service';
 import {
   type FeedbackConfig,
@@ -98,7 +98,8 @@ export class ProfileComponent implements OnInit {
   private readonly router = inject(Router);
 
   protected readonly state = signal<LoadState>('loading');
-  protected readonly languages = Object.keys(LANG_LABELS);
+  /** The languages this brand serves that the platform has live and this build can draw (ADR 0149). */
+  protected readonly languages = this.lang.offered;
 
   protected readonly editing = signal(false);
   protected readonly draftFirstName = signal('');

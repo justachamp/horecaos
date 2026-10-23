@@ -184,9 +184,7 @@ function zoneSummary(zoneId: string, code: string, nameEn: string): ZoneSummaryR
     zoneId,
     role: 'DELIVERY',
     code,
-    displayNameRu: nameEn,
-    displayNameUz: nameEn,
-    displayNameEn: nameEn,
+    displayNames: { ru: nameEn, 'uz-Latn': nameEn, en: nameEn },
     status: 'ACTIVE',
     activeVersion: 1,
   };

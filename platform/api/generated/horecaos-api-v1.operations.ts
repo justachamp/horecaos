@@ -165,6 +165,7 @@ export interface AddLineRequest {
 }
 
 export interface AddVersionRequest {
+  showItemPrices?: boolean;
   variablesSchema: { [key: string]: string };
   wordings: { [key: string]: WordingRequest };
 }
@@ -392,6 +393,16 @@ export interface AssistantKnowledgeControllerVersionResponse {
   reason?: string;
   status?: string;
   version?: number;
+}
+
+export interface AssistantLanguageResponse {
+  code?: string;
+  disclosureKey?: string;
+  locale?: string;
+}
+
+export interface AssistantLanguagesResponse {
+  languages?: Array<AssistantLanguageResponse>;
 }
 
 export interface AssistantUsageControllerUsageResponse {
@@ -695,9 +706,7 @@ export interface BatchImportZoneRow {
   code: string;
   currency: string;
   deliveryTariffId?: string;
-  displayNameEn: string;
-  displayNameRu: string;
-  displayNameUz: string;
+  displayNames?: { [key: string]: string };
   externalRef: string;
   freeDeliveryFromMinor?: number;
   geoJson: string;
@@ -1480,9 +1489,6 @@ export interface ComboSalesRowResponse {
 
 export interface CommentPresetChip {
   code?: string;
-  labelEn?: string;
-  labelRu?: string;
-  labelUz?: string;
   labels?: { [key: string]: string };
 }
 
@@ -2273,9 +2279,6 @@ export interface CreateTemplateRequest {
 
 export interface CreateZoneRequest {
   code: string;
-  displayNameEn: string;
-  displayNameRu: string;
-  displayNameUz: string;
   displayNames?: { [key: string]: string };
   role: "DELIVERY" | "CATCHMENT";
 }
@@ -4426,6 +4429,7 @@ export interface NotificationResponse {
   locale?: string;
   locationId?: string;
   notificationClass?: string;
+  platformDefaultVersion?: number;
   recipientEndpointId?: string;
   renderedContentHash?: string;
   status?: string;
@@ -4822,6 +4826,12 @@ export interface OperationsOrderControllerOrderSummaryResponse {
 export interface OperationsOrderControllerStateActionRequest {
   reasonCode: string;
   targetStatus: "RECEIVED" | "PAYMENT_AUTHORIZING" | "AWAITING_APPROVAL" | "PAYMENT_FAILED" | "CONFIRMED" | "REJECTED" | "EXPIRED" | "PREPARING" | "READY" | "FULFILLING" | "COMPLETED" | "CANCELLED";
+}
+
+export interface OperationsOrderOutcomeReasonControllerLocaleSetResponse {
+  configured?: boolean;
+  defaultLocale?: string;
+  locales?: Array<string>;
 }
 
 export interface OperationsPaymentControllerPaymentSessionResponse {
@@ -5267,6 +5277,17 @@ export interface OrderTable {
 export interface OriginCountResponse {
   origin?: string;
   registered?: number;
+}
+
+export interface OtpSentenceResponse {
+  characters?: number;
+  locale?: string;
+  text?: string;
+}
+
+export interface OtpWordingResponse {
+  gatewayApproval?: string;
+  sentences?: Array<OtpSentenceResponse>;
 }
 
 export interface OutcomeListResponse {
@@ -5818,6 +5839,16 @@ export interface PlatformBounds {
   rolling30DayCapCeiling?: number;
   rolling7DayCapCeiling?: number;
   weeklyCapCeiling?: number;
+}
+
+export interface PlatformDefaultResponse {
+  bodies?: { [key: string]: string };
+  channels?: Array<string>;
+  consentPurpose?: string;
+  notificationClass?: string;
+  templateKey?: string;
+  variables?: Array<string>;
+  version?: number;
 }
 
 export interface PlatformLocaleEntryResponse {
@@ -6866,9 +6897,6 @@ export interface RegionGeographyRequest {
   centreLat?: number;
   centreLon?: number;
   code: string;
-  displayNameEn: string;
-  displayNameRu: string;
-  displayNameUz: string;
   displayNames?: { [key: string]: string };
   expectedVersion?: number;
 }
@@ -6886,9 +6914,6 @@ export interface RegionResponse {
   centreLat?: number;
   centreLon?: number;
   code?: string;
-  displayNameEn?: string;
-  displayNameRu?: string;
-  displayNameUz?: string;
   displayNames?: { [key: string]: string };
   platform?: boolean;
   regionId?: string;
@@ -7045,9 +7070,6 @@ export interface RemoveTenantCalendarHolidayRequest {
 }
 
 export interface RenameZoneRequest {
-  displayNameEn?: string;
-  displayNameRu?: string;
-  displayNameUz?: string;
   displayNames?: { [key: string]: string };
 }
 
@@ -8751,9 +8773,14 @@ export interface TemplateResponse {
   fulfillmentMode?: string;
   id?: string;
   notificationClass?: string;
+  origin?: string;
+  providerReview?: string;
+  requiredLocales?: Array<string>;
+  shownVersion?: number;
   status?: string;
   templateKey?: string;
   version?: number;
+  versionLocales?: Array<string>;
 }
 
 export interface TenantArrearsView {
@@ -9473,6 +9500,7 @@ export interface WordingResponse {
   providerReviewNote?: string;
   providerReviewReference?: string;
   providerReviewUpdatedAt?: string;
+  showItemPrices?: boolean;
   status?: string;
   subject?: string;
   variablesSchema?: { [key: string]: string };
@@ -9505,9 +9533,7 @@ export interface ZoneOption {
   brandId?: string;
   code?: string;
   id?: string;
-  nameEn?: string;
-  nameRu?: string;
-  nameUz?: string;
+  names?: { [key: string]: string };
   status?: string;
 }
 
@@ -9527,9 +9553,6 @@ export interface ZoneSummaryResponse {
   code?: string;
   currency?: string;
   deliveryTariffId?: string;
-  displayNameEn?: string;
-  displayNameRu?: string;
-  displayNameUz?: string;
   displayNames?: { [key: string]: string };
   freeDeliveryFromMinor?: number;
   minBasketMinor?: number;
@@ -9578,6 +9601,7 @@ export interface Operations {
   "endBreak": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/breaks/end"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } } }; responses: { "200": unknown } };
   "close_4": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/close"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } }; body: CloseShiftRequest }; responses: { "200": CloseResponse } };
   "me_1": { method: "GET"; path: "/api/v1/devices/me"; request: { parameters: Record<string, never> }; responses: { "200": DeviceSelfResponse } };
+  "languages": { method: "GET"; path: "/api/v1/operations/assistant/languages"; request: { parameters: Record<string, never> }; responses: { "200": AssistantLanguagesResponse } };
   "ownOperations": { method: "GET"; path: "/api/v1/operations/auth/mfa/authenticators"; request: { parameters: Record<string, never> }; responses: { "200": OwnMfaResponse } };
   "removeOperations": { method: "DELETE"; path: "/api/v1/operations/auth/mfa/authenticators/{authenticatorId}"; request: { parameters: { path: { authenticatorId: string } }; body: RemoveAuthenticatorRequest }; responses: { "200": unknown } };
   "beginOperations": { method: "POST"; path: "/api/v1/operations/auth/mfa/enrolments"; request: { parameters: Record<string, never>; body: BeginEnrolmentRequest }; responses: { "200": Enrolment } };
@@ -9921,6 +9945,7 @@ export interface Operations {
   "list_16": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string }; query: { activeOnly?: boolean; kind: "CANCELLATION" | "COMPLETION" | "LINE_REMOVAL" } } }; responses: { "200": Array<ReasonResponse> } };
   "create_8": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerIdResponse } };
   "categories": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/categories"; request: { parameters: { path: { tenantId: string }; query: { kind: "CANCELLATION" | "COMPLETION" | "LINE_REMOVAL" } } }; responses: { "200": Array<string> } };
+  "localeSet_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/locale-set"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OperationsOrderOutcomeReasonControllerLocaleSetResponse } };
   "reorder_1": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/reorder"; request: { parameters: { path: { tenantId: string } }; body: OrderOutcomeReasonControllerReorderRequest }; responses: { "200": Array<ReasonResponse> } };
   "archive": { method: "DELETE"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } } }; responses: { "200": unknown } };
   "update_3": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerVersionResponse } };
@@ -10276,7 +10301,9 @@ export interface Operations {
   "eventClasses": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-routing/event-classes"; request: { parameters: Record<string, never> }; responses: { "200": Array<EventClassResponse> } };
   "list_2": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<TemplateResponse> } };
   "create": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateTemplateRequest }; responses: { "200": NotificationTemplateControllerIdResponse } };
-  "variableCatalogue": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/variable-catalogue"; request: { parameters: Record<string, never> }; responses: { "200": Array<VariableCatalogueEntry> } };
+  "otpWording": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/otp-wording"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OtpWordingResponse } };
+  "platformDefaults": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/platform-defaults"; request: { parameters: Record<string, never> }; responses: { "200": Array<PlatformDefaultResponse> } };
+  "variableCatalogue": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/variable-catalogue"; request: { parameters: { query: { templateKey?: string } } }; responses: { "200": Array<VariableCatalogueEntry> } };
   "versions": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/{templateId}/versions"; request: { parameters: { path: { brandId: string; templateId: string; tenantId: string } } }; responses: { "200": Array<WordingResponse> } };
   "addVersion": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/{templateId}/versions"; request: { parameters: { path: { brandId: string; templateId: string; tenantId: string } }; body: AddVersionRequest }; responses: { "200": NotificationTemplateControllerVersionResponse } };
   "version": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/{templateId}/versions/{versionNumber}"; request: { parameters: { path: { brandId: string; templateId: string; tenantId: string; versionNumber: number } } }; responses: { "200": Array<WordingResponse> } };

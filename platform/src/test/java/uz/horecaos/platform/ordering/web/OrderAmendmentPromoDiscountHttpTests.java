@@ -65,6 +65,7 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.pricing.application.PromoCodeAuthoringService;
 import uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.DiscountShape;
 import uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.PromoCodeDraft;
+import uz.horecaos.platform.support.LocaleNames;
 import uz.horecaos.platform.support.SignedInStaff;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
@@ -586,7 +587,7 @@ class OrderAmendmentPromoDiscountHttpTests {
                         List.of()),
                 actor);
         tariffs.activate(TENANT, BRAND, tariffId, drafted.version(), actor);
-        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, code, code, code, code);
+        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, code, LocaleNames.triple(code, code, code));
         var version = zones.draftCircleVersion(
                 new ServiceZoneService.NewVersion(
                         TENANT, BRAND, zoneId, ZoneRole.DELIVERY, null, priority, "UZS", tariffId, null, null, actor),

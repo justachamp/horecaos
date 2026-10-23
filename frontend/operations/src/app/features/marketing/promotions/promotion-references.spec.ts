@@ -72,9 +72,7 @@ function build(overrides: { readonly [key: string]: unknown } = {}) {
         {
           zoneId: 'z1',
           code: 'CENTRE',
-          displayNameRu: 'Центр',
-          displayNameUz: 'Markaz',
-          displayNameEn: 'Centre',
+          displayNames: { ru: 'Центр', 'uz-Latn': 'Markaz', en: 'Centre' },
         },
       ]),
     },

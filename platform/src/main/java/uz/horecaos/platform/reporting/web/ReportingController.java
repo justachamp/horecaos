@@ -165,16 +165,16 @@ public class ReportingController {
     }
 
     /**
-     * 10.10c: the version card settings.md 10.10 promises and never had. This
+     * 10.10c: the read-only version card of settings.md 10.10 «Границы SLA». This
      * mirrors {@link SlaBucketController}'s platform-admin read exactly —
      * same {@link SlaBucketSet}, same shape — over {@link Capability#REPORTING_READ}
      * at {@code TENANT} scope instead of {@code PLATFORM_ADMIN}, so a tenant
-     * can finally see which bucket definitions its own {@code /sla-buckets}
+     * can see which bucket definitions its own {@code /sla-buckets}
      * distribution above was computed under, without being able to change
-     * them: the buckets are platform-fixed and versioned by ADR 0043, on
-     * purpose, and this endpoint states that rather than building the
-     * tenant-configurable boundary the frontend information architecture
-     * still promises at settings.md 1105/1325.
+     * them: the buckets are platform-fixed and versioned (ADR 0043, ADR 0107
+     * Decision 4), and the card is the whole affordance. There is no write
+     * beside this read and none is planned; where an order counts as late on
+     * the boards is a different setting (the order-policy lateness card).
      */
     @GetMapping("/sla-bucket-set")
     @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)

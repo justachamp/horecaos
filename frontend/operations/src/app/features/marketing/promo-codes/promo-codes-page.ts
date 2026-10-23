@@ -9,6 +9,7 @@ import {
 
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentBrand } from '../../../core/auth/current-brand';
+import { formatDate, formatDateTime } from '../../../core/format/datetime';
 import { formatMoney } from '../../../core/format/money';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
@@ -24,6 +25,9 @@ import {
   PromoCodeView,
   PromoCodesApi,
 } from './promo-codes-api';
+
+/** The console's clock until a screen reads the tenant's own zone (ADR 0055: every tenant trades in Tashkent). */
+const PLACEHOLDER_TIME_ZONE = 'Asia/Tashkent';
 
 /**
  * Marketing §6.2 Promo codes (ADR 0072) — a brand's own promo codes: shape,
@@ -409,7 +413,7 @@ export class PromoCodesPage implements OnInit {
   }
 
   private formatShortDate(iso: string): string {
-    return new Date(iso).toLocaleDateString(this.i18n.locale() === 'en' ? 'en-GB' : 'ru-RU');
+    return formatDate(new Date(iso), PLACEHOLDER_TIME_ZONE);
   }
 
   // --------------------------------------------------------- redemption ledger
@@ -456,9 +460,7 @@ export class PromoCodesPage implements OnInit {
   }
 
   protected formatRedemptionMoment(iso: string | null): string {
-    return iso === null
-      ? '—'
-      : new Date(iso).toLocaleString(this.i18n.locale() === 'en' ? 'en-GB' : 'ru-RU');
+    return iso === null ? '—' : formatDateTime(new Date(iso), PLACEHOLDER_TIME_ZONE);
   }
 
   private describe(error: unknown): string {

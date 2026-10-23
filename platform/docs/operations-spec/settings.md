@@ -1021,9 +1021,17 @@ brand override → tenant override → platform default, with locale falling bac
 default → tenant default. That is ADR 0020's stated resolution order; the screen must show which
 of those steps produced the template being previewed, using the same origin chip as §1.2.
 
+**Built (ADR 0184, wave 21).** The list carries an origin chip per row (`Бренд`, `Организация`) and a
+read-only card of the platform's own default wording beneath it (`Платформа`), eight order events in
+ru / uz-Latn / en, with `Настроить` copying one into a template of the brand. The precedence is lexicographic
+and not a sum: a brand's wording beats a tenant's whatever the tenant pinned; then more pinned dimensions
+(fulfilment mode, source channel) beat fewer; then fulfilment mode beats source channel (D20). The platform
+default answers only when the tenant has no active template at any scope, and never for `ORDER_COMPLETED`
+(the rating prompt stays opt-in, ADR 0075).
+
 | Column | Source |
 |---|---|
-| Событие | `notifications.templates.template_key` — order statuses from the canonical machine (`CONFIRMED`, `PREPARING`, `READY`, `FULFILLING`, `COMPLETED`, `CANCELLED`, `REJECTED`), plus OTP, payment link, review request |
+| Событие | `notifications.templates.template_key` — order statuses from the canonical machine (`CONFIRMED`, `PREPARING`, `READY`, `FULFILLING`, `COMPLETED`, `CANCELLED`, `REJECTED`), plus payment link, review request. The one-time code is **not a row**: its sentence is the platform's (ADR 0184, D19), shown in its own read-only card with the gateway's approval state, and a `SECURITY` template cannot be created |
 | Класс | `.notification_class` ∈ `TRANSACTIONAL_REQUIRED / TRANSACTIONAL_OPTIONAL / MARKETING / SECURITY / OPERATIONS_ALERT` |
 | Канал доставки | `.channel` — SMS / Telegram / push / email |
 | Языки | completeness chips per locale from `notifications.template_versions.locale` |
@@ -1034,6 +1042,9 @@ of those steps produced the template being previewed, using the same origin chip
 **Sort.** Severity: blocked in moderation and required (0) → missing a locale that a channel
 actually serves (1) → draft (2) → active (3); then event order along the order lifecycle, not
 alphabetically — an admin reading this list is walking an order through its life.
+*Built (ADR 0184):* the language chips show every language the template's brand serves, written or
+missing; the moderation state is its own column on the list; the sort is `template-list-order.ts`. A
+moderation state counts against a template only while it is in force.
 
 **Editor.** A `TemplateEditor` with `VariableChip` insertion and a live preview inside the matching
 frame. Variables are **allowlisted typed variables from a versioned schema**
@@ -1043,6 +1054,13 @@ match: order id, restaurant name, delivery time, preparation time, product list,
 amount, delivery fee, courier first name, courier surname, courier phone, customer name,
 customer phone. Plus a `Показывать цены товаров` toggle, which Delever has and which changes the
 rendered product list.
+
+*Built (ADR 0184, D21):* ten of the thirteen are merge variables: order id, restaurant name (the brand's
+display name), delivery time, preparation time, product list, total (`amount` and `currency`), discount
+amount, delivery fee, courier first name (the on-the-way message only) and customer name (a message to the
+customer only). The toggle is a column of the version (`show_item_prices`). **Declined, and refused when a
+version names one:** the customer's phone, the courier's phone and the courier's surname. The two personal
+values are looked up when a message is sent and are never stored.
 
 Left pane: language tabs (`LocalizedFieldGroup`, ru / uz-Latn / en, default marked, completeness
 indicated). Right pane: the key fields — event, source channels, fulfilment modes, default
@@ -1061,12 +1079,16 @@ not model this at all and the IA calls it out as something HorecaOS adds.
 `NotificationTemplateController.create`/`.activate`. `Изменить` (creates a new
 `template_version`, never mutates) is built as `.addVersion`. `Тестовая отправка` (to a staff
 phone, recorded as an audit fact) and `Дублировать на другой язык` have no matching endpoint yet.
+*Built (ADR 0184):* `Тестовая отправка` sends an SMS template to a number and a Telegram template to one of the
+brand's bound chats, and writes `notification.template.test_sent` without the destination; `Дублировать`
+is an editor action that copies the active language's text into another to start its translation.
 Activation of a `TRANSACTIONAL_REQUIRED` template is confirmed by naming what it changes.
 
 **Consent is visible but not editable here.** A `MARKETING`-class template shows
 *«отправляется только клиентам с согласием»* with a link to Customers 5.2. Unsubscribe changes
 future eligibility and never erases delivery evidence — say so where an admin might expect a
-delete button.
+delete button. *Built (ADR 0184):* the notice is on the create form, beside every `MARKETING` row and in the
+versions drawer; creating an optional or marketing template asks for its consent purpose.
 
 ### Tab 2 — Маршрутизация
 
@@ -1178,6 +1200,14 @@ would rewrite the meaning of every chart already drawn and is exactly what ADR 0
 ADR 0107 for the contradiction this correction resolves and why configurability is declined rather
 than deferred.
 
+**The card is the whole affordance (pinned, wave 21).** It carries the version it was read at and one
+row per bucket, and **no input, no select and no button**: `reference-data-page.spec.ts` fails if any
+control appears inside `#sla-boundaries`. The route behind it,
+`GET /api/v1/tenants/{tenantId}/reporting/sla-bucket-set`, is refused without `REPORTING_READ` and answers
+the version with the six buckets with it (`ReportingControllerCapabilityHttpTests`). Where an order counts
+as *late on the boards* is a different setting, the order-policy lateness card; the reports' buckets do not
+follow it.
+
 ### Теги филиалов
 
 **Built (wave P37).** A tenant registers its own tags (`tenant.branch_tags`) and assigns any
@@ -1219,7 +1249,7 @@ who will never open any other settings screen, and because half the console's ot
 | Field | Type | Source |
 |---|---|---|
 | Поддерживаемые языки | multi-select over **the registry's content tier** (`GET /api/v1/operations/locales`, ADR 0149): `ru, uz-Latn, en` live; `kk`, `ka` declared and offered nowhere until a release makes them live. `uz-Cyrl` and `kaa` are not declared (the registry has room for both) | **built** (10.1's brand profile, V0242 `tenant.brand_locales`): the brand's own set and default, validated against the registry's content tier, not a list this screen keeps. A bare `uz` from an older client is read as `uz-Latn` and never stored |
-| Язык по умолчанию | single select | `platform.default_locale` (`ConfigurationKeys.DEFAULT_LOCALE`, default `"uz"`, tenant-visible) — a **real registered key today**, resolvable at every level |
+| Язык по умолчанию | single select | **built** (10.1's brand profile): `tenant.brand_locales.is_default`, one per brand, which must be one of the brand's own set. It is also what a storefront opens in (`GET /api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locales`, ADR 0149). The configuration key `platform.default_locale` this row used to cite was deleted by V0194 (ADR 0030); nothing reads a platform-wide default language any more, and a brand that has chosen none falls back to the registry's `ru` |
 | Валюта | read-only `UZS` | `tenant.tenants.default_currency` |
 | Часовой пояс | IANA | `tenant.tenants.default_timezone`; per-location `tenant.locations.timezone` |
 | Формат даты | read-only `DD.MM` | platform reference data (control-plane 8.3) |
@@ -1233,7 +1263,15 @@ customer: notification wordings, the bot, emails, SMS) and **staff UI** (the con
 activating one in a tier is a release, never a tenant's configuration. What this screen therefore means:
 
 - the languages it offers are the registry's content tier; a declared language that is not live is not on
-  the list, and adding one needs no change here;
+  the list, and adding one needs no change here. The same holds for every form that authors in a brand's
+  languages: a cancellation, line-removal or completion reason is worded in the **union of the tenant's brands**
+  (`GET .../order-outcome-reasons/locale-set`, the very set the service refuses to leave a wording out of), an
+  auto-add rule's customer text in the brand's set, a receipt footer and the document-language policy in the
+  registry's messages tier narrowed to the brand's set, and a storefront offers a language when the registry has
+  it live, the build has its catalogue and the brand serves it;
+- the assistant's notes and disclosure sentences are the one exception: they are written in the languages
+  its detector has word lists for (`GET /api/v1/operations/assistant/languages`), which are ISO 639 codes and not
+  platform tags (ADR 0149, Decision 3, "not locales");
 - **"all of this brand's languages are required"**: a notification template version needs a wording in
   every language *the template's brand serves* (a tenant-wide template: the union of the tenant's
   brands) before it can be saved or activated, not in every language the platform has. A customer whose
@@ -1533,7 +1571,7 @@ Named precisely, with the owning decision. Everything not listed here is built a
 |---|---|
 | A purpose/role column on `media.assets`, so "the logo" and "the aggregator banner" are distinguishable | ADR 0010 |
 | Brand contact fields and a brand description with translations | ADR 0002 |
-| Per-brand supported-language set (only `platform.default_locale` exists) | ADR 0030 key, content ADR 0002 |
+| ~~Per-brand supported-language set~~ — built: `tenant.brand_locales` (V0242), read by every localized editor and by the storefronts (`GET .../brands/{brandId}/locales`, ADR 0149). `platform.default_locale`, which this row used to cite, was deleted by V0194 | ADR 0149 |
 | Location sort order and venue attributes (branch tags built wave P37 — `BranchTagController`, §10.10) | ADR 0002 |
 | Courier policy settings: billing mode, shift enforcement, ready-only visibility, address-before-accept, post-delivery payment check, acceptance SLA, max concurrent orders, GPS radii | ADR 0042, Proposed |
 | ~~Business calendar, business-day boundary that may cross midnight, weekend definition~~ — built wave P37, `BusinessCalendarController`, §10.10. Delever's forecast-window default (09:00→09:00) is still an open product question the matrix records | ADR 0043 |

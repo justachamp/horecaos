@@ -67,6 +67,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.tenancy.api.LocalizedLabels;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -520,7 +521,9 @@ public class OperationsDispatchRulesController {
         static OptionsResponse of(Options options, List<RecentPlanRow> recent) {
             return new OptionsResponse(
                     options.installations().stream().map(InstallationOption::of).toList(),
-                    options.zones().stream().map(ZoneOption::of).toList(),
+                    options.zones().stream()
+                            .map(zone -> ZoneOption.of(zone, options.zoneNames().getOrDefault(zone.id(), Map.of())))
+                            .toList(),
                     options.channels().stream().map(ChannelOption::of).toList(),
                     options.locations().stream().map(LocationOption::of).toList(),
                     recent.stream().map(RecentPlan::of).toList(),
@@ -535,12 +538,11 @@ public class OperationsDispatchRulesController {
         }
     }
 
-    public record ZoneOption(
-            UUID id, UUID brandId, String code, String nameEn, String nameRu, String nameUz, String status) {
+    /** @param names the zone's name per locale (V0431), the only shape a zone's name has since V0679 */
+    public record ZoneOption(UUID id, UUID brandId, String code, Map<String, String> names, String status) {
 
-        static ZoneOption of(ZoneRow row) {
-            return new ZoneOption(
-                    row.id(), row.brandId(), row.code(), row.nameEn(), row.nameRu(), row.nameUz(), row.status());
+        static ZoneOption of(ZoneRow row, Map<String, String> names) {
+            return new ZoneOption(row.id(), row.brandId(), row.code(), LocalizedLabels.merge(names), row.status());
         }
     }
 

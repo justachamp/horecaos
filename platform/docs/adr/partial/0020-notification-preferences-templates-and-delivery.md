@@ -511,3 +511,26 @@ and which classes *should* respect one, if the answer ever needs to differ from
 - Message retention: nothing expires a notification row today. The row holds no
   contact value and no rendered body, which is what makes that survivable until a
   retention decision lands.
+
+## Status addition (2026-10-14)
+
+[ADR 0184](../partial/0184-order-messages-platform-wording-milestones-and-personal-values.md) builds the last
+step of this record's resolution order and amends three rules, and this record's Decision,
+Alternatives and Consequences are unchanged.
+
+- **The platform-default template layer exists.** The status line above and «Deliberately not built»
+  list it as absent; it is bundled in code (`PlatformDefaultTemplates`, in the shape ADR 0068 gave the
+  default terms), resolved only when the tenant has no active template at any scope, and shown read-only
+  in the console. `ORDER_COMPLETED` has none (ADR 0075).
+- **Precedence between the variant dimensions (ADR 0184, D20).** This record ordered brand, tenant,
+  platform and said nothing about the fulfilment mode and channel source gap-map row `10.9a` added. A
+  brand's wording outranks the tenant's whatever the tenant's pins; then more pinned dimensions beat
+  fewer; then fulfilment mode beats channel source.
+- **`SECURITY` is not authored (D19).** The one-time-code sentence is `OtpWording`, sent without a
+  template; a `SECURITY` template cannot be created, and the console shows the sentence read-only.
+- **Two personal merge variables (D21).** `customerName` for a customer-addressed class and
+  `courierFirstName` for the on-the-way message are resolved at render and never written to
+  `variables_json`; the customer's phone and the courier's phone and surname are declined.
+- The customer milestones ADR 0045 names (preparing, ready, on the way) are published by ordering
+  (`OrderPreparing`, `OrderReady`, `OrderFulfilling`) and trigger `TRANSACTIONAL_OPTIONAL` intents, so the
+  status line's «fulfillment ... still do not» no longer holds for these three facts.

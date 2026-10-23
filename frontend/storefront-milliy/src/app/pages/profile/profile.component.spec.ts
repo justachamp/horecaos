@@ -132,7 +132,17 @@ async function setUp(
       ]),
       { provide: CustomerProfileService, useValue: profileService },
       { provide: CustomerOtp, useValue: customerOtp },
-      { provide: LangService, useValue: { langId: signal('uz') } },
+      {
+        provide: LangService,
+        useValue: {
+          langId: signal('uz'),
+          // What the language service offers a brand that serves Russian and Uzbek (ADR 0149).
+          offered: signal([
+            { id: 'ru', tag: 'ru', label: 'Русский' },
+            { id: 'uz', tag: 'uz-Latn', label: 'Oʻzbekcha' },
+          ]),
+        },
+      },
       { provide: OrdersService, useValue: orders },
       { provide: ReviewsService, useValue: reviews },
       { provide: TranslateService, useClass: FakeTranslateService },
@@ -219,6 +229,16 @@ describe('ProfileComponent -- sign-out and language', () => {
     ru.click();
 
     expect(translate.setLang).toHaveBeenCalledWith('ru');
+  });
+
+  it('offers exactly the languages the language service offers, and none it does not', async () => {
+    const { fixture } = await setUp();
+
+    const chips = Array.from(
+      fixture.nativeElement.querySelectorAll('.lang-chip') as NodeListOf<HTMLButtonElement>,
+    );
+    expect(chips.map((chip) => chip.textContent?.trim())).toEqual(['RU', 'UZ']);
+    expect(chips.map((chip) => chip.title)).toEqual(['Русский', 'Oʻzbekcha']);
   });
 });
 

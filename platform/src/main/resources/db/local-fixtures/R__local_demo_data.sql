@@ -400,14 +400,22 @@ INSERT INTO fulfillment.delivery_tariff_bands (
 ) ON CONFLICT DO NOTHING;
 
 INSERT INTO fulfillment.service_zones (
-    id, tenant_id, brand_id, zone_role, code, display_name_ru, display_name_uz,
-    display_name_en, status
+    id, tenant_id, brand_id, zone_role, code, status
 ) VALUES (
     '10000000-0000-0000-0000-000000000035',
     '10000000-0000-0000-0000-000000000001',
-    '10000000-0000-0000-0000-000000000002', 'DELIVERY', 'LOCAL_5KM',
-    'Локальная зона 5 км', 'Mahalliy 5 km hudud', 'Local 5 km zone', 'ACTIVE'
+    '10000000-0000-0000-0000-000000000002', 'DELIVERY', 'LOCAL_5KM', 'ACTIVE'
 ) ON CONFLICT DO NOTHING;
+
+INSERT INTO fulfillment.service_zone_translations (tenant_id, brand_id, zone_id, locale, display_name)
+VALUES
+    ('10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002',
+     '10000000-0000-0000-0000-000000000035', 'ru', 'Локальная зона 5 км'),
+    ('10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002',
+     '10000000-0000-0000-0000-000000000035', 'uz-Latn', 'Mahalliy 5 km hudud'),
+    ('10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002',
+     '10000000-0000-0000-0000-000000000035', 'en', 'Local 5 km zone')
+ON CONFLICT DO NOTHING;
 
 WITH local_area AS (
     SELECT ST_Multi(ST_Buffer(

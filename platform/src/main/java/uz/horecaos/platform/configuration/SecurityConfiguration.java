@@ -219,6 +219,13 @@ public class SecurityConfiguration {
                                 // thing a storefront paints. The staff surfaces' twins stay
                                 // behind a session.
                                 "/api/v1/storefront/locales",
+                                // ADR 0149, Decision 5: the languages ONE brand serves, default first.
+                                // The same standing as the registry read above and the brand's terms and
+                                // analytics beside it: a picker paints before an account exists and the
+                                // answer names nobody. A brand id that is not the tenant's answers as a
+                                // brand that chose nothing, so it reveals no brand. See
+                                // StorefrontBrandLocaleController's own doc.
+                                "/api/v1/storefront/tenants/*/brands/*/locales",
                                 // ADR 0159: the tags a customer is offered with a rating, a brand's rating
                                 // summary and its published comments. Off until the tenant switches them on
                                 // (an empty answer, not a refusal), cached and rate limited by the

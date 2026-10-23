@@ -1,3 +1,5 @@
+import { platformTag } from '../services/lang.service';
+
 /**
  * A BCP 47 language tag fit to put in a `lang` attribute, or null.
  *
@@ -45,7 +47,7 @@ export function formatDate(iso: string, language: string): string | null {
   if (Number.isNaN(date.getTime())) {
     return null;
   }
-  if (language === 'uz') {
+  if (platformTag(language) === 'uz-Latn') {
     return `${date.getDate()}-${UZ_MONTHS[date.getMonth()]}, ${date.getFullYear()}`;
   }
   try {

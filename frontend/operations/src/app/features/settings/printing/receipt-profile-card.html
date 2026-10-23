@@ -32,9 +32,9 @@
       </label>
       <p class="q-caption muted">{{ 'settings.printing.profile.logoNote' | t }}</p>
 
-      @for (locale of locales; track locale.code) {
-        <fieldset class="locale" [attr.data-locale]="locale.code">
-          <legend class="q-body-sm">{{ locale.labelKey | t }}</legend>
+      @for (locale of locales(); track locale) {
+        <fieldset class="locale" [attr.data-locale]="locale">
+          <legend class="q-body-sm">{{ localeLabel(locale) }}</legend>
           @for (index of lineIndexes; track index) {
             <input
               class="field"
@@ -43,11 +43,11 @@
               [attr.aria-label]="
                 ('settings.printing.profile.footerLine' | t: { n: index + 1 }) +
                 ' · ' +
-                (locale.labelKey | t)
+                localeLabel(locale)
               "
-              [attr.data-testid]="'print-profile-footer-' + locale.code + '-' + index"
-              [value]="line(locale.code, index)"
-              (input)="setLine(locale.code, index, $any($event.target).value)"
+              [attr.data-testid]="'print-profile-footer-' + locale + '-' + index"
+              [value]="line(locale, index)"
+              (input)="setLine(locale, index, $any($event.target).value)"
             />
           }
         </fieldset>

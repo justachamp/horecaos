@@ -65,6 +65,10 @@ class FakeTranslateService {
 
 class FakeLangService {
   langId = () => 'uz';
+  offered = () => [
+    { id: 'uz', tag: 'uz-Latn', label: 'Oʻzbekcha' },
+    { id: 'ru', tag: 'ru', label: 'Русский' },
+  ];
   load(): Promise<void> {
     return Promise.resolve();
   }
@@ -385,5 +389,20 @@ describe('AuthLoginComponent brand rendering', () => {
     const text = fixture.nativeElement.textContent as string;
     expect(text.toLowerCase()).not.toContain('jizbiz');
     expect(text).toContain(NEUTRAL_BRAND.displayName);
+  });
+});
+
+/** ADR 0149, Decision 5: the picker offers what the language service says, named by the registry, with no list of its own. */
+describe('AuthLoginComponent language picker', () => {
+  it('lists the languages the language service offers, by their own names, and no others', () => {
+    const { fixture } = setUp();
+
+    fixture.detectChanges();
+
+    const options = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('select option'),
+    );
+    expect(options.map((option) => (option as HTMLOptionElement).value)).toEqual(['uz', 'ru']);
+    expect(options.map((option) => option.textContent?.trim())).toEqual(['Oʻzbekcha', 'Русский']);
   });
 });

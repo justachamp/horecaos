@@ -142,7 +142,9 @@ import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
+import uz.horecaos.platform.support.CommentPresetRows;
 import uz.horecaos.platform.support.FakeConfigurationResolver;
+import uz.horecaos.platform.support.LocaleNames;
 import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
@@ -3784,7 +3786,7 @@ class CartCheckoutAndOrderTests {
                         .extracting(
                                 JdbcOrderStore.OrderCommentPresetRow::sourcePresetId,
                                 JdbcOrderStore.OrderCommentPresetRow::code,
-                                JdbcOrderStore.OrderCommentPresetRow::labelRu)
+                                snapshot -> snapshot.labels().get("ru"))
                         .containsExactly(
                                 tuple(noOnions, "NO_ONIONS", "Без лука"),
                                 tuple(extraSpicy, "EXTRA_SPICY", "Поострее")));
@@ -3840,14 +3842,13 @@ class CartCheckoutAndOrderTests {
                                     .containsOnlyKeys("ru", "uz-Latn", "en", "kaa")
                                     .containsEntry("kaa", "Piyazsiz")
                                     .containsEntry("ru", "Без лука");
-                            assertThat(snapshot.labelRu()).isEqualTo("Без лука");
                         }));
         assertThat(jdbc.sql("""
                                 SELECT locale FROM ordering.order_line_comment_preset_labels
                                 WHERE tenant_id = :tenantId
                                 """).param("tenantId", TENANT).query(String.class).list())
-                .as("the triple stays in the snapshot's own columns, not stored twice")
-                .containsExactly("kaa");
+                .as("every wording the preset had is stored in the labels table, the triple included (V0678)")
+                .containsExactlyInAnyOrder("ru", "uz-Latn", "en", "kaa");
     }
 
     @Test
@@ -7157,16 +7158,34 @@ class CartCheckoutAndOrderTests {
     }
 
     @Test
-    @DisplayName("a completed order publishes OrderCompleted, and the three non-terminal steps still publish nothing")
+    @DisplayName("each kitchen step publishes its own fact, and a completion publishes OrderCompleted (ADR 0184)")
     void completionPublishesItsOwnEvent() {
         UUID order = orderIdOf(placeOrder("idem-completed-event"));
         published.clear();
 
         advance(order, OrderStatus.PREPARING);
         advance(order, OrderStatus.READY);
+        // PREPARING and READY had no reader until ADR 0184: ADR 0045 tells the customer each milestone, and
+        // notifications cannot trigger a message from a row in a history table.
         assertThat(published.ordering())
-                .as("PREPARING and READY still have no reader, and this comment's own reason still holds")
-                .isEmpty();
+                .extracting(OrderingEvent::eventType)
+                .containsExactly("OrderPreparing", "OrderReady");
+        assertThat(published.ordering().get(0))
+                .isInstanceOfSatisfying(uz.horecaos.platform.ordering.api.OrderPreparing.class, preparing -> {
+                    assertThat(preparing.orderId()).isEqualTo(order);
+                    assertThat(preparing.tenantId().value()).isEqualTo(TENANT);
+                    assertThat(preparing.fulfillmentMode()).isEqualTo("PICKUP");
+                    assertThat(preparing.preparingAt()).isEqualTo(clock.instant());
+                    assertThat(preparing.payload().toString())
+                            .as("no customer on a milestone: ADR 0029 keeps personal data off every topic")
+                            .doesNotContain(CUSTOMER.toString());
+                });
+        assertThat(published.ordering().get(1))
+                .isInstanceOfSatisfying(uz.horecaos.platform.ordering.api.OrderReady.class, ready -> {
+                    assertThat(ready.fulfillmentMode()).isEqualTo("PICKUP");
+                    assertThat(ready.orderVersion()).isGreaterThan(1);
+                });
+        published.clear();
 
         advance(order, OrderStatus.COMPLETED);
 
@@ -7180,6 +7199,62 @@ class CartCheckoutAndOrderTests {
                     // of every payload, and a rating prompt resolves the chat from
                     // the order id through an authorized call.
                     assertThat(completed.payload().toString()).doesNotContain(CUSTOMER.toString());
+                });
+    }
+
+    @Test
+    @DisplayName("the facts an order message may say are read from the real tables, and carry no customer (ADR 0184)")
+    void anOrderMessageReadsItsFactsFromTheRealTables() {
+        UUID order = orderIdOf(placeOrder("idem-notification-facts"));
+        var directory = new JdbcOrderDirectory(orderStore, jdbc);
+
+        var facts = directory.notificationFacts(TENANT, order).orElseThrow();
+
+        assertThat(facts.brandDisplayName())
+                .as("the brand's own name, which is what a customer calls the restaurant")
+                .isEqualTo("Brand");
+        assertThat(facts.timezone())
+                .as("the location's zone, so the promised time reads on the branch's clock")
+                .isEqualTo("Asia/Tashkent");
+        assertThat(facts.currency()).isEqualTo("UZS");
+        var stored = orderStore.find(TENANT, order).orElseThrow();
+        assertThat(facts.discountMinor()).isEqualTo(stored.discountMinor());
+        assertThat(facts.feeMinor()).isEqualTo(stored.feeMinor());
+        assertThat(facts.promisedAt()).isEqualTo(stored.promise().promisedAt());
+        assertThat(facts.prepMinutes()).isEqualTo(stored.promise().prepMinutes());
+        assertThat(facts.lines()).singleElement().satisfies(line -> {
+            assertThat(line.name()).isEqualTo("Qo'y burger");
+            assertThat(line.quantity()).isEqualByComparingTo("2");
+            assertThat(line.lineTotalMinor()).isPositive();
+        });
+        assertThat(facts.toString())
+                .as("nothing about the person who ordered travels with the order's facts")
+                .doesNotContain(CUSTOMER.toString());
+        assertThat(directory.notificationFacts(UUID.randomUUID(), order))
+                .as("another tenant is told nothing")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a delivery order publishes OrderFulfilling at the handover, and no completion yet (ADR 0184)")
+    void aDeliveryHandoverPublishesFulfilling() {
+        UUID order = orderIdOf(placeDeliveryOrder("idem-fulfilling-event"));
+        published.clear();
+
+        advance(order, OrderStatus.PREPARING);
+        advance(order, OrderStatus.READY);
+        advance(order, OrderStatus.FULFILLING);
+
+        assertThat(published.ordering())
+                .extracting(OrderingEvent::eventType)
+                .containsExactly("OrderPreparing", "OrderReady", "OrderFulfilling");
+        assertThat(published.ordering().get(2))
+                .isInstanceOfSatisfying(uz.horecaos.platform.ordering.api.OrderFulfilling.class, fulfilling -> {
+                    assertThat(fulfilling.fulfillmentMode()).isEqualTo("DELIVERY");
+                    assertThat(fulfilling.handedOverAt()).isEqualTo(clock.instant());
+                    assertThat(fulfilling.payload().toString())
+                            .as("no courier and no customer on the fact: the consumer resolves the first name itself")
+                            .doesNotContain(CUSTOMER.toString());
                 });
     }
 
@@ -7391,8 +7466,8 @@ class CartCheckoutAndOrderTests {
         // ceiling (r=10 km is ~314 km²) while covering every fixed test address
         // in this suite by a wide margin.
         UUID tariffId = seedFlatTariff("DEFAULT-ZERO", 10_000, 0L);
-        UUID zoneId =
-                zoneAuthoring.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "DEFAULT", "Default", "Default", "Default");
+        UUID zoneId = zoneAuthoring.createZone(
+                TENANT, BRAND, ZoneRole.DELIVERY, "DEFAULT", LocaleNames.triple("Default", "Default", "Default"));
         var drafted = zoneAuthoring.draftCircleVersion(
                 new ServiceZoneService.NewVersion(
                         TENANT, BRAND, zoneId, ZoneRole.DELIVERY, null, 0, "UZS", tariffId, null, null, DELIVERY_ACTOR),
@@ -7446,7 +7521,8 @@ class CartCheckoutAndOrderTests {
             int radiusMeters,
             @Nullable Long minBasketMinor,
             @Nullable Long freeDeliveryFromMinor) {
-        UUID zoneId = zoneAuthoring.createZone(TENANT, BRAND, ZoneRole.DELIVERY, code, code, code, code);
+        UUID zoneId =
+                zoneAuthoring.createZone(TENANT, BRAND, ZoneRole.DELIVERY, code, LocaleNames.triple(code, code, code));
         var drafted = zoneAuthoring.draftCircleVersion(
                 new ServiceZoneService.NewVersion(
                         TENANT,
@@ -8510,18 +8586,8 @@ class CartCheckoutAndOrderTests {
      */
     private UUID seedCommentPresetForBurger(String code, String labelRu) {
         UUID presetId = UUID.randomUUID();
-        jdbc.sql("""
-                INSERT INTO catalog.comment_presets (
-                    id, tenant_id, code, label_ru, label_uz, label_en, sort_order, status, version)
-                VALUES (:id, :tenantId, :code, :labelRu, :labelUz, :labelEn, 0, 'ACTIVE', 1)
-                """)
-                .param("id", presetId)
-                .param("tenantId", TENANT)
-                .param("code", code)
-                .param("labelRu", labelRu)
-                .param("labelUz", labelRu + " (uz)")
-                .param("labelEn", labelRu + " (en)")
-                .update();
+        CommentPresetRows.insertPreset(
+                jdbc, presetId, TENANT, code, CommentPresetRows.triple(labelRu, labelRu + " (uz)", labelRu + " (en)"));
         jdbc.sql("""
                 INSERT INTO catalog.product_comment_presets (
                     id, tenant_id, brand_id, product_id, preset_id, sort_order, version)

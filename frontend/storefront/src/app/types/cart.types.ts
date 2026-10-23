@@ -50,9 +50,6 @@ export interface CartResponseModifierSelection {
  */
 export interface CartResponseCommentPresetSelection {
   readonly code: string;
-  readonly labelRu: string;
-  readonly labelUz: string;
-  readonly labelEn: string;
   readonly labels?: Readonly<Record<string, string>>;
   readonly label?: string;
 }

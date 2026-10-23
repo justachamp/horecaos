@@ -55,9 +55,7 @@ export const catalogUzLatn: AreaMessages<typeof catalogEn> = {
   'catalog.autoAdd.field.mandatory': 'Mijoz rad eta olmaydi',
   'catalog.autoAdd.field.fulfillment': 'Yetkazish usullari',
   'catalog.autoAdd.field.channel': 'Kanal turlari',
-  'catalog.autoAdd.field.textRu': 'Mijoz uchun matn (ruscha)',
-  'catalog.autoAdd.field.textUz': 'Mijoz uchun matn (oʻzbekcha)',
-  'catalog.autoAdd.field.textEn': 'Mijoz uchun matn (inglizcha)',
+  'catalog.autoAdd.field.textIn': 'Mijoz uchun matn ({language})',
   'catalog.autoAdd.channelsNote':
     'Faqat buyurtma savatdan yigʻiladigan kanallar. Agregator yoki kassa buyurtmasi qoidani koʻtara olmaydi.',
   'catalog.autoAdd.pickVariant': 'Qoʻshiladigan pozitsiyani toping',

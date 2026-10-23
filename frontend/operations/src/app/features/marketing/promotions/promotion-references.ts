@@ -4,6 +4,8 @@ import { firstValueFrom } from 'rxjs';
 import { BrandScope } from '../../../core/api/catalog-paths';
 import { CursorState, Page, firstPage, nextPage } from '../../../core/api/page';
 import { I18n } from '../../../core/i18n/i18n';
+import { LabelsByLocale } from '../../../core/i18n/locale-labels';
+import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import { ConditionFixedValue } from '../../../shared/ui/condition-types';
 import { CatalogApi, fetchAllVariantsAtLocation } from '../../catalog/catalog-api';
 import {
@@ -13,6 +15,7 @@ import {
 } from '../../catalog/catalog-domain';
 import { SegmentsApi } from '../../customers/segments/segments-api';
 import { DeliveryZonesApi } from '../../delivery/delivery-zones-api';
+import { localisedName } from '../../delivery/localised-name';
 import { LocationView, LocationsApi } from '../../settings/locations/locations-api';
 import { PaymentMethodsApi } from '../../settings/payment-methods/payment-methods-api';
 import { ChannelView, SalesChannelsApi } from '../../settings/sales-channels/sales-channels-api';
@@ -43,6 +46,7 @@ const MAX_PRODUCT_PAGES = 10;
 @Injectable()
 export class PromotionReferences {
   private readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
   private readonly locationsApi = inject(LocationsApi);
   private readonly channelsApi = inject(SalesChannelsApi);
   private readonly paymentMethodsApi = inject(PaymentMethodsApi);
@@ -202,18 +206,9 @@ export class PromotionReferences {
 
   private zoneLabel(zone: {
     readonly code: string;
-    readonly displayNameRu: string;
-    readonly displayNameUz: string;
-    readonly displayNameEn: string;
+    readonly displayNames: LabelsByLocale;
   }): string {
-    const locale = this.i18n.locale();
-    const name =
-      locale === 'ru'
-        ? zone.displayNameRu
-        : locale === 'uz-Latn'
-          ? zone.displayNameUz
-          : zone.displayNameEn;
-    return `${name || zone.displayNameEn || zone.code}`;
+    return localisedName(this.i18n.locale(), zone, this.registry.fallbackOrder()) || zone.code;
   }
 
   private async attempt(load: () => Promise<void>): Promise<void> {

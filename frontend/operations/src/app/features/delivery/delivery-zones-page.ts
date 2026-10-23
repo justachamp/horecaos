@@ -20,7 +20,6 @@ import {
   changedLabels,
   labelsToSend,
   localeDisplayName,
-  platformColumns,
 } from '../../core/i18n/locale-labels';
 import { LocaleSet } from '../../core/i18n/locale-set';
 import { MessageKey } from '../../core/i18n/messages.en';
@@ -441,15 +440,9 @@ export class DeliveryZonesPage implements OnInit {
     this.createSubmitting.set(true);
     this.createError.set(null);
     try {
-      // The platform triple stays required by the contract: a platform language
-      // the brand does not offer takes the default language's name.
-      const columns = platformColumns(this.locales(), this.newNames(), this.defaultLocale());
       await this.api.create(scope, {
         role: this.newRole(),
         code: this.newCode().trim(),
-        displayNameRu: columns.ru,
-        displayNameUz: columns['uz-Latn'],
-        displayNameEn: columns.en,
         displayNames: labelsToSend(this.locales(), this.newNames()),
       });
       this.showCreateForm.set(false);
@@ -486,7 +479,7 @@ export class DeliveryZonesPage implements OnInit {
   }
 
   protected openRenameForm(zone: ZoneSummaryResponse): void {
-    this.renameNames.set(labelDrafts(this.locales(), zone.displayNames ?? triple(zone)));
+    this.renameNames.set(labelDrafts(this.locales(), zone.displayNames));
     this.renameError.set(null);
     this.renamingZone.set(zone);
   }
@@ -498,9 +491,7 @@ export class DeliveryZonesPage implements OnInit {
   /** The names the dialog changed: an offered language, filled in, whose text differs from what it opened with. */
   private renameChanges(): Record<string, string> {
     const zone = this.renamingZone();
-    return zone
-      ? changedLabels(this.locales(), this.renameNames(), zone.displayNames ?? triple(zone))
-      : {};
+    return zone ? changedLabels(this.locales(), this.renameNames(), zone.displayNames) : {};
   }
 
   protected canRename(): boolean {
@@ -829,9 +820,4 @@ function problemsOf(error: unknown): readonly string[] {
   }
   const problems = error.problem?.['problems'];
   return Array.isArray(problems) ? problems.map((entry) => String(entry)) : [];
-}
-
-/** A zone's platform-triple name columns keyed by locale — for a response that predates `displayNames`. */
-function triple(zone: ZoneSummaryResponse): LabelsByLocale {
-  return { ru: zone.displayNameRu, 'uz-Latn': zone.displayNameUz, en: zone.displayNameEn };
 }

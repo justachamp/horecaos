@@ -1812,9 +1812,7 @@ describe('ProductEditorPage', () => {
       of({
         presetId: 'preset-1',
         code: 'NO_ONION',
-        labelRu: 'Без лука',
-        labelUz: 'Piyozsiz',
-        labelEn: 'No onion',
+        labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onion' },
         posModifierCode: null,
         sortOrder: 0,
         status: 'ACTIVE',
@@ -1828,9 +1826,7 @@ describe('ProductEditorPage', () => {
           {
             presetId: 'preset-1',
             code: 'NO_ONION',
-            labelRu: 'Без лука',
-            labelUz: 'Piyozsiz',
-            labelEn: 'No onion',
+            labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onion' },
             posModifierCode: null,
             sortOrder: 0,
             status: 'ACTIVE',
@@ -1849,9 +1845,6 @@ describe('ProductEditorPage', () => {
             {
               presetId: 'preset-1',
               code: 'NO_ONION',
-              labelRu: 'Без лука',
-              labelUz: 'Piyozsiz',
-              labelEn: 'No onion',
               labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onion' },
               posModifierCode: null,
               sortOrder: 0,
@@ -1861,9 +1854,6 @@ describe('ProductEditorPage', () => {
             {
               presetId: 'preset-2',
               code: 'EXTRA_SPICY',
-              labelRu: 'Поострее',
-              labelUz: 'Achchiqroq',
-              labelEn: 'Extra spicy',
               labels: { ru: 'Поострее', 'uz-Latn': 'Achchiqroq', en: 'Extra spicy' },
               posModifierCode: null,
               sortOrder: 1,
@@ -1923,9 +1913,7 @@ describe('ProductEditorPage', () => {
             {
               presetId: 'preset-1',
               code: 'NO_ONION',
-              labelRu: 'Без лука',
-              labelUz: 'Piyozsiz',
-              labelEn: 'No onion',
+              labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onion' },
               posModifierCode: 'MOD-9',
               sortOrder: 0,
               status: 'ACTIVE',
@@ -1972,9 +1960,6 @@ describe('ProductEditorPage', () => {
             {
               presetId: 'preset-1',
               code: 'NO_ONION',
-              labelRu: 'Без лука',
-              labelUz: 'Piyozsiz',
-              labelEn: 'No onion',
               labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onion' },
               posModifierCode: null,
               sortOrder: 0,

@@ -3536,8 +3536,7 @@ public class OperationsOrderController {
                             line.line().finalAmountMinor(),
                             line.modifiers().stream().map(m -> m.optionName()).toList(),
                             line.commentPresets().stream()
-                                    .map(p -> new CommentPresetChip(
-                                            p.code(), p.labelRu(), p.labelUz(), p.labelEn(), p.labels()))
+                                    .map(p -> new CommentPresetChip(p.code(), p.labels()))
                                     .toList(),
                             line.line().lineId(),
                             line.line().hasNote(),
@@ -3874,11 +3873,10 @@ public class OperationsOrderController {
     /**
      * Row 2.1b. Matches {@code CommentPresetController.PresetResponse}'s own locale shape.
      *
-     * @param labels every wording the line's snapshot holds, keyed by locale -- the triple above
-     *               plus any locale a tenant's brands support beyond it (row 10.12, V0433)
+     * @param labels every wording the line's snapshot holds, keyed by locale, the platform triple
+     *               first (row 10.12, V0433; the only shape of it since V0678)
      */
-    public record CommentPresetChip(
-            String code, String labelRu, String labelUz, String labelEn, java.util.Map<String, String> labels) {}
+    public record CommentPresetChip(String code, java.util.Map<String, String> labels) {}
 
     public record NoteResponse(UUID lineId, @Nullable String note) {}
 

@@ -508,6 +508,9 @@
       },
       "AddVersionRequest" : {
         "properties" : {
+          "showItemPrices" : {
+            "type" : "boolean"
+          },
           "variablesSchema" : {
             "additionalProperties" : {
               "type" : "string"
@@ -1278,6 +1281,31 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "AssistantLanguageResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "disclosureKey" : {
+            "type" : "string"
+          },
+          "locale" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "AssistantLanguagesResponse" : {
+        "properties" : {
+          "languages" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AssistantLanguageResponse"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -2240,20 +2268,11 @@
             "format" : "uuid",
             "type" : "string"
           },
-          "displayNameEn" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "displayNameRu" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "displayNameUz" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
+          "displayNames" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           },
           "externalRef" : {
             "maxLength" : 120,
@@ -2287,7 +2306,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "code", "currency", "displayNameEn", "displayNameRu", "displayNameUz", "externalRef", "geoJson", "role" ],
+        "required" : [ "code", "currency", "externalRef", "geoJson", "role" ],
         "type" : "object"
       },
       "BeginEnrolmentRequest" : {
@@ -4693,15 +4712,6 @@
       "CommentPresetChip" : {
         "properties" : {
           "code" : {
-            "type" : "string"
-          },
-          "labelEn" : {
-            "type" : "string"
-          },
-          "labelRu" : {
-            "type" : "string"
-          },
-          "labelUz" : {
             "type" : "string"
           },
           "labels" : {
@@ -7276,21 +7286,6 @@
             "minLength" : 0,
             "type" : "string"
           },
-          "displayNameEn" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "displayNameRu" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "displayNameUz" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
           "displayNames" : {
             "additionalProperties" : {
               "type" : "string"
@@ -7302,7 +7297,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "code", "displayNameEn", "displayNameRu", "displayNameUz", "role" ],
+        "required" : [ "code", "role" ],
         "type" : "object"
       },
       "CrmLogListResponse" : {
@@ -13918,6 +13913,10 @@
           "notificationClass" : {
             "type" : "string"
           },
+          "platformDefaultVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
           "recipientEndpointId" : {
             "format" : "uuid",
             "type" : "string"
@@ -15216,6 +15215,23 @@
           }
         },
         "required" : [ "reasonCode", "targetStatus" ],
+        "type" : "object"
+      },
+      "OperationsOrderOutcomeReasonControllerLocaleSetResponse" : {
+        "properties" : {
+          "configured" : {
+            "type" : "boolean"
+          },
+          "defaultLocale" : {
+            "type" : "string"
+          },
+          "locales" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
         "type" : "object"
       },
       "OperationsPaymentControllerPaymentSessionResponse" : {
@@ -16665,6 +16681,35 @@
           "registered" : {
             "format" : "int64",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "OtpSentenceResponse" : {
+        "properties" : {
+          "characters" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "locale" : {
+            "type" : "string"
+          },
+          "text" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OtpWordingResponse" : {
+        "properties" : {
+          "gatewayApproval" : {
+            "type" : "string"
+          },
+          "sentences" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OtpSentenceResponse"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -18328,6 +18373,42 @@
             "type" : "integer"
           },
           "weeklyCapCeiling" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "PlatformDefaultResponse" : {
+        "properties" : {
+          "bodies" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "channels" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "consentPurpose" : {
+            "type" : "string"
+          },
+          "notificationClass" : {
+            "type" : "string"
+          },
+          "templateKey" : {
+            "type" : "string"
+          },
+          "variables" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "version" : {
             "format" : "int32",
             "type" : "integer"
           }
@@ -21700,21 +21781,6 @@
             "pattern" : "^[A-Z0-9][A-Z0-9_-]{0,31}$",
             "type" : "string"
           },
-          "displayNameEn" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "displayNameRu" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "displayNameUz" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
           "displayNames" : {
             "additionalProperties" : {
               "type" : "string"
@@ -21726,7 +21792,7 @@
             "type" : "integer"
           }
         },
-        "required" : [ "code", "displayNameEn", "displayNameRu", "displayNameUz" ],
+        "required" : [ "code" ],
         "type" : "object"
       },
       "RegionRegisteredView" : {
@@ -21768,15 +21834,6 @@
             "type" : "number"
           },
           "code" : {
-            "type" : "string"
-          },
-          "displayNameEn" : {
-            "type" : "string"
-          },
-          "displayNameRu" : {
-            "type" : "string"
-          },
-          "displayNameUz" : {
             "type" : "string"
           },
           "displayNames" : {
@@ -22318,21 +22375,6 @@
       },
       "RenameZoneRequest" : {
         "properties" : {
-          "displayNameEn" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "displayNameRu" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "displayNameUz" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
           "displayNames" : {
             "additionalProperties" : {
               "type" : "string"
@@ -27644,6 +27686,22 @@
           "notificationClass" : {
             "type" : "string"
           },
+          "origin" : {
+            "type" : "string"
+          },
+          "providerReview" : {
+            "type" : "string"
+          },
+          "requiredLocales" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "shownVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
           "status" : {
             "type" : "string"
           },
@@ -27653,6 +27711,12 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          },
+          "versionLocales" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -28310,7 +28374,7 @@
       "TestSendRequest" : {
         "properties" : {
           "destination" : {
-            "maxLength" : 32,
+            "maxLength" : 64,
             "minLength" : 0,
             "type" : "string"
           },
@@ -29899,6 +29963,9 @@
           "providerReviewUpdatedAt" : {
             "type" : "string"
           },
+          "showItemPrices" : {
+            "type" : "boolean"
+          },
           "status" : {
             "type" : "string"
           },
@@ -29995,14 +30062,11 @@
             "format" : "uuid",
             "type" : "string"
           },
-          "nameEn" : {
-            "type" : "string"
-          },
-          "nameRu" : {
-            "type" : "string"
-          },
-          "nameUz" : {
-            "type" : "string"
+          "names" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           },
           "status" : {
             "type" : "string"
@@ -30059,15 +30123,6 @@
           },
           "deliveryTariffId" : {
             "format" : "uuid",
-            "type" : "string"
-          },
-          "displayNameEn" : {
-            "type" : "string"
-          },
-          "displayNameRu" : {
-            "type" : "string"
-          },
-          "displayNameUz" : {
             "type" : "string"
           },
           "displayNames" : {
@@ -30970,6 +31025,26 @@
         },
         "summary" : "The calling device's own record",
         "tags" : [ "Kitchen device self" ]
+      }
+    },
+    "/api/v1/operations/assistant/languages" : {
+      "get" : {
+        "description" : "The languages the assistant's detector has a vocabulary for, each with the platform language it is and the configuration key that holds the disclosure wording in it. A note and a disclosure can be written in exactly these. A read of code, so the console offers what the detector knows and not a list of its own.",
+        "operationId" : "languages",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AssistantLanguagesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The languages the assistant answers in",
+        "tags" : [ "Assistant languages" ]
       }
     },
     "/api/v1/operations/auth/mfa/authenticators" : {
@@ -47041,6 +47116,35 @@
         "tags" : [ "Order outcome reasons" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/locale-set" : {
+      "get" : {
+        "description" : "Row 10.12 (ADR 0149, Decisions 4 and 5). A reason belongs to the tenant, so its customer wording is written in the union of the tenant's brands' supported languages, default first, the default being the tenant's first brand's. A brand that has chosen no set contributes the registry's content languages. This is exactly the set a create or an update refuses to leave a wording out of, so a form built on it can never send a body the service answers with a 400. Needs only order.read, like the list the cancel dialog reads.",
+        "operationId" : "localeSet_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OperationsOrderOutcomeReasonControllerLocaleSetResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The languages a reason's customer wording is authored in",
+        "tags" : [ "Order outcome reasons" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/reorder" : {
       "put" : {
         "operationId" : "reorder_1",
@@ -48459,7 +48563,7 @@
         "tags" : [ "Regions" ]
       },
       "post" : {
-        "description" : "The SW/NE box is what constrains the geocoder and what a zone activation is checked against, so a box that is inverted, has no area, or does not contain its own centre is refused with every reason at once. The name is displayNameRu/displayNameUz/displayNameEn (the platform triple, required) plus `displayNames` (row 10.12, optional) for any language beyond them; `displayNames` wins where both name a locale.",
+        "description" : "The SW/NE box is what constrains the geocoder and what a zone activation is checked against, so a box that is inverted, has no area, or does not contain its own centre is refused with every reason at once. The name is `displayNames`, one entry per language (row 10.12); the tenant's default language is required and the others are optional.",
         "operationId" : "create_6",
         "parameters" : [ {
           "in" : "path",
@@ -48527,7 +48631,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/regions/{regionId}" : {
       "put" : {
-        "description" : "A tenant may rewrite its own regions and not the platform's; a platform region answers not-found rather than forbidden, so this cannot be used to discover which platform regions exist. expectedVersion is required and is the version RegionResponse last reported for this row; a stale one is refused with STALE_VERSION, the optimistic-locking convention every other mutable aggregate on this surface already carries. A language beyond the platform triple that the request does not name in `displayNames` keeps its name, so an editor that shows only some languages never deletes the others; the triple is always named (it is required), and an editor keeps a language it does not show by sending the name the region already has.",
+        "description" : "A tenant may rewrite its own regions and not the platform's; a platform region answers not-found rather than forbidden, so this cannot be used to discover which platform regions exist. expectedVersion is required and is the version RegionResponse last reported for this row; a stale one is refused with STALE_VERSION, the optimistic-locking convention every other mutable aggregate on this surface already carries. A language that the request does not name in `displayNames` keeps its name, so an editor that shows only some languages never deletes the others.",
         "operationId" : "update_1",
         "parameters" : [ {
           "in" : "path",
@@ -65180,10 +65284,72 @@
         "tags" : [ "Notification templates" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/otp-wording" : {
+      "get" : {
+        "description" : "The platform's, not the tenant's (ADR 0184, D19): the sentence is sent by the customers module without a template, so there is nothing to edit and no SECURITY template can be created. gatewayApproval says whether this tenant's SMS gateway moderates wordings, in which case the gateway must have approved the platform's sentences before a code reaches a handset.",
+        "operationId" : "otpWording",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OtpWordingResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The sentence a customer reads with a one-time code, read-only",
+        "tags" : [ "Notification templates" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/platform-defaults" : {
+      "get" : {
+        "description" : "ADR 0020's last resolution layer (ADR 0184): bundled ru, uz-Latn and en wording for each order milestone, read-only. A brand customises one by registering its own template for the key and saving a version, which from then on outranks it. ORDER_COMPLETED has no default: the rating prompt is opt-in by activating a template (ADR 0075).",
+        "operationId" : "platformDefaults",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PlatformDefaultResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The wording the platform sends when a brand and its tenant have written none",
+        "tags" : [ "Notification templates" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/variable-catalogue" : {
       "get" : {
         "description" : "Fixes the defect that made the editor create-only in practice: the console used to save every version with an empty schema, and the renderer correctly refuses any placeholder that schema does not declare. This is what an author now picks from.",
         "operationId" : "variableCatalogue",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "templateKey",
+          "required" : false,
+          "schema" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        } ],
         "responses" : {
           "200" : {
             "content" : {
@@ -71839,6 +72005,9 @@
   }, {
     "description" : "Tighter caps and wider quiet hours, per channel and purpose (ADR 0112)",
     "name" : "Marketing contact policy"
+  }, {
+    "description" : "The languages the grounded assistant answers in",
+    "name" : "Assistant languages"
   }, {
     "description" : "ADR 0082: staged rollout as boolean configuration keys",
     "name" : "Feature flags"

@@ -53,6 +53,7 @@ import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchro
 import uz.horecaos.platform.pricing.PromotionDbFixture;
 import uz.horecaos.platform.pricing.domain.Promotion;
 import uz.horecaos.platform.pricing.domain.QuoteRequest;
+import uz.horecaos.platform.support.LocaleNames;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 
@@ -261,9 +262,7 @@ class PromotionSimulatorDeliveryHttpTests {
                 PromotionDbFixture.BRAND,
                 ZoneRole.DELIVERY,
                 "DEFAULT",
-                "Default",
-                "Default",
-                "Default");
+                LocaleNames.triple("Default", "Default", "Default"));
         var version = zones.draftCircleVersion(
                 new ServiceZoneService.NewVersion(
                         PromotionDbFixture.TENANT,

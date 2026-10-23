@@ -3,9 +3,12 @@ package uz.horecaos.platform.ordering.api;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import uz.horecaos.platform.tenancy.api.LocalizedLabels;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 
 /**
  * The order as a paper document needs it (ADR 0154), read through ordering's own port.
@@ -125,15 +128,21 @@ public interface OrderPrintSource {
             int quantity,
             long finalAmountMinor) {}
 
-    /** A coded kitchen instruction chosen at checkout, its label copied in the three languages (V0397, V0433). */
-    record Preset(String code, String labelRu, String labelUz, String labelEn) {
+    /**
+     * A coded kitchen instruction chosen at checkout, its wording copied in every language the
+     * preset had (V0397, V0433; the only home of it since V0678).
+     */
+    record Preset(String code, Map<String, String> labels) {
 
+        /**
+         * The wording in the document's language, else the registry's fallback language, else
+         * whatever the snapshot holds; the code only for a snapshot with no wording at all, which
+         * the schema does not allow.
+         */
         public String label(String locale) {
-            return switch (locale) {
-                case "ru" -> labelRu;
-                case "uz-Latn" -> labelUz;
-                default -> labelEn;
-            };
+            String picked = LocalizedLabels.pick(
+                    labels, List.of(locale, PlatformLocales.fallback().tag()));
+            return picked == null ? code : picked;
         }
     }
 }

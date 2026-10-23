@@ -1,17 +1,30 @@
 package uz.horecaos.platform.notifications.application;
 
+import java.time.Clock;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.iam.api.AuthenticatedActor;
+import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.notifications.api.DispatchOutcome;
 import uz.horecaos.platform.notifications.api.NotificationDispatch;
 import uz.horecaos.platform.notifications.api.NotificationTransport;
+import uz.horecaos.platform.notifications.api.OperationsSubscriptionDirectory;
 import uz.horecaos.platform.notifications.domain.MessageLocale;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
+import uz.horecaos.platform.notifications.domain.NotificationVariableCatalog;
 import uz.horecaos.platform.notifications.domain.TemplateRenderer;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore.TemplateRow;
@@ -32,26 +45,72 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * it would be refused at the real gateway, with the reason named instead of a
  * confusing provider error.
  *
- * <p><strong>SMS only, for now.</strong> A Telegram test send would need a
- * bound chat rather than a free-form destination, and this service does not
- * yet resolve one — refused with a clear reason rather than attempted against
- * an invented recipient.
+ * <p><strong>SMS to a phone, Telegram to one of the brand's own bound chats.</strong> An SMS test goes
+ * to the number the author types. A Telegram message has no number: it goes to a bound chat, and a
+ * chat is an ADR 0026 binding, so the destination is a binding id and it must be one of the chats this
+ * brand's routing screen lists and has not unbound (ADR 0184, row 10.9a). An author for one brand cannot
+ * put a message into another brand's group by naming its binding. Any other channel is refused with its
+ * name, because it has no adapter to send through.
  *
- * <p>No row is written by this call, in {@code notifications.notifications}
- * or anywhere else: nothing here is a real message a tenant would ever need
- * to look back on, and every generated id below is a transient correlation
- * value for exactly one outbound call, the same status a lease token holds
- * (ADR 0076) rather than a row's own identity.
+ * <p><strong>One audit fact per test send</strong> ({@code notification.template.test_sent}), which
+ * settings.md 10.9 asks for: who sent a real message from which version, in which language, to which
+ * channel, and what the route answered. The destination is not in it, and not stored anywhere: a phone
+ * number in an audit row is a number in a table a support export reads. No row is written in
+ * {@code notifications.notifications}, and every generated id below is a transient correlation value
+ * for exactly one outbound call, the same status a lease token holds (ADR 0076) rather than a row's
+ * own identity.
  */
 @Service
 public class TemplateTestSendService {
 
     private final JdbcTemplateStore templates;
     private final NotificationTransport transport;
+    private final AuditRecorder audit;
+    private final CurrentActor currentActor;
+    private final OperationsSubscriptionDirectory chats;
+    private final Clock clock;
 
+    /** A service whose sends leave no audit fact and whose chats are never bound (tests, tools). */
     public TemplateTestSendService(JdbcTemplateStore templates, NotificationTransport transport) {
+        this(
+                templates,
+                transport,
+                fact -> {},
+                () -> new AuthenticatedActor("template-test-send", java.util.Set.of(), Map.of()),
+                new OperationsSubscriptionDirectory() {
+                    @Override
+                    public List<UUID> subscribedBindings(
+                            UUID tenantId, UUID brandId, @Nullable UUID locationId, String eventClass) {
+                        return List.of();
+                    }
+
+                    @Override
+                    public List<ScopedBinding> tenantDigestBindings(UUID tenantId, String eventClass) {
+                        return List.of();
+                    }
+
+                    @Override
+                    public List<ScopedBinding> platformDigestBindings(String eventClass) {
+                        return List.of();
+                    }
+                },
+                Clock.systemUTC());
+    }
+
+    @Autowired
+    public TemplateTestSendService(
+            JdbcTemplateStore templates,
+            NotificationTransport transport,
+            AuditRecorder audit,
+            CurrentActor currentActor,
+            OperationsSubscriptionDirectory chats,
+            Clock clock) {
         this.templates = templates;
         this.transport = transport;
+        this.audit = audit;
+        this.currentActor = currentActor;
+        this.chats = chats;
+        this.clock = clock;
     }
 
     /**
@@ -83,11 +142,14 @@ public class TemplateTestSendService {
         }
 
         NotificationChannel channel = NotificationChannel.valueOf(template.channel());
-        if (channel != NotificationChannel.SMS) {
+        if (channel != NotificationChannel.SMS && channel != NotificationChannel.TELEGRAM) {
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED,
-                    "A test send is only available for an SMS template today; %s is not wired for one"
+                    "A test send is available for an SMS or a Telegram template; %s has no adapter to send through"
                             .formatted(channel));
+        }
+        if (channel == NotificationChannel.TELEGRAM) {
+            requireOwnChat(tenantId, brandId, destination);
         }
 
         MessageLocale locale = MessageLocale.parse(localeTag)
@@ -105,7 +167,7 @@ public class TemplateTestSendService {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, reason);
         }
 
-        Map<String, String> sampleVariables = sampleValuesFor(version);
+        Map<String, String> sampleVariables = sampleValuesFor(version, locale);
         String body;
         try {
             // version.bodyTemplate() is never null (body_template is NOT NULL),
@@ -140,8 +202,57 @@ public class TemplateTestSendService {
         // this line opened a transaction, and nothing below writes one either
         // — see the class Javadoc for why.
         DispatchOutcome outcome = transport.dispatch(dispatch);
+        recordTestSend(tenantId, brandId, template, versionNumber, locale, outcome);
         return new TestSendOutcome(
                 outcome.status().name(), outcome.providerStatus(), outcome.errorCode(), outcome.detail());
+    }
+
+    /**
+     * A Telegram test goes to a chat this brand has bound and not unbound, named by its binding id.
+     * Refused with the same message for a malformed id, another brand's chat and a retired one: which of
+     * the three it is would tell a caller about chats they may not see.
+     */
+    private void requireOwnChat(UUID tenantId, UUID brandId, String destination) {
+        UUID bindingId;
+        try {
+            bindingId = UUID.fromString(destination.strip());
+        } catch (IllegalArgumentException malformed) {
+            throw notOneOfTheBrandsChats();
+        }
+        if (!chats.isActiveOperationsChat(tenantId, brandId, bindingId)) {
+            throw notOneOfTheBrandsChats();
+        }
+    }
+
+    private static ApiException notOneOfTheBrandsChats() {
+        return new ApiException(
+                ErrorCode.VALIDATION_FAILED,
+                "A Telegram test goes to one of this brand's bound chats; choose one from the routing tab");
+    }
+
+    private void recordTestSend(
+            UUID tenantId,
+            UUID brandId,
+            TemplateRow template,
+            int versionNumber,
+            MessageLocale locale,
+            DispatchOutcome outcome) {
+        Map<String, Object> sent = new LinkedHashMap<>();
+        sent.put("templateKey", template.templateKey());
+        sent.put("channel", template.channel());
+        sent.put("versionNumber", versionNumber);
+        sent.put("locale", locale.tag());
+        sent.put("outcome", outcome.status().name());
+        audit.record(AuditFact.of("notification.template.test_sent", AuditClass.BUSINESS)
+                .by(ActorRef.user(currentActor.get().subject(), null))
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("notification.template", template.id())
+                .targetVersion((long) template.version())
+                .because("A test message was sent from a template version, to a destination the author named")
+                .changed(ChangeDocuments.created(sent))
+                .correlatedBy(template.id().toString())
+                .occurredAt(clock.instant())
+                .build());
     }
 
     /**
@@ -149,24 +260,39 @@ public class TemplateTestSendService {
      * own description stands in where nothing better exists, so a rendered
      * test message reads as an example rather than throwing on a missing
      * value {@link TemplateRenderer#render} would otherwise refuse.
+     *
+     * <p>The two personal variables read as invented people, never as anyone real: the sample is the
+     * point of a test, and a test send must not reveal the customer or the courier of any order.
      */
-    private Map<String, String> sampleValuesFor(VersionRow version) {
+    private Map<String, String> sampleValuesFor(VersionRow version, MessageLocale locale) {
         Set<String> used = TemplateRenderer.variablesUsedIn(version.bodyTemplate());
         Map<String, String> sample = new LinkedHashMap<>();
-        Map<String, String> catalogDefaults = defaultSamples();
+        Map<String, String> catalogDefaults = defaultSamples(version.showItemPrices());
         for (String name : used) {
             sample.put(name, catalogDefaults.getOrDefault(name, "[" + name + "]"));
         }
         return sample;
     }
 
-    private Map<String, String> defaultSamples() {
+    private static Map<String, String> defaultSamples(boolean showItemPrices) {
         Map<String, String> defaults = new LinkedHashMap<>();
         defaults.put("orderNumber", "A-1042");
-        defaults.put("amount", "85 000 UZS");
+        defaults.put("amount", "85000");
         defaults.put("currency", "UZS");
         defaults.put("reasonCode", "OUT_OF_STOCK");
         defaults.put("code", "482913");
+        defaults.put("restaurantName", "Oqtepa Lavash");
+        defaults.put("deliveryTime", "19:45");
+        defaults.put("preparationTime", "35");
+        defaults.put(
+                "productList", showItemPrices ? "2x Lavash (50000 UZS), 1x Cola (8000 UZS)" : "2x Lavash, 1x Cola");
+        defaults.put("discountAmount", "5000");
+        defaults.put("deliveryFee", "12000");
+        defaults.put("customerName", "Aziz");
+        defaults.put("courierFirstName", "Bobur");
+        // A name the catalogue declines is never given a sample: leaving it out makes a wording that
+        // got past authoring with one fail the test send with the variable named, which is the point.
+        NotificationVariableCatalog.DECLINED.forEach(defaults::remove);
         return defaults;
     }
 

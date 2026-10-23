@@ -117,9 +117,6 @@ public class OperationsServiceZoneController {
                 brandId,
                 body.role(),
                 body.code(),
-                body.displayNameRu(),
-                body.displayNameUz(),
-                body.displayNameEn(),
                 body.displayNames() == null ? Map.of() : body.displayNames());
         return ResponseEntity.ok(new ServiceZoneController.ZoneView(
                 zoneId, body.code(), body.role().name()));
@@ -141,13 +138,7 @@ public class OperationsServiceZoneController {
             @Valid @RequestBody RenameZoneRequest body) {
         try {
             ServiceZoneService.ZoneNames renamed = zones.renameZone(
-                    tenantId,
-                    brandId,
-                    zoneId,
-                    body.displayNameRu(),
-                    body.displayNameUz(),
-                    body.displayNameEn(),
-                    body.displayNames() == null ? Map.of() : body.displayNames());
+                    tenantId, brandId, zoneId, body.displayNames() == null ? Map.of() : body.displayNames());
             return ResponseEntity.ok(new ZoneNamesResponse(renamed.zoneId(), renamed.names()));
         } catch (ServiceZoneService.DeliveryResourceNotFoundException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
@@ -361,9 +352,7 @@ public class OperationsServiceZoneController {
                         row.externalRef(),
                         row.role(),
                         row.code(),
-                        row.displayNameRu(),
-                        row.displayNameUz(),
-                        row.displayNameEn(),
+                        row.displayNames() == null ? Map.of() : row.displayNames(),
                         row.regionId(),
                         row.priority(),
                         row.currency(),
@@ -418,14 +407,8 @@ public class OperationsServiceZoneController {
         }
     }
 
-    /**
-     * A rename: the name per locale, and (for callers that predate `displayNames`) the
-     * platform triple. Only the locales named are written.
-     */
+    /** A rename: the name per locale. Only the locales named are written. */
     public record RenameZoneRequest(
-            @Nullable @Size(max = 200) String displayNameRu,
-            @Nullable @Size(max = 200) String displayNameUz,
-            @Nullable @Size(max = 200) String displayNameEn,
             @Nullable @Size(max = 32) Map<String, @Size(max = 200) String> displayNames) {}
 
     /** @param displayNames every locale the zone now has a name in, each once */
@@ -533,9 +516,7 @@ public class OperationsServiceZoneController {
             @NotBlank @Size(max = 120) String externalRef,
             @NotNull ZoneRole role,
             @NotBlank @Size(max = 32) String code,
-            @NotBlank @Size(max = 200) String displayNameRu,
-            @NotBlank @Size(max = 200) String displayNameUz,
-            @NotBlank @Size(max = 200) String displayNameEn,
+            @Nullable @Size(max = 32) Map<String, @Size(max = 200) String> displayNames,
             @Nullable UUID regionId,
             int priority,
             @NotBlank @Size(min = 3, max = 3) String currency,

@@ -1,9 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { SessionCapabilities } from '../../core/auth/session-capabilities';
+import { applyRegionalFormats, resetRegionalFormats } from '../../core/format/regional-format';
 import { I18n } from '../../core/i18n/i18n';
 import { LocationView } from '../settings/locations/locations-api';
 import { LeadDetailPanel } from './lead-detail-panel';
@@ -90,6 +91,27 @@ describe('LeadDetailPanel', () => {
     expect(host.textContent).not.toContain('901234567');
     expect(host.querySelector('[data-testid="lead-attempts"]')!.textContent).toContain('No answer');
     expect(api['reveal']).not.toHaveBeenCalled();
+  });
+
+  describe('the revealed number follows the brand’s display pattern (row 10.12)', () => {
+    afterEach(() => resetRegionalFormats());
+
+    it('writes the revealed contact phone in the pattern, and as it arrived when the brand chose none', async () => {
+      const host = await mount();
+      click(host, 'lead-reveal');
+      await flush();
+      fixture.detectChanges();
+      expect(host.querySelector('[data-testid="lead-phone"]')!.textContent).toContain(
+        '+998901234567',
+      );
+
+      applyRegionalFormats({ phoneDisplayPattern: '+### (##) ###-##-##' });
+      fixture.detectChanges();
+
+      expect(host.querySelector('[data-testid="lead-phone"]')!.textContent).toContain(
+        '+998 (90) 123-45-67',
+      );
+    });
   });
 
   it('reveals the number with a purpose the audit log will name, and hides it again', async () => {

@@ -62,11 +62,7 @@ export class DispatchConditionsForm {
   protected zoneLabel(zone: DispatchOptions['zones'][number]): string {
     return localisedName(
       this.i18n.locale(),
-      {
-        displayNameRu: zone.nameRu,
-        displayNameUz: zone.nameUz,
-        displayNameEn: zone.nameEn,
-      },
+      { displayNames: zone.names },
       this.registry.fallbackOrder(),
     );
   }

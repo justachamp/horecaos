@@ -388,7 +388,10 @@ describe('UiCartService project() (via load())', () => {
             ],
             modifierGroupIds: [],
             commentPresets: [
-              { code: 'NO_ONIONS', labelRu: 'Без лука', labelUz: 'Piyozsiz', labelEn: 'No onions' },
+              {
+                code: 'NO_ONIONS',
+                labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions' },
+              },
             ],
           },
         ],
@@ -400,7 +403,7 @@ describe('UiCartService project() (via load())', () => {
     const items = service.cartData()?.items ?? [];
     expect(items[0].commentPresetCodes).toEqual(['NO_ONIONS']);
     expect(items[0].commentPresets).toEqual([
-      { code: 'NO_ONIONS', labelRu: 'Без лука', labelUz: 'Piyozsiz', labelEn: 'No onions' },
+      { code: 'NO_ONIONS', labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions' } },
     ]);
   });
 
@@ -654,7 +657,7 @@ describe('UiCartService.setQuantity', () => {
     modifiers: [],
     commentPresetCodes: ['NO_ONIONS'],
     commentPresets: [
-      { code: 'NO_ONIONS', labelRu: 'Без лука', labelUz: 'Piyozsiz', labelEn: 'No onions' },
+      { code: 'NO_ONIONS', labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions' } },
     ],
   };
 

@@ -53,9 +53,7 @@ export const catalogEn = {
   'catalog.autoAdd.field.mandatory': 'The customer cannot decline it',
   'catalog.autoAdd.field.fulfillment': 'Fulfilment modes',
   'catalog.autoAdd.field.channel': 'Channel types',
-  'catalog.autoAdd.field.textRu': 'Customer text (Russian)',
-  'catalog.autoAdd.field.textUz': 'Customer text (Uzbek)',
-  'catalog.autoAdd.field.textEn': 'Customer text (English)',
+  'catalog.autoAdd.field.textIn': 'Customer text ({language})',
   'catalog.autoAdd.channelsNote':
     'Only channels that build orders from a cart. An aggregator or POS order cannot carry a rule.',
   'catalog.autoAdd.pickVariant': 'Find the item to add',

@@ -416,7 +416,7 @@ public class FeedbackTagService {
 
     private Map<String, String> suppliedLabels(@Nullable Map<String, String> byLocale) {
         try {
-            return LocalizedLabels.supplied(null, null, null, byLocale, MAXIMUM_LABEL_LENGTH);
+            return LocalizedLabels.supplied(byLocale, MAXIMUM_LABEL_LENGTH);
         } catch (IllegalArgumentException invalid) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
         }

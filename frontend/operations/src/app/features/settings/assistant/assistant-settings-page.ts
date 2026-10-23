@@ -13,7 +13,7 @@ import { ConfigurationResolutionView, EditableScopeType } from '../../../core/ap
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { I18n } from '../../../core/i18n/i18n';
-import { MessageKey } from '../../../core/i18n/messages.en';
+import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { InheritedField } from '../../../shared/ui/inherited-field/inherited-field';
 import { describeApiError } from '../../orders/order-errors';
@@ -21,6 +21,7 @@ import { ConfigurationApi } from '../configuration-api';
 import { SettingsSaved } from '../settings-saved';
 import { SettingsScope } from '../settings-scope';
 import { AssistantApi, AssistantUsageResponse, formatUsdCents, spendCents } from './assistant-api';
+import { AssistantKnowledgeApi, AssistantLanguage } from './assistant-knowledge-api';
 
 /** The per-brand switch (ADR 0069: "ships behind an entitlement and a per-tenant switch, defaulting off"). */
 export const ASSISTANT_ENABLED_CODE = 'assistant.enabled';
@@ -31,32 +32,20 @@ export const ASSISTANT_ENABLED_CODE = 'assistant.enabled';
  */
 export const DISCLOSURE_MAXIMUM_CHARACTERS = 500;
 
-type DisclosureLocale = 'en' | 'ru' | 'uz';
-
+/**
+ * One disclosure sentence, in one reply language the assistant speaks: the language is the
+ * backend's to name (`GET .../assistant/languages`, read from the detector's own vocabulary) and so
+ * is the configuration key that holds the sentence, so a language the detector learns arrives here
+ * without a change to this file.
+ */
 interface DisclosureField {
-  readonly locale: DisclosureLocale;
+  /** The assistant's code for the language: also what the usage report keys its default wording by. */
+  readonly locale: string;
+  /** The configuration key that holds the sentence. */
   readonly code: string;
-  readonly labelKey: MessageKey;
+  /** The platform language it is, as the registry tags it, for naming it to the operator. */
+  readonly language: string;
 }
-
-/** One key per reply language the assistant speaks; Russian first, the language most of its customers write in. */
-const DISCLOSURE_FIELDS: readonly DisclosureField[] = [
-  {
-    locale: 'ru',
-    code: 'assistant.disclosure_text_ru',
-    labelKey: 'settings.assistant.disclosure.field.ru',
-  },
-  {
-    locale: 'uz',
-    code: 'assistant.disclosure_text_uz',
-    labelKey: 'settings.assistant.disclosure.field.uz',
-  },
-  {
-    locale: 'en',
-    code: 'assistant.disclosure_text_en',
-    labelKey: 'settings.assistant.disclosure.field.en',
-  },
-];
 
 /** Both keys are `settableAt(PLATFORM, TENANT, BRAND)`: a branch has no setting of its own to edit. */
 const SETTABLE_SCOPES = ['PLATFORM', 'TENANT', 'BRAND'] as const;
@@ -96,7 +85,18 @@ export class AssistantSettingsPage {
   private readonly saved = inject(SettingsSaved);
   protected readonly i18n = inject(I18n);
 
-  protected readonly disclosureFields = DISCLOSURE_FIELDS;
+  private readonly registry = inject(PlatformLocales);
+  private readonly knowledgeApi = inject(AssistantKnowledgeApi);
+
+  /** The languages the assistant answers in; empty until read. */
+  protected readonly languages = signal<readonly AssistantLanguage[]>([]);
+  protected readonly disclosureFields = computed<readonly DisclosureField[]>(() =>
+    this.languages().map((language) => ({
+      locale: language.code,
+      code: language.disclosureKey,
+      language: language.locale,
+    })),
+  );
   protected readonly settableScopes = SETTABLE_SCOPES;
   protected readonly maximumCharacters = DISCLOSURE_MAXIMUM_CHARACTERS;
   protected readonly enabledCode = ASSISTANT_ENABLED_CODE;
@@ -171,18 +171,17 @@ export class AssistantSettingsPage {
   protected readonly formatOnOff = (value: unknown): string =>
     value ? this.i18n.t('settings.assistant.on') : this.i18n.t('settings.assistant.off');
 
-  private readonly disclosureFormatters = new Map<string, (value: unknown) => string>(
-    DISCLOSURE_FIELDS.map((field) => [
-      field.code,
-      (value: unknown) =>
-        typeof value === 'string' && value.trim().length > 0
-          ? value
-          : this.i18n.t('settings.assistant.disclosure.blank'),
-    ]),
-  );
+  /** Bound once, like {@link formatOnOff}: every disclosure shows a blank as "the platform's wording". */
+  protected readonly formatDisclosure = (value: unknown): string =>
+    typeof value === 'string' && value.trim().length > 0
+      ? value
+      : this.i18n.t('settings.assistant.disclosure.blank');
 
-  protected disclosureFormatter(field: DisclosureField): (value: unknown) => string {
-    return this.disclosureFormatters.get(field.code) ?? ((value) => String(value));
+  /** "Said in Russian": the field's name, from the registry's name of its language. */
+  protected fieldLabel(field: DisclosureField): string {
+    return this.i18n.t('settings.assistant.disclosure.field', {
+      language: this.registry.nameOf(field.language, this.i18n.locale()),
+    });
   }
 
   /** The platform's own wording for this language, from the report: what a blank value falls back to. */
@@ -299,11 +298,11 @@ export class AssistantSettingsPage {
 
   private announce(kind: 'set' | 'reverted', code: string): void {
     const isSwitch = code === ASSISTANT_ENABLED_CODE;
-    const field = DISCLOSURE_FIELDS.find((candidate) => candidate.code === code);
+    const field = this.disclosureFields().find((candidate) => candidate.code === code);
     const label = isSwitch
       ? this.i18n.t('settings.assistant.switch.field')
       : field
-        ? this.i18n.t(field.labelKey)
+        ? this.fieldLabel(field)
         : code;
     const target = this.scope.targetFor(this.level(), this.scope.brandId(), null);
     this.saved.announce(
@@ -337,7 +336,8 @@ export class AssistantSettingsPage {
     this.loadError.set(null);
     this.editingCode.set(null);
     try {
-      const codes = [ASSISTANT_ENABLED_CODE, ...DISCLOSURE_FIELDS.map((field) => field.code)];
+      await this.loadLanguages();
+      const codes = [ASSISTANT_ENABLED_CODE, ...this.disclosureFields().map((field) => field.code)];
       const entries = await Promise.all(
         codes.map(async (code) => [code, await this.resolve(tenantId, brandId, code)] as const),
       );
@@ -352,6 +352,11 @@ export class AssistantSettingsPage {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /** Which languages carry a disclosure: the detector's, read from the platform (any signed-in principal may read it). */
+  private async loadLanguages(): Promise<void> {
+    this.languages.set(await this.knowledgeApi.languages());
   }
 
   private async loadUsage(): Promise<void> {

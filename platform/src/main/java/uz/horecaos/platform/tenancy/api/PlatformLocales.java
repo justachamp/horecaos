@@ -1,5 +1,6 @@
 package uz.horecaos.platform.tenancy.api;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -93,16 +94,55 @@ public final class PlatformLocales {
 
     private static final PlatformLocale FALLBACK = ALL.getFirst();
 
+    /**
+     * Entries declared for an activation rehearsal, after the real ones; empty everywhere but inside a
+     * test that opened {@link #rehearseActivation}. Replaced, never mutated, so a reader holding the old
+     * list is never surprised mid-iteration.
+     */
+    private static volatile List<PlatformLocale> rehearsed = List.of();
+
     private PlatformLocales() {}
+
+    private static List<PlatformLocale> entries() {
+        List<PlatformLocale> extra = rehearsed;
+        if (extra.isEmpty()) {
+            return ALL;
+        }
+        List<PlatformLocale> both = new ArrayList<>(ALL);
+        both.addAll(extra);
+        return List.copyOf(both);
+    }
+
+    /**
+     * <strong>A test seam, and only that.</strong> Declares extra entries (a synthetic fifth language
+     * live in a tier) until the returned handle is closed, so a test can prove that activating a language
+     * is a change to its registry entry and nothing else (ADR 0149, Exit criteria: "no migration and no
+     * change to any module other than its catalogue"): the pickers, the template requirement, the
+     * outcome-reason set and the public read follow it without a line of their own.
+     *
+     * <p>Nothing in production calls it, and {@code LocaleListsLiveInTheRegistryTests} fails the build if
+     * any main source other than this class names it. It does not change {@link #fallback()}, which is
+     * the first entry of the real list, and it is not safe for tests that run in parallel in one JVM;
+     * the suite does not.
+     *
+     * @return a handle that removes the entries again; use it in a try-with-resources
+     */
+    public static AutoCloseable rehearseActivation(PlatformLocale... extra) {
+        List<PlatformLocale> before = rehearsed;
+        List<PlatformLocale> after = new ArrayList<>(before);
+        after.addAll(List.of(extra));
+        rehearsed = List.copyOf(after);
+        return () -> rehearsed = before;
+    }
 
     /** Every language the platform has declared, live or not, in fallback order. */
     public static List<PlatformLocale> all() {
-        return ALL;
+        return entries();
     }
 
     /** The languages live in a tier, in fallback order. */
     public static List<PlatformLocale> active(Tier tier) {
-        return ALL.stream().filter(locale -> locale.active(tier)).toList();
+        return entries().stream().filter(locale -> locale.active(tier)).toList();
     }
 
     /** The tags of {@link #active}: the closed set a store of that tier accepts. */
@@ -121,7 +161,7 @@ public final class PlatformLocales {
             return Optional.empty();
         }
         String wanted = tag.strip();
-        return ALL.stream()
+        return entries().stream()
                 .filter(locale -> locale.tag().equalsIgnoreCase(wanted))
                 .findFirst();
     }
@@ -136,7 +176,7 @@ public final class PlatformLocales {
             return Optional.empty();
         }
         String wanted = input.strip().toLowerCase(Locale.ROOT);
-        return ALL.stream()
+        return entries().stream()
                 .filter(locale -> locale.tag().toLowerCase(Locale.ROOT).equals(wanted)
                         || locale.inputAliases().stream()
                                 .anyMatch(
@@ -155,7 +195,7 @@ public final class PlatformLocales {
             return Optional.empty();
         }
         String wanted = code.strip();
-        return ALL.stream()
+        return entries().stream()
                 .filter(locale -> locale.catalogCode().equals(wanted))
                 .findFirst();
     }
@@ -224,7 +264,7 @@ public final class PlatformLocales {
             throw new IllegalArgumentException("A column reference is expected, not " + column);
         }
         StringBuilder sql = new StringBuilder("CASE ").append(column);
-        ALL.stream()
+        entries().stream()
                 .sorted(Comparator.comparingInt(PlatformLocale::fallbackRank))
                 .forEach(locale -> {
                     sql.append(" WHEN '").append(locale.tag()).append("' THEN ").append(locale.fallbackRank());
@@ -235,6 +275,6 @@ public final class PlatformLocales {
                                 .append(locale.fallbackRank());
                     }
                 });
-        return sql.append(" ELSE ").append(ALL.size()).append(" END").toString();
+        return sql.append(" ELSE ").append(entries().size()).append(" END").toString();
     }
 }

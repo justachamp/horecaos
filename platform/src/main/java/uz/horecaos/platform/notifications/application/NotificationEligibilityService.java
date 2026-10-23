@@ -1,11 +1,15 @@
 package uz.horecaos.platform.notifications.application;
 
 import java.time.Clock;
+import java.time.DateTimeException;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -20,16 +24,22 @@ import uz.horecaos.platform.customers.api.RecipientContactDirectory;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory.ContactEndpoint;
 import uz.horecaos.platform.marketing.api.CampaignFeedbackPort;
 import uz.horecaos.platform.notifications.api.NotificationTransport;
+import uz.horecaos.platform.notifications.application.NotificationTemplateService.PlatformWording;
 import uz.horecaos.platform.notifications.domain.ContentHashes;
 import uz.horecaos.platform.notifications.domain.MessageLocale;
 import uz.horecaos.platform.notifications.domain.MoneyText;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
+import uz.horecaos.platform.notifications.domain.NotificationVariableCatalog;
+import uz.horecaos.platform.notifications.domain.OrderMessageValues;
 import uz.horecaos.platform.notifications.domain.QuietHours;
 import uz.horecaos.platform.notifications.domain.SuppressionReason;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore.NotificationRow;
+import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore.TemplateRow;
+import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore.VersionRow;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
+import uz.horecaos.platform.ordering.api.OrderDirectory.NotificationFacts;
 import uz.horecaos.platform.ordering.api.OrderDirectory.OrderSummary;
 
 /**
@@ -217,6 +227,8 @@ public class NotificationEligibilityService {
         OrderDirectory.NotificationContext notificationContext = summary == null
                 ? null
                 : orders.notificationContext(row.tenantId(), row.subjectId()).orElse(null);
+        // ADR 0184: brand, then tenant, then the platform's own bundled wording, and only for a
+        // customer-addressed message of the class the platform wrote the wording for.
         var resolution = templates.resolve(
                 row.tenantId(),
                 row.brandId(),
@@ -224,10 +236,12 @@ public class NotificationEligibilityService {
                 channel,
                 locale,
                 notificationContext == null ? null : notificationContext.fulfillmentMode(),
-                notificationContext == null ? null : notificationContext.channelSource());
+                notificationContext == null ? null : notificationContext.channelSource(),
+                notificationClass);
         var template = resolution.template();
         var version = resolution.version();
-        if (template == null || version == null) {
+        var platformWording = resolution.platformDefault();
+        if (platformWording == null && (template == null || version == null)) {
             // Checking the resolved rows directly (rather than
             // resolution.isFound()) is what lets the compiler carry the non-null
             // fact into the rest of this method; Resolution guarantees the two
@@ -243,8 +257,9 @@ public class NotificationEligibilityService {
 
         // ADR 0091: a wording its SMS gateway has not approved, or has refused,
         // is not sent. The gateway would refuse it anyway; withholding it here
-        // records why instead of a provider error per customer.
-        if (TemplateProviderReviewService.withheld(version.providerReview())) {
+        // records why instead of a provider error per customer. The platform's own wording
+        // carries no moderation state of its own: it is the platform's to get approved.
+        if (version != null && TemplateProviderReviewService.withheld(version.providerReview())) {
             return suppress(
                     row,
                     TemplateProviderReviewService.REJECTED.equals(version.providerReview())
@@ -252,6 +267,10 @@ public class NotificationEligibilityService {
                             : SuppressionReason.TEMPLATE_AWAITING_PROVIDER,
                     now);
         }
+
+        // Where the wording came from names the purpose, the language it is actually in, and the
+        // variables it may use. Read once, here, so the rest of the method has one answer.
+        WordingSource wording = WordingSource.of(template, version, platformWording, templates);
 
         // The gate. Only the classes that legally need a decision ask for one, and
         // absence of a decision is withheld rather than permitted — "we never
@@ -263,8 +282,8 @@ public class NotificationEligibilityService {
             UUID consentAccountId = Objects.requireNonNull(
                     accountId, "a class that requires consent must have resolved a customer account");
             String consentPurpose = Objects.requireNonNull(
-                    template.consentPurpose(),
-                    "template %s is %s and must declare a consent purpose".formatted(template.id(), notificationClass));
+                    wording.consentPurpose(),
+                    "wording %s is %s and must declare a consent purpose".formatted(wording.id(), notificationClass));
             boolean granted = consent.consentFor(
                             row.tenantId(), consentAccountId, row.brandId(), consentPurpose, channel.name())
                     .map(ConsentDirectory.ConsentState::granted)
@@ -374,14 +393,18 @@ public class NotificationEligibilityService {
                     now);
         }
 
-        Map<String, String> variables = variablesFor(row, summary);
+        Map<String, String> variables = variablesFor(row, summary, wording.variables(), wording.showItemPrices());
+        // The language the wording is actually in, not the one the customer asked for: a brand that does
+        // not serve the customer's language writes to them in its own, and the dispatcher looks the
+        // version row up by exactly this tag.
         boolean ready = notifications.markReady(
                 row.tenantId(),
                 row.id(),
                 claimToken,
-                template.id(),
-                version.versionNumber(),
-                locale.tag(),
+                wording.templateId(),
+                wording.templateVersion(),
+                wording.platformDefaultVersion(),
+                wording.locale(),
                 accountId,
                 endpointId,
                 objectMapper.writeValueAsString(variables),
@@ -397,20 +420,31 @@ public class NotificationEligibilityService {
     }
 
     /**
-     * The values the template may render.
+     * The values the template may render, frozen onto the row.
      *
-     * <p>Two sources, both already free of personal data. What the triggering event
-     * carried is on the row — a rejection reason code lives on {@code OrderRejected}
-     * and nowhere else — and what the order carries is read here, when there is one.
-     * Nothing else may write this map: the ADR 0032 classification test already
-     * forbids protected values on an event payload, and the order summary is a
-     * deliberately narrow port for the same reason.
+     * <p>Two sources, both free of personal data. What the triggering event carried is on the row — a
+     * rejection reason code lives on {@code OrderRejected} and nowhere else — and what the order carries is
+     * read here, when there is one: its number and total, always, and, only when the wording names them,
+     * the restaurant, the promised time, the preparation time, the product list, the discount and the fee
+     * (ADR 0184). Nothing else may write this map: the ADR 0032 classification test already forbids
+     * protected values on an event payload, and the order read is a deliberately narrow port for the same
+     * reason.
+     *
+     * <p><strong>The two personal values are not here and cannot be.</strong> {@code customerName} and
+     * {@code courierFirstName} are resolved when the message is rendered and written nowhere (D21), so
+     * they are removed from this map even if a trigger supplied them. A row that froze a customer's name
+     * would be a table a support export leaks it from, which is what V0026's header says this one must
+     * never become.
      *
      * @param order null for a message that never named an order — an operations
      *              alert about something else, or a campaign message, whose only
      *              variables are whatever the row already carries
+     * @param declared the variables the wording names, which decides what is read beyond the order's number
+     *                 and total: an order read the template does not use is a query for nothing
+     * @param showItemPrices the version's «show item prices» setting
      */
-    private Map<String, String> variablesFor(NotificationRow row, @Nullable OrderSummary order) {
+    private Map<String, String> variablesFor(
+            NotificationRow row, @Nullable OrderSummary order, Set<String> declared, boolean showItemPrices) {
         Map<String, String> variables = new LinkedHashMap<>();
         if (row.variablesJson() != null && !row.variablesJson().isBlank()) {
             variables.putAll(objectMapper.readValue(row.variablesJson(), VARIABLES_TYPE));
@@ -419,8 +453,106 @@ public class NotificationEligibilityService {
             variables.put("orderNumber", order.publicOrderNumber() == null ? "" : order.publicOrderNumber());
             variables.put("amount", MoneyText.format(order.totalMinor(), order.currency()));
             variables.put("currency", order.currency() == null ? "" : order.currency());
+            if (declared.stream().anyMatch(ORDER_DETAIL_VARIABLES::contains)) {
+                orders.notificationFacts(row.tenantId(), row.subjectId())
+                        .ifPresent(facts -> putOrderDetail(variables, facts, declared, showItemPrices));
+            }
         }
+        variables.keySet().removeAll(NotificationVariableCatalog.RESOLVED_AT_RENDER);
         return variables;
+    }
+
+    /** The variables a wording may name beyond number and total; also what decides whether to read the facts. */
+    private static final Set<String> ORDER_DETAIL_VARIABLES =
+            Set.of("restaurantName", "deliveryTime", "preparationTime", "productList", "discountAmount", "deliveryFee");
+
+    private static void putOrderDetail(
+            Map<String, String> variables, NotificationFacts facts, Set<String> declared, boolean showItemPrices) {
+        if (declared.contains("restaurantName")) {
+            variables.put("restaurantName", facts.brandDisplayName());
+        }
+        if (declared.contains("deliveryTime")) {
+            variables.put(
+                    "deliveryTime", OrderMessageValues.deliveryTime(facts.promisedAt(), zoneOf(facts.timezone())));
+        }
+        if (declared.contains("preparationTime")) {
+            variables.put("preparationTime", OrderMessageValues.preparationTime(facts.prepMinutes()));
+        }
+        if (declared.contains("productList")) {
+            variables.put(
+                    "productList",
+                    OrderMessageValues.productList(
+                            facts.lines().stream()
+                                    .map(line -> new OrderMessageValues.Item(
+                                            line.name(), line.quantity(), line.lineTotalMinor()))
+                                    .toList(),
+                            facts.currency(),
+                            showItemPrices));
+        }
+        if (declared.contains("discountAmount")) {
+            variables.put("discountAmount", MoneyText.format(facts.discountMinor(), facts.currency()));
+        }
+        if (declared.contains("deliveryFee")) {
+            variables.put("deliveryFee", MoneyText.format(facts.feeMinor(), facts.currency()));
+        }
+    }
+
+    private static ZoneId zoneOf(String timezone) {
+        try {
+            return ZoneId.of(timezone);
+        } catch (DateTimeException unknown) {
+            // A location with an unreadable zone still gets its message, on UTC, rather than none.
+            return ZoneOffset.UTC;
+        }
+    }
+
+    /**
+     * Where a resolved wording came from, as the rest of eligibility needs it: one answer whether the
+     * wording is a tenant's template version or the platform's bundled default (ADR 0184), so no later
+     * line has to ask which.
+     *
+     * @param templateId null for the platform's wording
+     * @param platformDefaultVersion null for a tenant template; exactly one of the two is set
+     * @param locale the language the wording is actually in, which is not always the customer's
+     */
+    private record WordingSource(
+            String id,
+            @Nullable UUID templateId,
+            @Nullable Integer templateVersion,
+            @Nullable Integer platformDefaultVersion,
+            @Nullable String consentPurpose,
+            String locale,
+            Set<String> variables,
+            boolean showItemPrices) {
+
+        static WordingSource of(
+                @Nullable TemplateRow template,
+                @Nullable VersionRow version,
+                @Nullable PlatformWording platform,
+                NotificationTemplateService templates) {
+            if (platform != null) {
+                return new WordingSource(
+                        "platform default " + platform.entry().templateKey(),
+                        null,
+                        null,
+                        platform.version(),
+                        platform.entry().consentPurpose(),
+                        platform.locale(),
+                        platform.entry().variables(),
+                        false);
+            }
+            TemplateRow own = Objects.requireNonNull(template, "a found wording names a template");
+            VersionRow ownVersion = Objects.requireNonNull(version, "a found wording names a version");
+            return new WordingSource(
+                    own.id().toString(),
+                    own.id(),
+                    ownVersion.versionNumber(),
+                    null,
+                    own.consentPurpose(),
+                    ownVersion.locale(),
+                    templates.declaredVariables(ownVersion),
+                    ownVersion.showItemPrices());
+        }
     }
 
     private boolean suppress(NotificationRow row, SuppressionReason reason, Instant now) {

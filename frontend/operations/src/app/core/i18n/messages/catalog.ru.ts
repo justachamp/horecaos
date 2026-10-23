@@ -55,9 +55,7 @@ export const catalogRu: AreaMessages<typeof catalogEn> = {
   'catalog.autoAdd.field.mandatory': 'Клиент не может отказаться',
   'catalog.autoAdd.field.fulfillment': 'Способы получения',
   'catalog.autoAdd.field.channel': 'Типы каналов',
-  'catalog.autoAdd.field.textRu': 'Текст для клиента (русский)',
-  'catalog.autoAdd.field.textUz': 'Текст для клиента (узбекский)',
-  'catalog.autoAdd.field.textEn': 'Текст для клиента (английский)',
+  'catalog.autoAdd.field.textIn': 'Текст для клиента ({language})',
   'catalog.autoAdd.channelsNote':
     'Только каналы, где заказ собирается из корзины. Заказ агрегатора или кассы не может нести правило.',
   'catalog.autoAdd.pickVariant': 'Найдите добавляемую позицию',

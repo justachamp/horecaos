@@ -59,14 +59,16 @@
       <app-icon name="flagUz" [size]="24" />
       <span class="lang-row__label">{{ 'profile.languageSwitchLabel' | t }}</span>
       <div class="lang-chips">
-        @for (code of languages; track code) {
+        @for (option of languages(); track option.id) {
           <button
             type="button"
             class="lang-chip"
-            [class.is-active]="lang.langId() === code"
-            (click)="setLang(code)"
+            [class.is-active]="lang.langId() === option.id"
+            [attr.title]="option.label"
+            [attr.lang]="option.tag"
+            (click)="setLang(option.id)"
           >
-            {{ code.toUpperCase() }}
+            {{ option.id.toUpperCase() }}
           </button>
         }
       </div>

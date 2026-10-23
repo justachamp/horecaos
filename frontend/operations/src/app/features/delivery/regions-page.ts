@@ -17,7 +17,6 @@ import {
   labelDrafts,
   labelsToSend,
   localeDisplayName,
-  platformColumns,
 } from '../../core/i18n/locale-labels';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
@@ -58,10 +57,7 @@ const STATUS_KEYS: Readonly<Record<string, MessageKey>> = {
  * default language is the one name a region must have; every other offered
  * language is optional. **A language the tenant does not offer is never
  * touched by a rewrite**: `displayNames` carries only the offered, filled-in
- * names ({@link labelsToSend}) so the server keeps every other one beyond the
- * platform triple, and the three platform fields — which the OpenAPI contract
- * keeps required — go back for a language the tenant does not offer with the
- * name the region already has, unchanged ({@link platformColumns}).
+ * names ({@link labelsToSend}), so the server keeps every other one.
  *
  * **Platform regions are visible and read-only.** V0025's nullable tenant —
  * "Tashkent is not one tenant's fact" — means a tenant may reference the
@@ -184,7 +180,7 @@ export class RegionsPage implements OnInit {
   protected openEditForm(region: RegionResponse): void {
     this.editing.set(region);
     this.code.set(region.code);
-    this.names.set(labelDrafts(this.locales(), region.displayNames ?? triple(region)));
+    this.names.set(labelDrafts(this.locales(), region.displayNames));
     this.centreLat.set(region.centreLat);
     this.centreLon.set(region.centreLon);
     this.swLat.set(region.bboxSwLat);
@@ -214,28 +210,10 @@ export class RegionsPage implements OnInit {
     if (!scope || !this.canSubmit()) {
       return;
     }
-    const existingRegion = this.editing();
-    const columns = platformColumns(
-      this.locales(),
-      this.names(),
-      this.defaultLocale(),
-      existingRegion
-        ? {
-            ru: existingRegion.displayNameRu,
-            'uz-Latn': existingRegion.displayNameUz,
-            en: existingRegion.displayNameEn,
-          }
-        : null,
-    );
     const request: RegionGeographyRequest = {
       code: this.code().trim().toUpperCase(),
-      // The platform triple stays required by the contract: a platform language
-      // the tenant does not offer goes back as the region already has it
-      // (unchanged), and `displayNames` names only the offered, filled-in
-      // languages, so one beyond the triple that is not offered keeps its name.
-      displayNameRu: columns.ru,
-      displayNameUz: columns['uz-Latn'],
-      displayNameEn: columns.en,
+      // `displayNames` names only the offered, filled-in languages, so a language the tenant does not
+      // offer keeps its name on a rewrite.
       displayNames: labelsToSend(this.locales(), this.names()),
       centreLat: this.centreLat(),
       centreLon: this.centreLon(),
@@ -300,9 +278,4 @@ function problemsOf(error: unknown): readonly string[] {
   }
   const problems = error.problem?.['problems'];
   return Array.isArray(problems) ? problems.map((entry) => String(entry)) : [];
-}
-
-/** A region's platform-triple name columns keyed by locale — for a response that predates `displayNames`. */
-function triple(region: RegionResponse): LabelsByLocale {
-  return { ru: region.displayNameRu, 'uz-Latn': region.displayNameUz, en: region.displayNameEn };
 }

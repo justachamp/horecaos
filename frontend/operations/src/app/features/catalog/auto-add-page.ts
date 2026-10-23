@@ -4,7 +4,10 @@ import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
+import { LocaleSet } from '../../core/i18n/locale-set';
+import { labelsToSend, localeDisplayName } from '../../core/i18n/locale-labels';
 import type { MessageKey } from '../../core/i18n/messages.en';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
 import { describeApiError } from '../orders/order-errors';
@@ -53,9 +56,10 @@ interface Draft {
   readonly sortOrder: string;
   readonly triggerVariantIds: readonly string[];
   readonly bands: readonly BandDraft[];
-  readonly textRu: string;
-  readonly textUz: string;
-  readonly textEn: string;
+  /** What the author typed, by the brand's language (the platform tag). */
+  readonly texts: Readonly<Record<string, string>>;
+  /** A wording the rule already carries in a language the form does not offer: sent back as it is, never dropped. */
+  readonly keptTexts: Readonly<Record<string, string>>;
 }
 
 const EMPTY_DRAFT: Draft = {
@@ -75,9 +79,8 @@ const EMPTY_DRAFT: Draft = {
   sortOrder: '0',
   triggerVariantIds: [],
   bands: [],
-  textRu: '',
-  textUz: '',
-  textEn: '',
+  texts: {},
+  keptTexts: {},
 };
 
 function number(text: string): number | null {
@@ -112,7 +115,12 @@ export class AutoAddPage {
   private readonly catalogApi = inject(CatalogApi);
   private readonly brand = inject(CurrentBrand);
   private readonly location = inject(CurrentLocation);
+  private readonly localeSet = inject(LocaleSet);
+  private readonly registry = inject(PlatformLocales);
   protected readonly i18n = inject(I18n);
+
+  /** The brand's languages, default first: one customer-text field each. */
+  protected readonly textLocales = computed(() => this.localeSet.locales());
 
   protected readonly fulfillmentModes = AUTO_ADD_FULFILLMENT_MODES;
   protected readonly channelTypes = AUTO_ADD_CHANNEL_TYPES;
@@ -302,9 +310,7 @@ export class AutoAddPage {
         variantId: band.addVariantId,
         quantity: String(band.quantity),
       })),
-      textRu: rule.customerText['ru'] ?? '',
-      textUz: rule.customerText['uz-Latn'] ?? rule.customerText['uz'] ?? '',
-      textEn: rule.customerText['en'] ?? '',
+      ...this.textsOf(rule.customerText),
     });
     this.formError.set(null);
     this.resetPicker();
@@ -313,6 +319,35 @@ export class AutoAddPage {
 
   protected close(): void {
     this.editing.set(null);
+  }
+
+  /** A language's name in the console's own language, from the registry. */
+  protected localeLabel(locale: string): string {
+    return localeDisplayName(this.i18n, locale, this.registry);
+  }
+
+  protected setText(locale: string, value: string): void {
+    this.patch({ texts: { ...this.draft().texts, [locale]: value } });
+  }
+
+  /**
+   * A rule's stored wording split into what the form shows and what it keeps. A stored key is a tag or the
+   * catalog's code for one (`uz` for `uz-Latn`): the registry says which language it is, so the author's
+   * Uzbek wording lands in the Uzbek field however it was keyed.
+   */
+  private textsOf(stored: Readonly<Record<string, string>>): Pick<Draft, 'texts' | 'keptTexts'> {
+    const offered = this.textLocales();
+    const texts: Record<string, string> = {};
+    const kept: Record<string, string> = {};
+    for (const [key, value] of Object.entries(stored)) {
+      const tag = this.registry.canonical(key);
+      if (offered.includes(tag)) {
+        texts[tag] = value;
+      } else {
+        kept[key] = value;
+      }
+    }
+    return { texts, keptTexts: kept };
   }
 
   protected patch(change: Partial<Draft>): void {
@@ -402,16 +437,12 @@ export class AutoAddPage {
   }
 
   private bodyFrom(draft: Draft): AutoAddRuleBody {
-    const text: Record<string, string> = {};
-    if (draft.textRu.trim()) {
-      text['ru'] = draft.textRu.trim();
-    }
-    if (draft.textUz.trim()) {
-      text['uz-Latn'] = draft.textUz.trim();
-    }
-    if (draft.textEn.trim()) {
-      text['en'] = draft.textEn.trim();
-    }
+    // The customer's wording is optional per language: only what was filled in is sent, plus what the rule
+    // already says in a language this form does not offer (ADR 0149, Decision 5: the brand's own set).
+    const text: Record<string, string> = {
+      ...draft.keptTexts,
+      ...labelsToSend(this.textLocales(), draft.texts),
+    };
     const banded = draft.kind === 'PORTION_BAND';
     return {
       mode: draft.mode,
@@ -507,7 +538,7 @@ export class AutoAddPage {
 
   private async load(): Promise<void> {
     this.loading.set(true);
-    await this.brand.ensureLoaded();
+    await Promise.all([this.brand.ensureLoaded(), this.localeSet.ensureLoaded()]);
     const scope = this.brand.scope();
     if (!scope) {
       this.denied.set(this.brand.denied());

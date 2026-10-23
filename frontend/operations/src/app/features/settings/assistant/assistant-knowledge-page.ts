@@ -14,6 +14,7 @@ import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { formatDateTime } from '../../../core/format/datetime';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
+import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
 import { SettingsSaved } from '../settings-saved';
@@ -24,6 +25,7 @@ import {
   KNOWLEDGE_QUESTION_MAX,
   KNOWLEDGE_QUESTION_MIN,
   KNOWLEDGE_REASON_MAX,
+  AssistantLanguage,
   KnowledgeEntry,
   KnowledgeLocale,
   KnowledgeVersion,
@@ -31,8 +33,6 @@ import {
 
 /** See `order-queue.ts`'s identical constant for why this is a fixed zone, not the browser's. */
 const PLACEHOLDER_TIME_ZONE = 'Asia/Tashkent';
-
-const LOCALES: readonly KnowledgeLocale[] = ['ru', 'uz', 'en'];
 
 /** What one entry's history disclosure is showing. */
 type HistoryView =
@@ -73,7 +73,11 @@ export class AssistantKnowledgePage {
   private readonly saved = inject(SettingsSaved);
   protected readonly i18n = inject(I18n);
 
-  protected readonly locales = LOCALES;
+  private readonly registry = inject(PlatformLocales);
+
+  /** The languages the assistant answers in, as the backend names them; empty until read. */
+  protected readonly languages = signal<readonly AssistantLanguage[]>([]);
+  protected readonly locales = computed(() => this.languages().map((language) => language.code));
   protected readonly questionMax = KNOWLEDGE_QUESTION_MAX;
   protected readonly answerMax = KNOWLEDGE_ANSWER_MAX;
 
@@ -92,7 +96,7 @@ export class AssistantKnowledgePage {
   protected readonly revisingId = signal<string | null>(null);
   protected readonly retiringId = signal<string | null>(null);
 
-  protected readonly draftLocale = signal<KnowledgeLocale>('ru');
+  protected readonly draftLocale = signal<KnowledgeLocale>('');
   protected readonly draftLocationId = signal('');
   protected readonly draftQuestion = signal('');
   protected readonly draftAnswer = signal('');
@@ -143,17 +147,17 @@ export class AssistantKnowledgePage {
 
   // --------------------------------------------------------------- labels
 
-  protected localeLabel(locale: string): string {
-    switch (locale) {
-      case 'ru':
-        return this.i18n.t('settings.assistant.notes.locale.ru');
-      case 'uz':
-        return this.i18n.t('settings.assistant.notes.locale.uz');
-      case 'en':
-        return this.i18n.t('settings.assistant.notes.locale.en');
-      default:
-        return locale;
-    }
+  /** A language's name in the console's own language, from the registry; the bare code for one it does not know. */
+  protected localeLabel(code: string): string {
+    const language = this.languages().find((candidate) => candidate.code === code);
+    return language ? this.registry.nameOf(language.locale, this.i18n.locale()) : code;
+  }
+
+  /** The language a new note starts in: the registry's fallback when the assistant speaks it, else the first it does. */
+  private defaultDraftLocale(): KnowledgeLocale {
+    const languages = this.languages();
+    const fallback = this.registry.fallback();
+    return (languages.find((language) => language.locale === fallback) ?? languages[0])?.code ?? '';
   }
 
   protected scopeLabel(entry: KnowledgeEntry): string {
@@ -202,7 +206,7 @@ export class AssistantKnowledgePage {
 
   protected startCreating(): void {
     this.closeForms();
-    this.draftLocale.set('ru');
+    this.draftLocale.set(this.defaultDraftLocale());
     this.draftLocationId.set(this.scope.locationId() ?? '');
     this.draftQuestion.set('');
     this.draftAnswer.set('');
@@ -337,7 +341,12 @@ export class AssistantKnowledgePage {
     this.closeForms();
     this.histories.set(new Map());
     try {
-      this.entries.set(await this.api.list(tenantId, brandId));
+      const [entries, languages] = await Promise.all([
+        this.api.list(tenantId, brandId),
+        this.api.languages(),
+      ]);
+      this.entries.set(entries);
+      this.languages.set(languages);
       this.denied.set(false);
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {

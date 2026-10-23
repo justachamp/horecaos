@@ -850,6 +850,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Курьер привлечение приостановлено',
       'uz-Latn': 'Kuryer jalb qilish toʻxtatib turildi',
     },
+    'courier.first_name.disclosed_to_customer': {
+      en: 'A courier’s first name was shown to the customer in an order message',
+      ru: 'Имя курьера показано клиенту в сообщении о заказе',
+      'uz-Latn': 'Kuryerning ismi mijozga buyurtma xabarida koʻrsatildi',
+    },
     'courier.group.archived': {
       en: 'Courier group archived',
       ru: 'Курьер группа архивировано',
@@ -1439,6 +1444,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Notification template created',
       ru: 'Создан шаблон уведомления',
       'uz-Latn': 'Bildirishnoma shabloni yaratildi',
+    },
+    'notification.template.test_sent': {
+      en: 'Notification template test message sent',
+      ru: 'Отправлено тестовое сообщение по шаблону уведомления',
+      'uz-Latn': 'Bildirishnoma shabloni boʻyicha sinov xabari yuborildi',
     },
     'notification.template.version_activated': {
       en: 'Notification template version activated',

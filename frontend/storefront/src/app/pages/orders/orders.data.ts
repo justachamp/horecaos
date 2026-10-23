@@ -1,4 +1,5 @@
 import type { PromotionRow } from '../../services/applied-promotions';
+import { platformTag } from '../../services/lang.service';
 export interface OrderItem {
   id: string;
   title: string;
@@ -74,20 +75,13 @@ export const ORDER_STATUS_I18N_KEY: Readonly<Record<string, string>> = {
 };
 
 /**
- * `LangService.langId` (`'uz' | 'ru' | 'en'`) to the BCP 47 tag
- * `toLocaleString` actually needs. `'uz'` is the fallback for the same
- * reason it is `LangService.langId`'s own default: this storefront opens in
- * Uzbek until a customer changes it.
+ * `LangService.langId` to the BCP 47 tag `toLocaleString` actually needs: the platform's tag for the
+ * language, from the registry (ADR 0149). `'uz'` is the fallback for the same reason it is
+ * `LangService.langId`'s own default: this storefront opens in Uzbek until the brand's default or a
+ * customer's choice says otherwise.
  */
 export function localeTag(langId: string | undefined | null): string {
-  switch (langId) {
-    case 'ru':
-      return 'ru-RU';
-    case 'en':
-      return 'en-US';
-    default:
-      return 'uz-UZ';
-  }
+  return platformTag(langId || 'uz');
 }
 
 /**
