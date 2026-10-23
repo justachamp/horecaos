@@ -3,7 +3,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiClient, QueryParams } from '../../../core/api/api-client';
 import { BrandScope } from '../../../core/api/catalog-paths';
-import { command } from '../../../core/api/idempotency';
+import { IntentCommandRegistry, command } from '../../../core/api/idempotency';
 import { CursorState, Page } from '../../../core/api/page';
 import { benefitGrantPaths, reviewPaths } from '../../../core/api/reviews-paths';
 
@@ -220,6 +220,20 @@ export interface ApologyCodeInput {
   readonly expiresAt: string | null;
 }
 
+/** The request body of `POST .../benefit-grants` as the apology-code mint sends it. */
+interface ApologyCodeBody {
+  readonly customerAccountId: string;
+  readonly shape: ApologyShape;
+  readonly value: number;
+  readonly maximumDiscountMinor: null;
+  readonly currency: string | null;
+  readonly minBasketMinor: number;
+  readonly sourceType: 'RECOVERY_CASE';
+  readonly sourceId: string;
+  readonly validFrom: null;
+  readonly expiresAt: string | null;
+}
+
 /** The only time the plaintext code exists outside the customer's hands: shown once, kept nowhere. */
 export interface MintedApologyCode {
   readonly grantId: string;
@@ -256,6 +270,9 @@ function toQueryParams(filters: CaseFilters): QueryParams {
 @Injectable({ providedIn: 'root' })
 export class RecoveryApi {
   private readonly api = inject(ApiClient);
+
+  /** The mint in flight per case, so a retry of the same code reuses its key. See {@link mintApologyCode}. */
+  private readonly mintIntents = new IntentCommandRegistry<ApologyCodeBody>();
 
   list(scope: BrandScope, state: CursorState, filters: CaseFilters): Promise<Page<CaseSummary>> {
     return firstValueFrom(
@@ -367,9 +384,14 @@ export class RecoveryApi {
    * Issues a one-off code for the case's customer (`POST .../benefit-grants`, `pricing.promotion.manage`). The
    * source is the case, so the grant says why it exists. The case is not linked here: the code is shown once and
    * the operator links the grant like any other candidate.
+   *
+   * <p>One mint is one intent per case (ADR 0031): the same input again after a failure -- a lost response, a
+   * 502 -- goes out under the same `Idempotency-Key`, so a mint that did land is replayed and not issued a second
+   * time. Both codes would be spendable, and the console cannot retract either. An input that differs is a new
+   * intent and takes a new key; an issued code settles the intent.
    */
   async mintApologyCode(scope: BrandScope, input: ApologyCodeInput): Promise<MintedApologyCode> {
-    const body = {
+    const body: ApologyCodeBody = {
       customerAccountId: input.customerAccountId,
       shape: input.shape,
       value: input.value,
@@ -381,9 +403,14 @@ export class RecoveryApi {
       validFrom: null,
       expiresAt: input.expiresAt,
     };
-    return firstValueFrom(
-      this.api.post<typeof body, MintedApologyCode>(benefitGrantPaths.mint(scope), command(body)),
+    const issued = await firstValueFrom(
+      this.api.post<ApologyCodeBody, MintedApologyCode>(
+        benefitGrantPaths.mint(scope),
+        this.mintIntents.next(input.sourceId, body),
+      ),
     );
+    this.mintIntents.forget(input.sourceId);
+    return issued;
   }
 
   attach(

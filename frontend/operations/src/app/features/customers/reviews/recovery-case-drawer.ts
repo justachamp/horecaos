@@ -139,6 +139,9 @@ export class RecoveryCaseDrawer {
   protected readonly mintDays = signal(DEFAULT_VALID_DAYS);
   /** The code just minted. Shown once and dropped with the drawer: nothing else holds it. */
   protected readonly minted = signal<MintedApologyCode | null>(null);
+  /** The expiry instant the last submission of the mint form chose; see {@link mintExpiry}. */
+  private mintAnchor: { readonly signature: string; readonly expiresAt: string | null } | null =
+    null;
   protected readonly copied = signal(false);
 
   protected readonly compensationKinds = COMPENSATION_KINDS;
@@ -428,6 +431,7 @@ export class RecoveryCaseDrawer {
     const entered = Number(this.mintValue());
     const basket = this.mintMinBasket().trim();
     const days = this.mintDays().trim();
+    const expiresAt = this.mintExpiry(days, [shape, entered, basket]);
     const issued = await this.mutate(() =>
       this.api.mintApologyCode(this.scope(), {
         customerAccountId: this.current().customerAccountId,
@@ -442,13 +446,13 @@ export class RecoveryCaseDrawer {
         currency: shape === 'FREE_DELIVERY' ? null : this.mintCurrency(),
         minBasketMinor: basket === '' ? 0 : Number(basket),
         sourceId: this.current().id,
-        expiresAt:
-          days === '' ? null : new Date(Date.now() + Number(days) * 86_400_000).toISOString(),
+        expiresAt,
       }),
     );
     if (issued === undefined) {
       return;
     }
+    this.mintAnchor = null;
     this.minted.set(issued);
     this.copied.set(false);
     this.mintOpen.set(false);
@@ -457,6 +461,24 @@ export class RecoveryCaseDrawer {
     // The code just issued is the one the operator is about to link.
     this.compensationKind.set('BENEFIT_GRANT');
     this.compensationRef.set(issued.grantId);
+  }
+
+  /**
+   * The instant the code lapses, fixed by the first submission of this form and kept for as long as the form is
+   * unchanged. A moving `Date.now()` here would make a retry after a lost response a different request from the
+   * first, and the platform would issue a second code (ADR 0031): the key only repeats when the body does. Any
+   * edit to the form is a new request and takes a new instant; an issued code and a switch of case drop it.
+   */
+  private mintExpiry(days: string, others: readonly unknown[]): string | null {
+    const signature = JSON.stringify([days, ...others]);
+    if (this.mintAnchor?.signature !== signature) {
+      this.mintAnchor = {
+        signature,
+        expiresAt:
+          days === '' ? null : new Date(Date.now() + Number(days) * 86_400_000).toISOString(),
+      };
+    }
+    return this.mintAnchor.expiresAt;
   }
 
   protected async copyMinted(): Promise<void> {
@@ -576,6 +598,7 @@ export class RecoveryCaseDrawer {
     this.candidatesState.set('idle');
     this.minted.set(null);
     this.mintOpen.set(false);
+    this.mintAnchor = null;
     this.errorText.set(null);
     try {
       this.detail.set(await this.api.detail(this.scope(), summary.locationId, summary.id));
