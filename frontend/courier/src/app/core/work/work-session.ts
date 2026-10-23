@@ -9,7 +9,7 @@ import { DutyStore } from '../telemetry/duty.store';
  * What the app does about the courier's working state as it changes: the record is read, and
  * whatever hangs off an open shift follows it.
  *
- * `begin` runs once, when the courier is signed in. `reconcile` runs whenever something the app
+ * `begin` runs once the courier is signed in and the platform has answered for them. `reconcile` runs whenever something the app
  * did changes the record -- a shift opened, closed, a break started -- and makes the rest agree
  * with it: a session the platform still has open is picked up again, one it no longer has is let
  * go; offers are polled for while a shift is open; what the courier carries is read with a shift
@@ -25,19 +25,35 @@ export class WorkSession {
 
   private started = false;
 
-  /** Reads the record and brings the rest up to date. Idempotent: the shell may call it on every sign-in. */
+  /**
+   * Reads the record and brings the rest up to date. Idempotent: the shell may call it on every
+   * sign-in, and so may every screen that depends on it.
+   *
+   * It counts as having begun only once the platform has answered. If the first read fails -- a
+   * phone that has just lost its signal -- nothing is known about the shift, so nothing is torn down
+   * or started on a guess, and the next `begin` (any screen that needs the work state calls it) or
+   * `refresh` (the Retry on Today) tries again and reconciles then.
+   */
   async begin(): Promise<void> {
     if (this.started) {
       return;
     }
     this.started = true;
     await this.profile.load();
+    if (!this.recordKnown()) {
+      this.started = false;
+      return;
+    }
     await this.reconcile();
   }
 
   /** Re-reads the record after something changed it, then reconciles. */
   async refresh(): Promise<void> {
     await this.profile.load(true);
+    if (!this.recordKnown()) {
+      return;
+    }
+    this.started = true;
     await this.reconcile();
   }
 
@@ -54,6 +70,11 @@ export class WorkSession {
     // What the courier still carries is read with or without a shift: a delivery is finished
     // after the shift closes, not abandoned.
     await this.deliveries.refresh();
+  }
+
+  /** Whether the platform has ever answered for this courier; false only while the first read is failing. */
+  private recordKnown(): boolean {
+    return this.profile.state() !== 'error';
   }
 
   /** Sign-out: nothing may keep collecting for a courier who has left. */

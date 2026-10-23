@@ -8,17 +8,24 @@ import { AuthService } from '../../core/auth/auth.service';
 import { APP_CONFIG } from '../../core/config/app-config';
 import { CourierApi } from '../../core/courier/courier-api';
 import type { CourierProfile } from '../../core/courier/courier-profile';
+import { CourierProfileStore } from '../../core/courier/courier-profile.store';
 import { I18n } from '../../core/i18n/i18n';
+import { WorkSession } from '../../core/work/work-session';
 import { HomePage } from './home';
 
 describe('HomePage', () => {
   let me: ReturnType<typeof vi.fn>;
+  let begin: ReturnType<typeof vi.fn>;
+  let refresh: ReturnType<typeof vi.fn>;
 
   async function render(
     outcome: CourierProfile | ApiError,
     name: string | null = 'Alisher Karimov',
   ) {
     me = vi.fn();
+    begin = vi.fn().mockResolvedValue(undefined);
+    // The real WorkSession reads the record and then reconciles the rest; here it only reads.
+    refresh = vi.fn(() => TestBed.inject(CourierProfileStore).load(true));
     if (outcome instanceof ApiError) {
       me.mockRejectedValue(outcome);
     } else {
@@ -29,6 +36,7 @@ describe('HomePage', () => {
         provideRouter([]),
         { provide: APP_CONFIG, useValue: TEST_CONFIG },
         { provide: CourierApi, useValue: { me } },
+        { provide: WorkSession, useValue: { begin, refresh } },
         {
           provide: AuthService,
           useValue: {
@@ -145,6 +153,21 @@ describe('HomePage', () => {
     expect(page.querySelector('.notice.error')?.textContent).toContain('Cannot reach the server');
     page.querySelector('button')!.click();
     await vi.waitFor(() => expect(me).toHaveBeenCalledTimes(2));
+  });
+
+  it('retries through the work session, so a record that finally loads also brings up offers, duty and deliveries', async () => {
+    const page = await render(new ApiError({ status: 0, code: 'NETWORK', detail: 'offline' }));
+    expect(refresh).not.toHaveBeenCalled();
+
+    page.querySelector('button')!.click();
+
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  });
+
+  it('asks the work session to begin when it is shown, in case the first read of the record failed', async () => {
+    await render(courierProfile());
+
+    expect(begin).toHaveBeenCalledOnce();
   });
 
   it('greets without a name when the token carried none', async () => {

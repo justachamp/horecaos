@@ -9,6 +9,7 @@ import { formatDate, formatTime } from '../../core/format';
 import { I18n } from '../../core/i18n/i18n';
 import type { MessageKey } from '../../core/i18n/message-keys';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { WorkSession } from '../../core/work/work-session';
 
 /** Typed maps rather than built keys: a status the platform adds is a compile error here, not raw text on a phone. */
 const DUTY_KEYS: Readonly<Record<DutyState, MessageKey>> = {
@@ -45,6 +46,7 @@ export class HomePage implements OnInit {
   protected readonly i18n = inject(I18n);
   private readonly auth = inject(AuthService);
   private readonly config = inject(APP_CONFIG);
+  private readonly work = inject(WorkSession);
 
   protected readonly dutyKeys = DUTY_KEYS;
   protected readonly engagementKeys = ENGAGEMENT_KEYS;
@@ -66,10 +68,14 @@ export class HomePage implements OnInit {
   });
 
   ngOnInit(): void {
+    // Begin first: if the first read of the record failed, this one is the read that brings the
+    // shift's offers, duty and deliveries up; the load after it is the usual fresh look.
+    void this.work.begin();
     void this.store.load();
   }
 
+  /** Through the work session, not the store: a record that finally loads has to start what hangs off the shift. */
   protected reload(): void {
-    void this.store.load();
+    void this.work.refresh();
   }
 }
