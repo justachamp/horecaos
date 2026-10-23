@@ -443,6 +443,11 @@ export const reportsEn = {
   'reports.customers.funnel.stage.ORDERED': 'Ordered',
   'reports.customers.funnel.visits.notMeasured':
     'Visits: not measured. Nothing is collected from a browser, an app or a bot for this report, so visits are neither shown as zero nor estimated. A restaurant that wants visits can read them from its own Google Analytics.',
+  'reports.customers.funnel.pageLoads.label': 'page loads, not people',
+  'reports.customers.funnel.pageLoads.note':
+    'One page load is counted each time a browser tab opens the shop, with no cookie and no identifier. One person opening it twice is two, so this is shown beside the funnel and not as its first bar: the stages after it are not a share of it.',
+  'reports.customers.funnel.pageLoads.unrecorded':
+    '{days} days of this period came before the counter was switched on, so this total is partial.',
   'reports.customers.funnel.reason.NOT_BY_CHANNEL':
     'Registrations have no sales channel, so a channel cut leaves them out.',
   'reports.customers.funnel.unrecorded':

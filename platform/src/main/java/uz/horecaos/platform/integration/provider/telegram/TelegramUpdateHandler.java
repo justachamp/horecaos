@@ -142,6 +142,7 @@ public class TelegramUpdateHandler {
     private final String defaultLocale;
     private final ConversationInboundPort conversations;
     private final TelegramInstallationBrandLookup installationBrands;
+    private final TelegramCustomerLanding landing;
     private final TelegramUpdateDedupStore dedup;
     private final RateLimiter rateLimiter;
     private final ConfigurationResolver configuration;
@@ -172,6 +173,7 @@ public class TelegramUpdateHandler {
             @Value("${horecaos.notifications.telegram.group-locale:ru}") String defaultLocale,
             ConversationInboundPort conversations,
             TelegramInstallationBrandLookup installationBrands,
+            TelegramCustomerLanding landing,
             TelegramUpdateDedupStore dedup,
             RateLimiter rateLimiter,
             ConfigurationResolver configuration,
@@ -204,6 +206,7 @@ public class TelegramUpdateHandler {
         this.defaultLocale = defaultLocale;
         this.conversations = conversations;
         this.installationBrands = installationBrands;
+        this.landing = landing;
         this.dedup = dedup;
         this.rateLimiter = rateLimiter;
         this.configuration = configuration;
@@ -289,6 +292,7 @@ public class TelegramUpdateHandler {
         String chatType = String.valueOf(chat.get("type"));
         Integer topicId = message.get("message_thread_id") instanceof Number threadId ? threadId.intValue() : null;
         long fromUserId = fromUserId(message);
+        String languageCode = fromLanguageCode(message);
         boolean anonymousGroupAdmin = message.get("sender_chat") != null;
 
         ProviderCall call = resolveCall(installation);
@@ -307,7 +311,7 @@ public class TelegramUpdateHandler {
         }
 
         if ("private".equals(chatType)) {
-            handlePrivateMessage(installation, call, chatId, topicId, fromUserId, parsed);
+            handlePrivateMessage(installation, call, chatId, topicId, fromUserId, languageCode, parsed);
             return;
         }
 
@@ -769,13 +773,14 @@ public class TelegramUpdateHandler {
             long chatId,
             @Nullable Integer topicId,
             long fromUserId,
+            @Nullable String languageCode,
             ParsedCommand parsed) {
         if (LINK_COMMAND.equals(parsed.command())) {
             handleStaffLink(installation, call, chatId, fromUserId, parsed.argument());
             return;
         }
         if (START_COMMAND.equals(parsed.command())) {
-            handleCustomerLink(installation, call, chatId, fromUserId, parsed.argument());
+            handleCustomerLink(installation, call, chatId, fromUserId, languageCode, parsed.argument());
             return;
         }
         if (!TYPED_COMMANDS.contains(parsed.command())) {
@@ -1080,16 +1085,20 @@ public class TelegramUpdateHandler {
      * welcome flow exists for the resolved brand; either gate failing leaves
      * this exactly the silent no-op {@code handleCustomerLink} always gave a
      * bare {@code /start}.
+     *
+     * <p>ADR 0183 D27: when no flow answers, the Telegram channel's own welcome does (nothing, for a channel nobody has
+     * configured). A flow that is running keeps the conversation, so a customer is never greeted twice.
      */
-    private void handleBareStart(WebhookInstallation installation, long chatId) {
-        if (!entitlements.featureEnabled(installation.tenantId(), EntitlementKeys.TELEGRAM_CONVERSATIONS_ENABLED)) {
-            return;
+    private void handleBareStart(
+            WebhookInstallation installation, ProviderCall call, long chatId, @Nullable String languageCode) {
+        if (entitlements.featureEnabled(installation.tenantId(), EntitlementKeys.TELEGRAM_CONVERSATIONS_ENABLED)) {
+            Optional<UUID> brandId = resolveBrandForChat(installation, chatId);
+            if (brandId.isPresent() && conversations.hasActiveFlow(installation.tenantId(), brandId.get())) {
+                conversations.handleStart(channelRef(installation, brandId.get(), chatId));
+                return;
+            }
         }
-        Optional<UUID> brandId = resolveBrandForChat(installation, chatId);
-        if (brandId.isEmpty()) {
-            return;
-        }
-        conversations.handleStart(channelRef(installation, brandId.get(), chatId));
+        landing.greet(installation, call, chatId, languageCode);
     }
 
     /**
@@ -1185,15 +1194,21 @@ public class TelegramUpdateHandler {
      * unlike staff's typed {@code /link <code>}.
      */
     private void handleCustomerLink(
-            WebhookInstallation installation, ProviderCall call, long chatId, long fromUserId, String code) {
+            WebhookInstallation installation,
+            ProviderCall call,
+            long chatId,
+            long fromUserId,
+            @Nullable String languageCode,
+            String code) {
         if (code.isEmpty()) {
             // A bare /start, with no payload — somebody opened the bot
             // directly rather than through a storefront deep link. ADR 0059
             // precedence tier 4: this is exactly the case the conversations
             // engine answers, when the tenant is entitled and an active flow
-            // exists for the brand; otherwise handleStart no-ops and this
-            // stays the silent no-op it always was.
-            handleBareStart(installation, chatId);
+            // exists for the brand; otherwise (ADR 0183) the channel's own
+            // welcome answers, and a channel nobody configured stays the
+            // silent no-op it always was.
+            handleBareStart(installation, call, chatId, languageCode);
             return;
         }
         if (code.startsWith(AUTH_CODE_PREFIX)) {
@@ -1205,6 +1220,13 @@ public class TelegramUpdateHandler {
         }
         Optional<PendingCustomerLink> pending = customerLinks.resolve(code);
         if (pending.isEmpty()) {
+            // ADR 0183 (rows 6.6a and 7.6c): the third family of /start payload, tried after the two this platform
+            // mints for a customer. A live attribution link of this bot's brand counts one click and is then
+            // answered exactly like a bare /start; anything else is refused as it always was.
+            if (landing.countAttributionStart(installation, fromUserId, code)) {
+                handleBareStart(installation, call, chatId, languageCode);
+                return;
+            }
             bots.sendMessage(call, chatId, null, TelegramBotMessages.customerLinkInvalidOrExpiredCode());
             return;
         }
@@ -1598,6 +1620,13 @@ public class TelegramUpdateHandler {
         return message.get("from") instanceof Map<?, ?> from && from.get("id") instanceof Number id
                 ? id.longValue()
                 : 0L;
+    }
+
+    /** Telegram's {@code from.language_code}: the customer's interface language, used only to pick a wording. */
+    private static @Nullable String fromLanguageCode(Map<String, Object> message) {
+        return message.get("from") instanceof Map<?, ?> from && from.get("language_code") instanceof String code
+                ? code
+                : null;
     }
 
     @SuppressWarnings("unchecked")

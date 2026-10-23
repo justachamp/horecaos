@@ -298,6 +298,11 @@ export const settingsPaths = {
     return `${this.salesChannel(scope, channelId)}/setup`;
   },
 
+  /** `TelegramChannelSetupController` (ADR 0183 D27): a TELEGRAM channel's menu button, Mini App and texts. */
+  channelTelegram(scope: { readonly tenantId: string }, channelId: string): string {
+    return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/sales-channels/${enc(channelId)}/setup/telegram`;
+  },
+
   channelHostname(scope: LocationScope, channelId: string): string {
     return `${this.channelSetup(scope, channelId)}/hostname`;
   },

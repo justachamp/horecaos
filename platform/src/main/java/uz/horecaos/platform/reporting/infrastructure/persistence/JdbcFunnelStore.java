@@ -102,6 +102,60 @@ public class JdbcFunnelStore {
                 .update();
     }
 
+    // ------------------------------------------------- page loads (ADR 0183 D18)
+
+    /** Adds one page load to the day's counter for a brand and channel, creating the row on the first. */
+    public void addPageLoad(UUID tenantId, UUID brandId, LocalDate businessDate, String channelCode) {
+        jdbc.sql("""
+                INSERT INTO reporting.page_load_counts_day (tenant_id, brand_id, business_date, channel_code, page_loads)
+                VALUES (:tenantId, :brandId, :businessDate, :channelCode, 1)
+                ON CONFLICT (tenant_id, brand_id, business_date, channel_code)
+                DO UPDATE SET page_loads = reporting.page_load_counts_day.page_loads + 1
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("businessDate", businessDate)
+                .param("channelCode", channelCode)
+                .update();
+    }
+
+    /** Page loads counted in {@code [from, to]}, for one brand or every brand, one channel or every channel. */
+    public long readPageLoads(
+            UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId, @Nullable String channelCode) {
+        Long total = jdbc.sql("""
+                SELECT coalesce(sum(page_loads), 0)
+                  FROM reporting.page_load_counts_day
+                 WHERE tenant_id = :tenantId
+                   AND business_date >= :from AND business_date <= :to
+                   AND (CAST(:brandId AS uuid) IS NULL OR brand_id = CAST(:brandId AS uuid))
+                   AND (CAST(:channelCode AS varchar) IS NULL OR channel_code = CAST(:channelCode AS varchar))
+                """)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .param("brandId", brandId)
+                .param("channelCode", channelCode)
+                .query(Long.class)
+                .single();
+        return total == null ? 0 : total;
+    }
+
+    /**
+     * The first business date the counter has any row for, for one brand or every brand: before it the counter was not
+     * collecting, which the funnel reports as unrecorded days and never as zero.
+     */
+    public java.util.Optional<LocalDate> firstPageLoadDate(UUID tenantId, @Nullable UUID brandId) {
+        return jdbc.sql("""
+                SELECT min(business_date) FROM reporting.page_load_counts_day
+                 WHERE tenant_id = :tenantId
+                   AND (CAST(:brandId AS uuid) IS NULL OR brand_id = CAST(:brandId AS uuid))
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query(LocalDate.class)
+                .optional();
+    }
+
     // ------------------------------------------------------------------- reads
 
     public List<FunnelDay> readFunnelDays(
@@ -220,28 +274,32 @@ public class JdbcFunnelStore {
 
     // --------------------------------------------------------------- retention
 
-    /** Rows older than {@code cutoff} (exclusive) across both fact tables; the report-only count. */
+    /** Rows older than {@code cutoff} (exclusive) across the count tables; the report-only count. */
     public long countOlderThan(LocalDate cutoff) {
-        Long funnel = jdbc.sql("SELECT count(*) FROM reporting.fact_funnel_day WHERE business_date < :cutoff")
-                .param("cutoff", cutoff)
-                .query(Long.class)
-                .single();
-        Long registrations = jdbc.sql(
-                        "SELECT count(*) FROM reporting.fact_registration_day WHERE business_date < :cutoff")
-                .param("cutoff", cutoff)
-                .query(Long.class)
-                .single();
-        return (funnel == null ? 0 : funnel) + (registrations == null ? 0 : registrations);
+        return count("reporting.fact_funnel_day", cutoff)
+                + count("reporting.fact_registration_day", cutoff)
+                + count("reporting.page_load_counts_day", cutoff);
     }
 
-    /** Deletes rows older than {@code cutoff} (exclusive) from both fact tables; returns how many. */
+    private long count(String table, LocalDate cutoff) {
+        Long rows = jdbc.sql("SELECT count(*) FROM " + table + " WHERE business_date < :cutoff")
+                .param("cutoff", cutoff)
+                .query(Long.class)
+                .single();
+        return rows == null ? 0 : rows;
+    }
+
+    /** Deletes rows older than {@code cutoff} (exclusive) from the count tables; returns how many. */
     public int deleteOlderThan(LocalDate cutoff) {
-        return jdbc.sql("DELETE FROM reporting.fact_funnel_day WHERE business_date < :cutoff")
-                        .param("cutoff", cutoff)
-                        .update()
-                + jdbc.sql("DELETE FROM reporting.fact_registration_day WHERE business_date < :cutoff")
-                        .param("cutoff", cutoff)
-                        .update();
+        return delete("reporting.fact_funnel_day", cutoff)
+                + delete("reporting.fact_registration_day", cutoff)
+                + delete("reporting.page_load_counts_day", cutoff);
+    }
+
+    private int delete(String table, LocalDate cutoff) {
+        return jdbc.sql("DELETE FROM " + table + " WHERE business_date < :cutoff")
+                .param("cutoff", cutoff)
+                .update();
     }
 
     // ------------------------------------------------------------------ health

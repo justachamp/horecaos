@@ -366,6 +366,10 @@ export interface AttributionLinkView {
   readonly clickCount: number;
   readonly createdBy: string;
   readonly createdAt: string;
+  /** The link as it is shared, built on the server (ADR 0183); null with {@link unavailable} when it cannot be built. */
+  readonly url: string | null;
+  /** What is missing when `url` is null: a stable code (`WEB_HOSTNAME_NOT_VERIFIED`, `TELEGRAM_MINI_APP_NOT_SET_UP`, ...). */
+  readonly unavailable: string | null;
 }
 
 export interface MintAttributionLinkRequest {

@@ -84,6 +84,21 @@ public class ContentEnvironment {
                 .orElseGet(PublishingPolicy::platformDefault);
     }
 
+    /**
+     * The brand's category layout (ADR 0183 D17): {@code STANDARD} unless the brand chose {@code MARKETPLACE}. A document
+     * that says anything else is read as standard, so a later release's value can never break today's storefront.
+     */
+    public String storefrontLayout(UUID tenantId, UUID brandId) {
+        return policies.resolve(ContentPolicies.STOREFRONT_LAYOUT, ResourceScope.brand(tenantId, brandId))
+                .map(resolved -> resolved.document().effective())
+                .orElse(ContentPolicies.StorefrontLayoutPolicy.STANDARD);
+    }
+
+    /** A channel of the tenant by id, whatever its status. */
+    public Optional<SalesChannel> channelById(UUID tenantId, UUID channelId) {
+        return channels.byId(tenantId, channelId);
+    }
+
     public EditorialPolicy editorialPolicy(UUID tenantId, UUID brandId) {
         return policies.resolve(ContentPolicies.EDITORIAL, ResourceScope.brand(tenantId, brandId))
                 .map(resolved -> resolved.document())

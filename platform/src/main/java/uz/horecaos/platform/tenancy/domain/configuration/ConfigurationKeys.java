@@ -1357,8 +1357,23 @@ public final class ConfigurationKeys {
             .defaultValue(400)
             .ownedBy("reporting")
             .settableAt(ScopeType.PLATFORM)
+            .provisionalRetention(false, "finance and legal counsel (ADR 0167 open input 4)")
             .describedAs("Days the customer funnel, registration and attribution-link click counts are "
                     + "kept, by business date. The rows hold counts and no personal data.")
+            .build();
+
+    /**
+     * ADR 0183 D18: whether the storefront's page-load ping is counted. Declared here so a stored row passes the startup
+     * validator, and declared identically in {@code reporting.api.ReportingConfigurationKeys} where it is consumed, for the
+     * reason recorded on {@link #COMMERCIAL_ENFORCEMENT_CEILING}.
+     */
+    public static final ConfigurationKey<Boolean> REPORTING_PAGE_LOAD_COUNT_ENABLED = ConfigurationKey.of(
+                    "reporting.page_load_count_enabled", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("reporting")
+            .settableAt(ScopeType.PLATFORM)
+            .describedAs("Whether a storefront's page-load ping is counted into the customer funnel's visits figure "
+                    + "(page loads, not people). Off until counsel answers (ADR 0183 D18).")
             .build();
 
     /**
@@ -1437,6 +1452,7 @@ public final class ConfigurationKeys {
             WORKFORCE_ROSTER_LATE_AFTER_MINUTES,
             WORKFORCE_ROSTER_MATCH_WINDOW_MINUTES,
             REPORTING_FUNNEL_RETENTION_DAYS,
+            REPORTING_PAGE_LOAD_COUNT_ENABLED,
             LOYALTY_POS_SYNC_MAX_AUTO_CREDIT_MINOR,
             LOYALTY_POS_SYNC_MAX_BINDING_CREDIT_MINOR_PER_DAY,
             LOYALTY_POS_TILL_KEEPS_BALANCE,

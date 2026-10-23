@@ -272,6 +272,15 @@ public class SecurityConfiguration {
                         .requestMatchers(
                                 HttpMethod.POST, "/api/v1/storefront/tenants/*/brands/*/attribution-links/*/clicks")
                         .permitAll()
+                        // ADR 0183 D18: whether the platform counts page loads (the same answer for everyone, naming
+                        // nobody) and the ping itself. Dark behind reporting.page_load_count_enabled; the ping can only
+                        // add one to a per-day counter, records no address, agent, cookie, session or path, answers 202
+                        // whether or not it counted, and is limited per visitor in the ADR 0033 limiter. Exactly these
+                        // two methods on exactly this path, as every exemption here.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/storefront/tenants/*/brands/*/page-loads")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/storefront/tenants/*/brands/*/page-loads")
+                        .permitAll()
                         // ADR 0023: the on-box probe evaluates every alert
                         // threshold from this scrape, and it cannot hold a bearer
                         // token — minting one needs Keycloak, and an alert path

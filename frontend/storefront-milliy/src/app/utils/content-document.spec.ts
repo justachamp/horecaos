@@ -436,3 +436,80 @@ describe('parseContentHome: the pop-up', () => {
     expect(read?.media).toBeUndefined();
   });
 });
+
+describe('parseContentHome: the brand switcher and the layout (ADR 0183 D17)', () => {
+  const entry = (n: number, overrides: Record<string, unknown> = {}) => ({
+    targetBrandId: `brand-${n}`,
+    name: `Brand ${n}`,
+    url: `https://brand${n}.example.uz/`,
+    ...overrides,
+  });
+
+  it('a document that has neither is read as no switcher and the standard layout', () => {
+    const home = parse({});
+
+    expect(home.brandSwitcher).toEqual([]);
+    expect(home.layout).toBe('STANDARD');
+    expect(NO_CONTENT.brandSwitcher).toEqual([]);
+    expect(NO_CONTENT.layout).toBe('STANDARD');
+  });
+
+  it('reads the entries in order, with the logo resolved against the API origin', () => {
+    const home = parse({ brandSwitcher: [entry(1, { logo: image({ alt: 'Logo' }) }), entry(2)] });
+
+    expect(home.brandSwitcher.map((e) => e.name)).toEqual(['Brand 1', 'Brand 2']);
+    expect(home.brandSwitcher[0].url).toBe('https://brand1.example.uz/');
+    expect(home.brandSwitcher[0].logo?.renditions[0].url).toBe(`${API}/media/a?variant=w400`);
+    expect(home.brandSwitcher[1].logo).toBeUndefined();
+  });
+
+  it('drops an entry whose address is not an https address of its own: it is where a tap is sent', () => {
+    const home = parse({
+      brandSwitcher: [
+        entry(1, { url: 'http://brand1.example.uz/' }),
+        entry(2, { url: 'javascript:alert(1)' }),
+        entry(3, { url: 'https://user:pass@brand3.example.uz/' }),
+        entry(4, { url: undefined }),
+        entry(5),
+      ],
+    });
+
+    expect(home.brandSwitcher.map((e) => e.name)).toEqual(['Brand 5']);
+  });
+
+  it('drops an entry with no name or no target, and one that is not an object', () => {
+    const home = parse({
+      brandSwitcher: [
+        entry(1, { name: '  ' }),
+        entry(2, { targetBrandId: '' }),
+        'x',
+        null,
+        entry(3),
+      ],
+    });
+
+    expect(home.brandSwitcher.map((e) => e.name)).toEqual(['Brand 3']);
+  });
+
+  it('keeps the entry, without a logo, when the logo cannot be shown or is not an image', () => {
+    const home = parse({
+      brandSwitcher: [
+        entry(1, { logo: image({ renditions: [] }) }),
+        entry(2, { logo: { kind: 'VIDEO', url: '/media/v.mp4' } }),
+      ],
+    });
+
+    expect(home.brandSwitcher.map((e) => e.logo)).toEqual([undefined, undefined]);
+  });
+
+  it('a section that is not an array is no switcher', () => {
+    expect(parse({ brandSwitcher: 'nope' }).brandSwitcher).toEqual([]);
+  });
+
+  it('turns the marketplace layout on for the exact word only, and any other value is the standard one', () => {
+    expect(parse({ layout: 'MARKETPLACE' }).layout).toBe('MARKETPLACE');
+    for (const value of ['marketplace', 'GRID', '', null, 3, undefined]) {
+      expect(parse({ layout: value }).layout).toBe('STANDARD');
+    }
+  });
+});

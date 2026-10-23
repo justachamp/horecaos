@@ -660,8 +660,10 @@ links, `Предпросмотр` in the matching frame (`PhoneFrame`, `Telegram
 ### TELEGRAM
 
 Token paste + `Проверить` (validates and auto-fills bot display name and `@username`); menu
-button label and URL; mini-app mode; per-language texts; public-offer link; a dynamic button; the
-positive/negative review chat routing. Backing: `integration.installations` with
+button label per language (**the URL is never typed**: it is the brand's verified storefront
+hostname, ADR 0183 D27); mini-app mode with the BotFather short name; per-language welcome
+texts; public-offer link (the tenant's terms page on that hostname); ~~a dynamic button~~ (**not
+built**, ADR 0183 D27); the positive/negative review chat routing. Backing: `integration.installations` with
 `provider_category='NOTIFICATION'`/`OTHER`, `secret_reference` for the token — **the token is never
 rendered after entry** (`SecretInput`, ADR 0028), which is a straight improvement on pasting it into
 a plain text field.

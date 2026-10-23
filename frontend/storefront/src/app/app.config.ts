@@ -8,6 +8,7 @@ import { PreloadAllModules, provideRouter, withPreloading } from '@angular/route
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 
 import { routes } from './app.routes';
+import { PageLoadCounter } from './core/analytics/page-load-counter';
 import { AttributionLanding } from './core/attribution/attribution-landing';
 import { TranslateService } from './services/translate.service';
 import { ThemeService } from './services/theme.service';
@@ -40,9 +41,15 @@ export const appConfig: ApplicationConfig = {
       }
     }),
     provideAppInitializer(() => {
-      // ADR 0167: a ?ref= landing counts one click on its attribution link. Not awaited -- nothing
-      // renders on the answer -- and the service swallows its own failures.
+      // ADR 0167, ADR 0183: a ?ref= landing, or a Mini App launched from a ?startapp= link, counts one click on
+      // its attribution link. Not awaited -- nothing renders on the answer -- and the service swallows its own failures.
       void inject(AttributionLanding).recordLanding();
+    }),
+    provideAppInitializer(() => {
+      // ADR 0183 D18: once per tab session, and only if the platform owner has switched the page-load count on, one
+      // anonymous ping that adds to a per-day counter ("page loads, not people"). Dark by default: while it is off the
+      // only request is the flag read. Not awaited, and the service swallows its own failures.
+      void inject(PageLoadCounter).recordSession();
     }),
     // The map script's key is the platform's to deliver (GET .../map-config, ADR 0145 decision 4), so it
     // can be rotated without a build; it used to be a literal in environment.ts, committed to git.

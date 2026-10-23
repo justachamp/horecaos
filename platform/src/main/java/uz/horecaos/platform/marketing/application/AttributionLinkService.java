@@ -43,7 +43,12 @@ import uz.horecaos.platform.web.api.ErrorCode;
 @Service
 public class AttributionLinkService {
 
-    private static final Set<String> CHANNELS = Set.of("WEB", "TELEGRAM_BOT", "TELEGRAM_MINI_APP", "MOBILE_APP");
+    /**
+     * What a marketer may mint a link for. ADR 0044 also lists {@code MOBILE_APP}; the Flutter app is on hold
+     * (ADR 0055), so such a link would go nowhere and is no longer offered. A row minted before that keeps reading.
+     */
+    private static final Set<String> CHANNELS = Set.of("WEB", "TELEGRAM_BOT", "TELEGRAM_MINI_APP");
+
     private static final Set<String> DESTINATION_TYPES = Set.of("CAMPAIGN", "STOREFRONT_HOME", "INFLUENCER");
     private static final String TOKEN_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private static final int TOKEN_LENGTH = 10;
@@ -78,7 +83,11 @@ public class AttributionLinkService {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "label must not be blank");
         }
         if (!CHANNELS.contains(channel)) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, "channel must be one of " + CHANNELS);
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "MOBILE_APP".equals(channel)
+                            ? "A mobile app link cannot be minted while the mobile app is on hold (ADR 0055)"
+                            : "channel must be one of " + CHANNELS);
         }
         if (!DESTINATION_TYPES.contains(destinationType)) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "destinationType must be one of " + DESTINATION_TYPES);

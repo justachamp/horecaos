@@ -777,6 +777,11 @@ export interface FunnelStageResponse {
   readonly reason: string | null;
   readonly count: number | null;
   readonly unrecordedDays: number;
+  /**
+   * What `count` is a count *of*, when that is not the stage's own name: `PAGE_LOADS` on the visits stage once the platform
+   * owner has switched the page-load count on (ADR 0183 D18) -- tab sessions and not people. Never a denominator.
+   */
+  readonly basis?: string | null;
 }
 
 /** A null count is "not recorded" and is never zero. */

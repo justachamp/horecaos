@@ -445,6 +445,11 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.customers.funnel.stage.ORDERED': 'Buyurtma berdi',
   'reports.customers.funnel.visits.notMeasured':
     'Tashriflar: oʻlchanmaydi. Bu hisobot uchun brauzerdan, ilovadan yoki botdan hech narsa yigʻilmaydi, shuning uchun tashriflar nol deb koʻrsatilmaydi va taxmin qilinmaydi. Tashriflarni xohlagan restoran ularni oʻzining Google Analytics orqali oʻqiy oladi.',
+  'reports.customers.funnel.pageLoads.label': 'sahifa yuklanishlari, odamlar emas',
+  'reports.customers.funnel.pageLoads.note':
+    'Brauzer oynasi doʻkonni ochgan har safar bitta yuklanish sanaladi, cookie va identifikatorsiz. Bir kishi ikki marta ochsa, bu ikkita yuklanish, shuning uchun raqam voronkaning birinchi ustuni sifatida emas, uning yonida koʻrsatiladi: keyingi bosqichlar uning ulushi emas.',
+  'reports.customers.funnel.pageLoads.unrecorded':
+    'Bu davrning {days} kuni hisoblagich yoqilishidan oldin edi, shuning uchun jami toʻliq emas.',
   'reports.customers.funnel.reason.NOT_BY_CHANNEL':
     'Roʻyxatdan oʻtishlarning savdo kanali yoʻq, shuning uchun kanal kesimi ularni qamramaydi.',
   'reports.customers.funnel.unrecorded':

@@ -302,7 +302,7 @@ export const marketingEn = {
   // --------------------------------------------------------- attribution links 6.6a (ADR 0044, T18)
   'marketing.attributionLinks.title': 'Acquisition links',
   'marketing.attributionLinks.intro':
-    'A trackable website ?ref= link or Telegram deep link, for a campaign or an influencer.',
+    'A link for a campaign or an influencer: your website, your Telegram bot or your Telegram Mini App. It counts how many times it is opened, never who opened it.',
   'marketing.attributionLinks.empty': 'No link minted yet',
   'marketing.attributionLinks.create.action': 'Mint a link',
   'marketing.attributionLinks.create.title': 'Mint an acquisition link',
@@ -324,6 +324,91 @@ export const marketingEn = {
   'marketing.attributionLinks.destinationType.CAMPAIGN': 'A campaign',
   'marketing.attributionLinks.destinationType.STOREFRONT_HOME': 'The storefront home',
   'marketing.attributionLinks.destinationType.INFLUENCER': 'An influencer',
+  'marketing.attributionLinks.copy': 'Copy',
+  'marketing.attributionLinks.copied': 'Copied',
+  'marketing.attributionLinks.unavailable.WEB_HOSTNAME_NOT_CLAIMED':
+    'No website address yet: this brand’s branches sell on no website channel with an address.',
+  'marketing.attributionLinks.unavailable.WEB_HOSTNAME_NOT_VERIFIED':
+    'The website address is not verified yet.',
+  'marketing.attributionLinks.unavailable.WEB_HOSTNAME_AMBIGUOUS':
+    'Two verified website addresses sell here, and the platform will not guess which one to link.',
+  'marketing.attributionLinks.unavailable.TELEGRAM_BOT_NOT_CONNECTED':
+    'No Telegram bot is connected for this brand.',
+  'marketing.attributionLinks.unavailable.TELEGRAM_BOT_UNREACHABLE':
+    'Telegram would not tell us the bot’s name just now. Try again shortly.',
+  'marketing.attributionLinks.unavailable.TELEGRAM_MINI_APP_NOT_SET_UP':
+    'The Mini App is not set up yet: finish the Telegram Mini App setup below.',
+  'marketing.attributionLinks.unavailable.MOBILE_APP_ON_HOLD':
+    'The mobile app is on hold, so this link goes nowhere.',
+  // ------------------------------------------- the guided Mini App setup (ADR 0183, row 6.6a)
+  'marketing.miniApp.title': 'Telegram Mini App setup',
+  'marketing.miniApp.lead':
+    'Your storefront inside your Telegram bot. Two steps are only yours to do in Telegram, and the exact words to send are written out; the rest is read from the facts, so you can leave and come back.',
+  'marketing.miniApp.loading': 'Reading where the setup stands…',
+  'marketing.miniApp.denied':
+    'Setting up the Mini App needs the permission to manage integrations.',
+  'marketing.miniApp.error': 'Where the setup stands could not be read.',
+  'marketing.miniApp.open': 'Open',
+  'marketing.miniApp.copy': 'Copy',
+  'marketing.miniApp.state.DONE': 'Done',
+  'marketing.miniApp.state.RECORDED': 'Recorded',
+  'marketing.miniApp.state.TODO': 'To do',
+  'marketing.miniApp.state.UNKNOWN': 'Could not check',
+  'marketing.miniApp.step.CONNECT_BOT.title': 'Connect your bot',
+  'marketing.miniApp.step.CONNECT_BOT.hint':
+    'Create the bot with @BotFather (/newbot), then paste its token under Settings → Integrations. The token is never shown again.',
+  'marketing.miniApp.step.REGISTER_WEBHOOK.title': 'Register the bot’s webhook',
+  'marketing.miniApp.step.REGISTER_WEBHOOK.hint':
+    'So the bot hears your customers: press Register webhook on the bot’s card in Integrations.',
+  'marketing.miniApp.step.TELEGRAM_CHANNEL.title': 'Add a Telegram sales channel',
+  'marketing.miniApp.step.TELEGRAM_CHANNEL.hint':
+    'Under Settings → Sales channels, add a channel of type Telegram backed by this bot. Its menu button, texts and Mini App switch are set there.',
+  'marketing.miniApp.step.STOREFRONT_ADDRESS.title': 'Your storefront has a verified address',
+  'marketing.miniApp.step.STOREFRONT_ADDRESS.hint':
+    'The Mini App opens your storefront, so it needs the verified address of your website channel. You never type an address here.',
+  'marketing.miniApp.step.BOTFATHER_APP.title': 'Create the Mini App in BotFather',
+  'marketing.miniApp.step.BOTFATHER_APP.hint':
+    'Only the holder of the bot can do this, and Telegram gives us no way to check it, so this step reads “Recorded” once you tell us the short name.',
+  'marketing.miniApp.step.MENU_BUTTON.title': 'Put the Mini App on the bot’s menu button',
+  'marketing.miniApp.step.MENU_BUTTON.hint':
+    'We set the button and then ask Telegram what it shows. The step is done only when Telegram shows what we set.',
+  'marketing.miniApp.step.TEST_LINK.title': 'Open it on your phone',
+  'marketing.miniApp.step.TEST_LINK.hint':
+    'Open this link in Telegram: your storefront should open inside the bot. Then mint a “Telegram mini app” link above and open that to see a click counted.',
+  'marketing.miniApp.detail.STOREFRONT_ADDRESS.NOT_CLAIMED':
+    'No website channel selling at this brand’s branches has claimed an address yet.',
+  'marketing.miniApp.detail.STOREFRONT_ADDRESS.NOT_VERIFIED':
+    'The website channel’s address is claimed but not verified. Publish its DNS record and verify it.',
+  'marketing.miniApp.detail.STOREFRONT_ADDRESS.AMBIGUOUS':
+    'Two verified website addresses sell at this brand’s branches, and the platform will not guess which one is the storefront.',
+  'marketing.miniApp.detail.MENU_BUTTON.NOT_READY': 'Finish the steps above first.',
+  'marketing.miniApp.detail.MENU_BUTTON.MINI_APP_OFF':
+    'The Mini App is switched off on the Telegram channel. Recording the short name switches it on.',
+  'marketing.miniApp.detail.MENU_BUTTON.NOT_APPLIED':
+    'Telegram shows a different button from the one we mean to set.',
+  'marketing.miniApp.detail.MENU_BUTTON.OTHER_BRAND':
+    'The Telegram channel’s Mini App opens another brand’s storefront. Recording the short name here moves it to this brand.',
+  'marketing.miniApp.detail.TEST_LINK.NOT_READY':
+    'The link appears once the bot and the short name are known.',
+  'marketing.miniApp.botFather.step1': 'Open @BotFather in Telegram and send /newapp.',
+  'marketing.miniApp.botFather.step2': 'Choose your bot: @{bot}.',
+  'marketing.miniApp.botFather.step3': 'Send a title and a short description. Customers see both.',
+  'marketing.miniApp.botFather.step4': 'Send a 640×360 picture, then a GIF or /empty to skip it.',
+  'marketing.miniApp.botFather.step5':
+    'When BotFather asks for the Web App URL, send exactly the address below.',
+  'marketing.miniApp.botFather.step6':
+    'When BotFather asks for a short name, send one of your choice: letters, digits and underscores, for example order. BotFather replies with a link ending in it. Enter the short name here.',
+  'marketing.miniApp.shortName': 'Short name BotFather accepted',
+  'marketing.miniApp.record': 'Record short name',
+  'marketing.miniApp.needsChannel':
+    'Add the Telegram sales channel first: the short name is recorded on it.',
+  'marketing.miniApp.needsAddress':
+    'BotFather needs your storefront address first. Finish the step above.',
+  'marketing.miniApp.menu.wanted': 'We will set the label “{label}”, opening {url}.',
+  'marketing.miniApp.menu.held': 'Telegram currently shows a button that opens {url}.',
+  'marketing.miniApp.menu.apply': 'Set the menu button',
+  'marketing.miniApp.menu.notShown':
+    'Telegram accepted the call but still shows a different button. Try again, or check the bot in BotFather.',
 
   // ------------------------------------------------------- promo codes 6.2 (ADR 0072, wave 60)
   'marketing.promoCodes.title': 'Promo codes',
@@ -1510,13 +1595,57 @@ export const marketingEn = {
   'marketing.storefront.tab.groups': 'Home groups',
   'marketing.storefront.tab.carousel': 'Offer carousel',
   'marketing.storefront.tab.preview': 'Preview',
-  'marketing.storefront.tab.switcher': 'Brand switcher',
+  'marketing.storefront.tab.switcher': 'Brand switcher and layout',
+  'marketing.storefront.tab.branches': 'Branch order',
   'marketing.storefront.groups.hint':
     'Titled rails of dishes on the home screen: hand-picked, or a whole category. Their order here is their order on the screen.',
   'marketing.storefront.carousel.hint':
     'The carousel at the top of the home screen is shared by banners and promo cards. Order it here; write and publish them under Content. It is the same for every customer — a personal offer for one guest is a separate thing.',
   'marketing.storefront.carousel.link': 'Open Content',
-  'marketing.storefront.switcher.title': 'Brand switcher and marketplace layout — not built',
-  'marketing.storefront.switcher.body':
-    'These wait until a tenant runs two brands on one storefront and asks for them (ADR 0157, Release 4). Until then there is nothing to configure, and no setting is reserved for it.',
+  'marketing.storefront.layout.title': 'Category layout',
+  'marketing.storefront.layout.hint':
+    'Standard is the category navigation customers have today. Marketplace shows a compact strip of categories and an “all categories” overlay, for a storefront with many of them. The choice applies to this brand as soon as you make it.',
+  'marketing.storefront.layout.standard': 'Standard',
+  'marketing.storefront.layout.marketplace': 'Marketplace',
+  'marketing.storefront.layout.saved': 'Layout saved.',
+  'marketing.storefront.switcher.title': 'Other brands on this storefront',
+  'marketing.storefront.switcher.hint':
+    'A strip of your other brands at the top of this storefront, each leading to that brand’s own website. The address is the website’s verified address, looked up every time; nothing is typed here and nothing goes stale.',
+  'marketing.storefront.switcher.empty':
+    'No brand is offered here. The storefront looks as it did before.',
+  'marketing.storefront.switcher.status.shown': 'Shown to customers',
+  'marketing.storefront.switcher.status.hidden': 'Hidden',
+  'marketing.storefront.switcher.status.noHostname':
+    'Not shown: this website has no verified address yet',
+  'marketing.storefront.switcher.status.inactive': 'Not shown: the brand is not active',
+  'marketing.storefront.switcher.up': 'Move up',
+  'marketing.storefront.switcher.down': 'Move down',
+  'marketing.storefront.switcher.hide': 'Hide',
+  'marketing.storefront.switcher.show': 'Show',
+  'marketing.storefront.switcher.remove': 'Remove',
+  'marketing.storefront.switcher.add.title': 'Offer another brand',
+  'marketing.storefront.switcher.add.target': 'Brand and website',
+  'marketing.storefront.switcher.add.choose': 'Choose a brand…',
+  'marketing.storefront.switcher.add.noAddress': 'no verified address yet',
+  'marketing.storefront.switcher.add.none':
+    'There is no other brand with a website to offer. Another brand needs an active website channel that sells at one of its branches.',
+  'marketing.storefront.switcher.add.submit': 'Add to the strip',
+  'marketing.storefront.switcher.added': 'Brand added.',
+  'marketing.storefront.switcher.updated': 'Saved.',
+  'marketing.storefront.switcher.removed': 'Brand removed.',
+  'marketing.storefront.switcher.reordered': 'Order saved.',
+  'marketing.storefront.branches.title': 'Order of branches',
+  'marketing.storefront.branches.hint':
+    'A customer who shares their location sees the nearest branch first; this order only breaks a tie. A customer who shares none sees the branches in exactly this order. A branch you leave out is listed last, by name.',
+  'marketing.storefront.branches.placed': 'In your order',
+  'marketing.storefront.branches.nonePlaced':
+    'No branch is placed. The storefront lists the branches by name.',
+  'marketing.storefront.branches.unplaced': 'Not placed (listed last, by name)',
+  'marketing.storefront.branches.noneUnplaced': 'Every branch is placed.',
+  'marketing.storefront.branches.place': 'Place',
+  'marketing.storefront.branches.unplace': 'Take out of the order',
+  'marketing.storefront.branches.inactive': 'not active, so customers do not see it',
+  'marketing.storefront.branches.save': 'Save order',
+  'marketing.storefront.branches.reset': 'Undo changes',
+  'marketing.storefront.branches.saved': 'Order saved.',
 } as const;

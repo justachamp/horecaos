@@ -77,7 +77,7 @@ class ConfigurationKeysTests {
     @Test
     void aKeySettableNowhereIsRejectedAtDeclaration() {
         assertThatThrownBy(() -> new ConfigurationKey<>(
-                        "ordering.thing", String.class, null, Set.of(), "ordering", false, false, ""))
+                        "ordering.thing", String.class, null, Set.of(), "ordering", false, false, "", null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("at least one scope");
     }

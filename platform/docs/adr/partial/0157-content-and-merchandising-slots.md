@@ -1306,6 +1306,23 @@ it. For Release 5: with the entitlement and the policy on, a news post written w
 block editor renders on the storefront with no element outside the block set, and with
 either off, no editorial route exists.
 
+## Status addition (2026-10-14)
+
+[ADR 0183](../built/0183-acquisition-links-the-tenants-mini-app-and-storefront-merchandising.md) (Accepted 2026-10-14, batch 21, decision
+D17) waives this record's Release 4 trigger in part. This record's Decision, Alternatives and Consequences are unchanged.
+
+- **The branch order and the brand switcher entries are built now**, without a tenant asking. Both are fully specified
+  above (`content.brand_switcher_entries`, one nullable `storefront_sort_order` on `tenant.locations`) and depend on
+  nothing a tenant would decide. They render nothing until an entry exists or a sort order is set, so a tenant with one
+  brand sees what it saw before. The migration is `V0676`.
+- **The marketplace layout is built and stays dark.** Where the choice lives, which Release 4 left open and this record
+  reserved no field for, is answered: a brand-scoped ADR 0030 policy `storefront.layout` in `{STANDARD, MARKETPLACE}`,
+  default `STANDARD`, carried on the home document the storefront already reads. Nothing sets it for any brand until a
+  tenant that runs a marketplace asks (ADR 0157's open input, still with the platform owner as product). The sentence
+  «no layout field exists before then» in Decision 5 is read with this addition.
+- The open input «Whether the brand switcher and the marketplace layout are built» is therefore closed for the switcher
+  and the branch order, and remains open for switching the layout on.
+
 ## References
 
 - ADR 0007, ADR 0010 (media lifecycle, CDN origin not built), ADR 0016 (immutable

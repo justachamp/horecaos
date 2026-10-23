@@ -77,7 +77,8 @@
     "storyPrevious": "Предыдущий слайд",
     "storyProgress": "Слайд {{current}} из {{total}}",
     "openLink": "Подробнее",
-    "popupClose": "Закрыть"
+    "popupClose": "Закрыть",
+    "brandSwitcher": "Другие наши бренды"
   },
   "editorial": {
     "homeLabel": "Ещё от нас",
@@ -114,6 +115,8 @@
     "searchHint": "Поиск блюда или кухни",
     "categories": "Категории",
     "allCategories": "Все",
+    "showAllCategories": "Все категории",
+    "categoriesClose": "Закрыть",
     "emptyMenu": "В этом филиале пока нет меню",
     "loadError": "Не удалось загрузить меню"
   },

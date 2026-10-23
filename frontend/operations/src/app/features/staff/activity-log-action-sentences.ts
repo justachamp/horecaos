@@ -210,6 +210,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       'uz-Latn': 'Tasdiqlash soʻralindi',
     },
     'audit.read': { en: 'Audit read', ru: 'Журнал просмотр', 'uz-Latn': 'Jurnal koʻrish' },
+    'brand.storefront_branch_order.changed': {
+      en: 'Order of branches on the storefront changed',
+      ru: 'Изменён порядок филиалов на витрине',
+      'uz-Latn': 'Vitrinadagi filiallar tartibi oʻzgartirildi',
+    },
     'catalog.autoAddRule.activated': {
       en: 'Auto-add rule activated',
       ru: 'Правило автодобавления активировано',
@@ -535,6 +540,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Изменены ссылки на соцсети канала',
       'uz-Latn': 'Kanalning ijtimoiy tarmoq havolalari oʻzgartirildi',
     },
+    'channel.telegram.updated': {
+      en: 'Telegram channel settings edited',
+      ru: 'Изменены настройки Telegram-канала',
+      'uz-Latn': 'Telegram kanali sozlamalari tahrirlandi',
+    },
     'channel.updated': {
       en: 'Sales channel edited',
       ru: 'Изменён канал продаж',
@@ -744,6 +754,26 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Storefront content reordered',
       ru: 'Изменён порядок контента витрины',
       'uz-Latn': 'Vitrina kontenti tartibi oʻzgartirildi',
+    },
+    'content.switcher_entry.added': {
+      en: 'A brand was added to the storefront brand switcher',
+      ru: 'Бренд добавлен в переключатель брендов витрины',
+      'uz-Latn': 'Vitrinaning brendlar almashtirgichiga brend qoʻshildi',
+    },
+    'content.switcher_entry.removed': {
+      en: 'A brand was removed from the storefront brand switcher',
+      ru: 'Бренд убран из переключателя брендов витрины',
+      'uz-Latn': 'Vitrinaning brendlar almashtirgichidan brend olib tashlandi',
+    },
+    'content.switcher_entry.reordered': {
+      en: 'Storefront brand switcher reordered',
+      ru: 'Изменён порядок переключателя брендов витрины',
+      'uz-Latn': 'Vitrina brendlar almashtirgichi tartibi oʻzgartirildi',
+    },
+    'content.switcher_entry.updated': {
+      en: 'A brand in the storefront brand switcher was shown or hidden',
+      ru: 'Показ бренда в переключателе брендов витрины изменён',
+      'uz-Latn': 'Vitrina brendlar almashtirgichidagi brend koʻrinishi oʻzgartirildi',
     },
     'conversation.closed': {
       en: 'Conversation closed',
@@ -1289,6 +1319,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Integration telegram link code issued',
       ru: 'Интеграция Telegram ссылка код выдано',
       'uz-Latn': 'Integratsiya Telegram havola kod berildi',
+    },
+    'integration.telegram_menu_button_applied': {
+      en: 'Telegram menu button set on the bot',
+      ru: 'Кнопка меню бота Telegram установлена',
+      'uz-Latn': 'Telegram botining menyu tugmasi oʻrnatildi',
     },
     'integration.telegram_staff_link_code_issued': {
       en: 'Integration telegram staff link code issued',

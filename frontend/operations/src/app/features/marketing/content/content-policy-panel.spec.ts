@@ -13,6 +13,8 @@ const POLICIES: ContentPolicies = {
   publishingVersion: 2,
   editorial: { news: false, gallery: false, recipes: false, vacancies: false },
   editorialVersion: 5,
+  layout: 'STANDARD',
+  layoutVersion: 0,
   editorialEntitled: true,
   videoEntitled: false,
 };

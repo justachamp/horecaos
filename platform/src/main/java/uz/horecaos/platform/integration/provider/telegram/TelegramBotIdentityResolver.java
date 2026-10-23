@@ -62,6 +62,32 @@ public class TelegramBotIdentityResolver {
     }
 
     /**
+     * The Telegram bot that serves one brand (ADR 0183): an installation provisioned as that brand's own bot (ADR 0059's
+     * {@code brand_id}) wins, else the tenant-wide one. An installation that belongs to <em>another</em> brand is never
+     * returned, so a brand's link can never name a sibling brand's bot.
+     */
+    public Optional<Installation> activeInstallation(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT i.id, i.secret_reference, e.base_url, i.non_sensitive_config ->> 'botUsername' AS bot_username
+                FROM integration.installations i
+                JOIN integration.provider_environments e ON e.code = i.environment_code
+                WHERE i.tenant_id = :tenantId AND i.provider_category = 'NOTIFICATION'
+                  AND i.provider_type = 'TELEGRAM_BOT_API' AND i.status = 'ACTIVE'
+                  AND (i.brand_id IS NULL OR i.brand_id = :brandId)
+                ORDER BY (i.brand_id IS NULL), i.created_at
+                LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((row, number) -> new Installation(
+                        row.getObject("id", UUID.class),
+                        row.getString("secret_reference"),
+                        row.getString("base_url"),
+                        row.getString("bot_username")))
+                .optional();
+    }
+
+    /**
      * The bot's own {@code @username}: the cached value if one is already on
      * file, otherwise resolved live via {@code getMe} and cached for next
      * time.

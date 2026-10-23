@@ -188,10 +188,30 @@ export class TelegramWebappService {
     return this.mode === 'compact';
   }
 
-  /** Start param from tgWebAppStartParam (e.g. from ?startapp=command) */
+  /**
+   * The start parameter the Mini App was launched with (`https://t.me/<bot>/<app>?startapp=<value>`, or a
+   * `web_app` menu button, which has none), or null for any other visit.
+   *
+   * Telegram delivers it three ways and which one a client uses depends on its version, so all three are read in the
+   * order they are most reliable: the page's query string (`tgWebAppStartParam`, as a host that forwards launch
+   * parameters writes it), the URL fragment (where Telegram's own launch parameters travel, beside `tgWebAppData`),
+   * and `Telegram.WebApp.initDataUnsafe.start_param`. Never trusted for anything but its shape: it is whatever a
+   * stranger put in a link.
+   */
   get startParam(): string | null {
     if (typeof window === 'undefined') return null;
-    return new URLSearchParams(window.location.search).get('tgWebAppStartParam');
+    const fromQuery = new URLSearchParams(window.location.search).get('tgWebAppStartParam');
+    if (fromQuery) return fromQuery;
+    const fromFragment = new URLSearchParams(window.location.hash.replace(/^#/, '')).get(
+      'tgWebAppStartParam',
+    );
+    if (fromFragment) return fromFragment;
+    const unsafe = (
+      window as unknown as {
+        Telegram?: { WebApp?: { initDataUnsafe?: { start_param?: unknown } } };
+      }
+    ).Telegram?.WebApp?.initDataUnsafe?.start_param;
+    return typeof unsafe === 'string' && unsafe.length > 0 ? unsafe : null;
   }
 
   /**

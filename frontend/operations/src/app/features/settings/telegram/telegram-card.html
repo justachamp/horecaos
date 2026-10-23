@@ -1,0 +1,117 @@
+<section class="facet-card" data-testid="telegram-card">
+  <h2 class="q-subhead">{{ 'settings.telegram.title' | t }}</h2>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'settings.telegram.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm" data-testid="telegram-denied">{{ 'settings.telegram.denied' | t }}</p>
+    }
+    @case ('error') {
+      <p class="q-body-sm error" data-testid="telegram-error">
+        {{ 'settings.telegram.error' | t }}
+      </p>
+    }
+    @default {
+      <p class="q-body-sm hint">{{ 'settings.telegram.lead' | t }}</p>
+
+      <label class="check">
+        <input
+          type="checkbox"
+          data-testid="telegram-mini-app"
+          [checked]="miniAppEnabled()"
+          (change)="miniAppEnabled.set($any($event.target).checked); saved.set(false)"
+        />
+        <span class="q-body-sm">{{ 'settings.telegram.miniApp.enabled' | t }}</span>
+      </label>
+
+      <div class="address" data-testid="telegram-address">
+        <span class="q-caption">{{ 'settings.telegram.miniApp.address' | t }}</span>
+        @if (view()?.miniAppUrl; as url) {
+          <code class="q-body-sm" data-testid="telegram-mini-app-url">{{ url }}</code>
+        } @else if (unavailableKey(); as key) {
+          <span class="q-body-sm status not-configured" data-testid="telegram-mini-app-unavailable">
+            {{ key | t }}
+          </span>
+        }
+      </div>
+
+      <label class="field">
+        <span class="q-caption">{{ 'settings.telegram.shortName' | t }}</span>
+        <input
+          class="q-input"
+          type="text"
+          maxlength="64"
+          autocomplete="off"
+          data-testid="telegram-short-name"
+          [value]="shortName()"
+          (input)="shortName.set($any($event.target).value); saved.set(false)"
+        />
+        <span class="q-caption hint">{{ 'settings.telegram.shortName.hint' | t }}</span>
+      </label>
+
+      <h3 class="q-body field-title">{{ 'settings.telegram.menuButton.title' | t }}</h3>
+      <p class="q-caption hint">{{ 'settings.telegram.menuButton.hint' | t }}</p>
+      @for (locale of locales(); track locale) {
+        <label class="field">
+          <span class="q-caption">{{ languageName(locale) }}</span>
+          <input
+            class="q-input"
+            type="text"
+            [attr.maxlength]="labelLimit"
+            [attr.data-testid]="'telegram-label-' + locale"
+            [value]="labels()[locale] ?? ''"
+            (input)="setLabel(locale, $any($event.target).value)"
+          />
+        </label>
+      }
+
+      <h3 class="q-body field-title">{{ 'settings.telegram.welcome.title' | t }}</h3>
+      <p class="q-caption hint">{{ 'settings.telegram.welcome.hint' | t }}</p>
+      @for (locale of locales(); track locale) {
+        <label class="field">
+          <span class="q-caption">{{ languageName(locale) }}</span>
+          <textarea
+            class="q-input"
+            rows="3"
+            [attr.maxlength]="welcomeLimit"
+            [attr.data-testid]="'telegram-welcome-' + locale"
+            [value]="welcomes()[locale] ?? ''"
+            (input)="setWelcome(locale, $any($event.target).value)"
+          ></textarea>
+        </label>
+      }
+
+      <label class="check">
+        <input
+          type="checkbox"
+          data-testid="telegram-offer"
+          [checked]="publicOffer()"
+          (change)="publicOffer.set($any($event.target).checked); saved.set(false)"
+        />
+        <span class="q-body-sm">{{ 'settings.telegram.offer' | t }}</span>
+      </label>
+      @if (view()?.publicOfferUrl; as offerUrl) {
+        <code class="q-body-sm" data-testid="telegram-offer-url">{{ offerUrl }}</code>
+      }
+
+      @if (saveError(); as error) {
+        <p class="q-body-sm error" role="alert" data-testid="telegram-save-error">{{ error }}</p>
+      }
+      @if (saved()) {
+        <p class="q-body-sm status configured" data-testid="telegram-saved">
+          {{ 'settings.telegram.saved' | t }}
+        </p>
+      }
+      <div class="actions">
+        <button type="button" data-testid="telegram-save" [disabled]="!canSave()" (click)="save()">
+          {{ 'settings.telegram.save' | t }}
+        </button>
+        <a class="q-body-sm" routerLink="/marketing/referrals" data-testid="telegram-guided-link">
+          → {{ 'settings.telegram.guided' | t }}
+        </a>
+      </div>
+    }
+  }
+</section>

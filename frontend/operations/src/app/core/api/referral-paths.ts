@@ -33,6 +33,15 @@ export const referralPaths = {
     return `${this.programs(scope)}/${encodeURIComponent(programId)}/retire`;
   },
 
+  /** `TelegramMiniAppSetupController` (ADR 0183): the guided Mini App and BotFather setup, derived from the facts. */
+  telegramMiniAppSetup(scope: BrandScope): string {
+    return `${OPERATIONS}${tenantBrand(scope)}/telegram/mini-app-setup`;
+  },
+
+  telegramMenuButton(scope: BrandScope): string {
+    return `${this.telegramMiniAppSetup(scope)}/menu-button`;
+  },
+
   summary(scope: BrandScope): string {
     return `${this.base(scope)}/summary`;
   },

@@ -25,6 +25,8 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
  *                      {@code EntitlementGate} about the code. {@code
  *                      ConfigurationKeyEntitlementTests} holds every code named here to a
  *                      feature key {@code EntitlementKeys} declares
+ * @param provisional present while the key's default is a retention period nobody with the authority has confirmed
+ *                    (ADR 0029, «Provisional retention»); see {@link ProvisionalRetention}
  */
 public record ConfigurationKey<T>(
         String code,
@@ -35,7 +37,8 @@ public record ConfigurationKey<T>(
         boolean tenantVisible,
         boolean explicitNullTerminates,
         String description,
-        @Nullable String entitledBy) {
+        @Nullable String entitledBy,
+        @Nullable ProvisionalRetention provisional) {
 
     /** A key no plan feature gates: how every declaration was written before {@code entitledBy} existed. */
     public ConfigurationKey(
@@ -56,7 +59,28 @@ public record ConfigurationKey<T>(
                 tenantVisible,
                 explicitNullTerminates,
                 description,
+                null,
                 null);
+    }
+
+    /**
+     * A retention period that is a placeholder (ADR 0029, «Provisional retention»): the key's <em>default</em> is a guess
+     * until someone with the authority confirms it, and confirming it is writing the value at {@code PLATFORM} scope, which
+     * ADR 0030 audits. While the key still resolves from its code default it is provisional, and the startup check reports
+     * it (and refuses a production start when it governs personal data).
+     *
+     * @param governsPersonalData whether the rows this period keeps hold personal data. A provisional period over counts
+     *                            and no person (the customer funnel) is reported; one over a person's data is refused
+     * @param awaitingConfirmationFrom who must confirm it, named so the report says whom to ask
+     */
+    public record ProvisionalRetention(boolean governsPersonalData, String awaitingConfirmationFrom) {
+
+        public ProvisionalRetention {
+            Objects.requireNonNull(awaitingConfirmationFrom, "Say who must confirm a provisional period");
+            if (awaitingConfirmationFrom.isBlank()) {
+                throw new IllegalArgumentException("Say who must confirm a provisional period");
+            }
+        }
     }
 
     public ConfigurationKey {
@@ -102,6 +126,7 @@ public record ConfigurationKey<T>(
         private boolean explicitNullTerminates;
         private String description = "";
         private @Nullable String entitledBy;
+        private @Nullable ProvisionalRetention provisional;
 
         private Builder(String code, Class<T> valueType) {
             this.code = code;
@@ -142,6 +167,12 @@ public record ConfigurationKey<T>(
             return this;
         }
 
+        /** Marks the key's default as a provisional retention period (ADR 0029); see {@link ProvisionalRetention}. */
+        public Builder<T> provisionalRetention(boolean governsPersonalData, String awaitingConfirmationFrom) {
+            this.provisional = new ProvisionalRetention(governsPersonalData, awaitingConfirmationFrom);
+            return this;
+        }
+
         public Builder<T> describedAs(String text) {
             this.description = text;
             return this;
@@ -157,7 +188,8 @@ public record ConfigurationKey<T>(
                     tenantVisible,
                     explicitNullTerminates,
                     description,
-                    entitledBy);
+                    entitledBy,
+                    provisional);
         }
     }
 }

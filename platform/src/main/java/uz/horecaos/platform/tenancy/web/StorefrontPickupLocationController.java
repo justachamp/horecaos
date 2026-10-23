@@ -3,7 +3,6 @@ package uz.horecaos.platform.tenancy.web;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -44,7 +43,8 @@ public class StorefrontPickupLocationController {
     @PostMapping("/pickup-locations")
     @Operation(
             summary = "Find the nearest pickup locations with a published storefront menu",
-            description = "Returns at most twenty active pickup branches, nearest first. Each "
+            description = "Returns at most twenty active pickup branches, nearest first; with no point, in the "
+                    + "brand's own storefront order (distanceKnown is then false on every branch). Each "
                     + "result carries the same current serviceability answer the checkout path "
                     + "will later re-resolve authoritatively. POST so the caller's coordinate "
                     + "travels in the body rather than the query string; nothing is written and "
@@ -57,12 +57,13 @@ public class StorefrontPickupLocationController {
     }
 
     /**
-     * @param point the caller's own position, WGS 84 degrees
+     * @param point the caller's own position, WGS 84 degrees; absent when the customer has shared none, and the branches
+     *              then come in the order the brand set for its storefront (ADR 0183 D17)
      * @param limit at most this many branches; defaults to 10 and is capped by
      *              {@link StorefrontPickupLocationQuery#MAXIMUM_LIMIT}
      */
     public record PickupLocationSearchRequest(
-            @NotNull @Valid GeoPoint point, @Nullable Integer limit) {}
+            @Nullable @Valid GeoPoint point, @Nullable Integer limit) {}
 
     // A branch's public name and address by id (2026-09-21 audit follow-up
     // (d), for a pickup order's own detail) is served by the dedicated

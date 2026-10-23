@@ -2,6 +2,7 @@ package uz.horecaos.platform.tenancy.infrastructure.persistence;
 
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
@@ -26,14 +27,27 @@ public class JdbcStorefrontPickupLocationStore {
     }
 
     /**
-     * The nearest catalogue-capable branches, ordered deterministically.
+     * The catalogue-capable branches, ordered deterministically.
      *
-     * <p>The database owns geodesic distance here. Latitude and longitude are
-     * WGS 84 degrees, so planar arithmetic in the client would produce a
-     * different order as a search moves away from the equator.
+     * <p>With a customer point the database owns geodesic distance: latitude and longitude are WGS 84 degrees, so planar
+     * arithmetic in the client would produce a different order as a search moves away from the equator. Nearest first, then
+     * the brand's own storefront order, then the id (ADR 0157 Release 4: the manual order is the tie-break after distance).
+     *
+     * <p>With no point (ADR 0183 D17) there is no distance to sort by, so the order is the one the brand set
+     * ({@code storefront_sort_order}, unset last), then the branch's name, then its id. {@code distanceMeters} is then null:
+     * the answer says it does not know, and does not invent a zero.
      */
-    public List<PickupLocationCandidate> nearestTo(GeoPoint point, int limit) {
-        return jdbc.sql("""
+    public List<PickupLocationCandidate> nearestTo(@Nullable GeoPoint point, int limit) {
+        boolean located = point != null;
+        String distance = located ? """
+                  ST_Distance(
+                      ST_SetSRID(ST_MakePoint(l.longitude, l.latitude), 4326)::geography,
+                      ST_SetSRID(ST_MakePoint(:longitude, :latitude), 4326)::geography
+                  )""" : "CAST(NULL AS double precision)";
+        String order = located
+                ? "ORDER BY distance_meters, l.storefront_sort_order NULLS LAST, l.id"
+                : "ORDER BY l.storefront_sort_order NULLS LAST, l.display_name, l.id";
+        var statement = jdbc.sql("""
                 SELECT l.tenant_id,
                        l.brand_id,
                        l.id AS location_id,
@@ -43,10 +57,8 @@ public class JdbcStorefrontPickupLocationStore {
                        l.address_line,
                        l.district,
                        l.city,
-                       ST_Distance(
-                           ST_SetSRID(ST_MakePoint(l.longitude, l.latitude), 4326)::geography,
-                           ST_SetSRID(ST_MakePoint(:longitude, :latitude), 4326)::geography
-                       ) AS distance_meters
+                       """ + distance + """
+                        AS distance_meters
                 FROM tenant.locations l
                 JOIN tenant.brands b
                   ON b.tenant_id = l.tenant_id AND b.id = l.brand_id
@@ -64,8 +76,7 @@ public class JdbcStorefrontPickupLocationStore {
                 WHERE t.status = 'ACTIVE'
                   AND b.status = 'ACTIVE'
                   AND l.status = 'ACTIVE'
-                  AND l.latitude IS NOT NULL
-                  AND l.longitude IS NOT NULL
+                  AND (l.latitude IS NOT NULL AND l.longitude IS NOT NULL OR NOT CAST(:located AS boolean))
                   AND EXISTS (
                       SELECT 1
                       FROM catalog.publications p
@@ -74,12 +85,16 @@ public class JdbcStorefrontPickupLocationStore {
                         AND p.channel = 'STOREFRONT'
                         AND p.status = 'PUBLISHED'
                   )
-                ORDER BY distance_meters, l.id
+                """ + order + """
+
                 LIMIT :limit
                 """)
-                .param("latitude", point.latitude())
-                .param("longitude", point.longitude())
-                .param("limit", limit)
+                .param("located", located)
+                .param("limit", limit);
+        if (point != null) {
+            statement = statement.param("latitude", point.latitude()).param("longitude", point.longitude());
+        }
+        return statement
                 .query((row, number) -> new PickupLocationCandidate(
                         row.getObject("tenant_id", UUID.class),
                         row.getObject("brand_id", UUID.class),
@@ -90,7 +105,7 @@ public class JdbcStorefrontPickupLocationStore {
                         row.getString("address_line"),
                         row.getString("district"),
                         row.getString("city"),
-                        row.getDouble("distance_meters")))
+                        row.getObject("distance_meters") == null ? null : row.getDouble("distance_meters")))
                 .list();
     }
 
@@ -105,7 +120,7 @@ public class JdbcStorefrontPickupLocationStore {
             String addressLine,
             String district,
             String city,
-            double distanceMeters) {}
+            @Nullable Double distanceMeters) {}
 
     // A named branch's public profile, by id rather than by distance
     // (2026-09-21 audit follow-up (d)), is served by

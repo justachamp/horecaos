@@ -446,6 +446,11 @@ export const reportsRu: AreaMessages<typeof reportsEn> = {
   'reports.customers.funnel.stage.ORDERED': 'Заказали',
   'reports.customers.funnel.visits.notMeasured':
     'Посещения: не измеряются. Для этого отчёта ничего не собирается ни из браузера, ни из приложения, ни из бота, поэтому посещения не показаны нулём и не оценены. Ресторан, которому нужны посещения, может прочитать их в собственной Google Analytics.',
+  'reports.customers.funnel.pageLoads.label': 'загрузок страниц, а не людей',
+  'reports.customers.funnel.pageLoads.note':
+    'Одна загрузка считается каждый раз, когда вкладка браузера открывает магазин, без cookie и без идентификатора. Один человек, открывший магазин дважды, — это две загрузки, поэтому цифра показана рядом с воронкой, а не её первой полосой: следующие этапы не являются её долей.',
+  'reports.customers.funnel.pageLoads.unrecorded':
+    '{days} дн. этого периода были до включения счётчика, поэтому итог неполный.',
   'reports.customers.funnel.reason.NOT_BY_CHANNEL':
     'У регистраций нет канала продаж, поэтому срез по каналу их не включает.',
   'reports.customers.funnel.unrecorded':

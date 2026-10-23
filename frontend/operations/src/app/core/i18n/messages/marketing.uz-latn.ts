@@ -303,7 +303,7 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   // --------------------------------------------------------- attribution links 6.6a (ADR 0044, T18)
   'marketing.attributionLinks.title': 'Jalb qilish havolalari',
   'marketing.attributionLinks.intro':
-    'Kampaniya yoki bloger uchun kuzatiladigan ?ref= sayt havolasi yoki Telegram chuqur havolasi.',
+    'Kampaniya yoki bloger uchun havola: saytingizga, Telegram botingizga yoki Telegram Mini App ga. U necha marta ochilganini sanaydi, kim ochganini esa yoʻq.',
   'marketing.attributionLinks.empty': 'Hali havola yaratilmagan',
   'marketing.attributionLinks.create.action': 'Havola yaratish',
   'marketing.attributionLinks.create.title': 'Jalb qilish havolasini yaratish',
@@ -325,6 +325,93 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.attributionLinks.destinationType.CAMPAIGN': 'Kampaniya',
   'marketing.attributionLinks.destinationType.STOREFRONT_HOME': 'Doʻkon bosh sahifasi',
   'marketing.attributionLinks.destinationType.INFLUENCER': 'Bloger',
+  'marketing.attributionLinks.copy': 'Nusxalash',
+  'marketing.attributionLinks.copied': 'Nusxalandi',
+  'marketing.attributionLinks.unavailable.WEB_HOSTNAME_NOT_CLAIMED':
+    'Sayt manzili hali yoʻq: bu brend filiallari manzili bor birorta veb-kanal orqali sotmaydi.',
+  'marketing.attributionLinks.unavailable.WEB_HOSTNAME_NOT_VERIFIED':
+    'Sayt manzili hali tasdiqlanmagan.',
+  'marketing.attributionLinks.unavailable.WEB_HOSTNAME_AMBIGUOUS':
+    'Savdo ikkita tasdiqlangan sayt manzili orqali ketadi va platforma qaysi biriga havola berishni taxmin qilmaydi.',
+  'marketing.attributionLinks.unavailable.TELEGRAM_BOT_NOT_CONNECTED':
+    'Bu brend uchun Telegram bot ulanmagan.',
+  'marketing.attributionLinks.unavailable.TELEGRAM_BOT_UNREACHABLE':
+    'Telegram hozir bot nomini aytmadi. Birozdan keyin qayta urinib koʻring.',
+  'marketing.attributionLinks.unavailable.TELEGRAM_MINI_APP_NOT_SET_UP':
+    'Mini App hali sozlanmagan: quyidagi Telegram Mini App sozlashni yakunlang.',
+  'marketing.attributionLinks.unavailable.MOBILE_APP_ON_HOLD':
+    'Mobil ilova toʻxtatilgan, shuning uchun bu havola hech yerga olib bormaydi.',
+  // ------------------------------------------- the guided Mini App setup (ADR 0183, row 6.6a)
+  'marketing.miniApp.title': 'Telegram Mini App ni sozlash',
+  'marketing.miniApp.lead':
+    'Vitrinangiz Telegram botingiz ichida. Ikki qadamni faqat siz Telegramda bajarasiz va yuboriladigan soʻzlar aniq yozilgan; qolgani faktlardan oʻqiladi, shuning uchun chiqib, keyin qaytish mumkin.',
+  'marketing.miniApp.loading': 'Sozlash qayerda turganini oʻqiyapmiz…',
+  'marketing.miniApp.denied':
+    'Mini App ni sozlash uchun integratsiyalarni boshqarish huquqi kerak.',
+  'marketing.miniApp.error': 'Sozlash qayerda turganini oʻqib boʻlmadi.',
+  'marketing.miniApp.open': 'Ochish',
+  'marketing.miniApp.copy': 'Nusxalash',
+  'marketing.miniApp.state.DONE': 'Tayyor',
+  'marketing.miniApp.state.RECORDED': 'Yozib qoʻyildi',
+  'marketing.miniApp.state.TODO': 'Bajarish kerak',
+  'marketing.miniApp.state.UNKNOWN': 'Tekshirib boʻlmadi',
+  'marketing.miniApp.step.CONNECT_BOT.title': 'Botingizni ulang',
+  'marketing.miniApp.step.CONNECT_BOT.hint':
+    'Botni @BotFather da yarating (/newbot), keyin tokenini Sozlamalar → Integratsiyalar boʻlimiga qoʻying. Token qayta koʻrsatilmaydi.',
+  'marketing.miniApp.step.REGISTER_WEBHOOK.title': 'Botning webhook ini roʻyxatdan oʻtkazing',
+  'marketing.miniApp.step.REGISTER_WEBHOOK.hint':
+    'Bot mijozlaringizni eshitishi uchun: Integratsiyalardagi bot kartasida «Webhook ni roʻyxatdan oʻtkazish» tugmasini bosing.',
+  'marketing.miniApp.step.TELEGRAM_CHANNEL.title': 'Telegram sotuv kanalini qoʻshing',
+  'marketing.miniApp.step.TELEGRAM_CHANNEL.hint':
+    'Sozlamalar → Sotuv kanallari boʻlimida shu botga ulangan Telegram turidagi kanal qoʻshing. Menyu tugmasi, matnlar va Mini App kaliti shu yerda sozlanadi.',
+  'marketing.miniApp.step.STOREFRONT_ADDRESS.title': 'Vitrinangizning tasdiqlangan manzili bor',
+  'marketing.miniApp.step.STOREFRONT_ADDRESS.hint':
+    'Mini App vitrinangizni ochadi, shuning uchun unga veb-kanalingizning tasdiqlangan manzili kerak. Bu yerda manzil kiritmaysiz.',
+  'marketing.miniApp.step.BOTFATHER_APP.title': 'Mini App ni BotFather da yarating',
+  'marketing.miniApp.step.BOTFATHER_APP.hint':
+    'Buni faqat bot egasi qila oladi, tekshirishning esa imkoni yoʻq: Telegram bunday imkon bermaydi. Qisqa nomni bildirganingizda bu qadam «Yozib qoʻyildi» deb koʻrinadi.',
+  'marketing.miniApp.step.MENU_BUTTON.title': 'Mini App ni botning menyu tugmasiga qoʻying',
+  'marketing.miniApp.step.MENU_BUTTON.hint':
+    'Tugmani oʻrnatamiz va Telegramdan nimani koʻrsatayotganini soʻraymiz. Telegram biz oʻrnatganini koʻrsatgandagina qadam tayyor boʻladi.',
+  'marketing.miniApp.step.TEST_LINK.title': 'Telefoningizda oching',
+  'marketing.miniApp.step.TEST_LINK.hint':
+    'Bu havolani Telegramda oching: vitrina bot ichida ochilishi kerak. Keyin yuqorida «Telegram Mini App» havolasini yarating va uni oching — bosish hisobga olinadi.',
+  'marketing.miniApp.detail.STOREFRONT_ADDRESS.NOT_CLAIMED':
+    'Bu brend filiallarida sotadigan birorta veb-kanal hali manzil belgilamagan.',
+  'marketing.miniApp.detail.STOREFRONT_ADDRESS.NOT_VERIFIED':
+    'Veb-kanal manzili belgilangan, lekin tasdiqlanmagan. DNS yozuvini joylashtiring va tasdiqlang.',
+  'marketing.miniApp.detail.STOREFRONT_ADDRESS.AMBIGUOUS':
+    'Bu brend filiallarida ikkita tasdiqlangan sayt manzili orqali sotiladi va platforma qaysi biri vitrina ekanini taxmin qilmaydi.',
+  'marketing.miniApp.detail.MENU_BUTTON.NOT_READY': 'Avval yuqoridagi qadamlarni yakunlang.',
+  'marketing.miniApp.detail.MENU_BUTTON.MINI_APP_OFF':
+    'Mini App Telegram kanalida oʻchirilgan. Qisqa nomni yozib qoʻysangiz, u yoqiladi.',
+  'marketing.miniApp.detail.MENU_BUTTON.NOT_APPLIED':
+    'Telegram biz oʻrnatmoqchi boʻlgan tugmadan boshqasini koʻrsatyapti.',
+  'marketing.miniApp.detail.MENU_BUTTON.OTHER_BRAND':
+    'Telegram kanalining Mini App i boshqa brend vitrinasini ochadi. Qisqa nomni shu yerda yozib qoʻysangiz, u shu brendga oʻtadi.',
+  'marketing.miniApp.detail.TEST_LINK.NOT_READY':
+    'Bot va qisqa nom maʻlum boʻlgach, havola paydo boʻladi.',
+  'marketing.miniApp.botFather.step1': 'Telegramda @BotFather ni oching va /newapp yuboring.',
+  'marketing.miniApp.botFather.step2': 'Botingizni tanlang: @{bot}.',
+  'marketing.miniApp.botFather.step3':
+    'Nom va qisqa tavsif yuboring. Mijozlar ikkalasini ham koʻradi.',
+  'marketing.miniApp.botFather.step4':
+    '640×360 rasm yuboring, keyin GIF yoki oʻtkazib yuborish uchun /empty.',
+  'marketing.miniApp.botFather.step5':
+    'BotFather Web App URL soʻraganda, quyidagi manzilni aynan shundayligicha yuboring.',
+  'marketing.miniApp.botFather.step6':
+    'BotFather qisqa nom soʻraganda, oʻzingiz tanlagan birini yuboring: harflar, raqamlar va pastki chiziq, masalan order. BotFather u bilan tugaydigan havola yuboradi. Qisqa nomni shu yerga kiriting.',
+  'marketing.miniApp.shortName': 'BotFather qabul qilgan qisqa nom',
+  'marketing.miniApp.record': 'Qisqa nomni yozib qoʻyish',
+  'marketing.miniApp.needsChannel':
+    'Avval Telegram sotuv kanalini qoʻshing: qisqa nom shu kanalda yoziladi.',
+  'marketing.miniApp.needsAddress':
+    'BotFather ga vitrinangiz manzili kerak. Avval yuqoridagi qadamni yakunlang.',
+  'marketing.miniApp.menu.wanted': '«{label}» yozuvini oʻrnatamiz, u {url} ni ochadi.',
+  'marketing.miniApp.menu.held': 'Telegram hozir {url} ni ochadigan tugmani koʻrsatyapti.',
+  'marketing.miniApp.menu.apply': 'Menyu tugmasini oʻrnatish',
+  'marketing.miniApp.menu.notShown':
+    'Telegram chaqiruvni qabul qildi, lekin hamon boshqa tugmani koʻrsatyapti. Qayta urinib koʻring yoki botni BotFather da tekshiring.',
 
   // ------------------------------------------------------- promo codes 6.2 (ADR 0072, wave 60)
   'marketing.promoCodes.title': 'Promokodlar',
@@ -1529,14 +1616,57 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.storefront.tab.groups': 'Bosh sahifa guruhlari',
   'marketing.storefront.tab.carousel': 'Takliflar karuseli',
   'marketing.storefront.tab.preview': 'Koʻrib chiqish',
-  'marketing.storefront.tab.switcher': 'Brend almashtirgich',
+  'marketing.storefront.tab.switcher': 'Brend almashtirgich va joylashuv',
+  'marketing.storefront.tab.branches': 'Filiallar tartibi',
   'marketing.storefront.groups.hint':
     'Bosh ekrandagi nomli taomlar lentalari: qoʻlda tanlangan yoki butun toifa. Bu yerdagi tartib ekrandagi tartibdir.',
   'marketing.storefront.carousel.hint':
     'Bosh ekran tepasidagi karusel banner va promo-kartochkalar uchun umumiy. Tartibni shu yerda belgilang; ularni «Kontent» boʻlimida yozing va chop eting. U barcha mijozlar uchun bir xil — bitta mehmonga shaxsiy taklif esa boshqa narsa.',
   'marketing.storefront.carousel.link': '«Kontent»ni ochish',
-  'marketing.storefront.switcher.title':
-    'Brend almashtirgich va marketpleys joylashuvi — yaratilmagan',
-  'marketing.storefront.switcher.body':
-    'Ular ijarachi bitta vitrinada ikki brend yuritib, ularni soʻramaguncha kutadi (ADR 0157, 4-reliz). Shu paytgacha sozlanadigan narsa yoʻq va buning uchun hech qanday sozlama zaxiralanmagan.',
+  'marketing.storefront.layout.title': 'Toifalar joylashuvi',
+  'marketing.storefront.layout.hint':
+    'Standart — mijozlarda hozirgi toifalar navigatsiyasi. «Marketpleys» toifalarning ixcham lentasini va «barcha toifalar» oynasini koʻrsatadi — toifalari koʻp vitrina uchun. Tanlov saqlangach, shu brend uchun darhol kuchga kiradi.',
+  'marketing.storefront.layout.standard': 'Standart',
+  'marketing.storefront.layout.marketplace': 'Marketpleys',
+  'marketing.storefront.layout.saved': 'Joylashuv saqlandi.',
+  'marketing.storefront.switcher.title': 'Shu vitrinadagi boshqa brendlar',
+  'marketing.storefront.switcher.hint':
+    'Vitrina tepasida boshqa brendlaringiz lentasi; har biri brendning oʻz saytiga olib boradi. Manzil — saytning tasdiqlangan manzili, har safar oʻqiladi: bu yerda hech narsa kiritilmaydi va hech narsa eskirmaydi.',
+  'marketing.storefront.switcher.empty':
+    'Bu yerda hech qanday brend taklif etilmaydi. Vitrina avvalgidek koʻrinadi.',
+  'marketing.storefront.switcher.status.shown': 'Mijozlarga koʻrsatiladi',
+  'marketing.storefront.switcher.status.hidden': 'Yashirilgan',
+  'marketing.storefront.switcher.status.noHostname':
+    'Koʻrsatilmaydi: bu saytning tasdiqlangan manzili hali yoʻq',
+  'marketing.storefront.switcher.status.inactive': 'Koʻrsatilmaydi: brend faol emas',
+  'marketing.storefront.switcher.up': 'Yuqoriga',
+  'marketing.storefront.switcher.down': 'Pastga',
+  'marketing.storefront.switcher.hide': 'Yashirish',
+  'marketing.storefront.switcher.show': 'Koʻrsatish',
+  'marketing.storefront.switcher.remove': 'Olib tashlash',
+  'marketing.storefront.switcher.add.title': 'Boshqa brendni taklif qilish',
+  'marketing.storefront.switcher.add.target': 'Brend va sayt',
+  'marketing.storefront.switcher.add.choose': 'Brendni tanlang…',
+  'marketing.storefront.switcher.add.noAddress': 'tasdiqlangan manzil hali yoʻq',
+  'marketing.storefront.switcher.add.none':
+    'Taklif qilish mumkin boʻlgan sayti bor boshqa brend yoʻq. Boshqa brendning kamida bitta filialida sotadigan faol sayt kanali kerak.',
+  'marketing.storefront.switcher.add.submit': 'Lentaga qoʻshish',
+  'marketing.storefront.switcher.added': 'Brend qoʻshildi.',
+  'marketing.storefront.switcher.updated': 'Saqlandi.',
+  'marketing.storefront.switcher.removed': 'Brend olib tashlandi.',
+  'marketing.storefront.switcher.reordered': 'Tartib saqlandi.',
+  'marketing.storefront.branches.title': 'Filiallar tartibi',
+  'marketing.storefront.branches.hint':
+    'Joylashuvini ulashgan mijoz avval eng yaqin filialni koʻradi; bu tartib faqat teng masofada hal qiladi. Joylashuv ulashmagan mijoz filiallarni aynan shu tartibda koʻradi. Tartibga kiritmagan filialingiz oxirida, nomi boʻyicha turadi.',
+  'marketing.storefront.branches.placed': 'Sizning tartibingizda',
+  'marketing.storefront.branches.nonePlaced':
+    'Hech bir filial joylashtirilmagan. Vitrina filiallarni nomi boʻyicha koʻrsatadi.',
+  'marketing.storefront.branches.unplaced': 'Joylashtirilmagan (oxirida, nomi boʻyicha)',
+  'marketing.storefront.branches.noneUnplaced': 'Barcha filiallar joylashtirilgan.',
+  'marketing.storefront.branches.place': 'Joylashtirish',
+  'marketing.storefront.branches.unplace': 'Tartibdan chiqarish',
+  'marketing.storefront.branches.inactive': 'faol emas, mijozlar uni koʻrmaydi',
+  'marketing.storefront.branches.save': 'Tartibni saqlash',
+  'marketing.storefront.branches.reset': 'Oʻzgarishlarni bekor qilish',
+  'marketing.storefront.branches.saved': 'Tartib saqlandi.',
 };

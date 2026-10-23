@@ -49,6 +49,9 @@ export class ContentService {
   readonly stories = computed(() => this.state().stories);
   readonly promoGrid = computed(() => this.state().promoGrid);
   readonly popup = computed(() => this.state().popup);
+  readonly brandSwitcher = computed(() => this.state().brandSwitcher);
+  /** `STANDARD` while there is no document: a failed read never changes how categories are drawn. */
+  readonly layout = computed(() => this.state().layout);
 
   private locale: string | null = null;
   private loadedAt: number | null = null;

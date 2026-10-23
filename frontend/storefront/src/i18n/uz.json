@@ -75,6 +75,8 @@
     "search": "Qidirish...",
     "menu": "Menyu 😍",
     "all": "Hammasi",
+    "allCategories": "Barcha toifalar",
+    "categoriesClose": "Yopish",
     "goHome": "Bosh sahifaga qaytish",
     "noResults": "Hech narsa topilmadi",
     "recentSearches": "Oxirgi qidiruvlar",
@@ -92,6 +94,7 @@
     "learnMore": "Batafsil",
     "open": "Ochish",
     "popupClose": "Yopish",
+    "brandSwitcher": "Boshqa brendlarimiz",
     "editorialSection": "Biz haqimizda ko'proq",
     "editorial": {
       "news": "Yangiliklar",

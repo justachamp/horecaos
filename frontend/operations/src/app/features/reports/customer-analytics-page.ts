@@ -94,7 +94,9 @@ interface RfmRowViewModel {
  * facts the platform already holds, as daily counts that name nobody
  * (`GET .../reporting/customer-funnel`, `.../acquisition-sources`). The first
  * stage, visits, is **not measured** — nothing is collected from a browser — and
- * the page says so with the reason instead of drawing a zero; a day whose basket
+ * the page says so with the reason instead of drawing a zero (once the platform owner has
+ * switched on the page-load count, ADR 0183 D18, it shows that figure instead, labelled
+ * «page loads, not people» and kept out of the funnel's bars); a day whose basket
  * count was never recorded is reported as unrecorded and never summed as zero.
  * The stages are counts of distinct events on each day and not a cohort, so the
  * chart prints no percentage between them, and the acquisition band says in words
@@ -266,10 +268,25 @@ export class CustomerAnalyticsPage {
     (this.funnel()?.stages ?? []).some((stage) => stage.stage === 'VISITS' && !stage.measured),
   );
 
-  /** Only the stages that were measured are drawn, in the order the server returned them. */
+  /**
+   * The page-load count, when the platform owner has switched it on (ADR 0183 D18): a figure of tab sessions, labelled «page
+   * loads, not people», shown *beside* the funnel and never as its first bar, because a bar would invite reading the next
+   * stage as a share of it.
+   */
+  protected readonly pageLoads = computed(() => {
+    const visits = (this.funnel()?.stages ?? []).find((stage) => stage.stage === 'VISITS');
+    return visits !== undefined &&
+      visits.measured &&
+      visits.basis === 'PAGE_LOADS' &&
+      visits.count !== null
+      ? { count: visits.count, unrecordedDays: visits.unrecordedDays }
+      : null;
+  });
+
+  /** Only the stages that were measured are drawn, in the order the server returned them; page loads are not one of them. */
   protected readonly funnelChartStages = computed<readonly FunnelStage[]>(() =>
     (this.funnel()?.stages ?? [])
-      .filter((stage) => stage.measured && stage.count !== null)
+      .filter((stage) => stage.stage !== 'VISITS' && stage.measured && stage.count !== null)
       .map((stage) => ({
         key: stage.stage,
         label: this.i18n.t(`reports.customers.funnel.stage.${stage.stage}` as MessageKey),
@@ -284,7 +301,7 @@ export class CustomerAnalyticsPage {
   /** A measured stage that has days with no recorded count — its total is partial, and the page says so. */
   protected readonly funnelGaps = computed(() =>
     (this.funnel()?.stages ?? [])
-      .filter((stage) => stage.measured && stage.unrecordedDays > 0)
+      .filter((stage) => stage.stage !== 'VISITS' && stage.measured && stage.unrecordedDays > 0)
       .map((stage) => ({
         stage: stage.stage,
         label: this.i18n.t(`reports.customers.funnel.stage.${stage.stage}` as MessageKey),

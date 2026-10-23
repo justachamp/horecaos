@@ -403,6 +403,30 @@ test says so. Nothing is collected from a browser, an app or a bot for this purp
 Network tab of a storefront page shows no request to a measurement endpoint other than the
 tenant's own installed tags and the link-click call on a `?ref=` landing.
 
+## Status addition (2026-10-14)
+
+[ADR 0183](../built/0183-acquisition-links-the-tenants-mini-app-and-storefront-merchandising.md) (Accepted 2026-10-14, batch 21) takes
+two decisions that bear on this record. This record's Decision, Alternatives and Consequences are unchanged.
+
+- **Tier 2 is declined, not merely deferred (ADR 0183 D16).** Decision 4's tier 2, and the «Tier 2, not built» block of the
+  Specification, stay a specification. The owner's instruction is that per-person attribution is declined until counsel
+  answers: no column, no policy, no erasure null-out and no storefront carriage is built, not even dark. Read the
+  Accepted trade-off «Tier 2 is designed and left unbuilt» as a recorded decline. What is built is tier 1, now fed by
+  the bot's `/start <token>` and the Mini App's start parameter as well as the web `?ref=` landing, through the one
+  public click path Decision 5 describes.
+- **The visits stage may be a page-load *count*, dark (ADR 0183 D18).** Decision 1 («no emitter in the storefronts») is
+  read with this exception and no other: after counsel answers, a storefront may post one anonymous ping per tab session
+  to a public, rate-limited endpoint that adds one to a per-day, per-brand, per-channel counter
+  (`reporting.page_load_counts_day`, `V0675`). No cookie, identifier, address, user agent, session or path is read or
+  stored, and no distinct-visitor or page-view figure exists; the console labels the figure «page loads, not people» and
+  draws no ratio against it. It ships behind `reporting.page_load_count_enabled`, a `PLATFORM` boolean that defaults to
+  false, and no storefront calls the endpoint while it is false. Decision 8's events, measurement identifier and consent
+  purpose still wait for counsel.
+- **The checklist items this record owed are done by ADR 0183:** the alert on a closed day with no funnel row, the
+  provisional-retention flag on `reporting.funnel_retention_days` and the startup check that reports it (it refuses only
+  a provisional key that governs personal data, and the funnel rows hold counts), `statistics.md` §2.6 Band D, ADR 0043's
+  status line, and the proposed notice as a default clause in `PlatformDefaultTerms`.
+
 ## References
 
 - ADR 0015 (consent decisions), ADR 0023 (a report reads no module schema), ADR 0025, ADR 0027,

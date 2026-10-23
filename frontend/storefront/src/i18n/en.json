@@ -75,6 +75,8 @@
     "search": "Search...",
     "menu": "Menu 😍",
     "all": "All",
+    "allCategories": "All categories",
+    "categoriesClose": "Close",
     "goHome": "Go to home",
     "noResults": "No results found",
     "recentSearches": "Recent searches",
@@ -92,6 +94,7 @@
     "learnMore": "Learn more",
     "open": "Open",
     "popupClose": "Close",
+    "brandSwitcher": "Our other brands",
     "editorialSection": "More from us",
     "editorial": {
       "news": "News",

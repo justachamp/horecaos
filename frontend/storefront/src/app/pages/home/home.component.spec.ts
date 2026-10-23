@@ -129,6 +129,8 @@ class FakeContentService {
   readonly groups = computed(() => this.home()?.groups ?? []);
   readonly stories = computed(() => this.home()?.stories ?? []);
   readonly popup = computed(() => this.home()?.popup ?? null);
+  readonly brandSwitcher = computed(() => this.home()?.brandSwitcher ?? []);
+  readonly layout = computed(() => this.home()?.layout ?? 'STANDARD');
   readonly load = vi.fn(async () => {});
 }
 
@@ -597,6 +599,8 @@ function contentHome(overrides: Partial<ContentHome> = {}): ContentHome {
     stories: [],
     promoGrid: [],
     popup: null,
+    brandSwitcher: [],
+    layout: 'STANDARD',
     ...overrides,
   };
 }
@@ -961,5 +965,149 @@ describe('HomeComponent: entry points to the editorial pages (ADR 0157, Decision
     expect(entryLinks(fixture)).toEqual([]);
     expect(comp.error()).toBeNull();
     expect(queryAll(fixture, '.menu-dish')).toHaveLength(2);
+  });
+});
+
+/** A menu of `count` categories named `Category 1`, `Category 2`, ... */
+function menuOf(count: number) {
+  const items = Array.from({ length: count }, (_, i) => ({
+    id: `cat-${i + 1}`,
+    name: `Category ${i + 1}`,
+    items: [],
+    items_count: 0,
+  }));
+  return {
+    category: null,
+    offer: null,
+    populars: [],
+    populars_count: 0,
+    menu: {
+      categories: items.map(({ id, name }) => ({ id, name })),
+      category_items: items,
+      category_items_count: count,
+    },
+  };
+}
+
+/** The pills in the sticky menu strip, by their text, «All» and the overlay opener left out. */
+function stripNames(fixture: ComponentFixture<unknown>): string[] {
+  return queryAll(fixture, 'button')
+    .map((button) => (button.textContent ?? '').trim())
+    .filter((name) => name.startsWith('Category '));
+}
+
+describe('HomeComponent: the brand switcher and the marketplace layout (ADR 0183 D17)', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('draws no switcher and the whole category strip when the brand uses neither', async () => {
+    const { fixture, content, menu } = await setUp();
+    menu.home.mockResolvedValue(menuOf(8));
+    content.home.set(contentHome());
+
+    await mount(fixture);
+
+    expect(query(fixture, '[data-testid="brand-switcher"]')).toBeNull();
+    expect(query(fixture, '[data-testid="all-categories-open"]')).toBeNull();
+    expect(stripNames(fixture)).toHaveLength(8);
+  });
+
+  it('draws the other brands as links to their own websites', async () => {
+    const { fixture, content } = await setUp();
+    content.home.set(
+      contentHome({
+        brandSwitcher: [
+          { targetBrandId: 'b-2', name: 'Pizza House', url: 'https://pizza.example.uz/' },
+          { targetBrandId: 'b-3', name: 'Sushi Bar', url: 'https://sushi.example.uz/' },
+        ],
+      }),
+    );
+
+    await mount(fixture);
+
+    const links = queryAll(fixture, '[data-testid="brand-switcher"] a');
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      'https://pizza.example.uz/',
+      'https://sushi.example.uz/',
+    ]);
+    expect(links.map((link) => (link.textContent ?? '').trim())).toEqual([
+      expect.stringContaining('Pizza House'),
+      expect.stringContaining('Sushi Bar'),
+    ]);
+  });
+
+  it('shows a compact strip and an «all categories» button in the marketplace layout', async () => {
+    const { fixture, content, menu } = await setUp();
+    menu.home.mockResolvedValue(menuOf(8));
+    content.home.set(contentHome({ layout: 'MARKETPLACE' }));
+
+    await mount(fixture);
+
+    expect(stripNames(fixture)).toEqual([
+      'Category 1',
+      'Category 2',
+      'Category 3',
+      'Category 4',
+      'Category 5',
+    ]);
+    expect(query(fixture, '[data-testid="all-categories-open"]')).not.toBeNull();
+    expect(query(fixture, '[role="dialog"]')).toBeNull();
+  });
+
+  it('lists every category in the overlay, and a choice made there applies and closes it', async () => {
+    const { fixture, comp, content, menu } = await setUp();
+    menu.home.mockResolvedValue(menuOf(8));
+    content.home.set(contentHome({ layout: 'MARKETPLACE' }));
+    await mount(fixture);
+
+    (query(fixture, '[data-testid="all-categories-open"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const dialog = query(fixture, '[role="dialog"]') as HTMLElement;
+    expect(dialog).not.toBeNull();
+    expect(dialog.querySelectorAll('li')).toHaveLength(9);
+
+    (query(fixture, '[data-testid="categories-overlay-cat-7"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(comp.selectedCategoryId()).toBe('cat-7');
+    expect(query(fixture, '[role="dialog"]')).toBeNull();
+    // The strip keeps the chosen category in view, in place of the last compact one.
+    expect(stripNames(fixture)).toEqual([
+      'Category 1',
+      'Category 2',
+      'Category 3',
+      'Category 4',
+      'Category 7',
+    ]);
+  });
+
+  it('closes the overlay with Escape and with the backdrop, choosing nothing', async () => {
+    const { fixture, comp, content, menu } = await setUp();
+    menu.home.mockResolvedValue(menuOf(8));
+    content.home.set(contentHome({ layout: 'MARKETPLACE' }));
+    await mount(fixture);
+
+    (query(fixture, '[data-testid="all-categories-open"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    fixture.detectChanges();
+    expect(query(fixture, '[role="dialog"]')).toBeNull();
+
+    (query(fixture, '[data-testid="all-categories-open"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    (query(fixture, '[data-testid="categories-overlay-backdrop"]') as HTMLElement).click();
+    fixture.detectChanges();
+    expect(query(fixture, '[role="dialog"]')).toBeNull();
+    expect(comp.selectedCategoryId()).toBeNull();
+  });
+
+  it("keeps today's strip when the layout is one this client does not know", async () => {
+    const { fixture, content, menu } = await setUp();
+    menu.home.mockResolvedValue(menuOf(8));
+    content.home.set(contentHome({ layout: 'STANDARD' }));
+
+    await mount(fixture);
+
+    expect(stripNames(fixture)).toHaveLength(8);
   });
 });

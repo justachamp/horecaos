@@ -128,6 +128,23 @@ export interface ContentPopup {
   readonly cap: { readonly mode: PopupCapMode; readonly n: number };
 }
 
+/**
+ * A way to a sibling brand's storefront (ADR 0157 Release 4, ADR 0183 D17). The address is the
+ * target website's verified hostname, resolved by the server on this read and vetted again here; it
+ * is never copied from anything a person typed.
+ */
+export interface ContentBrandSwitcherEntry {
+  readonly targetBrandId: string;
+  readonly name: string;
+  /** The brand's logo when it has a servable image; absent means the name stands alone. */
+  readonly logo?: ContentImageMedia;
+  /** An `https:` address, already checked. */
+  readonly url: string;
+}
+
+/** `STANDARD` is today's category navigation; `MARKETPLACE` a compact strip plus an overlay (ADR 0183 D17). */
+export type StorefrontLayout = 'STANDARD' | 'MARKETPLACE';
+
 /** The whole `content/home` document, normalised. */
 export interface ContentHome {
   readonly locale: string;
@@ -136,6 +153,10 @@ export interface ContentHome {
   readonly stories: readonly ContentStoryGroup[];
   readonly promoGrid: readonly ContentCarouselItem[];
   readonly popup: ContentPopup | null;
+  /** Empty for a brand that offers no other brand: the server then omits the field. */
+  readonly brandSwitcher: readonly ContentBrandSwitcherEntry[];
+  /** `STANDARD` unless the document says exactly `MARKETPLACE`. */
+  readonly layout: StorefrontLayout;
 }
 
 /** The anonymous counters (ADR 0157, Decision 10). */

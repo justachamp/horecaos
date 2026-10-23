@@ -116,7 +116,8 @@ public class JdbcAttributionLinkStore {
      * Counts one click on a link named by its public token (ADR 0167 Decision 4/5, tier 1).
      *
      * <p>One statement, so the running total and the day's series cannot disagree: the link is
-     * updated only if it is {@code ACTIVE}, of the named brand and inside its validity window, and the
+     * updated only if it is {@code ACTIVE}, of the named brand (any brand of the tenant when {@code brandId} is null, for a
+     * surface that serves the whole tenant) and inside its validity window, and the
      * series row is upserted from what that update returned. An unknown, archived, out-of-window or
      * other-brand token updates nothing and inserts nothing -- the caller cannot tell which, and the
      * endpoint answers all of them alike. The "day" is the tenant's own calendar day (its default
@@ -126,12 +127,13 @@ public class JdbcAttributionLinkStore {
      *
      * @return whether a click was counted
      */
-    public boolean recordPublicClick(UUID tenantId, UUID brandId, String token, Instant now) {
+    public boolean recordPublicClick(UUID tenantId, @Nullable UUID brandId, String token, Instant now) {
         return jdbc.sql("""
                 WITH hit AS (
                     UPDATE marketing.attribution_links
                        SET click_count = click_count + 1
-                     WHERE tenant_id = :tenantId AND brand_id = :brandId AND token = :token
+                     WHERE tenant_id = :tenantId AND (CAST(:brandId AS uuid) IS NULL OR brand_id = CAST(:brandId AS uuid))
+                       AND token = :token
                        AND status = 'ACTIVE'
                        AND valid_from <= :now AND (valid_until IS NULL OR valid_until > :now)
                     RETURNING id, tenant_id

@@ -301,7 +301,7 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   // --------------------------------------------------------- attribution links 6.6a (ADR 0044, T18)
   'marketing.attributionLinks.title': 'Ссылки привлечения',
   'marketing.attributionLinks.intro':
-    'Отслеживаемая ссылка сайта ?ref= или диплинк Telegram — для кампании или блогера.',
+    'Ссылка для кампании или блогера: на сайт, на Telegram-бота или на Telegram Mini App. Она считает, сколько раз её открыли, но не кто.',
   'marketing.attributionLinks.empty': 'Ссылок пока нет',
   'marketing.attributionLinks.create.action': 'Создать ссылку',
   'marketing.attributionLinks.create.title': 'Создать ссылку привлечения',
@@ -323,6 +323,92 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.attributionLinks.destinationType.CAMPAIGN': 'Кампания',
   'marketing.attributionLinks.destinationType.STOREFRONT_HOME': 'Главная страница витрины',
   'marketing.attributionLinks.destinationType.INFLUENCER': 'Блогер',
+  'marketing.attributionLinks.copy': 'Копировать',
+  'marketing.attributionLinks.copied': 'Скопировано',
+  'marketing.attributionLinks.unavailable.WEB_HOSTNAME_NOT_CLAIMED':
+    'Адреса сайта пока нет: филиалы этого бренда не продают ни через один сайт-канал с адресом.',
+  'marketing.attributionLinks.unavailable.WEB_HOSTNAME_NOT_VERIFIED':
+    'Адрес сайта ещё не подтверждён.',
+  'marketing.attributionLinks.unavailable.WEB_HOSTNAME_AMBIGUOUS':
+    'Продажи идут через два подтверждённых адреса сайта, и платформа не гадает, на какой дать ссылку.',
+  'marketing.attributionLinks.unavailable.TELEGRAM_BOT_NOT_CONNECTED':
+    'Для этого бренда не подключён Telegram-бот.',
+  'marketing.attributionLinks.unavailable.TELEGRAM_BOT_UNREACHABLE':
+    'Telegram сейчас не сказал нам имя бота. Повторите чуть позже.',
+  'marketing.attributionLinks.unavailable.TELEGRAM_MINI_APP_NOT_SET_UP':
+    'Mini App ещё не настроен: завершите настройку Telegram Mini App ниже.',
+  'marketing.attributionLinks.unavailable.MOBILE_APP_ON_HOLD':
+    'Мобильное приложение приостановлено, поэтому эта ссылка никуда не ведёт.',
+  // ------------------------------------------- the guided Mini App setup (ADR 0183, row 6.6a)
+  'marketing.miniApp.title': 'Настройка Telegram Mini App',
+  'marketing.miniApp.lead':
+    'Ваша витрина внутри Telegram-бота. Два шага можете сделать только вы, в Telegram, и точные слова для отправки написаны ниже; остальное читается из фактов, поэтому можно уйти и вернуться.',
+  'marketing.miniApp.loading': 'Смотрим, на каком шаге настройка…',
+  'marketing.miniApp.denied': 'Для настройки Mini App нужно право управлять интеграциями.',
+  'marketing.miniApp.error': 'Не удалось прочитать, на каком шаге настройка.',
+  'marketing.miniApp.open': 'Открыть',
+  'marketing.miniApp.copy': 'Копировать',
+  'marketing.miniApp.state.DONE': 'Готово',
+  'marketing.miniApp.state.RECORDED': 'Записано',
+  'marketing.miniApp.state.TODO': 'Нужно сделать',
+  'marketing.miniApp.state.UNKNOWN': 'Не удалось проверить',
+  'marketing.miniApp.step.CONNECT_BOT.title': 'Подключите бота',
+  'marketing.miniApp.step.CONNECT_BOT.hint':
+    'Создайте бота в @BotFather (/newbot), затем вставьте его токен в Настройки → Интеграции. Токен больше не показывается.',
+  'marketing.miniApp.step.REGISTER_WEBHOOK.title': 'Зарегистрируйте webhook бота',
+  'marketing.miniApp.step.REGISTER_WEBHOOK.hint':
+    'Чтобы бот слышал клиентов: нажмите «Зарегистрировать webhook» на карточке бота в Интеграциях.',
+  'marketing.miniApp.step.TELEGRAM_CHANNEL.title': 'Добавьте канал продаж Telegram',
+  'marketing.miniApp.step.TELEGRAM_CHANNEL.hint':
+    'В Настройки → Каналы продаж добавьте канал типа Telegram, подключённый к этому боту. Кнопка меню, тексты и переключатель Mini App настраиваются в нём.',
+  'marketing.miniApp.step.STOREFRONT_ADDRESS.title': 'У витрины есть подтверждённый адрес',
+  'marketing.miniApp.step.STOREFRONT_ADDRESS.hint':
+    'Mini App открывает вашу витрину, поэтому ему нужен подтверждённый адрес сайт-канала. Адрес здесь вводить не нужно.',
+  'marketing.miniApp.step.BOTFATHER_APP.title': 'Создайте Mini App в BotFather',
+  'marketing.miniApp.step.BOTFATHER_APP.hint':
+    'Это может сделать только владелец бота, а проверить это мы не можем: Telegram не даёт такой возможности. Шаг получает статус «Записано», когда вы сообщите короткое имя.',
+  'marketing.miniApp.step.MENU_BUTTON.title': 'Поставьте Mini App на кнопку меню бота',
+  'marketing.miniApp.step.MENU_BUTTON.hint':
+    'Мы ставим кнопку и спрашиваем у Telegram, что он показывает. Шаг готов только тогда, когда Telegram показывает то, что мы поставили.',
+  'marketing.miniApp.step.TEST_LINK.title': 'Откройте на телефоне',
+  'marketing.miniApp.step.TEST_LINK.hint':
+    'Откройте эту ссылку в Telegram: витрина должна открыться внутри бота. Затем создайте выше ссылку «Telegram Mini App» и откройте её — клик будет засчитан.',
+  'marketing.miniApp.detail.STOREFRONT_ADDRESS.NOT_CLAIMED':
+    'Ни один сайт-канал, продающий в филиалах этого бренда, ещё не задал адрес.',
+  'marketing.miniApp.detail.STOREFRONT_ADDRESS.NOT_VERIFIED':
+    'Адрес сайт-канала задан, но не подтверждён. Опубликуйте DNS-запись и подтвердите его.',
+  'marketing.miniApp.detail.STOREFRONT_ADDRESS.AMBIGUOUS':
+    'В филиалах этого бренда продают через два подтверждённых адреса сайта, и платформа не гадает, какой из них витрина.',
+  'marketing.miniApp.detail.MENU_BUTTON.NOT_READY': 'Сначала завершите шаги выше.',
+  'marketing.miniApp.detail.MENU_BUTTON.MINI_APP_OFF':
+    'Mini App выключен в канале Telegram. Запись короткого имени включит его.',
+  'marketing.miniApp.detail.MENU_BUTTON.NOT_APPLIED':
+    'Telegram показывает не ту кнопку, которую мы собираемся поставить.',
+  'marketing.miniApp.detail.MENU_BUTTON.OTHER_BRAND':
+    'Mini App канала Telegram открывает витрину другого бренда. Запись короткого имени здесь переносит его на этот бренд.',
+  'marketing.miniApp.detail.TEST_LINK.NOT_READY':
+    'Ссылка появится, когда станут известны бот и короткое имя.',
+  'marketing.miniApp.botFather.step1': 'Откройте @BotFather в Telegram и отправьте /newapp.',
+  'marketing.miniApp.botFather.step2': 'Выберите своего бота: @{bot}.',
+  'marketing.miniApp.botFather.step3':
+    'Отправьте название и короткое описание. Клиенты увидят и то и другое.',
+  'marketing.miniApp.botFather.step4':
+    'Отправьте картинку 640×360, затем GIF или /empty, чтобы пропустить.',
+  'marketing.miniApp.botFather.step5':
+    'Когда BotFather спросит Web App URL, отправьте ровно адрес ниже.',
+  'marketing.miniApp.botFather.step6':
+    'Когда BotFather спросит короткое имя, отправьте любое на ваш выбор: буквы, цифры и подчёркивания, например order. BotFather ответит ссылкой, оканчивающейся им. Введите короткое имя здесь.',
+  'marketing.miniApp.shortName': 'Короткое имя, которое принял BotFather',
+  'marketing.miniApp.record': 'Записать короткое имя',
+  'marketing.miniApp.needsChannel':
+    'Сначала добавьте канал продаж Telegram: короткое имя записывается в нём.',
+  'marketing.miniApp.needsAddress':
+    'BotFather нужен адрес вашей витрины. Сначала завершите шаг выше.',
+  'marketing.miniApp.menu.wanted': 'Мы поставим подпись «{label}», открывающую {url}.',
+  'marketing.miniApp.menu.held': 'Сейчас Telegram показывает кнопку, открывающую {url}.',
+  'marketing.miniApp.menu.apply': 'Поставить кнопку меню',
+  'marketing.miniApp.menu.notShown':
+    'Telegram принял вызов, но по-прежнему показывает другую кнопку. Повторите или проверьте бота в BotFather.',
 
   // ------------------------------------------------------- promo codes 6.2 (ADR 0072, wave 60)
   'marketing.promoCodes.title': 'Промокоды',
@@ -1505,14 +1591,57 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.storefront.tab.groups': 'Группы на главной',
   'marketing.storefront.tab.carousel': 'Карусель предложений',
   'marketing.storefront.tab.preview': 'Предпросмотр',
-  'marketing.storefront.tab.switcher': 'Переключатель брендов',
+  'marketing.storefront.tab.switcher': 'Переключатель брендов и раскладка',
+  'marketing.storefront.tab.branches': 'Порядок филиалов',
   'marketing.storefront.groups.hint':
     'Именованные ленты блюд на главном экране: выбранные вручную или целая категория. Порядок здесь — это порядок на экране.',
   'marketing.storefront.carousel.hint':
     'Карусель вверху главного экрана общая для баннеров и промо-карточек. Порядок задаётся здесь; писать и публиковать их нужно в разделе «Контент». Она одинакова для всех клиентов — персональное предложение для одного гостя — это отдельное.',
   'marketing.storefront.carousel.link': 'Открыть «Контент»',
-  'marketing.storefront.switcher.title':
-    'Переключатель брендов и раскладка маркетплейса — не созданы',
-  'marketing.storefront.switcher.body':
-    'Они ждут, пока арендатор не начнёт вести два бренда на одной витрине и не попросит об этом (ADR 0157, релиз 4). До тех пор настраивать нечего, и под это не зарезервировано ни одной настройки.',
+  'marketing.storefront.layout.title': 'Раскладка категорий',
+  'marketing.storefront.layout.hint':
+    'Стандартная — навигация по категориям, как сейчас у клиентов. «Маркетплейс» показывает компактную полосу категорий и оверлей «все категории» — для витрины, где их много. Выбор действует для этого бренда сразу после сохранения.',
+  'marketing.storefront.layout.standard': 'Стандартная',
+  'marketing.storefront.layout.marketplace': 'Маркетплейс',
+  'marketing.storefront.layout.saved': 'Раскладка сохранена.',
+  'marketing.storefront.switcher.title': 'Другие бренды на этой витрине',
+  'marketing.storefront.switcher.hint':
+    'Полоса ваших других брендов вверху витрины; каждый ведёт на собственный сайт бренда. Адрес — подтверждённый адрес сайта, он читается каждый раз: здесь ничего не вводится и ничего не устаревает.',
+  'marketing.storefront.switcher.empty':
+    'Здесь не предлагается ни один бренд. Витрина выглядит как раньше.',
+  'marketing.storefront.switcher.status.shown': 'Показывается клиентам',
+  'marketing.storefront.switcher.status.hidden': 'Скрыт',
+  'marketing.storefront.switcher.status.noHostname':
+    'Не показывается: у этого сайта ещё нет подтверждённого адреса',
+  'marketing.storefront.switcher.status.inactive': 'Не показывается: бренд не активен',
+  'marketing.storefront.switcher.up': 'Выше',
+  'marketing.storefront.switcher.down': 'Ниже',
+  'marketing.storefront.switcher.hide': 'Скрыть',
+  'marketing.storefront.switcher.show': 'Показать',
+  'marketing.storefront.switcher.remove': 'Убрать',
+  'marketing.storefront.switcher.add.title': 'Предложить другой бренд',
+  'marketing.storefront.switcher.add.target': 'Бренд и сайт',
+  'marketing.storefront.switcher.add.choose': 'Выберите бренд…',
+  'marketing.storefront.switcher.add.noAddress': 'подтверждённого адреса ещё нет',
+  'marketing.storefront.switcher.add.none':
+    'Нет другого бренда с сайтом, который можно предложить. Нужен активный канал-сайт другого бренда, который продаёт хотя бы в одном его филиале.',
+  'marketing.storefront.switcher.add.submit': 'Добавить в полосу',
+  'marketing.storefront.switcher.added': 'Бренд добавлен.',
+  'marketing.storefront.switcher.updated': 'Сохранено.',
+  'marketing.storefront.switcher.removed': 'Бренд убран.',
+  'marketing.storefront.switcher.reordered': 'Порядок сохранён.',
+  'marketing.storefront.branches.title': 'Порядок филиалов',
+  'marketing.storefront.branches.hint':
+    'Клиент, который поделился местоположением, сначала видит ближайший филиал; этот порядок лишь разрешает ничью. Клиент без местоположения видит филиалы именно в этом порядке. Филиал, который вы не включили, идёт последним, по названию.',
+  'marketing.storefront.branches.placed': 'В вашем порядке',
+  'marketing.storefront.branches.nonePlaced':
+    'Ни один филиал не расставлен. Витрина показывает филиалы по названию.',
+  'marketing.storefront.branches.unplaced': 'Не расставлены (идут последними, по названию)',
+  'marketing.storefront.branches.noneUnplaced': 'Все филиалы расставлены.',
+  'marketing.storefront.branches.place': 'Поставить',
+  'marketing.storefront.branches.unplace': 'Убрать из порядка',
+  'marketing.storefront.branches.inactive': 'не активен, клиенты его не видят',
+  'marketing.storefront.branches.save': 'Сохранить порядок',
+  'marketing.storefront.branches.reset': 'Отменить изменения',
+  'marketing.storefront.branches.saved': 'Порядок сохранён.',
 };

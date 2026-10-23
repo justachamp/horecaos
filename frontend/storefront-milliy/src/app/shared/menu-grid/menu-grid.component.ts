@@ -12,10 +12,19 @@ import {
 } from '@angular/core';
 
 import { ReducedMotionService } from '../../services/reduced-motion.service';
+import type { StorefrontLayout } from '../../types/content.types';
 import type { CategoryItem, MenuCategory, MenuItem } from '../../types/home.types';
 import { filterOptionsOf, matchesAllTags } from '../../utils/menu-tags';
+import { CategoriesOverlayComponent } from '../categories-overlay/categories-overlay.component';
 import { DishCardComponent } from '../dish-card/dish-card.component';
 import { TranslatePipe } from '../translate/translate.pipe';
+
+/**
+ * How many categories the marketplace layout's compact rail names before the rest go behind «all
+ * categories» (ADR 0183 D17). Five fits a phone's width without much scrolling and keeps the rail a
+ * rail.
+ */
+export const COMPACT_RAIL_SIZE = 5;
 
 /**
  * The menu as a category rail over a list of dish cards.
@@ -25,11 +34,14 @@ import { TranslatePipe } from '../translate/translate.pipe';
  * sold-out and sale-window states (`DishCardComponent`). It owns only the
  * category filter; what the menu contains, and what to say when it is empty,
  * stays with the screen that read it.
+ *
+ * With the brand's `MARKETPLACE` layout (ADR 0183 D17) the rail is compact: the first few categories
+ * and a button that opens every category in an overlay. Anything else is today's rail, all of them.
  */
 @Component({
   selector: 'app-menu-grid',
   standalone: true,
-  imports: [DishCardComponent, TranslatePipe],
+  imports: [CategoriesOverlayComponent, DishCardComponent, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './menu-grid.component.html',
   styleUrl: './menu-grid.component.scss',
@@ -45,6 +57,8 @@ export class MenuGridComponent {
    * lacks leaves the grid showing everything. The customer is free to choose another afterwards.
    */
   readonly requestedCategoryId = input<string | null>(null);
+  /** The brand's category layout; the table screen leaves it at the standard rail. */
+  readonly layout = input<StorefrontLayout>('STANDARD');
   readonly sections = input.required<readonly CategoryItem[]>();
   readonly currency = input<string | null>(null);
   /** False on the table screen, where a dish is not a link into the delivery basket. */
@@ -61,6 +75,28 @@ export class MenuGridComponent {
   readonly choose = output<{ item: MenuItem; variantId: string }>();
 
   protected readonly activeCategoryId = signal<string | null>(null);
+  protected readonly overlayOpen = signal(false);
+
+  protected readonly marketplace = computed(() => this.layout() === 'MARKETPLACE');
+
+  /**
+   * The categories the rail draws. Standard: all of them, as it always did. Marketplace: the first
+   * few, with the chosen category kept in view when it is further along, so choosing from the overlay
+   * never leaves the rail showing nothing selected.
+   */
+  protected readonly railCategories = computed(() => {
+    const all = this.categories();
+    if (!this.marketplace() || all.length <= COMPACT_RAIL_SIZE) {
+      return all;
+    }
+    const head = all.slice(0, COMPACT_RAIL_SIZE);
+    const active = this.activeCategoryId();
+    const chosen = active === null ? undefined : all.find((category) => category.id === active);
+    if (chosen === undefined || head.some((category) => category.id === chosen.id)) {
+      return head;
+    }
+    return [...head.slice(0, COMPACT_RAIL_SIZE - 1), chosen];
+  });
 
   /** ADR 0174: the tags the guest has selected as filters. Selected chips combine as AND. */
   protected readonly selectedTags = signal<ReadonlySet<string>>(new Set());
@@ -116,6 +152,12 @@ export class MenuGridComponent {
 
   protected selectCategory(categoryId: string | null): void {
     this.activeCategoryId.set(categoryId);
+  }
+
+  /** A choice made in the «all categories» overlay: apply it and close the overlay. */
+  protected chooseFromOverlay(categoryId: string | null): void {
+    this.selectCategory(categoryId);
+    this.overlayOpen.set(false);
   }
 
   protected toggleTag(tagId: string): void {

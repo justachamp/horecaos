@@ -29,8 +29,12 @@ import java.util.Map;
  */
 public final class PlatformDefaultTerms {
 
-    /** Bump this only when the wording below changes; see the class doc. */
-    public static final int VERSION = 1;
+    /**
+     * Bump this only when the wording below changes; see the class doc. Version 2 (ADR 0183, ADR 0167's checklist) adds the
+     * notice that the platform counts registrations, baskets, checkouts and orders in total and never by person, and
+     * records nothing about what a visitor looks at. Counsel's final wording is a non-blocking open input of ADR 0167.
+     */
+    public static final int VERSION = 2;
 
     private static final String NAME_TOKEN = "{{brandName}}";
 
@@ -110,6 +114,10 @@ public final class PlatformDefaultTerms {
             may ask {{brandName}} about the personal data it holds about you or ask it to be \
             corrected, consistent with applicable law.
 
+            HorecaOS counts registrations, baskets, checkouts and orders, in total and never \
+            by person, so the restaurant can see how it is doing. It does not record what you \
+            look at or which pages you visit.
+
             9. Marketing communications
             {{brandName}} may send you messages about your orders. Where it sends you \
             marketing or promotional messages, you may opt out of them at any time without \
@@ -172,6 +180,8 @@ public final class PlatformDefaultTerms {
 
             8. Ваши персональные данные
             {{brandName}} обрабатывает предоставленные вами персональные данные (имя, номер телефона, адрес доставки) для приёма и исполнения ваших заказов, связи с вами по их поводу, а также иных целей, указанных в его уведомлении о конфиденциальности. Вы можете обратиться к {{brandName}} с запросом о своих персональных данных или об их исправлении в порядке, предусмотренном применимым законодательством.
+
+            HorecaOS считает регистрации, корзины, оформления и заказы — в целом и никогда по отдельным людям, чтобы ресторан видел, как идут дела. Платформа не записывает, что вы просматриваете и какие страницы посещаете.
 
             9. Маркетинговые сообщения
             {{brandName}} может направлять вам сообщения, связанные с вашими заказами. Если он направляет вам маркетинговые или рекламные сообщения, вы можете отказаться от них в любое время без ущерба для возможности оформления заказов.
@@ -253,6 +263,11 @@ public final class PlatformDefaultTerms {
             boshqa maqsadlar uchun qayta ishlaydi. Amaldagi qonunchilikka muvofiq, \
             {{brandName}}dan sizning shaxsiy ma'lumotlaringiz haqida so'rov qilishingiz yoki \
             ularni to'g'irlashni so'rashingiz mumkin.
+
+            HorecaOS ro'yxatdan o'tishlar, savatlar, rasmiylashtirishlar va buyurtmalarni \
+            umumiy hisobda va hech qachon alohida shaxslar bo'yicha emas, restoran ishlari \
+            qanday ketayotganini ko'ra olishi uchun sanaydi. Platforma nimani ko'rganingiz \
+            yoki qaysi sahifalarga kirganingizni yozib bormaydi.
 
             9. Marketing xabarlari
             {{brandName}} sizga buyurtmalaringiz yuzasidan xabarlar yuborishi mumkin. Agar u \

@@ -385,6 +385,38 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.channelSetup.status.notConfigured': 'Sozlanmagan',
   'settings.channelSetup.noFacets': 'Bu kanal turi uchun hali sozlamalar yoʻq.',
   'settings.channelSetup.telegram.title': 'Telegram bot',
+  'settings.telegram.title': 'Menyu tugmasi, Mini App va salomlashish',
+  'settings.telegram.loading': 'Telegram sozlamalari yuklanmoqda…',
+  'settings.telegram.denied': 'Bu kanalning Telegram sozlamalariga ruxsatingiz yoʻq.',
+  'settings.telegram.error': 'Telegram sozlamalarini yuklab boʻlmadi.',
+  'settings.telegram.lead':
+    'Bu sozlamalar shu Telegram kanaliga tegishli. Mini App vitrinangizni ochadi, shuning uchun manzilni kiritmaysiz: bu ishchi brend vitrinasining tasdiqlangan manzili.',
+  'settings.telegram.miniApp.enabled': 'Menyu tugmasi Mini App ni ochadi',
+  'settings.telegram.miniApp.address': 'Mini App manzili',
+  'settings.telegram.miniApp.unavailable.BRAND_NOT_CHOSEN':
+    'Ishchi brend vitrinasini tanlash uchun Mini App yoqilgan holda saqlang.',
+  'settings.telegram.miniApp.unavailable.HOSTNAME_NOT_CLAIMED':
+    'Bu brend filiallari hozircha manzili bor birorta veb-kanal orqali sotmaydi. Veb-kanal sozlamasida manzil belgilang.',
+  'settings.telegram.miniApp.unavailable.HOSTNAME_NOT_VERIFIED':
+    'Veb-kanal manzili hali tasdiqlanmagan, shuning uchun undan foydalanib boʻlmaydi. DNS yozuvini joylashtiring va manzilni tasdiqlang.',
+  'settings.telegram.miniApp.unavailable.HOSTNAME_AMBIGUOUS':
+    'Bu brend filiallarida ikkita tasdiqlangan manzil orqali sotiladi va platforma qaysi biri vitrina ekanini taxmin qilmaydi. Bittasini qoldiring.',
+  'settings.telegram.shortName': 'Mini App qisqa nomi',
+  'settings.telegram.shortName.hint':
+    'BotFather Mini App ingizga bergan qisqa nom (/newapp): harflar, raqamlar va pastki chiziq. Mini App havolalari uchun kerak.',
+  'settings.telegram.menuButton.title': 'Menyu tugmasi yozuvi',
+  'settings.telegram.menuButton.hint':
+    'Har bir til uchun 64 belgigacha. Telegram har bir botga bitta yozuv saqlaydi: bosqichma-bosqich sozlash brendning asosiy tilidagi yozuvni qoʻllaydi, mijoz esa botni ishga tushirganda oʻz tilidagi yozuvni koʻradi.',
+  'settings.telegram.welcome.title': 'Salomlashish',
+  'settings.telegram.welcome.hint':
+    'Mijoz botni ishga tushirganda bot nima deb javob beradi. Boʻsh qoldirilsa, platformaning odatiy salomi yuboriladi.',
+  'settings.telegram.offer':
+    'Foydalanish shartlarimni salomlashishda ommaviy oferta sifatida taklif qilish',
+  'settings.telegram.save': 'Saqlash',
+  'settings.telegram.saved': 'Saqlandi.',
+  'settings.telegram.stale':
+    'Kanal boshqa oynada oʻzgartirilgan, maʻlumotlar qayta yuklandi. Oʻzgartirishni takrorlang.',
+  'settings.telegram.guided': 'Mini App ni bosqichma-bosqich sozlash',
   'settings.channelSetup.hostname.title': 'Sayt manzili',
   'settings.channelSetup.hostname.verified': 'tasdiqlangan',
   'settings.channelSetup.hostname.unverified': 'tasdiqlanmagan',

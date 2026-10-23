@@ -437,6 +437,56 @@ describe('CustomerAnalyticsPage', () => {
       expect(table.textContent).not.toContain('Visits');
     });
 
+    it('shows a switched-on page-load count beside the funnel, labelled «page loads, not people», never as a bar or a ratio (ADR 0183 D18)', async () => {
+      await render(SCOPE, {
+        customerFunnel: vi.fn().mockResolvedValue(
+          customerFunnel({
+            stages: [
+              {
+                stage: 'VISITS',
+                measured: true,
+                reason: null,
+                count: 2300,
+                unrecordedDays: 3,
+                basis: 'PAGE_LOADS',
+              },
+              { stage: 'REGISTERED', measured: true, reason: null, count: 9, unrecordedDays: 0 },
+              {
+                stage: 'BASKET_STARTED',
+                measured: true,
+                reason: null,
+                count: 15,
+                unrecordedDays: 0,
+              },
+              { stage: 'ORDERED', measured: true, reason: null, count: 8, unrecordedDays: 0 },
+            ],
+          }),
+        ),
+      });
+      const band = funnelBand();
+
+      expect(band.querySelector('[data-testid="funnel-visits-not-measured"]')).toBeNull();
+      expect(band.querySelector('[data-testid="funnel-page-loads-count"]')?.textContent).toContain(
+        '2300',
+      );
+      expect(band.querySelector('[data-testid="funnel-page-loads-label"]')?.textContent).toContain(
+        'page loads, not people',
+      );
+      expect(
+        band.querySelector('[data-testid="funnel-page-loads-unrecorded"]')?.textContent,
+      ).toContain('3 days');
+      const table = band.querySelector('[data-testid="q-funnel-chart-table"]') as HTMLElement;
+      expect(table.textContent).not.toContain('Visits');
+      expect(table.textContent).not.toContain('2300');
+      expect(band.textContent).not.toContain('%');
+    });
+
+    it('draws no page-load figure while the count is dark', async () => {
+      await render();
+
+      expect(funnelBand().querySelector('[data-testid="funnel-page-loads"]')).toBeNull();
+    });
+
     it('says how many days of a stage were never recorded instead of presenting a partial total as whole', async () => {
       await render();
       const gaps = Array.from(

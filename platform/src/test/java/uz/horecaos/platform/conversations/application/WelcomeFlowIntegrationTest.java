@@ -187,6 +187,7 @@ class WelcomeFlowIntegrationTest {
                 "en",
                 engine,
                 new TelegramInstallationBrandLookup(jdbc),
+                uz.horecaos.platform.support.TelegramLandings.inert(jdbc),
                 new TelegramUpdateDedupStore(jdbc, clock),
                 new uz.horecaos.platform.web.cache.InProcessRateLimiter(clock),
                 new JdbcConfigurationResolver(jdbc),

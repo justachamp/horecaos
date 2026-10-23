@@ -169,6 +169,34 @@ public class TelegramBotApiClient {
     }
 
     /**
+     * Sets the button beside a chat's message field (ADR 0183 D27): the tenant's Mini App entry point.
+     *
+     * @param chatId a private chat to set it for, or null for the bot's default, the button every private chat without
+     *               its own shows. Telegram keeps one default label per bot; a per-chat call is how a customer sees the
+     *               label in their own language
+     */
+    public TelegramCallResult setChatMenuButton(ProviderCall call, @Nullable Long chatId, TelegramMenuButton button) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (chatId != null) {
+            body.put("chat_id", chatId);
+        }
+        body.put("menu_button", button.toApiShape());
+        return call("setChatMenuButton", call, body);
+    }
+
+    /**
+     * The button a chat currently shows, or the bot's default when {@code chatId} is null: how the setup flow proves that
+     * what it set is what Telegram holds, rather than trusting its own {@code ok}.
+     */
+    public TelegramCallResult getChatMenuButton(ProviderCall call, @Nullable Long chatId) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (chatId != null) {
+            body.put("chat_id", chatId);
+        }
+        return call("getChatMenuButton", call, body);
+    }
+
+    /**
      * Registers (or re-registers) this bot's webhook (ADR 0058 stage 1's
      * unfinished half: the header check in {@code TelegramWebhookController}
      * had no caller that ever told Telegram where to send updates).

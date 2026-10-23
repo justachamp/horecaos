@@ -75,6 +75,8 @@
     "search": "Поиск...",
     "menu": "Меню 😍",
     "all": "Всё",
+    "allCategories": "Все категории",
+    "categoriesClose": "Закрыть",
     "goHome": "На главную",
     "noResults": "Ничего не найдено",
     "recentSearches": "Недавние поиски",
@@ -92,6 +94,7 @@
     "learnMore": "Подробнее",
     "open": "Открыть",
     "popupClose": "Закрыть",
+    "brandSwitcher": "Другие наши бренды",
     "editorialSection": "Ещё от нас",
     "editorial": {
       "news": "Новости",

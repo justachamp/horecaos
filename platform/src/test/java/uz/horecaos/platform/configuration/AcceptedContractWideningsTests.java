@@ -98,6 +98,17 @@ class AcceptedContractWideningsTests {
         assertThat(AcceptedContractWidenings.mayBecomeOptional(DRAFT_REQUEST)).containsExactly("message");
     }
 
+    // ----------------------------------------------------- ADR 0183: the pickup search's optional point
+
+    private static final String PICKUP_SEARCH_REQUEST = "/api/v1/storefront/pickup-locations post request";
+
+    @Test
+    @DisplayName("the public pickup search may leave the customer's point out")
+    void thePickupSearchPointMayBecomeOptional() {
+        assertThat(AcceptedContractWidenings.mayBecomeOptional(PICKUP_SEARCH_REQUEST))
+                .containsExactly("point");
+    }
+
     @ParameterizedTest
     @ValueSource(
             strings = {
@@ -113,6 +124,21 @@ class AcceptedContractWideningsTests {
     void nothingElseMaySwapAField(String context) {
         assertThat(AcceptedContractWidenings.mayBecomeRequired(context)).isEmpty();
         assertThat(AcceptedContractWidenings.mayBeRemoved(context)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "/api/v1/storefront/pickup-locations post request.point",
+                "/api/v1/storefront/pickup-locations post request.point.latitude",
+                "/api/v1/storefront/pickup-locations post response 200",
+                "/api/v1/storefront/pickup-locations get request",
+                "/api/v1/storefront/serviceability post request",
+                "/api/v1/operations/tenants/{tenantId}/pickup-locations post request"
+            })
+    @DisplayName(
+            "nothing around the pickup search may make a required field optional: not its point's parts, its answer, or a sibling route")
+    void nothingAroundThePickupSearchMayBecomeOptional(String context) {
         assertThat(AcceptedContractWidenings.mayBecomeOptional(context)).isEmpty();
     }
 }

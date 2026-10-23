@@ -3,8 +3,10 @@ package uz.horecaos.platform.marketing.application;
 import java.time.Clock;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.marketing.api.AttributionClickPort;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAttributionLinkStore;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -26,7 +28,7 @@ import uz.horecaos.platform.web.cache.RateLimiter;
  * other-brand token returns without a trace. The endpoint cannot be used to probe which tokens exist.
  */
 @Service
-public class AttributionLinkClickService {
+public class AttributionLinkClickService implements AttributionClickPort {
 
     /** The shape {@code ck_attribution_link_token_shape} enforces, checked before any state is touched. */
     private static final Pattern TOKEN_SHAPE = Pattern.compile("^[A-Za-z0-9_-]{4,64}$");
@@ -52,21 +54,40 @@ public class AttributionLinkClickService {
     }
 
     /**
+     * The web storefront's endpoint: the same count as {@link #click}, with a rate-limited visitor told so (HTTP 429).
+     *
      * @param clientKey an opaque, never-stored handle for the caller, for the limiter and nothing else
      * @return whether a click was counted; callers answer the same either way
      * @throws ApiException {@code RATE_LIMIT_EXCEEDED} when this visitor has used the minute's allowance
      */
     @Transactional
     public boolean recordClick(UUID tenantId, UUID brandId, String token, String clientKey) {
-        if (token == null || !TOKEN_SHAPE.matcher(token).matches()) {
-            return false;
-        }
-        RateLimiter.Decision decision =
-                rateLimiter.check(new RateLimiter.Key(OPERATION, tenantId.toString(), token + "|" + clientKey), LIMIT);
-        if (!decision.allowed()) {
+        Outcome outcome = click(tenantId, brandId, token, clientKey);
+        if (outcome == Outcome.RATE_LIMITED) {
             throw new ApiException(
                     ErrorCode.RATE_LIMIT_EXCEEDED, "Too many requests for this link. Try again shortly.");
         }
-        return store.recordPublicClick(tenantId, brandId, token, clock.instant());
+        return outcome == Outcome.COUNTED;
+    }
+
+    /**
+     * Every surface's click lands here (ADR 0183): the web storefront through {@link #recordClick}, the Telegram bot
+     * through {@link AttributionClickPort}. A token of the wrong shape is ignored before the limiter is touched; a
+     * well-formed one is limited first and looked up second.
+     */
+    @Override
+    @Transactional
+    public Outcome click(UUID tenantId, @Nullable UUID brandId, String token, String visitor) {
+        if (token == null || !TOKEN_SHAPE.matcher(token).matches()) {
+            return Outcome.NOT_A_LINK;
+        }
+        RateLimiter.Decision decision =
+                rateLimiter.check(new RateLimiter.Key(OPERATION, tenantId.toString(), token + "|" + visitor), LIMIT);
+        if (!decision.allowed()) {
+            return Outcome.RATE_LIMITED;
+        }
+        return store.recordPublicClick(tenantId, brandId, token, clock.instant())
+                ? Outcome.COUNTED
+                : Outcome.NOT_A_LINK;
     }
 }

@@ -142,7 +142,9 @@ final class StorefrontPublishedSurface {
             BRAND + "/content/careers",
             BRAND + "/content/careers/{slug}",
             // A visit through a campaign link, counted without naming anybody (ADR 0167).
-            BRAND + "/attribution-links/{token}/clicks");
+            BRAND + "/attribution-links/{token}/clicks",
+            // Whether page loads are counted, and the one anonymous ping per tab session (ADR 0183 D18).
+            BRAND + "/page-loads");
 
     private StorefrontPublishedSurface() {}
 

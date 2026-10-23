@@ -1,0 +1,115 @@
+<div class="branches" data-testid="storefront-branch-order">
+  <h2 class="q-subhead">{{ 'marketing.storefront.branches.title' | t }}</h2>
+  <p class="q-body-sm branches__note">{{ 'marketing.storefront.branches.hint' | t }}</p>
+
+  @if (loading()) {
+    <p class="q-caption" role="status">{{ 'marketing.content.list.loading' | t }}</p>
+  } @else if (denied()) {
+    <q-denied-state capability="LOCATION_READ" />
+  } @else {
+    @if (error(); as message) {
+      <p class="q-body-sm branches__error" role="alert" data-testid="branch-order-error">
+        {{ message }}
+      </p>
+    }
+    @if (saved()) {
+      <p class="q-body-sm" role="status" data-testid="branch-order-saved">
+        {{ 'marketing.storefront.branches.saved' | t }}
+      </p>
+    }
+
+    <h3 class="q-body-sm branches__group">{{ 'marketing.storefront.branches.placed' | t }}</h3>
+    @if (placed().length === 0) {
+      <p class="q-body-sm branches__note" data-testid="branch-order-none-placed">
+        {{ 'marketing.storefront.branches.nonePlaced' | t }}
+      </p>
+    } @else {
+      <ol class="branches__list" data-testid="branch-order-placed">
+        @for (branch of placed(); track branch.locationId; let first = $first; let last = $last) {
+          <li class="branches__row" [attr.data-testid]="'branch-placed-' + branch.locationId">
+            <span class="q-body-sm">{{ branch.displayName }}</span>
+            <span class="branches__actions">
+              <button
+                type="button"
+                class="q-body-sm"
+                [disabled]="busy() || first"
+                (click)="move(branch, -1)"
+                [attr.data-testid]="'branch-up-' + branch.locationId"
+              >
+                {{ 'marketing.storefront.switcher.up' | t }}
+              </button>
+              <button
+                type="button"
+                class="q-body-sm"
+                [disabled]="busy() || last"
+                (click)="move(branch, 1)"
+                [attr.data-testid]="'branch-down-' + branch.locationId"
+              >
+                {{ 'marketing.storefront.switcher.down' | t }}
+              </button>
+              <button
+                type="button"
+                class="q-body-sm"
+                [disabled]="busy()"
+                (click)="unplace(branch)"
+                [attr.data-testid]="'branch-unplace-' + branch.locationId"
+              >
+                {{ 'marketing.storefront.branches.unplace' | t }}
+              </button>
+            </span>
+          </li>
+        }
+      </ol>
+    }
+
+    <h3 class="q-body-sm branches__group">{{ 'marketing.storefront.branches.unplaced' | t }}</h3>
+    @if (unplaced().length === 0) {
+      <p class="q-body-sm branches__note">{{ 'marketing.storefront.branches.noneUnplaced' | t }}</p>
+    } @else {
+      <ul class="branches__list" data-testid="branch-order-unplaced">
+        @for (branch of unplaced(); track branch.locationId) {
+          <li class="branches__row" [attr.data-testid]="'branch-unplaced-' + branch.locationId">
+            <span class="q-body-sm">
+              {{ branch.displayName }}
+              @if (branch.status !== 'ACTIVE') {
+                <span class="q-caption branches__inactive">{{
+                  'marketing.storefront.branches.inactive' | t
+                }}</span>
+              }
+            </span>
+            <button
+              type="button"
+              class="q-body-sm"
+              [disabled]="busy()"
+              (click)="place(branch)"
+              [attr.data-testid]="'branch-place-' + branch.locationId"
+            >
+              {{ 'marketing.storefront.branches.place' | t }}
+            </button>
+          </li>
+        }
+      </ul>
+    }
+
+    <div class="branches__footer">
+      <button
+        type="button"
+        class="q-body-sm"
+        [disabled]="busy() || !dirty()"
+        (click)="save()"
+        data-testid="branch-order-save"
+      >
+        {{ 'marketing.storefront.branches.save' | t }}
+      </button>
+      <button
+        type="button"
+        class="q-body-sm"
+        [disabled]="busy() || !dirty()"
+        (click)="reset()"
+        data-testid="branch-order-reset"
+      >
+        {{ 'marketing.storefront.branches.reset' | t }}
+      </button>
+    </div>
+  }
+</div>
