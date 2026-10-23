@@ -25,6 +25,10 @@ export class FakeIdentityProvider {
   accessTokenSeconds = 300;
   /** When set, the next token request is refused with this OAuth error. */
   refuseWith: string | null = null;
+  /** While true the token endpoint cannot be reached at all: the request fails the way a dropped connection does. */
+  tokenEndpointUnreachable = false;
+  /** When set, the next token request is answered with this status and no OAuth error (a gateway or a rate limit). */
+  failNextTokenRequestWith: number | null = null;
   /** Overrides applied to the identity token's claims. */
   idTokenClaims: Record<string, unknown> = {};
   /** The `iss` the discovery document claims. */
@@ -61,6 +65,9 @@ export class FakeIdentityProvider {
       });
     }
     if (url.endsWith('/protocol/openid-connect/token') && body !== null) {
+      if (this.tokenEndpointUnreachable) {
+        throw new TypeError('Failed to fetch');
+      }
       return this.token(body);
     }
     return new Response('not found', { status: 404 });
@@ -71,6 +78,11 @@ export class FakeIdentityProvider {
   }
 
   private async token(form: URLSearchParams): Promise<Response> {
+    if (this.failNextTokenRequestWith !== null) {
+      const status = this.failNextTokenRequestWith;
+      this.failNextTokenRequestWith = null;
+      return new Response('upstream trouble', { status });
+    }
     if (this.refuseWith !== null) {
       const error = this.refuseWith;
       this.refuseWith = null;

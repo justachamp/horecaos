@@ -77,6 +77,7 @@ export type OidcErrorCode =
   | 'token_exchange_failed'
   | 'token_invalid'
   | 'refresh_failed'
+  | 'refresh_unavailable'
   | 'storage_unavailable';
 
 /**
@@ -98,6 +99,15 @@ interface ProviderMetadata {
   readonly authorizationEndpoint: string;
   readonly tokenEndpoint: string;
   readonly endSessionEndpoint: string | null;
+}
+
+/**
+ * A status that says the server could not answer, as opposed to the server answering no: any 5xx,
+ * a timeout (408) and a rate limit (429). Everything else a token endpoint says to a refresh
+ * request -- 400 `invalid_grant`, 401 `invalid_client` -- is a decision.
+ */
+function couldNotAnswer(status: number): boolean {
+  return status >= 500 || status === 408 || status === 429;
 }
 
 /** How long a login may take at the identity provider before its stored verifier is refused. */
@@ -221,7 +231,15 @@ export class OidcClient {
     return { tokens: received, claims };
   }
 
-  /** Trades a refresh token for a new set. A refusal means the session is over, not that it should be retried. */
+  /**
+   * Trades a refresh token for a new set.
+   *
+   * Two failures, and the caller must not confuse them. `refresh_failed` is the identity provider
+   * saying no (a client error such as `invalid_grant`): the session is over and is not to be
+   * retried. `refresh_unavailable` is the identity provider not answering -- the fetch never
+   * arrived, or it answered 5xx, 408 or 429: nothing was decided about the refresh token, which
+   * is still the courier's, and a later attempt may well work.
+   */
   async refresh(refreshToken: string): Promise<Tokens> {
     const metadata = await this.metadata();
     return this.tokenRequest(
@@ -335,13 +353,21 @@ export class OidcClient {
           typeof (body as { error?: unknown }).error === 'string'
             ? (body as { error: string }).error
             : String(response.status);
-        throw new OidcError(failure, `the token endpoint answered ${code}`);
+        throw new OidcError(
+          failure === 'refresh_failed' && couldNotAnswer(response.status)
+            ? 'refresh_unavailable'
+            : failure,
+          `the token endpoint answered ${code}`,
+        );
       }
     } catch (cause) {
       if (cause instanceof OidcError) {
         throw cause;
       }
-      throw new OidcError(failure, 'the token endpoint could not be reached');
+      throw new OidcError(
+        failure === 'refresh_failed' ? 'refresh_unavailable' : failure,
+        'the token endpoint could not be reached',
+      );
     }
 
     const raw = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;

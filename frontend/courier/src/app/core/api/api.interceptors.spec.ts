@@ -102,6 +102,45 @@ describe('API interceptors', () => {
     );
   });
 
+  it('keeps the session and reports NETWORK when the renewal could not reach the identity provider', async () => {
+    const answer = firstValueFrom(http.get('/api/v1/courier/x', platform())).catch(
+      (failure: unknown) => failure,
+    );
+    const first = await nextRequest();
+    const leavings = harness.navigations.length;
+    harness.provider.tokenEndpointUnreachable = true;
+    first.flush({}, { status: 401, statusText: 'Unauthorized' });
+
+    const failure = (await answer) as ApiError;
+    expect(failure).toBeInstanceOf(ApiError);
+    expect(failure.isNetwork).toBe(true);
+    expect(auth.signedIn()).toBe(true);
+    // No sign-in was started: the page is not replaced under a courier who is mid-delivery.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(harness.navigations).toHaveLength(leavings);
+
+    // And the next call, once the connection is back, renews and goes through.
+    harness.provider.tokenEndpointUnreachable = false;
+    const later = firstValueFrom(http.get('/api/v1/courier/x', platform()));
+    const retry = await nextRequest();
+    expect(retry.request.headers.get('Authorization')).toBe('Bearer access-1');
+    retry.flush({ ok: true });
+    await expect(later).resolves.toEqual({ ok: true });
+  });
+
+  it('sends the request out with the token it holds when the renewal before it could not be made', async () => {
+    harness.advance(300_000);
+    harness.provider.tokenEndpointUnreachable = true;
+
+    const answer = firstValueFrom(http.get('/api/v1/courier/x', platform()));
+
+    const request = await nextRequest();
+    expect(request.request.headers.get('Authorization')).toBe('Bearer access-1');
+    request.flush({ ok: true });
+    await expect(answer).resolves.toEqual({ ok: true });
+    expect(auth.signedIn()).toBe(true);
+  });
+
   it('gives up after one retry rather than looping on a platform that keeps saying 401', async () => {
     const answer = firstValueFrom(http.get('/api/v1/courier/x', platform())).catch(
       (failure: unknown) => failure,

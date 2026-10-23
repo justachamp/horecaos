@@ -17,6 +17,16 @@ import { sanitizeReturnTo } from './return-destination';
 export const REFRESH_SKEW_MS = 30_000;
 
 /**
+ * What a renewal came to.
+ *
+ * - `renewed`: new tokens are held.
+ * - `kept`: the identity provider could not be reached, so nothing was decided: the tokens held are
+ *   still the courier's, and the session carries on with them until a renewal can be made.
+ * - `ended`: there is nothing to renew with, or the identity provider refused; the session is over.
+ */
+export type RenewOutcome = 'renewed' | 'kept' | 'ended';
+
+/**
  * The courier's sign-in, and the only place a token is held.
  *
  * **Tokens live in memory only** (AGENTS.md: never in local storage). Reloading the page, or the
@@ -31,6 +41,13 @@ export const REFRESH_SKEW_MS = 30_000;
  * Renewal is single-flight: a screen firing three requests as the token lapses causes one refresh,
  * not three, which matters because a refresh token is rotated and the second use of a spent one
  * would end the session.
+ *
+ * **Only a refusal ends the session.** A courier in a lift or a basement has a token lapsing and no
+ * connection; the identity provider not answering says nothing about the refresh token, so the
+ * tokens are kept and the stale access token is still handed out -- the platform decides whether it
+ * is good, and a call that fails for want of a connection is retried by the callers that retry.
+ * Ending the session there would stop the duty session and its sender and replace the page in
+ * the middle of a delivery.
  */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -41,7 +58,7 @@ export class AuthService {
   private readonly i18n = inject(I18n);
 
   private tokens: Tokens | null = null;
-  private refreshing: Promise<boolean> | null = null;
+  private refreshing: Promise<RenewOutcome> | null = null;
 
   private readonly identity = signal<IdentityClaims | null>(null);
 
@@ -74,7 +91,8 @@ export class AuthService {
    * A token that is good to send now, or null when there is none to be had.
    *
    * Null is not an error to retry: it means the session is over and the caller should start a
-   * sign-in.
+   * sign-in. When a renewal was due but the identity provider could not be reached the session is
+   * not over, so the token already held is returned (it may be about to lapse, or just have).
    */
   async accessToken(): Promise<string | null> {
     if (this.tokens === null) {
@@ -83,11 +101,12 @@ export class AuthService {
     if (this.tokens.accessExpiresAt - this.now() > REFRESH_SKEW_MS) {
       return this.tokens.accessToken;
     }
-    return (await this.renew()) ? (this.tokens?.accessToken ?? null) : null;
+    const outcome = await this.renew();
+    return outcome === 'ended' ? null : (this.tokens?.accessToken ?? null);
   }
 
   /** Renews the tokens now, whatever their clock says; used when the platform refuses one. */
-  forceRefresh(): Promise<boolean> {
+  forceRefresh(): Promise<RenewOutcome> {
     return this.renew();
   }
 
@@ -111,22 +130,22 @@ export class AuthService {
     this.navigation.assign(destination ?? this.navigation.origin + SIGNED_OUT_PATH);
   }
 
-  private renew(): Promise<boolean> {
+  private renew(): Promise<RenewOutcome> {
     this.refreshing ??= this.refreshOnce().finally(() => {
       this.refreshing = null;
     });
     return this.refreshing;
   }
 
-  private async refreshOnce(): Promise<boolean> {
+  private async refreshOnce(): Promise<RenewOutcome> {
     const current = this.tokens;
     if (current === null || current.refreshToken === null) {
       this.expire();
-      return false;
+      return 'ended';
     }
     if (current.refreshExpiresAt !== null && current.refreshExpiresAt <= this.now()) {
       this.expire();
-      return false;
+      return 'ended';
     }
     try {
       const renewed = await this.oidc.refresh(current.refreshToken);
@@ -135,10 +154,14 @@ export class AuthService {
         // A refresh response may omit the identity token; the logout hint is still wanted.
         idToken: renewed.idToken ?? current.idToken,
       };
-      return true;
-    } catch {
+      return 'renewed';
+    } catch (failure) {
+      if (failure instanceof OidcError && failure.code === 'refresh_unavailable') {
+        // Nobody said no. The tokens are still the courier's; the next call tries again.
+        return 'kept';
+      }
       this.expire();
-      return false;
+      return 'ended';
     }
   }
 }

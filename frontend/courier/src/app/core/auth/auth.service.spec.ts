@@ -140,6 +140,59 @@ describe('AuthService', () => {
       expect(auth.signedIn()).toBe(false);
     });
 
+    describe('when the identity provider cannot be reached for a renewal', () => {
+      // A courier in a lift or a basement: the access token is inside its skew, the refresh token is
+      // still good, and the fetch fails. That is not the end of the session.
+      async function lapsedAndOffline() {
+        await signedIn();
+        harness.advance(300_000 - REFRESH_SKEW_MS + 1);
+        harness.provider.tokenEndpointUnreachable = true;
+      }
+
+      it('keeps the session, and hands out the token it holds rather than none', async () => {
+        await lapsedAndOffline();
+
+        await expect(auth.accessToken()).resolves.toBe('access-1');
+        expect(auth.signedIn()).toBe(true);
+        expect(auth.claims()?.name).toBe('Alisher Karimov');
+      });
+
+      it('renews with the same refresh token once the connection is back', async () => {
+        await lapsedAndOffline();
+        await auth.accessToken();
+
+        harness.provider.tokenEndpointUnreachable = false;
+
+        await expect(auth.accessToken()).resolves.toBe('access-2');
+        expect(auth.signedIn()).toBe(true);
+      });
+
+      it('keeps the session through a gateway error or a rate limit as well', async () => {
+        await signedIn();
+        harness.advance(300_000);
+        harness.provider.failNextTokenRequestWith = 503;
+
+        await expect(auth.accessToken()).resolves.toBe('access-1');
+        expect(auth.signedIn()).toBe(true);
+        await expect(auth.accessToken()).resolves.toBe('access-2');
+      });
+
+      it('says the tokens were kept when a renewal is asked for on demand, and not that the session ended', async () => {
+        await lapsedAndOffline();
+
+        await expect(auth.forceRefresh()).resolves.toBe('kept');
+        expect(auth.signedIn()).toBe(true);
+      });
+
+      it('still ends the session once the refresh token itself has run out while offline', async () => {
+        await lapsedAndOffline();
+        harness.advance(31 * 60 * 1000);
+
+        await expect(auth.accessToken()).resolves.toBeNull();
+        expect(auth.signedIn()).toBe(false);
+      });
+    });
+
     it('does not even try to renew a refresh token that has itself expired', async () => {
       await signedIn();
       harness.advance(31 * 60 * 1000);
@@ -151,7 +204,7 @@ describe('AuthService', () => {
     it('can be made to renew on demand, as the API does after a 401', async () => {
       await signedIn();
 
-      await expect(auth.forceRefresh()).resolves.toBe(true);
+      await expect(auth.forceRefresh()).resolves.toBe('renewed');
       await expect(auth.accessToken()).resolves.toBe('access-2');
     });
 

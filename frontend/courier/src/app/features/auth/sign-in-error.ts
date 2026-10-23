@@ -19,6 +19,7 @@ const MESSAGE_BY_CODE: Readonly<Record<OidcErrorCode, MessageKey>> = {
   token_exchange_failed: 'auth.error.default',
   token_invalid: 'auth.error.default',
   refresh_failed: 'auth.error.default',
+  refresh_unavailable: 'auth.error.unavailable',
 };
 
 /** `/auth/error?code=...`: a sign-in that did not complete, with the one thing a courier can do about it. */

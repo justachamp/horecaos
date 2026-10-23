@@ -255,6 +255,68 @@ describe('OidcClient', () => {
         code: 'refresh_failed',
       });
     });
+
+    describe('telling a refusal from a token endpoint that could not answer', () => {
+      async function signedInTokens() {
+        const { pending } = await started();
+        const { tokens } = await client.completeLogin(
+          new URLSearchParams({ code: 'code-1', state: pending.state }),
+          pending,
+        );
+        return tokens;
+      }
+
+      it('calls a refusal of the refresh token a refusal: the session it belonged to is over', async () => {
+        const tokens = await signedInTokens();
+        harness.provider.refuseWith = 'invalid_grant';
+
+        await expect(client.refresh(tokens.refreshToken!)).rejects.toMatchObject({
+          code: 'refresh_failed',
+        });
+      });
+
+      it('calls a client error without an OAuth body a refusal too', async () => {
+        const tokens = await signedInTokens();
+        harness.provider.failNextTokenRequestWith = 401;
+
+        await expect(client.refresh(tokens.refreshToken!)).rejects.toMatchObject({
+          code: 'refresh_failed',
+        });
+      });
+
+      it('calls a fetch that never reached the endpoint unavailable, not a refusal', async () => {
+        const tokens = await signedInTokens();
+        harness.provider.tokenEndpointUnreachable = true;
+
+        await expect(client.refresh(tokens.refreshToken!)).rejects.toMatchObject({
+          code: 'refresh_unavailable',
+        });
+      });
+
+      it.each([500, 502, 503, 504, 408, 429])(
+        'calls a %s from the token endpoint unavailable: the refresh token was not refused',
+        async (status) => {
+          const tokens = await signedInTokens();
+          harness.provider.failNextTokenRequestWith = status;
+
+          await expect(client.refresh(tokens.refreshToken!)).rejects.toMatchObject({
+            code: 'refresh_unavailable',
+          });
+        },
+      );
+
+      it('still reports the same trouble at the first sign-in as a failed exchange: there is nothing to keep', async () => {
+        const { pending } = await started();
+        harness.provider.tokenEndpointUnreachable = true;
+
+        await expect(
+          client.completeLogin(
+            new URLSearchParams({ code: 'code-1', state: pending.state }),
+            pending,
+          ),
+        ).rejects.toMatchObject({ code: 'token_exchange_failed' });
+      });
+    });
   });
 
   describe('ending the session', () => {
