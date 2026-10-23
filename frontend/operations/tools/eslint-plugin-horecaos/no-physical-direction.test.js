@@ -35,8 +35,59 @@ ruleTester.run('no-physical-direction', rule, {
       parser: PARSER_PATH,
       filename: 'fixtures/logical.css',
     },
+    {
+      // A declaration that says why it must stay physical: on its own line, on the line above, or
+      // in SCSS's own comment syntax.
+      code: fixture('allowed-physical.css'),
+      parser: PARSER_PATH,
+      filename: 'fixtures/allowed.css',
+    },
   ],
   invalid: [
+    {
+      // The fixer: each spelling becomes its one logical twin, spacing and the rest untouched, and
+      // the width/style/colour suffix of a border side survives.
+      code: [
+        '.a { margin-left: 4px; margin-right:0; padding-left : 2px; }',
+        '.b { border-right-color: red; border-left: 1px solid; text-align:right; }',
+        '.c { left: 1px; right:\n    2px; float: right; border-bottom-right-radius: 3px; }',
+      ].join('\n'),
+      parser: PARSER_PATH,
+      filename: 'fixtures/fixer.css',
+      output: [
+        '.a { margin-inline-start: 4px; margin-inline-end:0; padding-inline-start : 2px; }',
+        '.b { border-inline-end-color: red; border-inline-start: 1px solid; text-align:end; }',
+        '.c { inset-inline-start: 1px; inset-inline-end:\n    2px; float: inline-end; border-end-end-radius: 3px; }',
+      ].join('\n'),
+      errors: 10,
+    },
+    {
+      // A `physical-ok` with no reason allows nothing, and one declaration's reason does not cover
+      // its neighbour on the next line.
+      code: [
+        '.a {',
+        '  left: 50%; /* physical-ok: centred */',
+        '  right: 0;',
+        '  margin-left: 1px; /* physical-ok: */',
+        '}',
+      ].join('\n'),
+      parser: PARSER_PATH,
+      filename: 'fixtures/unreasoned.css',
+      output: [
+        '.a {',
+        '  left: 50%; /* physical-ok: centred */',
+        '  inset-inline-end: 0;',
+        '  margin-inline-start: 1px; /* physical-ok: */',
+        '}',
+      ].join('\n'),
+      errors: [
+        { messageId: 'physicalDirection', data: { found: 'right:', logical: 'inset-inline-end' } },
+        {
+          messageId: 'physicalDirection',
+          data: { found: 'margin-left:', logical: 'margin-inline-start' },
+        },
+      ],
+    },
     {
       code: fixture('physical-direction.css'),
       parser: PARSER_PATH,
@@ -68,6 +119,7 @@ ruleTester.run('no-physical-direction', rule, {
           data: { found: 'border-top-left-radius:', logical: 'border-start-start-radius' },
         },
       ],
+      output: fixture('physical-direction.fixed.css'),
     },
   ],
 });
@@ -76,6 +128,8 @@ ruleTester.run('no-physical-direction', rule, {
 const apps = [
   { app: 'operations', dir: process.cwd() },
   { app: 'control-plane', dir: path.join(process.cwd(), '..', 'control-plane') },
+  { app: 'storefront', dir: path.join(process.cwd(), '..', 'storefront') },
+  { app: 'storefront-milliy', dir: path.join(process.cwd(), '..', 'storefront-milliy') },
 ];
 const sizes = [];
 for (const { app, dir } of apps) {

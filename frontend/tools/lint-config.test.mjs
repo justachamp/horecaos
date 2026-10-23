@@ -14,7 +14,8 @@
  * vendors the design system's closed type scale, so it also bans a raw `font-size: Npx`
  * (the rule frontend/operations owns), and so does `courier`, which vendors the same sheet; the two
  * storefronts are Tailwind/SCSS apps with no such scale, so for them a raw px font-size is NOT a finding and this checks that it stays
- * one that is not (a rule that fires where its premise is absent is noise that gets ignored).
+ * one that is not (a rule that fires where its premise is absent is noise that gets ignored). The
+ * logical-properties rule (no `margin-left`) is every app's.
  *
  * Node's built-in runner, no dependencies beyond the app's own eslint.
  */
@@ -99,18 +100,20 @@ if (BANS_RAW_PX) {
   });
 }
 
-// ADR 0149, Decision 6: the logical-properties ratchet is the control plane's too (the operations
-// console runs it through its own `.eslintrc.json`, and proves it with its plugin's tests). The
-// storefronts are Tailwind apps whose layout is utilities, so for them it is NOT a finding.
+// ADR 0149, Decision 6: the logical-properties ratchet is every app's. The two consoles and the
+// courier lint `.css`; the two storefronts keep their hand-written component styles in `.scss`
+// (their layout is mostly Tailwind utilities, which are not stylesheets this rule reads).
 const DIRECTION_RULE = 'horecaos/no-physical-direction';
+const STYLESHEET = app === 'storefront' || app === 'storefront-milliy' ? 'src/probe.scss' : 'src/probe.css';
 
-if (BANS_RAW_PX) {
-  test('a physical margin in a new stylesheet is a finding, a logical one is not', async () => {
-    assert.ok((await verdict('.a {\n  margin-left: 4px;\n}\n', 'src/probe.css')).includes(DIRECTION_RULE));
-    assert.deepEqual(await verdict('.a {\n  margin-inline-start: 4px;\n}\n', 'src/probe.css'), []);
-  });
-} else {
-  test('a physical margin is not a finding in an app whose layout is not hand-written CSS', async () => {
-    assert.equal((await verdict('.a {\n  margin-left: 4px;\n}\n', 'src/probe.css')).includes(DIRECTION_RULE), false);
-  });
-}
+test('a physical margin in a new stylesheet is a finding, a logical one is not', async () => {
+  assert.ok((await verdict('.a {\n  margin-left: 4px;\n}\n', STYLESHEET)).includes(DIRECTION_RULE));
+  assert.deepEqual(await verdict('.a {\n  margin-inline-start: 4px;\n}\n', STYLESHEET), []);
+});
+
+test('a physical declaration that says why it must stay is not a finding', async () => {
+  const centred = '.a {\n  left: 50%; /* physical-ok: centred with translateX(-50%) */\n}\n';
+  assert.deepEqual(await verdict(centred, STYLESHEET), []);
+  const unreasoned = '.a {\n  left: 50%; /* physical-ok: */\n}\n';
+  assert.ok((await verdict(unreasoned, STYLESHEET)).includes(DIRECTION_RULE));
+});

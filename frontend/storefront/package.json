@@ -10,7 +10,7 @@
     "test:watch": "ng test",
     "format": "prettier --write \"src/**/*.{ts,html,css,scss,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,html,css,scss,json}\"",
-    "lint": "eslint \"src/**/*.ts\"",
+    "lint": "eslint \"src/**/*.{ts,css,scss}\"",
     "lint:rules": "node ../tools/lint-config.test.mjs && node ../tools/glyph-audit/glyph-audit.mjs && node --test ../tools/glyph-audit/glyph-audit.test.mjs"
   },
   "prettier": {

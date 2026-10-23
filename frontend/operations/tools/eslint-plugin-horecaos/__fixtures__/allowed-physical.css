@@ -1,0 +1,16 @@
+.centred {
+  position: absolute;
+  left: 50%; /* physical-ok: centred with translateX(-50%), which is symmetric in either direction */
+  transform: translateX(-50%);
+}
+
+.above {
+  position: absolute;
+  /* physical-ok: the notch is a physical edge of a device mock-up */
+  right: 0;
+}
+
+.scss-line {
+  // physical-ok: the safe-area inset is a device edge, not a writing direction
+  padding-left: var(--safe-left);
+}

@@ -1,0 +1,13 @@
+.card {
+  margin-inline-start: 8px;
+  padding-inline-end: 4px;
+  border-inline-start: 2px solid red;
+  text-align: end;
+}
+
+.badge {
+  position: absolute;
+  inset-inline-end: 0;
+  float: inline-start;
+  border-start-start-radius: 4px;
+}

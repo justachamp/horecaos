@@ -1,0 +1,20 @@
+[
+  "src/app/pages/cart/cart.component.scss",
+  "src/app/pages/checkout/checkout.component.scss",
+  "src/app/pages/checkout/payment-list/payment-list.component.scss",
+  "src/app/pages/details/details.component.scss",
+  "src/app/pages/dine-in/dine-in-table/dine-in-table.component.scss",
+  "src/app/pages/dine-in/dine-in-table/order-bar/dine-in-order-bar.component.scss",
+  "src/app/pages/profile/profile.component.scss",
+  "src/app/shared/bottom-nav/bottom-nav.component.scss",
+  "src/app/shared/categories-overlay/categories-overlay.component.scss",
+  "src/app/shared/combo-choices/combo-choices.component.scss",
+  "src/app/shared/content-blocks/content-blocks.component.scss",
+  "src/app/shared/content-popup/content-popup.component.scss",
+  "src/app/shared/content-story-viewer/content-story-viewer.component.scss",
+  "src/app/shared/dish-card/dish-card.component.scss",
+  "src/app/shared/gift-offers/gift-offers.component.scss",
+  "src/app/shared/modifier-picker/modifier-picker.component.scss",
+  "src/app/shared/nested-choices/nested-choices.component.scss",
+  "src/app/shared/physical-facts/physical-facts.component.scss"
+]
