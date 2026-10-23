@@ -5,7 +5,7 @@
     [attr.aria-label]="'content.brandSwitcher' | t"
   >
     <ul class="switcher__rail rail">
-      @for (item of rail(); track item.entry.targetBrandId) {
+      @for (item of rail(); track item.entry.targetBrandId + item.entry.url) {
         <li class="switcher__item">
           <a
             class="brand"

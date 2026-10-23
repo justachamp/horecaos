@@ -161,8 +161,9 @@ with Marketplace the category rail shows five categories and an «All categories
 
 **Two things to know before saying «done» to the tenant.**
 
-- An entry names a *channel*, not an address. Releasing or un-verifying that website's hostname takes the entry off the storefront
-  with no edit; verifying it puts it back.
+- An entry names a *channel*, not an address, and the channel must be one that sells at the target brand's own branches (the
+  picker offers only those; the platform refuses any other pair). Releasing or un-verifying that website's hostname takes the entry
+  off the storefront with no edit; verifying it puts it back.
 - The customer apps do not call the public pickup search yet (they use the location the deployment is configured with), so the
   branch order is served by `POST /api/v1/storefront/pickup-locations` and proved there, and a customer sees it only once a
   branch chooser is built on that endpoint. A brand's own storefront must send its `brandId` in that request to get the brand's own

@@ -13,6 +13,9 @@ import { TranslatePipe } from '../translate/translate.pipe';
  * website's verified hostname on this read (and `normalizeHomeDocument` has vetted again); it
  * leaves this storefront, so it opens with `rel="noopener noreferrer"`. A logo that cannot load is
  * replaced by the brand's first letter, since the name is still worth following.
+ *
+ * A brand can be offered through two of its websites, so a tile is identified by the brand *and* its address: the brand
+ * alone would repeat a key in the list (NG0955) and let one tile's DOM stand in for the other's.
  */
 @Component({
   selector: 'app-content-brand-switcher',
@@ -24,7 +27,7 @@ import { TranslatePipe } from '../translate/translate.pipe';
     @if (entries().length > 0) {
       <nav [attr.aria-label]="'content.brandSwitcher' | t" data-testid="brand-switcher">
         <ul class="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 py-1">
-          @for (entry of entries(); track entry.targetBrandId) {
+          @for (entry of entries(); track entry.targetBrandId + entry.url) {
             <li class="shrink-0">
               <a
                 class="flex items-center gap-2 rounded-full border border-zinc-700 bg-surface-raised py-1 pl-1 pr-4 text-sm font-semibold text-text-primary"

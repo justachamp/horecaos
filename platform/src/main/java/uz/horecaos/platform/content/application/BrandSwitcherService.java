@@ -41,6 +41,10 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * changes and nobody has to remember to edit an entry. An entry whose target brand is no longer active, or whose hostname is
  * not verified, is not shown (and the console says so). With no entry the home document is byte-for-byte what it was.
  *
+ * <p><strong>An entry is a pair the candidates list offers.</strong> It shows the target brand's name and logo and links to the
+ * channel's hostname, so the channel must be one that sells at the target brand's own active branches
+ * ({@code BrandContentFacts.siblingStorefronts}); a channel of another brand cannot be named for it.
+ *
  * <p>The mutations need {@code content.manage} at the brand and leave an audit fact each, in the transaction that made them.
  */
 @Service
@@ -135,6 +139,17 @@ public class BrandSwitcherService {
         if (channel.isEmpty() || channel.get().systemType() != SalesChannelSystemType.WEB) {
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED, "The entry must name one of this tenant's website channels");
+        }
+        boolean sellsThere = environment.brand().siblingStorefronts(tenantId, brandId).stream()
+                .anyMatch(sibling -> sibling.brandId().equals(targetBrandId)
+                        && sibling.channelId().equals(channelId));
+        if (!sellsThere) {
+            // The entry shows the target brand's name and logo and links to the channel's hostname: they must be the
+            // same
+            // storefront. This is the pair GET /candidates offers, so the console never sends one that is refused.
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "That website channel does not sell at that brand's branches, so it is not that brand's storefront");
         }
         Instant now = clock.instant();
         UUID id = uz.horecaos.platform.configuration.Ids.newId();

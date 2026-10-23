@@ -366,6 +366,31 @@ class BrandSwitcherEndpointTests {
 
     @Test
     @DisplayName(
+            "an entry is a pair the candidates offer: a website channel that does not sell at the target brand's branches cannot be named for it")
+    void aChannelThatDoesNotSellAtTheTargetBrandIsNotPairedWithIt() throws Exception {
+        // sushiChannel sells at SUSHI's branch only. An entry naming PIZZA through it would show PIZZA's name and logo
+        // and
+        // send the visitor to SUSHI's website.
+        String crossed = "{\"targetBrandId\":\"" + PIZZA + "\",\"channelId\":\"" + sushiChannel + "\"}";
+        MvcResult refused = send(post(SWITCHER + "/entries"), OWNER, crossed, null);
+        assertThat(status(refused))
+                .as(refused.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(400);
+
+        // DORMANT has a branch and no website channel at it: nobody's channel stands for it.
+        String dormant = "{\"targetBrandId\":\"" + DORMANT + "\",\"channelId\":\"" + pizzaChannel + "\"}";
+        assertThat(status(send(post(SWITCHER + "/entries"), OWNER, dormant, null)))
+                .isEqualTo(400);
+
+        assertThat(entries()).isEmpty();
+        assertThat(audited("content.switcher_entry.added")).isZero();
+
+        // The pair the candidates list offers is accepted.
+        assertThat(add(PIZZA, pizzaChannel).get("hostname").stringValue()).isEqualTo("pizza.example.uz");
+    }
+
+    @Test
+    @DisplayName(
             "the order is replaced by naming every entry once, and the storefront follows it; naming some, a foreign id or one twice is refused")
     void reorderingNamesEveryEntryOnce() throws Exception {
         fixture.channelHostname(TENANT, sushiChannel, "sushi.example.uz", true);

@@ -38,6 +38,13 @@
   when one is renamed or added unplaced. The console presents the version it read and, on `STALE_VERSION`, shows the order as it now
   stands, drops its draft and says so (`StorefrontBranchOrderEndpointTests.aStaleConsoleCannotUnplaceAColleaguesBranch`,
   `twoSavesAgainstOneVersionCannotBothWin`, `theVersionIsTheOrder`; `storefront-branch-order.spec.ts`).
+  **Correction, 2026-10-23 (fix wave H, the switcher's pairs).** `POST .../brand-switcher/entries` accepted any website channel of the
+  tenant with any brand, while `GET .../candidates` offers only a channel that sells at the target brand's own branches, so an entry
+  could show brand B's name and logo and link to brand C's storefront. An entry must now be a pair the candidates list offers
+  (`BrandSwitcherEndpointTests.aChannelThatDoesNotSellAtTheTargetBrandIsNotPairedWithIt`). A brand offered through two of its
+  websites is two tiles, and both storefronts key a tile by brand and address, so the list no longer repeats a key. One claim of the
+  review does not hold and nothing changed for it: a channel has at most one hostname (`tenant.channel_hostnames` is keyed by tenant and
+  channel, V0403), so `verifiedWebHostname` never chooses between two verified hostnames of one website.
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: proposed by Claude (batch 21); Ayubkhon Abbosov (platform owner) decides
