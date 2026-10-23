@@ -34,8 +34,9 @@ import uz.horecaos.platform.tenancy.api.TelegramChannelSettingsDirectory;
  * <p><strong>A per-chat button outlives the Mini App that set it.</strong> Telegram keeps it until something replaces it and
  * has no call that lists or clears them all. So when the Mini App is off, or the storefront has no verified address, a
  * customer who starts the bot again and still holds a Mini App button in that chat is put back to Telegram's default: the
- * button never keeps opening an address the platform no longer vouches for. A bot whose Mini App was never configured is not
- * asked, and a chat that holds no Mini App button is left exactly as it is.
+ * button never keeps opening an address the platform no longer vouches for. A channel with neither the Mini App switch nor a
+ * short name is taken for one that never had a Mini App: it is not asked, so a button another tool set is not touched. A chat
+ * that holds no Mini App button is left exactly as it is.
  */
 @Component
 public class TelegramCustomerLanding {

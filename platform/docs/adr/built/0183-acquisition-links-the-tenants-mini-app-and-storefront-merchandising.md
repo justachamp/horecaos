@@ -16,8 +16,10 @@
   Telegram's default back, reads it back, and writes the audit fact `integration.telegram_menu_button_reset` only when the read-back
   agrees (`MiniAppAndLinksEndpointTests`: `aMenuButtonOfAMiniAppSwitchedOffCanBeTakenOff`, `anAddressThatLapsesCanBeTakenOff`,
   `takingTheButtonOffIsReadBackToo`; another brand's live Mini App is left alone, `anotherBrandsLiveMiniAppIsNotTakenOff`).
-  `TelegramCustomerLanding` puts a chat's own Mini App button back to the default at that customer's next `/start`
-  (`TelegramBotLandingTests.aMiniAppSwitchedOffTakesTheChatsButtonOff`). Still outside the platform: a chat that never starts
+  `TelegramCustomerLanding` puts a chat's own Mini App button back to the default at that customer's next `/start`, while the
+  channel still carries the Mini App switch or a short name (a channel with neither is taken for one that never had a Mini App,
+  so a button set by another tool is not touched; `TelegramBotLandingTests.aMiniAppSwitchedOffTakesTheChatsButtonOff`,
+  `aChatWithNoMiniAppButtonIsLeftAlone`). Still outside the platform: a chat that never starts
   the bot again, and a main Mini App address held in @BotFather; the runbook says where each is corrected.
   **Correction, 2026-10-23 (fix wave H, the no-point pickup search).** D17 and the endpoint's description said that with no
   point the public search lists «the brand's branches in the order the brand set». The request named no brand and the query had no
