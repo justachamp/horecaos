@@ -36,9 +36,16 @@ export const BRANCH_STATE_POLL_MS = 30_000;
  * A branch counts as closed when its **effective** mode is `FORCE_CLOSED`: an elapsed `effectiveUntil`
  * reads as back on the schedule, with no job and no write, exactly as the server reads it.
  *
- * **Denied is silent.** A refused read (the operator may not see the brand's branches) leaves {@link denied}
- * set and the list empty, and the control and the strip draw nothing: «the shell control is omitted, not
- * disabled».
+ * **A branch manager reads their own branch.** The batched read is brand-scoped, and a branch manager (the person
+ * §6 is written for: closes their own branch when the fryer dies, holds no authority over the network) holds
+ * `location.service-state.change` and `location.read` at their branch only, so the brand's read is refused. That
+ * refusal is not «denied»: the same state is served at the branch (`GET .../locations/{id}/service-summary`, and
+ * the branch's profile for its name and zone), so the shell reads that instead and from then on skips the brand
+ * read. The strip then lists the one branch they can see, and the control and `c` work as for anyone else.
+ *
+ * **Denied is silent.** When the branch's own read is refused too (the operator may not see this branch either)
+ * {@link denied} is set and the list empty, and the control and the strip draw nothing: «the shell control is
+ * omitted, not disabled».
  */
 @Injectable({ providedIn: 'root' })
 export class BranchStates {
@@ -48,6 +55,8 @@ export class BranchStates {
   readonly states = signal<ReadonlyMap<string, LocationServiceStateView>>(new Map());
   /** Each branch's time zone, read once: a branch does not move. */
   private readonly zones = signal<ReadonlyMap<string, string>>(new Map());
+  /** The names a branch's own profile gave, for a reader whose branch picker lists none (a direct branch grant). */
+  private readonly profileNames = signal<ReadonlyMap<string, string>>(new Map());
   readonly denied = signal(false);
   readonly loaded = signal(false);
   /** The error the last read ended in, or null. A screen that must report a failed read (the branch list) asks. */
@@ -56,6 +65,8 @@ export class BranchStates {
   private watchers = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   private inFlight: Promise<void> | null = null;
+  /** The brand whose batched read was refused (403): its operator holds the branch, not the brand. */
+  private branchOnlyBrandId: string | null = null;
 
   /** The branches shut by hand, in the order the server lists them, named from the branch picker's own list. */
   readonly closed: Signal<readonly ClosedBranch[]> = computed(() => {
@@ -64,7 +75,10 @@ export class BranchStates {
       .filter((state) => state.effectiveMode === 'FORCE_CLOSED')
       .map((state) => ({
         locationId: state.locationId,
-        name: names.get(state.locationId) ?? state.locationId,
+        name:
+          names.get(state.locationId) ??
+          this.profileNames().get(state.locationId) ??
+          state.locationId,
         until: state.effectiveUntil,
         reasonCode: state.reasonCode,
         timeZone: this.zones().get(state.locationId) ?? deviceTimeZone(),
@@ -116,13 +130,9 @@ export class BranchStates {
       return;
     }
     try {
-      const states = await this.api.serviceStates(scope);
-      this.states.set(new Map(states.map((state) => [state.locationId, state])));
+      await this.readStates(scope);
       this.denied.set(false);
       this.lastError.set(null);
-      if (this.zones().size === 0 && states.length > 0) {
-        await this.readZones(scope);
-      }
     } catch (error) {
       this.lastError.set(error instanceof ApiError ? error : null);
       if (error instanceof ApiError && (error.status === 403 || error.status === 401)) {
@@ -132,6 +142,61 @@ export class BranchStates {
       // Any other failure keeps the last answer: a strip that vanishes on a dropped request hides a closed branch.
     } finally {
       this.loaded.set(true);
+    }
+  }
+
+  /** The brand's batched read; when that is refused, the branch's own, which a branch manager is served. */
+  private async readStates(scope: LocationScope): Promise<void> {
+    if (this.branchOnlyBrandId !== scope.brandId) {
+      try {
+        const states = await this.api.serviceStates(scope);
+        this.states.set(new Map(states.map((state) => [state.locationId, state])));
+        if (this.zones().size === 0 && states.length > 0) {
+          await this.readZones(scope);
+        }
+        return;
+      } catch (error) {
+        if (!(error instanceof ApiError && error.status === 403)) {
+          throw error;
+        }
+        this.branchOnlyBrandId = scope.brandId;
+      }
+    }
+    await this.readOwnBranch(scope);
+  }
+
+  /** What a branch manager is served: the branch's own summary, named and zoned by its own profile. */
+  private async readOwnBranch(scope: LocationScope): Promise<void> {
+    const summary = await this.api.serviceSummary(scope);
+    this.states.set(
+      new Map([
+        [
+          scope.locationId,
+          {
+            locationId: scope.locationId,
+            mode: summary.mode,
+            effectiveMode: summary.effectiveMode,
+            reasonCode: summary.reasonCode,
+            effectiveUntil: summary.effectiveUntil,
+          },
+        ],
+      ]),
+    );
+    if (!this.zones().has(scope.locationId)) {
+      await this.readProfile(scope);
+    }
+  }
+
+  private async readProfile(scope: LocationScope): Promise<void> {
+    try {
+      const profile = await this.api.profile(scope);
+      this.zones.update((zones) => new Map(zones).set(scope.locationId, profile.timezone));
+      this.profileNames.update((names) =>
+        new Map(names).set(scope.locationId, profile.displayName),
+      );
+    } catch {
+      // The state is what matters; a branch whose zone is unknown is shown in the reader's own, and the next
+      // poll asks again.
     }
   }
 

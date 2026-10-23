@@ -10,6 +10,7 @@ import { I18n } from '../../core/i18n/i18n';
 import {
   LocationServiceStateView,
   LocationsApi,
+  ServiceSummaryResponse,
 } from '../../features/settings/locations/locations-api';
 import { ShortcutRegistry } from '../../shared/keyboard/shortcut-registry';
 import { BranchStateControl } from './branch-state-control';
@@ -31,25 +32,42 @@ describe('BranchStateControl', () => {
   let fixture: ComponentFixture<BranchStateControl>;
   let mayChange: boolean;
 
+  /**
+   * `'refused'`: nothing is readable. `'branch-only'`: a branch manager, whose grants are all at the branch -- the
+   * brand's batched read and list are refused (403) while the branch's own summary and profile are served.
+   */
   async function render(
-    read: readonly LocationServiceStateView[] | 'refused' = [state()],
+    read: readonly LocationServiceStateView[] | 'refused' | 'branch-only' = [state()],
+    own: Partial<ServiceSummaryResponse> = {},
   ): Promise<void> {
+    const refusal = (): Promise<never> =>
+      Promise.reject(new ApiError('INSUFFICIENT_CAPABILITY', 403, null, null));
+    const brandWideRefused = read === 'refused' || read === 'branch-only';
     const api = {
-      serviceStates:
+      serviceStates: brandWideRefused ? vi.fn(refusal) : vi.fn().mockResolvedValue(read),
+      list: brandWideRefused
+        ? vi.fn(refusal)
+        : vi.fn().mockResolvedValue([{ id: 'l1', timezone: 'Asia/Tashkent' }]),
+      profile:
         read === 'refused'
-          ? vi.fn().mockRejectedValue(new ApiError('INSUFFICIENT_CAPABILITY', 403, null, null))
-          : vi.fn().mockResolvedValue(read),
-      list: vi.fn().mockResolvedValue([{ id: 'l1', timezone: 'Asia/Tashkent' }]),
-      serviceSummary: vi.fn().mockResolvedValue({
-        mode: 'FOLLOW_SCHEDULE',
-        effectiveMode: 'FOLLOW_SCHEDULE',
-        reasonCode: null,
-        effectiveUntil: null,
-        maxConcurrentOrders: null,
-        openOrderCount: 0,
-        bindings: [],
-        preparationBands: [],
-      }),
+          ? vi.fn(refusal)
+          : vi
+              .fn()
+              .mockResolvedValue({ id: 'l1', displayName: 'Chilonzor', timezone: 'Asia/Tashkent' }),
+      serviceSummary:
+        read === 'refused'
+          ? vi.fn(refusal)
+          : vi.fn().mockResolvedValue({
+              mode: 'FOLLOW_SCHEDULE',
+              effectiveMode: 'FOLLOW_SCHEDULE',
+              reasonCode: null,
+              effectiveUntil: null,
+              maxConcurrentOrders: null,
+              openOrderCount: 0,
+              bindings: [],
+              preparationBands: [],
+              ...own,
+            }),
       changeServiceState: vi.fn().mockResolvedValue(undefined),
     };
     await TestBed.configureTestingModule({
@@ -60,7 +78,11 @@ describe('BranchStateControl', () => {
           provide: CurrentLocation,
           useValue: {
             scope: signal<LocationScope | null>(SCOPE),
-            options: signal([{ id: 'l1', displayName: 'Chilonzor', status: 'ACTIVE' }]),
+            options: signal(
+              read === 'branch-only'
+                ? []
+                : [{ id: 'l1', displayName: 'Chilonzor', status: 'ACTIVE' }],
+            ),
             ensureLoaded: () => Promise.resolve(),
           },
         },
@@ -116,6 +138,32 @@ describe('BranchStateControl', () => {
 
     expect(control()).toBeNull();
     expect(press('c')).toBe(false);
+  });
+
+  it('is in the header for a branch manager whose grants stop at the branch: the brand-wide read is refused, their own branch is not', async () => {
+    await render('branch-only');
+
+    expect(control()?.textContent?.trim()).toBe('Branch open');
+  });
+
+  it('shows a branch manager their branch shut until cancelled, and c opens the dialog that can reopen it', async () => {
+    await render('branch-only', {
+      mode: 'FORCE_CLOSED',
+      effectiveMode: 'FORCE_CLOSED',
+      reasonCode: 'EQUIPMENT_FAILURE',
+    });
+    expect(control()?.textContent?.trim()).toBe('Branch closed');
+
+    expect(press('c')).toBe(true);
+    await settle();
+
+    const dialog = host().querySelector('[data-testid="branch-state-dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.textContent).toContain('Chilonzor');
+    expect(
+      host().querySelector<HTMLInputElement>('[data-testid="branch-state-mode-FOLLOW_SCHEDULE"]')
+        ?.checked,
+    ).toBe(true);
   });
 
   it('is omitted until the state of this branch has been read', async () => {
