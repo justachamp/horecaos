@@ -30,6 +30,12 @@ import uz.horecaos.platform.tenancy.api.TelegramChannelSettingsDirectory;
  * language (Telegram's {@code language_code}, read through the registry), falling back to the brand's default language, then
  * to the platform's wording. It also sets the menu button for that one chat in the customer's language, because Telegram keeps
  * a single label per bot and the per-chat call is how the other languages are ever seen.
+ *
+ * <p><strong>A per-chat button outlives the Mini App that set it.</strong> Telegram keeps it until something replaces it and
+ * has no call that lists or clears them all. So when the Mini App is off, or the storefront has no verified address, a
+ * customer who starts the bot again and still holds a Mini App button in that chat is put back to Telegram's default: the
+ * button never keeps opening an address the platform no longer vouches for. A bot whose Mini App was never configured is not
+ * asked, and a chat that holds no Mini App button is left exactly as it is.
  */
 @Component
 public class TelegramCustomerLanding {
@@ -114,6 +120,8 @@ public class TelegramCustomerLanding {
 
         if (miniApp) {
             localiseMenuButton(call, chatId, channel, locale, brandDefault, origin + "/");
+        } else if (channel.miniAppEnabled() || channel.miniAppShortName() != null) {
+            takeStaleMenuButtonOff(call, chatId);
         }
         return true;
     }
@@ -140,6 +148,23 @@ public class TelegramCustomerLanding {
         } catch (IllegalArgumentException refused) {
             // A stored label or address Telegram would refuse: the welcome has been sent, the button is a nicety.
             log.debug("Skipped a per-chat menu button: {}", refused.getClass().getSimpleName());
+        }
+    }
+
+    /** Puts this chat's button back to Telegram's default when it still opens a Mini App; reads before it writes. */
+    private void takeStaleMenuButtonOff(ProviderCall call, long chatId) {
+        try {
+            if (bots.getChatMenuButton(call, chatId) instanceof TelegramCallResult.Success held
+                    && TelegramMenuButton.fromApiShape(held.result())
+                            .webAppUrl()
+                            .isPresent()) {
+                bots.setChatMenuButton(call, chatId, new TelegramMenuButton.Default());
+            }
+        } catch (RuntimeException failure) {
+            // The greeting has been sent; the button is a nicety and the next start tries again.
+            log.debug(
+                    "Skipped taking a per-chat menu button off: {}",
+                    failure.getClass().getSimpleName());
         }
     }
 

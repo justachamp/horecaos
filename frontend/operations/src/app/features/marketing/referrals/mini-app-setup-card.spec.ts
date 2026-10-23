@@ -267,6 +267,58 @@ describe('MiniAppSetupCard (ADR 0183, row 6.6a)', () => {
     expect(byId('mini-app-state-MENU_BUTTON')?.textContent?.trim()).toBe('To do');
   });
 
+  it('offers to take the button off while Telegram still shows a Mini App the setup no longer stands behind', async () => {
+    const applyMenuButton = vi
+      .fn()
+      .mockResolvedValue(
+        view({ MENU_BUTTON: ['TODO', 'MINI_APP_OFF'] }, { miniAppShortName: 'order' }),
+      );
+    await render({
+      status: vi
+        .fn()
+        .mockResolvedValue(
+          view(
+            { MENU_BUTTON: ['TODO', 'STALE_BUTTON'] },
+            { miniAppShortName: 'order', menuButtonUrl: 'https://shop.example.uz/' },
+          ),
+        ),
+      applyMenuButton,
+    });
+
+    const button = byId('mini-app-apply-menu-button') as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    expect(button.textContent?.trim()).toBe('Take the menu button off');
+    expect(byId('mini-app-detail-MENU_BUTTON')?.textContent).toContain('Take it off');
+
+    button.click();
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(applyMenuButton).toHaveBeenCalledWith(SCOPE);
+      expect(byId('mini-app-detail-MENU_BUTTON')?.textContent).toContain('switched off');
+    });
+    expect(byId('mini-app-not-shown')).toBeNull();
+    expect((byId('mini-app-apply-menu-button') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('says so when Telegram accepted taking the button off and still shows it', async () => {
+    const stale = view(
+      { MENU_BUTTON: ['TODO', 'STALE_BUTTON'] },
+      { miniAppShortName: 'order', menuButtonUrl: 'https://shop.example.uz/' },
+    );
+    await render({
+      status: vi.fn().mockResolvedValue(stale),
+      applyMenuButton: vi.fn().mockResolvedValue(stale),
+    });
+
+    (byId('mini-app-apply-menu-button') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(byId('mini-app-not-shown')).not.toBeNull();
+    });
+  });
+
   it('keeps the button off until the earlier steps are done', async () => {
     await render({
       status: vi.fn().mockResolvedValue(view({ MENU_BUTTON: ['TODO', 'NOT_READY'] })),

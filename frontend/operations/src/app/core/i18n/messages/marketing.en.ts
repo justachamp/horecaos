@@ -388,6 +388,8 @@ export const marketingEn = {
     'Telegram shows a different button from the one we mean to set.',
   'marketing.miniApp.detail.MENU_BUTTON.OTHER_BRAND':
     'The Telegram channel’s Mini App opens another brand’s storefront. Recording the short name here moves it to this brand.',
+  'marketing.miniApp.detail.MENU_BUTTON.STALE_BUTTON':
+    'Telegram still shows a button that opens the storefront, but the Mini App is switched off or the address is no longer verified. Take it off so customers are not sent there.',
   'marketing.miniApp.detail.TEST_LINK.NOT_READY':
     'The link appears once the bot and the short name are known.',
   'marketing.miniApp.botFather.step1': 'Open @BotFather in Telegram and send /newapp.',
@@ -407,6 +409,7 @@ export const marketingEn = {
   'marketing.miniApp.menu.wanted': 'We will set the label “{label}”, opening {url}.',
   'marketing.miniApp.menu.held': 'Telegram currently shows a button that opens {url}.',
   'marketing.miniApp.menu.apply': 'Set the menu button',
+  'marketing.miniApp.menu.takeOff': 'Take the menu button off',
   'marketing.miniApp.menu.notShown':
     'Telegram accepted the call but still shows a different button. Try again, or check the bot in BotFather.',
 

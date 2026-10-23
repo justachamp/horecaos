@@ -8,6 +8,17 @@
   value goes and how to prove it, in `docs/runbooks/external-connections/w8-acquisition-merchandising.md`: the BotFather round
   trip, counsel's answers (per-person attribution stays declined, the page-load count stays off, the 400-day retention stays
   provisional), and a tenant that asks for the marketplace layout.
+  **Correction, 2026-10-23 (fix wave H, the menu button's way back).** The Rollout section's «rollback of any of them is removing
+  the reading call» did not hold for the menu button, and nor did the runbook's first draft («goes back to the bot's default on
+  the next apply»): the button is held at Telegram and nothing reset it, so a Mini App switched off, or a hostname that stopped
+  being verified, left the bot opening the storefront. It does now. While Telegram shows a Mini App button the brand's setup no
+  longer stands behind, the `MENU_BUTTON` step reports `STALE_BUTTON` and `TelegramMiniAppSetupService.applyMenuButton` sets
+  Telegram's default back, reads it back, and writes the audit fact `integration.telegram_menu_button_reset` only when the read-back
+  agrees (`MiniAppAndLinksEndpointTests`: `aMenuButtonOfAMiniAppSwitchedOffCanBeTakenOff`, `anAddressThatLapsesCanBeTakenOff`,
+  `takingTheButtonOffIsReadBackToo`; another brand's live Mini App is left alone, `anotherBrandsLiveMiniAppIsNotTakenOff`).
+  `TelegramCustomerLanding` puts a chat's own Mini App button back to the default at that customer's next `/start`
+  (`TelegramBotLandingTests.aMiniAppSwitchedOffTakesTheChatsButtonOff`). Still outside the platform: a chat that never starts
+  the bot again, and a main Mini App address held in @BotFather; the runbook says where each is corrected.
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: proposed by Claude (batch 21); Ayubkhon Abbosov (platform owner) decides

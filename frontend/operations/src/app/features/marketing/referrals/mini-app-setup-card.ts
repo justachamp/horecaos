@@ -189,7 +189,11 @@ export class MiniAppSetupCard implements OnInit {
       const after = await this.api.applyMenuButton(this.scope());
       this.adopt(after);
       const menu = after.steps.find((step) => step.code === 'MENU_BUTTON');
-      this.appliedButNotShown.set(menu?.state === 'TODO');
+      // After taking a button off the step is TODO for another reason (the Mini App is off); only these two details mean
+      // Telegram was asked and still shows the wrong button.
+      this.appliedButNotShown.set(
+        menu?.state === 'TODO' && (menu.detail === 'NOT_APPLIED' || menu.detail === 'STALE_BUTTON'),
+      );
     } catch (error) {
       this.applyError.set(this.describe(error));
     } finally {

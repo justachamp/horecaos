@@ -380,6 +380,66 @@ class TelegramBotLandingTests {
     }
 
     @Test
+    @DisplayName(
+            "a chat that holds a Mini App button is put back to Telegram's default once the Mini App is switched off")
+    void aMiniAppSwitchedOffTakesTheChatsButtonOff() {
+        seedBot(brandA);
+        seedStorefront(brandA, "shop.example.uz", true);
+        configureChannel(brandA, true, Map.of("en", "Hello"), Map.of("en", "Order"), false);
+        deliver(bareStart(5030L, "en"));
+        assertThat(bot.menuButtonFor(5030L)).containsEntry("type", "web_app");
+
+        jdbc.sql("UPDATE tenant.telegram_channel_settings SET mini_app_enabled = false WHERE tenant_id = :t")
+                .param("t", tenant)
+                .update();
+        deliver(bareStart(5030L, "en"));
+
+        assertThat(bot.menuButtonFor(5030L))
+                .as("the button that opened the storefront no longer does")
+                .isEqualTo(Map.of("type", "default"));
+        assertThat(bot.messagesSentTo(5030L)).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("a storefront address that stops being verified takes the chat's Mini App button off the next time")
+    void aLapsedAddressTakesTheChatsButtonOff() {
+        seedBot(brandA);
+        seedStorefront(brandA, "shop.example.uz", true);
+        configureChannel(brandA, true, Map.of("en", "Hello"), Map.of("en", "Order"), false);
+        deliver(bareStart(5031L, "en"));
+        jdbc.sql("UPDATE tenant.channel_hostnames SET verified = false WHERE tenant_id = :t")
+                .param("t", tenant)
+                .update();
+
+        deliver(bareStart(5031L, "en"));
+
+        assertThat(bot.menuButtonFor(5031L)).isEqualTo(Map.of("type", "default"));
+    }
+
+    @Test
+    @DisplayName(
+            "a chat that holds no Mini App button, or a bot whose Mini App was never configured, is not written to")
+    void aChatWithNoMiniAppButtonIsLeftAlone() {
+        seedBot(brandA);
+        seedStorefront(brandA, "shop.example.uz", true);
+        configureChannel(brandA, false, Map.of("en", "Hello"), Map.of(), false);
+        deliver(bareStart(5032L, "en"));
+        assertThat(bot.setChatMenuButtonCallCount())
+                .as("a Mini App that was never configured is never asked about")
+                .isZero();
+
+        jdbc.sql("UPDATE tenant.telegram_channel_settings SET mini_app_short_name = 'order' WHERE tenant_id = :t")
+                .param("t", tenant)
+                .update();
+        deliver(bareStart(5033L, "en"));
+
+        assertThat(bot.menuButtonFor(5033L)).isNull();
+        assertThat(bot.setChatMenuButtonCallCount())
+                .as("the chat holds nothing to take off, so nothing is written")
+                .isZero();
+    }
+
+    @Test
     @DisplayName("a running welcome flow keeps the conversation, and the channel's welcome is not sent on top of it")
     void aRunningFlowIsNotGreetedTwice() {
         seedBot(brandA);
