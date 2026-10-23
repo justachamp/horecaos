@@ -956,6 +956,56 @@ class FiscalEvidenceEndpointTests {
 
     @Test
     @DisplayName(
+            "an amendment filed after more answered ones than a batch holds is still found: the pass pages through its window")
+    void aNewAmendmentIsFoundBehindMoreAnsweredOnesThanABatchHolds() throws Exception {
+        UUID first = seedOrder("E-808");
+        UUID second = seedOrder("E-809");
+        UUID firstDocument = issuedClickDocument(first, ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        UUID secondDocument = issuedClickDocument(second, ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        amendedAt(first, 2, NOW.plus(Duration.ofHours(1)), true);
+        amendedAt(second, 2, NOW.plus(Duration.ofHours(2)), true);
+        assertThat(amendmentCorrections.openRequests(2)).isEqualTo(2);
+
+        // Another order is amended later. The two before it are answered and stay in the window for thirty days;
+        // a pass that re-read only the oldest two flagged revisions would never get past them.
+        UUID third = seedOrder("E-810");
+        UUID thirdDocument = issuedClickDocument(third, ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        amendedAt(third, 2, NOW.plus(Duration.ofHours(3)), true);
+
+        assertThat(amendmentCorrections.openRequests(2))
+                .as("the batch is the size of a page, not of the pass")
+                .isEqualTo(1);
+        assertThat(documentStatus(thirdDocument)).isEqualTo("CORRECTION_REQUESTED");
+        assertThat(documentStatus(firstDocument)).isEqualTo("CORRECTION_REQUESTED");
+        assertThat(documentStatus(secondDocument)).isEqualTo("CORRECTION_REQUESTED");
+        assertThat(amendmentCorrections.openRequests(2)).isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "the latest revision of an order speaks for the earlier ones even when a page boundary falls between them")
+    void theLatestRevisionAsksEvenAcrossPages() throws Exception {
+        UUID amendedTwice = seedOrder("E-811");
+        UUID amendedOnce = seedOrder("E-812");
+        UUID twiceDocument = issuedClickDocument(amendedTwice, ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        issuedClickDocument(amendedOnce, ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        amendedAt(amendedTwice, 2, NOW.plus(Duration.ofHours(1)), true);
+        amendedAt(amendedOnce, 2, NOW.plus(Duration.ofHours(2)), true);
+        amendedAt(amendedTwice, 3, NOW.plus(Duration.ofHours(3)), true);
+
+        // One revision per page: the order's two revisions are two pages apart.
+        assertThat(amendmentCorrections.openRequests(1)).isEqualTo(2);
+
+        assertThat(jdbc.sql("SELECT source_revision FROM fiscal.fiscal_correction_requests WHERE document_id = :d")
+                        .param("d", twiceDocument)
+                        .query(Integer.class)
+                        .single())
+                .as("one request for the order, asked on its latest revision")
+                .isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName(
             "the whole loop (ADR 0166 exit criteria): an amendment asks, the sweep repeats harmlessly, a second person approves, the agent's reference is attached, and the original reads CORRECTED beside its linked correction")
     void theWholeLoopFromAnAmendmentToAnAttachedReference() throws Exception {
         UUID orderId = seedOrder("E-807");

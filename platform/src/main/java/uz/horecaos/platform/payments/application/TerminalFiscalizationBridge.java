@@ -141,7 +141,8 @@ public class TerminalFiscalizationBridge implements TerminalReceiptIssuer {
                     "Fiscal document {} for order {} was not sent: it holds no seller snapshot",
                     document.id(),
                     document.orderId());
-            return Outcome.REJECTED;
+            // Nothing was asked of the terminal: its refusal would be REJECTED, and would be recorded as one.
+            return Outcome.NOT_SENDABLE;
         }
         List<FiscalReceiptLine> built;
         switch (lines.build(ReceiptLineBuilder.Subject.of(document), null)) {
@@ -155,7 +156,7 @@ public class TerminalFiscalizationBridge implements TerminalReceiptIssuer {
                         document.id(),
                         document.orderId(),
                         unprojectable.reason());
-                return Outcome.REJECTED;
+                return Outcome.NOT_SENDABLE;
             }
             case ReceiptLineBuilder.Result.Blocked blocked -> {
                 return switch (blocked.obstacle()) {

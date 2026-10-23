@@ -3,6 +3,7 @@ package uz.horecaos.platform.ordering.api;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The read the fiscal module needs to learn that an order was amended after its receipt was filed (ADR 0039,
@@ -20,13 +21,26 @@ import java.util.UUID;
 public interface FiscalCorrectionRevisionFeed {
 
     /**
-     * Revisions created at or after {@code since} whose command declares a fiscal consequence, oldest first.
+     * One page of the revisions created at or after {@code since} whose command declares a fiscal consequence, in
+     * the order {@code created_at}, tenant, order, revision.
      *
      * <p>Only an amendment's revision is ever flagged: revision 1, the checkout snapshot, is not.
      *
+     * <p><strong>A keyset page, because the flag is never cleared.</strong> A flagged revision stays flagged for
+     * ever, so the oldest {@code limit} of a window are the same rows on every pass; a feed that only had a limit
+     * would show the reader those and never the newer ones behind them. The reader asks for the next page with the
+     * last revision it was given and stops at the first page that is not full.
+     *
+     * @param after the last revision of the previous page, or null for the first page; the page starts strictly
+     *     after it
      * @param limit the most revisions to return
      */
-    List<FlaggedRevision> flaggedSince(Instant since, int limit);
+    List<FlaggedRevision> flaggedSince(Instant since, @Nullable FlaggedRevision after, int limit);
+
+    /** The first page of {@link #flaggedSince(Instant, FlaggedRevision, int)}. */
+    default List<FlaggedRevision> flaggedSince(Instant since, int limit) {
+        return flaggedSince(since, null, limit);
+    }
 
     /**
      * @param revision the order's revision number, at least 2

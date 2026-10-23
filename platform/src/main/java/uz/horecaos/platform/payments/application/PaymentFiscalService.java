@@ -189,6 +189,30 @@ public class PaymentFiscalService {
     }
 
     /**
+     * Records the receipt the provider already holds for this document, if it holds one.
+     *
+     * <p>The read-back made on its own, for the caller that cannot submit: the receipt could not be rebuilt, and
+     * the question is whether the earlier request, whose reply was lost, in fact filed it. Nothing is sent. When
+     * the provider answers with a receipt it is recorded exactly as a submission's answer is, so the document
+     * leaves {@code SUBMITTED} or {@code BLOCKED} for {@code ISSUED} and carries the evidence.
+     *
+     * @return true when the provider held the receipt and it is now recorded
+     */
+    @Transactional
+    public boolean recordReceiptAlreadyHeld(FiscalDocument document, ProviderBinding binding, Instant now) {
+        FiscalReceiptPort port = receiptPorts.get(binding.providerType());
+        if (port == null || !binding.supportsPartnerFiscalization()) {
+            return false;
+        }
+        Optional<FiscalSubmission> held = port.heldReceipt(document, binding);
+        if (held.isEmpty() || held.get().status() != FiscalStatus.ISSUED) {
+            return false;
+        }
+        apply(document, binding, held.get(), now);
+        return true;
+    }
+
+    /**
      * Records what the tenant's own fiscal terminal answered (ADR 0166 «Providers»): the same bookkeeping as a
      * provider's answer, with no merchant account to name and no provider liveness watermark to move.
      *

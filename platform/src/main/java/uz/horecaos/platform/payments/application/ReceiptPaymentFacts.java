@@ -33,6 +33,11 @@ public interface ReceiptPaymentFacts {
      */
     OptionalLong providerAmountMinor(UUID tenantId, @Nullable UUID paymentIntentId);
 
-    /** The points tender of the order's settlement that actually settled, or zero when there is none. */
+    /**
+     * The points tender of the order's settlement that is held or has settled, or zero when there is none.
+     *
+     * <p>Held counts: Payme's lines are built at presentation, before the money arrives, when the balance tender is
+     * still reserved. A tender that was released, failed or reversed went back to the customer and is not counted.
+     */
     long pointsRedeemedMinor(UUID tenantId, UUID orderId);
 }

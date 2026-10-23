@@ -33,14 +33,17 @@ import uz.horecaos.platform.ordering.api.FiscalCorrectionRevisionFeed.FlaggedRev
  * several flagged revisions of one order, the latest asks, and it covers the earlier ones.
  *
  * <p><strong>Polling, with the lookback as the only state.</strong> The flag cannot be cleared by fiscal (the
- * table is ordering's and append-only), so the pass re-reads the flagged revisions of a window and every
- * decision is idempotent: a revision already answered by a request on a document is skipped by the request
- * itself ({@code source_revision}, V0686).
+ * table is ordering's and append-only), so the pass re-reads the flagged revisions of a window, all of them and
+ * not the oldest few, and every decision is idempotent: a revision already answered by a request on a document
+ * is skipped by the request itself ({@code source_revision}, V0686).
  */
 @Service
 public class FiscalAmendmentCorrections {
 
     private static final Logger log = LoggerFactory.getLogger(FiscalAmendmentCorrections.class);
+
+    /** A ceiling on one pass's reading, so a feed that misbehaves cannot hold the sweeper for ever. */
+    private static final int MAX_PAGES = 10_000;
 
     private final FiscalCorrectionRevisionFeed feed;
     private final JdbcFiscalLifecycleStore documents;
@@ -62,20 +65,21 @@ public class FiscalAmendmentCorrections {
     }
 
     /**
-     * One pass.
+     * One pass, over the whole lookback window.
      *
+     * <p><strong>The window is drained, a page at a time.</strong> The flag is never cleared, so every pass reads
+     * the same old revisions again; a pass that took only the oldest {@code pageSize} of them looked at the first few
+     * days of the window and stopped, and an order amended after that was not asked about until the older ones aged
+     * out, weeks later and after the tenant's tax filing. The pages are read to the first one that is not full, the
+     * latest revision of each order is kept (it speaks for the earlier ones, wherever a page boundary fell), and only
+     * then are the documents looked at. The cost is the window's flagged orders, one read of their documents each,
+     * every interval.
+     *
+     * @param pageSize how many flagged revisions the feed is asked for at a time; it bounds a read, not the pass
      * @return how many correction requests this pass opened
      */
-    public int openRequests(int batchSize) {
-        List<FlaggedRevision> flagged = feed.flaggedSince(clock.instant().minus(lookback), batchSize);
-
-        Map<OrderKey, FlaggedRevision> latest = new LinkedHashMap<>();
-        for (FlaggedRevision revision : flagged) {
-            latest.merge(
-                    new OrderKey(revision.tenantId(), revision.orderId()),
-                    revision,
-                    (earlier, later) -> later.revision() >= earlier.revision() ? later : earlier);
-        }
+    public int openRequests(int pageSize) {
+        Map<OrderKey, FlaggedRevision> latest = latestFlaggedRevisions(Math.max(1, pageSize));
 
         int opened = 0;
         for (FlaggedRevision revision : latest.values()) {
@@ -96,6 +100,32 @@ public class FiscalAmendmentCorrections {
             }
         }
         return opened;
+    }
+
+    /** The latest flagged revision of every order in the window, read page by page to the end of it. */
+    private Map<OrderKey, FlaggedRevision> latestFlaggedRevisions(int pageSize) {
+        Instant since = clock.instant().minus(lookback);
+        Map<OrderKey, FlaggedRevision> latest = new LinkedHashMap<>();
+        FlaggedRevision after = null;
+        for (int page = 0; page < MAX_PAGES; page++) {
+            List<FlaggedRevision> flagged = feed.flaggedSince(since, after, pageSize);
+            for (FlaggedRevision revision : flagged) {
+                latest.merge(
+                        new OrderKey(revision.tenantId(), revision.orderId()),
+                        revision,
+                        (earlier, later) -> later.revision() >= earlier.revision() ? later : earlier);
+            }
+            if (flagged.size() < pageSize) {
+                return latest;
+            }
+            after = flagged.getLast();
+        }
+        // Not reachable with a window of weeks: it takes more than MAX_PAGES full pages. Loud, because what is cut
+        // off is the newest amendments, and a pass that silently stopped here would be the defect this loop fixes.
+        log.error(
+                "The amendment window holds more than {} pages of flagged revisions; the newest were not read this pass",
+                MAX_PAGES);
+        return latest;
     }
 
     /** An issued sale whose receipt left before the revision was appended. */

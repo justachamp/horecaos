@@ -39,6 +39,24 @@
   `fiscal.synthetic_lines_allowed`, `SyntheticLineGate` and the 409 `FISCAL_LINES_NOT_BUILT` are gone;
   `fiscal.evidence_retention_years` (seven years, provisional) is declared in `FiscalEvidencePolicies`.
   V0685 snapshots the `tender_id` and `business_date` on the document at opening, and the evidence read returns both (the card draws the day).
+  Correction, 2026-10-23: the tender half of that sentence was not true outside fixtures. The opener derived `tender_id` from
+  `payments.tenders.payment_intent_id`, which no code writes (`OrderSettlementService.plan` inserts the tender with no intent and
+  `PaymentIntentService.createIntent` runs after it), so every real document kept NULL and the V0685 backfill matched no row.
+  `JdbcFiscalLifecycleStore.ordersOwingADocument` now takes the tender that names the intent when one does, and otherwise the
+  order's one money tender; an order with two money legs and no link to tell them apart keeps none
+  (`FiscalObligationTests.theTenderIsFoundThroughTheSettlementWhenNothingLinksItToTheIntent`). Documents opened before the
+  correction keep NULL and no backfill migration was added. The tender-to-intent link is still not written, deliberately:
+  `OrderSettlementService.restateTotal` and `replanMoneyLeg` refuse a money tender that names an intent, so writing it at
+  checkout would refuse every catch-weight restatement and every payment-method change.
+  Also 2026-10-23: a retry of a document that is not `PENDING` (a request may have left) asks the provider what it
+  already holds before it rebuilds the lines (`FiscalReceiptPort.heldReceipt`, Click's `ofd_data`), so an order that can no
+  longer be built does not hide a receipt Click filed; and a document blocked as `PROVIDER_REPORT_OVERDUE` keeps that reason
+  when a retry cannot rebuild its receipt, rather than being restated as «nothing was sent».
+  The two exits that send nothing and are neither a builder obstacle nor an answer (a document with no seller snapshot, and a
+  marked good through a path that cannot carry a code, which a terminal never can yet) return `NOT_SENDABLE` and are blocked at
+  once as `NO_FISCAL_PATH`; they used to return `REJECTED`, which left the claimed document `SUBMITTED` to be blocked an hour
+  later as «the provider did not report» about a provider or terminal nobody had asked. No vendor adapter for `FiscalTerminalPort`
+  is wired outside the local profile, so the terminal half cannot be reached in a deployed profile yet; the provider half is the same defect on a path that is wired.
   `FiscalNodeFacts.requiresMarkingCapablePayment` is called from `CartPaymentOptions` and
   `CheckoutEligibilityGuard` (while `feature.marked_goods` is on for the tenant), so Payme is neither
   offered nor accepted for a basket holding a marked node, and `OrderAmendmentService` refuses

@@ -77,6 +77,10 @@ public class FiscalObligationService {
 
     private static final Logger log = LoggerFactory.getLogger(FiscalObligationService.class);
 
+    /** What a document that cannot be sent as it stands says; also the retry's sentence for the same outcome. */
+    static final String NOT_SENDABLE_NOTE =
+            "the receipt cannot be sent as it stands (no seller snapshot, or goods the issuing path cannot carry); nothing was sent";
+
     private final JdbcFiscalLifecycleStore documents;
     private final LegalEntityDirectory sellers;
     private final FiscalReportingPolicyService policies;
@@ -464,6 +468,16 @@ public class FiscalObligationService {
                         now);
                 log.warn(
                         "Fiscal document {} for order {} is BLOCKED: a marked line is short of scanned units.",
+                        claim.documentId(),
+                        claim.orderId());
+            }
+            case NOT_SENDABLE -> {
+                // Nothing was built and nothing was sent, so the claim describes a request that does not exist. Left
+                // SUBMITTED it would be blocked an hour later as «the provider did not report».
+                documents.blockUnsent(
+                        claim.tenantId(), claim.documentId(), FiscalReasonCode.NO_FISCAL_PATH, NOT_SENDABLE_NOTE, now);
+                log.warn(
+                        "Fiscal document {} for order {} is BLOCKED: it cannot be sent as it stands.",
                         claim.documentId(),
                         claim.orderId());
             }

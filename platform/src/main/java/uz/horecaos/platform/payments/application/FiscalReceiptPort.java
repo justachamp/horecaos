@@ -1,5 +1,6 @@
 package uz.horecaos.platform.payments.application;
 
+import java.util.Optional;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.domain.FiscalSubmission;
 import uz.horecaos.platform.payments.domain.ProviderBinding;
@@ -57,5 +58,21 @@ public interface FiscalReceiptPort {
      */
     default boolean takesLinesWithTheCheckout() {
         return false;
+    }
+
+    /**
+     * The receipt the provider already holds for this document, asked without sending anything (ADR 0038).
+     *
+     * <p>A document that was asked about once may have been filed whatever the reply said: Click's {@code
+     * submit_items} is not documented as idempotent, and its answer can be lost after the receipt exists. This is
+     * the read that settles it, the one {@link #submit} makes before a resubmission, offered to the caller that has
+     * to make it <em>before</em> it builds the lines a submission needs, because an order that can no longer be
+     * built (amended, refunded, reclassified since) must not hide a receipt the tax authority already has.
+     *
+     * @return an {@code ISSUED} submission carrying the evidence when the provider holds a receipt; empty when it
+     *     holds none yet, cannot be asked, or this provider has no such read (the default)
+     */
+    default Optional<FiscalSubmission> heldReceipt(FiscalDocument document, ProviderBinding binding) {
+        return Optional.empty();
     }
 }

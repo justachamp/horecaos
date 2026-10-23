@@ -282,6 +282,13 @@ public class JdbcFiscalLifecycleStore {
      * of some status, including the ones that can only be blocked. An order that
      * kept reappearing would be the same defect as a sweep that never runs.
      *
+     * <p><strong>The tender is found through the settlement.</strong> {@code tender_id} was derived from
+     * {@code payments.tenders.payment_intent_id}, which nothing writes: the settlement plans its tenders with no
+     * intent and the intent is created after it, so every document the opener wrote kept NULL and the evidence could
+     * not link a tender to its receipt. A tender that does name the intent still wins; otherwise the order's one
+     * money tender is the leg the sale covers, and an order with two money legs and no link to tell them apart keeps
+     * none rather than a guess.
+     *
      * @param closedSince a floor on {@code closed_at}. An order that completed
      *                    before the fiscal module existed is not this sweep's to
      *                    open, and without the floor every run scans the whole
@@ -295,12 +302,24 @@ public class JdbcFiscalLifecycleStore {
                        i.id AS payment_intent_id, i.tender, i.provider_type,
                        i.status AS intent_status,
                        -- The money tender this document will cover (ADR 0038, ADR 0166 Decision 2): the
-                       -- one tender that names the intent, and none when that is not unambiguous.
-                       (SELECT (array_agg(t.id))[1]
-                          FROM payments.tenders t
-                         WHERE t.tenant_id = o.tenant_id AND t.payment_intent_id = i.id
-                           AND NOT t.settles_from_balance
-                        HAVING count(*) = 1) AS tender_id
+                       -- one tender that names the intent when a writer has linked them, else the one money
+                       -- tender of the order's settlement, and none when either is not unambiguous.
+                       -- Nothing in production sets payments.tenders.payment_intent_id (the tender is
+                       -- inserted by OrderSettlementService.plan with none, and the intent is created after
+                       -- it), so the first branch alone left tender_id NULL on every real document.
+                       COALESCE(
+                         (SELECT (array_agg(t.id))[1]
+                            FROM payments.tenders t
+                           WHERE t.tenant_id = o.tenant_id AND t.payment_intent_id = i.id
+                             AND NOT t.settles_from_balance
+                          HAVING count(*) = 1),
+                         (SELECT (array_agg(t.id))[1]
+                            FROM payments.order_settlements s
+                            JOIN payments.tenders t
+                              ON t.tenant_id = s.tenant_id AND t.settlement_id = s.id
+                           WHERE s.tenant_id = o.tenant_id AND s.order_id = o.id
+                             AND NOT t.settles_from_balance
+                          HAVING count(*) = 1)) AS tender_id
                 FROM ordering.orders o
                 LEFT JOIN payments.payment_intents i
                        ON i.tenant_id = o.tenant_id AND i.order_id = o.id

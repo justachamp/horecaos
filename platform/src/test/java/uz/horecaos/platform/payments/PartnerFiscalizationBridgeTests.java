@@ -700,6 +700,77 @@ class PartnerFiscalizationBridgeTests {
     }
 
     // -----------------------------------------------------------------------
+    // A request that may have left is looked for before the receipt is rebuilt (ADR 0166 Decision 6, ADR 0038)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+            "a document blocked as overdue is read back before its receipt is rebuilt: what Click already holds is found even when the order can no longer be built")
+    void aReceiptClickHoldsIsFoundBeforeTheLinesAreRebuilt() {
+        seedClickBinding();
+        UUID intentId = seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY);
+        UUID documentId = seedPendingDocument(intentId);
+        capturedClickAttempt(intentId, "777");
+        blockedAsOverdue(documentId);
+        // The tenant edited a classification after the request left: the builder now refuses this order.
+        world.dishWithCheeseAndDeliveryFee();
+        world.classes.remove(World.CHEESE_OPTION);
+        ScriptedOfdData ofd =
+                new ScriptedOfdData("https://ofd.soliq.uz/check?t=EZ20221028&r=1234&c=20221028171340&s=SIGN");
+
+        Outcome outcome = clickBridge(ofd).retry(TENANT, documentId, "idem-overdue-held");
+
+        assertThat(outcome)
+                .as("Click filed the receipt; the reply that would have said so was lost. Restating this as "
+                        + "'nothing was sent' leaves the tax authority holding a receipt the platform never records")
+                .isEqualTo(Outcome.ALREADY_ISSUED);
+        FiscalDocument after = fiscalService.find(TENANT, documentId).orElseThrow();
+        assertThat(after.status()).isEqualTo(FiscalStatus.ISSUED);
+        assertThat(after.evidence()).isNotNull();
+        assertThat(ofd.reads).as("one read-back, and nothing was submitted").isEqualTo(1);
+        assertThat(ofd.submits).isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "when Click holds nothing the obstacle is reported as before: BLOCKED_CLASSIFICATION, nothing submitted")
+    void aDocumentClickHoldsNothingForIsStillBlockedByTheObstacle() {
+        seedClickBinding();
+        UUID intentId = seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY);
+        UUID documentId = seedPendingDocument(intentId);
+        capturedClickAttempt(intentId, "777");
+        blockedAsOverdue(documentId);
+        world.dishWithCheeseAndDeliveryFee();
+        world.classes.remove(World.CHEESE_OPTION);
+        ScriptedOfdData ofd = new ScriptedOfdData(null);
+
+        Outcome outcome = clickBridge(ofd).retry(TENANT, documentId, "idem-overdue-empty");
+
+        assertThat(outcome).isEqualTo(Outcome.BLOCKED_CLASSIFICATION);
+        assertThat(ofd.reads).isEqualTo(1);
+        assertThat(ofd.submits).isZero();
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .isEqualTo(FiscalStatus.BLOCKED);
+    }
+
+    @Test
+    @DisplayName("a document that was never sent is not read back: the provider cannot hold what it was never asked")
+    void aDocumentNeverSentIsNotReadBack() {
+        seedClickBinding();
+        UUID intentId = seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY);
+        UUID documentId = seedPendingDocument(intentId);
+        capturedClickAttempt(intentId, "777");
+        world.dishWithCheeseAndDeliveryFee();
+        world.classes.remove(World.CHEESE_OPTION);
+        ScriptedOfdData ofd = new ScriptedOfdData(null);
+
+        Outcome outcome = clickBridge(ofd).retry(TENANT, documentId, "idem-pending");
+
+        assertThat(outcome).isEqualTo(Outcome.BLOCKED_CLASSIFICATION);
+        assertThat(ofd.reads).isZero();
+    }
+
+    // -----------------------------------------------------------------------
     // Payme's silence: a missing SetFiscalData is the documented normal case
     // -----------------------------------------------------------------------
 
@@ -778,7 +849,9 @@ class PartnerFiscalizationBridgeTests {
 
         Outcome outcome = bridge.retry(TENANT, documentId, "idem-marked-3");
 
-        assertThat(outcome).isEqualTo(Outcome.REJECTED);
+        assertThat(outcome)
+                .as("nothing was asked of Payme: not a refusal by it, which would leave the claimed document SUBMITTED")
+                .isEqualTo(Outcome.NOT_SENDABLE);
         assertThat(fiscalService.find(TENANT, documentId).orElseThrow().lines())
                 .as("no synthetic line was written for the marked good either")
                 .isEmpty();
@@ -856,7 +929,7 @@ class PartnerFiscalizationBridgeTests {
 
         Outcome outcome = markedBridge(click, completeVodka(2)).retry(TENANT, documentId, "idem-no-snapshot");
 
-        assertThat(outcome).isEqualTo(Outcome.REJECTED);
+        assertThat(outcome).isEqualTo(Outcome.NOT_SENDABLE);
         assertThat(click.sent)
                 .as("a real receipt with real codes is never filed under a TIN of zeros")
                 .isEmpty();
@@ -890,7 +963,7 @@ class PartnerFiscalizationBridgeTests {
 
         Outcome outcome = capturingBridge(click).retry(TENANT, documentId, "idem-ordinary-no-snapshot");
 
-        assertThat(outcome).isEqualTo(Outcome.REJECTED);
+        assertThat(outcome).isEqualTo(Outcome.NOT_SENDABLE);
         assertThat(click.sent).isEmpty();
     }
 
@@ -1414,6 +1487,43 @@ class PartnerFiscalizationBridgeTests {
     }
 
     @Test
+    @DisplayName(
+            "a cash document that holds no seller snapshot is not issued under zeros, and is not reported as the terminal's refusal")
+    void aCashDocumentWithNoSellerSnapshotIsNotSendable() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        withoutSellerSnapshot(documentId);
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+
+        assertThat(terminalBridge(terminal, true).retry(TENANT, documentId, "idem-no-seller"))
+                .as("REJECTED would say the terminal refused, and leave the claimed document SUBMITTED to be "
+                        + "blocked an hour later as 'the provider did not report' about a terminal nobody asked")
+                .isEqualTo(Outcome.NOT_SENDABLE);
+
+        assertThat(terminal.issueCalls()).isZero();
+        assertThat(sentRequestsOf(documentId)).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "a marked good paid in cash at a branch with a terminal is not sendable: no terminal carries a code yet")
+    void aMarkedGoodThroughATerminalIsNotSendable() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        world.marks = completeVodka(1);
+        world.orderFromMarks(world.marks);
+        world.classes.put(
+                VODKA_VARIANT,
+                new FiscalClassificationFacts("22030000000000000", "123456", 796, "Vodka", "4600000000015", true));
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+
+        assertThat(terminalBridge(terminal, true).retry(TENANT, documentId, "idem-marked-terminal"))
+                .isEqualTo(Outcome.NOT_SENDABLE);
+
+        assertThat(terminal.issueCalls()).isZero();
+    }
+
+    @Test
     @DisplayName("a refusal from the terminal fails the document with the refusal recorded")
     void aRefusalFailsTheDocument() {
         seedLegalEntity(CLICK_ENTITY, "CASHENT");
@@ -1631,6 +1741,95 @@ class PartnerFiscalizationBridgeTests {
         public PaymentProviderType providerType() {
             return PaymentProviderType.CLICK;
         }
+    }
+
+    /** Click's {@code ofd_data} as a script: it holds a receipt at {@code qrCodeUrl}, or none when that is null. */
+    private static final class ScriptedOfdData implements MerchantApiTransport {
+
+        private final @Nullable String qrCodeUrl;
+        int reads;
+        int submits;
+
+        ScriptedOfdData(@Nullable String qrCodeUrl) {
+            this.qrCodeUrl = qrCodeUrl;
+        }
+
+        @Override
+        public uz.horecaos.platform.integration.api.provider.ProviderOutcome exchange(MerchantApiCall call) {
+            if ("ofd.read".equals(call.operation())) {
+                reads++;
+                return uz.horecaos.platform.integration.api.provider.ProviderOutcome.success(
+                        qrCodeUrl == null ? Map.of("error_code", 0) : Map.of("error_code", 0, "qrCodeURL", qrCodeUrl),
+                        null);
+            }
+            if (call.mutating()) {
+                submits++;
+            }
+            throw new AssertionError("this test only reads ofd_data: " + call.operation());
+        }
+    }
+
+    /** The bridge over the real Click adapter, whose transport is {@code ofd}. */
+    private PartnerFiscalizationBridge clickBridge(ScriptedOfdData ofd) {
+        ClickFiscalAdapter click =
+                new ClickFiscalAdapter(new ClickMerchantApi(ofd, CLOCK), new JdbcPaymentAttemptStore(jdbc), CLOCK);
+        PaymentFiscalService service = new PaymentFiscalService(
+                documents, List.of(click), event -> {}, new RecordingProviderActivityRecorder());
+        fiscalService = service;
+        return new PartnerFiscalizationBridge(service, bindings, world.builder(service), CLOCK);
+    }
+
+    /** A captured Click attempt whose payment id is stored, so the adapter does not have to resolve it. */
+    private void capturedClickAttempt(UUID intentId, String externalPaymentId) {
+        UUID merchantBinding = jdbc.sql("SELECT id FROM payments.merchant_bindings WHERE provider_type = 'CLICK'")
+                .query(UUID.class)
+                .single();
+        UUID attemptId = UUID.randomUUID();
+        new JdbcPaymentAttemptStore(jdbc)
+                .insert(new PaymentAttempt(
+                        attemptId,
+                        TENANT,
+                        intentId,
+                        PaymentProviderType.CLICK,
+                        merchantBinding,
+                        "mtid-" + UUID.randomUUID(),
+                        java.time.LocalDate.of(2026, 8, 24),
+                        null,
+                        null,
+                        new SomAmount(15_000L, "UZS"),
+                        PaymentAttemptStatus.INITIATED,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        1,
+                        CLOCK.instant(),
+                        null));
+        jdbc.sql("""
+                UPDATE payments.payment_attempts
+                   SET status = 'CAPTURED', external_payment_id = :payment, settled_at = :now
+                 WHERE id = :id
+                """)
+                .param("payment", externalPaymentId)
+                .param("now", CLOCK.instant().atOffset(ZoneOffset.UTC))
+                .param("id", attemptId)
+                .update();
+    }
+
+    /** The state the reporting sweep leaves a document in when the provider never reported: asked, and overdue. */
+    private static void blockedAsOverdue(UUID documentId) {
+        jdbc.sql("""
+                UPDATE fiscal.fiscal_documents
+                   SET status = 'BLOCKED', reason_code = 'PROVIDER_REPORT_OVERDUE',
+                       reason_note = 'the provider did not report', submitted_at = :at, blocked_at = :now
+                 WHERE id = :id
+                """)
+                .param("at", CLOCK.instant().minusSeconds(7_200).atOffset(ZoneOffset.UTC))
+                .param("now", CLOCK.instant().atOffset(ZoneOffset.UTC))
+                .param("id", documentId)
+                .update();
     }
 
     private PartnerFiscalizationBridge bridge() {
