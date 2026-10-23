@@ -587,7 +587,11 @@ class WorkflowWiringTests(unittest.TestCase):
             with self.subTest(app=app):
                 scripts = self.scripts(app)
                 self.assertTrue(scripts["lint"].startswith("eslint "), scripts["lint"])
-                self.assertEqual("node ../tools/lint-config.test.mjs", scripts["lint:rules"])
+                # The config check comes first and alone is what fails when the config lost its rules; an app
+                # may add checks after it (the glyph audit of the typeface, ADR 0149), never put one before.
+                self.assertTrue(
+                    scripts["lint:rules"].startswith("node ../tools/lint-config.test.mjs"), scripts["lint:rules"]
+                )
                 self.assertTrue((REPO / "frontend" / app / "eslint.config.mjs").is_file())
 
     def test_ci_no_longer_runs_the_changed_files_check(self) -> None:

@@ -1864,7 +1864,10 @@ export class ProductEditorPage implements OnInit {
     readonly labels: Readonly<Record<string, string>>;
   }): string {
     // The map is keyed by the platform's tags (ADR 0149): the editor holds catalog codes.
-    return presetLabelFor({ labels: preset.labels }, this.registry.tagOfCatalogCode(this.editingLocale()));
+    return presetLabelFor(
+      { labels: preset.labels },
+      this.registry.tagOfCatalogCode(this.editingLocale()),
+    );
   }
 
   /** Attaches the preset the picker's `<select>` currently names, or re-sorts it if already attached — the same call. */

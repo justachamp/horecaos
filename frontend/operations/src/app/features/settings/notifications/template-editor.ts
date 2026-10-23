@@ -58,12 +58,17 @@ function sampleProductList(showItemPrices: boolean): string {
   return showItemPrices ? '2x Lavash (50000 UZS), 1x Cola (8000 UZS)' : '2x Lavash, 1x Cola';
 }
 
-/** What a prefilled wording needs to carry: a language, its text, and the version's price switch. */
+/**
+ * What a prefilled wording needs to carry: a language, its text, the version's price switch, and for a push
+ * its cover and target (ADR 0182, D14).
+ */
 export interface PrefillWording {
   readonly locale: string;
   readonly body: string;
   readonly subject: string | null;
   readonly showItemPrices?: boolean;
+  readonly coverAssetId?: string | null;
+  readonly targetPath?: string | null;
 }
 
 /** Every placeholder a piece of text names, in first-appearance order. */

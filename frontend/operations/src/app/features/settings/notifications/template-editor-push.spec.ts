@@ -166,6 +166,7 @@ describe('TemplateEditor for a push wording (ADR 0182, D14)', () => {
       providerReviewReference: null,
       providerReviewNote: null,
       providerReviewUpdatedAt: null,
+      showItemPrices: false,
       coverAssetId: 'asset-3',
       targetPath: '/menu',
     };

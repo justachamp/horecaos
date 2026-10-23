@@ -118,7 +118,11 @@ const PLATFORM_REASON_KEYS: Readonly<Record<string, MessageKey>> = {
 
 /** The words for a correction reason; null for a reason this client does not know, which the caller shows raw. */
 export function correctionReasonKey(reason: string): MessageKey | null {
-  return (REASON_KEYS as Readonly<Record<string, MessageKey>>)[reason] ?? PLATFORM_REASON_KEYS[reason] ?? null;
+  return (
+    (REASON_KEYS as Readonly<Record<string, MessageKey>>)[reason] ??
+    PLATFORM_REASON_KEYS[reason] ??
+    null
+  );
 }
 
 /** The tender-and-document pair the payments page links with: the document a tender's receipt is. */

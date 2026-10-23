@@ -125,6 +125,7 @@ export const NO_CONSOLE_SCREEN: Readonly<Record<string, string>> = {
   'workforce.roster.match_window_minutes': '9/X.2',
   'loyalty.pos_sync.max_auto_credit_minor': '6.3b',
   'loyalty.pos_sync.max_binding_credit_minor_per_day': '6.3b',
+  'loyalty.pos_sync.require_consent': '6.3b',
   'loyalty.pos.till_keeps_balance': '6.3b',
 };
 

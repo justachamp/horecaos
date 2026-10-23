@@ -32,7 +32,14 @@ import {
 export type PolicyResolutionScope = 'TENANT' | 'BRAND' | 'LOCATION';
 
 type PolicyFieldKind =
-  'shiftEnforcement' | 'money' | 'count' | 'boolean' | 'revealTiming' | 'gps' | 'runPayMode' | 'gate';
+  | 'shiftEnforcement'
+  | 'money'
+  | 'count'
+  | 'boolean'
+  | 'revealTiming'
+  | 'gps'
+  | 'runPayMode'
+  | 'gate';
 
 interface PolicyFieldSpec {
   readonly key: string;

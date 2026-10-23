@@ -892,9 +892,6 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.notifications.field.templateKey': 'Событие',
   'settings.notifications.field.notificationClass': 'Класс',
   'settings.notifications.field.channel': 'Канал доставки',
-  'settings.notifications.field.consentPurpose': 'Цель согласия',
-  'settings.notifications.field.consentPurpose.hint':
-    'Согласие, которое клиент дал на получение этого сообщения. Кампания уходит только тем, кто согласился на это по этому каналу; MARKETING_PROMOTIONS есть у каждого арендатора.',
   'settings.notifications.field.status': 'Активен',
   'settings.notifications.field.activeVersion': 'Версия',
   'settings.notifications.field.channel.hint':

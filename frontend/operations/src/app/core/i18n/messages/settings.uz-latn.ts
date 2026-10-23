@@ -903,9 +903,6 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.notifications.field.templateKey': 'Hodisa',
   'settings.notifications.field.notificationClass': 'Sinf',
   'settings.notifications.field.channel': 'Yetkazish kanali',
-  'settings.notifications.field.consentPurpose': 'Rozilik maqsadi',
-  'settings.notifications.field.consentPurpose.hint':
-    'Mijoz bu xabarni olishga bergan rozilik. Kampaniya faqat shu kanalda rozilik bergan mijozlarga yuboriladi; MARKETING_PROMOTIONS har bir tenantda bor.',
   'settings.notifications.field.status': 'Faol',
   'settings.notifications.field.activeVersion': 'Versiya',
   'settings.notifications.field.channel.hint':

@@ -936,7 +936,11 @@ describe('SettingsHomePage', () => {
     type(fixture, 'minimum');
 
     expect(options(fixture).map(column)).toEqual([
-      ['Minimum order amount', 'Selling → Order policy', 'not set · default 0 · brand and above only'],
+      [
+        'Minimum order amount',
+        'Selling → Order policy',
+        'not set · default 0 · brand and above only',
+      ],
     ]);
     type(fixture, 'enforcement');
     expect(options(fixture)).toEqual([]);

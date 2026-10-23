@@ -52,7 +52,8 @@ export const settingsSearchText = localMessages<Key>({
     'key.ordering.minimum_order_amount_minor': 'Минимальная сумма заказа',
     'key.ordering.preorder_branch_resolution': 'Выбор филиала для предзаказа',
     'key.ordering.operator_promo_code_allowed': 'Промокод в заказе оператора',
-    'key.ordering.operator_callback_flag_allowed': 'Пометка «Перезвонить клиенту» в заказе оператора',
+    'key.ordering.operator_callback_flag_allowed':
+      'Пометка «Перезвонить клиенту» в заказе оператора',
     'key.ordering.operator_change_due_allowed': 'Сумма «Сдача» в заказе оператора',
     'key.ordering.auto_accept_eligible_channels': 'Каналы автоприёма',
     'key.ordering.auto_accept_min_prior_orders': 'Автоприём: нужно прошлых заказов',

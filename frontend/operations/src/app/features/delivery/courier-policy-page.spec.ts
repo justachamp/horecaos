@@ -182,9 +182,9 @@ describe('CourierPolicyPage', () => {
       policy: () => Promise.resolve({ ...POLICY, pickupHandoverGate: 'HARD' }),
     });
 
-    expect(host.querySelector('[data-testid="policy-row-pickupHandoverGate"]')?.textContent).toContain(
-      'Hard',
-    );
+    expect(
+      host.querySelector('[data-testid="policy-row-pickupHandoverGate"]')?.textContent,
+    ).toContain('Hard');
   });
 
   // Row 3.9: "renders neither policyId nor policyVersion although both are

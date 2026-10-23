@@ -888,9 +888,6 @@ export const settingsEn = {
   'settings.notifications.field.templateKey': 'Event',
   'settings.notifications.field.notificationClass': 'Class',
   'settings.notifications.field.channel': 'Delivery channel',
-  'settings.notifications.field.consentPurpose': 'Consent purpose',
-  'settings.notifications.field.consentPurpose.hint':
-    'The consent a customer gave to receive this message. A campaign sends only to customers who agreed to it on this channel; MARKETING_PROMOTIONS is the purpose every tenant has.',
   'settings.notifications.field.status': 'Active',
   'settings.notifications.field.activeVersion': 'Version',
   'settings.notifications.field.channel.hint':
