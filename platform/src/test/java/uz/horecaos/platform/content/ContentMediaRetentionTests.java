@@ -475,7 +475,7 @@ class ContentMediaRetentionTests {
             "every module that stores an asset id has registered a usage probe: a release with a probe missing would be a release that cannot see")
     void everyOwnerOfAnAssetReferenceHasAProbe() {
         assertThat(probes.stream().map(MediaUsageProbe::module).collect(Collectors.toSet()))
-                .containsExactlyInAnyOrder("content", "catalog", "tenancy", "helpcenter", "reviews");
+                .containsExactlyInAnyOrder("content", "catalog", "tenancy", "helpcenter", "reviews", "notifications");
     }
 
     // ========================================================= what cannot be released
