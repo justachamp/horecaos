@@ -100,11 +100,57 @@ describe('PushSubscriptionService.refresh', () => {
     expect(await service.refresh()).toBe('off');
 
     api.status.mockResolvedValue({ available: true, publicKey: 'vapid-key', subscribed: true });
+    (pushBrowser.current as ReturnType<typeof vi.fn>).mockResolvedValue(SUBSCRIPTION);
     expect(await service.refresh()).toBe('on');
 
     api.status.mockResolvedValue({ available: true, publicKey: 'vapid-key', subscribed: false });
     (pushBrowser.permission as ReturnType<typeof vi.fn>).mockReturnValue('denied');
     expect(await service.refresh()).toBe('blocked');
+  });
+
+  it('is off, not on, on a second device: the platform holds a subscription and this browser holds none', async () => {
+    const { service, api, pushBrowser } = setUp();
+    api.status.mockResolvedValue({ available: true, publicKey: 'vapid-key', subscribed: true });
+    (pushBrowser.current as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+    expect(await service.refresh()).toBe('off');
+
+    // Turning it on here re-registers this browser, which is how the newest browser comes to receive it.
+    expect(await service.enable()).toBe('on');
+    expect(api.subscribe).toHaveBeenCalledWith(SUBSCRIPTION, expect.any(String));
+  });
+
+  it('is blocked, not off, on a second device whose browser has refused notifications', async () => {
+    const { service, api, pushBrowser } = setUp();
+    api.status.mockResolvedValue({ available: true, publicKey: 'vapid-key', subscribed: true });
+    (pushBrowser.current as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (pushBrowser.permission as ReturnType<typeof vi.fn>).mockReturnValue('denied');
+
+    expect(await service.refresh()).toBe('blocked');
+  });
+
+  it('is on when the platform and this browser both hold a subscription', async () => {
+    const { service, api, pushBrowser } = setUp();
+    api.status.mockResolvedValue({ available: true, publicKey: 'vapid-key', subscribed: true });
+    (pushBrowser.current as ReturnType<typeof vi.fn>).mockResolvedValue(SUBSCRIPTION);
+
+    expect(await service.refresh()).toBe('on');
+  });
+
+  it('asks the browser for its subscription only when the platform has one, so a customer who never opted in installs nothing', async () => {
+    const { service, pushBrowser } = setUp();
+
+    expect(await service.refresh()).toBe('off');
+
+    expect(pushBrowser.current).not.toHaveBeenCalled();
+  });
+
+  it('takes the platform’s word when the browser cannot say what it holds', async () => {
+    const { service, api, pushBrowser } = setUp();
+    api.status.mockResolvedValue({ available: true, publicKey: 'vapid-key', subscribed: true });
+    (pushBrowser.current as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('no worker'));
+
+    expect(await service.refresh()).toBe('on');
   });
 
   it('never asks the browser for permission just by reading', async () => {
@@ -206,6 +252,7 @@ describe('PushSubscriptionService.disable', () => {
   it('stays on, and says so, when the platform cannot be reached: the customer asked to be off, and is not', async () => {
     const { service, api, pushBrowser } = setUp();
     api.status.mockResolvedValue({ available: true, publicKey: 'vapid-key', subscribed: true });
+    (pushBrowser.current as ReturnType<typeof vi.fn>).mockResolvedValue(SUBSCRIPTION);
     await service.refresh();
     const failure = new HorecaOSApiError({
       status: 0,
@@ -228,6 +275,55 @@ describe('PushSubscriptionService.forget', () => {
 
     service.forget();
 
+    expect(service.state()).toBe('unknown');
+  });
+
+  it('drops this browser’s own subscription, so a handset the customer signed out of stops receiving their promotions', async () => {
+    const { service, api, pushBrowser } = setUp();
+    api.status.mockResolvedValue({ available: true, publicKey: 'vapid-key', subscribed: true });
+    await service.refresh();
+
+    service.forget();
+
+    await vi.waitFor(() => expect(pushBrowser.unsubscribe).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not tell the platform: signing out is not withdrawing the consent', async () => {
+    const { service, api, pushBrowser } = setUp();
+    api.status.mockResolvedValue({ available: true, publicKey: 'vapid-key', subscribed: true });
+    await service.refresh();
+
+    service.forget();
+
+    await vi.waitFor(() => expect(pushBrowser.unsubscribe).toHaveBeenCalled());
+    expect(api.unsubscribe).not.toHaveBeenCalled();
+  });
+
+  it('drops it even when the profile page was never opened in this session', () => {
+    const { service, pushBrowser } = setUp();
+
+    service.forget();
+
+    expect(service.state()).toBe('unknown');
+    expect(pushBrowser.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks nothing of a browser that has no Web Push', () => {
+    const { service, pushBrowser } = setUp(browser({ supported: false }));
+
+    service.forget();
+
+    expect(pushBrowser.unsubscribe).not.toHaveBeenCalled();
+  });
+
+  it('survives a browser that fails to drop its subscription: signing out still completes', async () => {
+    const pushBrowser = browser();
+    pushBrowser.unsubscribe.mockRejectedValue(new Error('worker gone'));
+    const { service } = setUp(pushBrowser);
+
+    expect(() => service.forget()).not.toThrow();
+
+    await vi.waitFor(() => expect(pushBrowser.unsubscribe).toHaveBeenCalledTimes(1));
     expect(service.state()).toBe('unknown');
   });
 });

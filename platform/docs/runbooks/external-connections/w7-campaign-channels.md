@@ -19,7 +19,7 @@ a secret is an ADR 0028 reference stored with `bao kv put` and never pasted into
 | A gateway account cleared for `MARKETING` traffic | platform owner, gateway | the `MARKETING` purpose gate, refusing | 6 |
 | One real VAS delivery-receipt callback | integration, provider | the receipt endpoint, disabled; statistics say «not reported» | 7 |
 | A provider that reports reads or opens | platform owner | `reportsRead`, false for every wired channel | 8 |
-| Web Push (a VAPID key pair, the opt-in wording) | platform owner; counsel | `WebPushChannelAdapter` against a fake push service; the storefront opt-in, dark | 9 |
+| Web Push (a VAPID key pair, the opt-in wording) | platform owner; counsel | `WebPushChannelAdapter` against a fake push service; the storefront opt-in, mounted on both profile pages and dark until the key is set | 9 |
 
 ## 1. Email: a provider and the sending domain
 
@@ -61,7 +61,10 @@ password, point the platform at it). Two points are specific to bulk mail:
 
 **What a customer's unsubscribe page is.** `GET /providers/mail/unsubscribe/{token}` on the API origin
 (`HORECAOS_API_ORIGIN`) renders a confirmation page and changes nothing; `POST` unsubscribes. The token is
-in the path and never logged. The page is platform-hosted, in the message's language, with no storefront
+in the path. The application never logs it, and the edge replaces it with `redacted` in its access and
+error logs (the `request>uri` filter in both Caddyfiles, which also covers the push click path
+`/providers/push/clicks/{token}`); keep that filter when the edge changes, because a token in a log is a
+working unsubscribe link for whoever reads the log. The page is platform-hosted, in the message's language, with no storefront
 styling. The origin must be reachable by the customer's mail client and by a browser; the production edge
 already proxies it (the API origin's catch-all).
 
@@ -183,7 +186,7 @@ for the provider's callback, and the delivery service's two flags.
 **How to prove it.** The first campaign on that channel shows a number, and no longer «not reported», for
 **read**.
 
-## 9. Web Push: a VAPID key pair, the opt-in wording, and one line in each storefront
+## 9. Web Push: the opt-in wording, then a VAPID key pair
 
 **The fact.** Web Push needs the platform to sign its requests to the browser vendors' push services
 (VAPID, RFC 8292) with a key pair of its own. Nothing is bought and no third-party account exists: the
@@ -222,24 +225,30 @@ openssl ec -in vapid.pem -pubout -outform DER 2>/dev/null | tail -c 65 | base64 
 
 Then delete `vapid.pem`; nothing keeps it.
 
-**Where the value goes.**
+**Where the value goes.** In this order, because the opt-in card is already mounted on both storefronts'
+profile pages (below), so step 4 is the step that shows it to every signed-in customer, and what they tap is
+recorded as their consent under the wording step 1 confirms.
 
-1. The private scalar: `bao kv put horecaos/production/provider_notification/platform/vapid value=<the 43 characters>`.
+1. **Counsel confirms the wording** of `push.consentNote` (section «Opt-in wording» below). Do not go on
+   until the answer is in writing: the consent record carries `PUSH_OPT_IN_V1`, and a customer who opts in
+   under a wording counsel has not seen cannot be moved to the confirmed one without asking again.
+2. The private scalar: `bao kv put horecaos/production/provider_notification/platform/vapid value=<the 43 characters>`.
    Never paste it into a chat, a ticket or a file.
-2. `/etc/horecaos/production.env` (see `deploy/env.template`):
+3. `/etc/horecaos/production.env` (see `deploy/env.template`):
    `HORECAOS_PUSH_VAPID_PUBLIC_KEY=<the 87 characters>`,
    `HORECAOS_PUSH_VAPID_PRIVATE_KEY_REF=horecaos:production:provider_notification:platform:vapid`,
    `HORECAOS_PUSH_VAPID_SUBJECT=mailto:<an address that is read>` (RFC 8292 wants a `mailto:` or `https:`
    contact the push services may write to if the platform misbehaves).
-3. Restart `platform-app`.
-4. **One line in each storefront**, which this wave did not add because the profile page is another wave's
-   file: mount `<app-push-subscribe />` (and add `PushSubscribeComponent` to the page's `imports`) where a
-   signed-in customer should find it, for example under `<app-profile-menu>` in
-   `frontend/storefront/src/app/pages/profile/profile.component.html` and in the profile page of
-   `frontend/storefront-milliy`. On a home-screen banner pass `[dismissible]="true"`. In the same page's
-   sign-out handler, next to `this.telegramLink.forget()`, add `this.pushSubscription.forget()` (inject
-   `PushSubscriptionService`), so the next customer on the handset does not inherit this one's state.
-   Until it is mounted no customer can opt in, so no campaign has a push recipient.
+4. Restart `platform-app`. From here `GET .../push` answers `available: true` and the card appears.
+
+**What is already in the storefronts (nothing to add).** `<app-push-subscribe />` is mounted under the
+profile menu on `frontend/storefront/src/app/pages/profile/profile.component.html` and on the profile page of
+`frontend/storefront-milliy`, and each page's sign-out handler calls `pushSubscription.forget()`. A second
+card must not be added. The card reads this browser's state, not only the customer's: a customer who turned
+push on from a phone and opens the profile on a laptop is offered «Turn on» there, and turning it on moves
+the one live subscription to the laptop. Signing out drops the browser's own subscription (the platform is
+not told, and the consent stays), so the next person on a shared handset does not receive the previous
+customer's promotions, and the customer is offered «Turn on» again at their next visit.
 
 **How to prove the connection.**
 
@@ -277,5 +286,6 @@ Then delete `vapid.pem`; nothing keeps it.
 
 **Opt-in wording (counsel).** The prompt says what the customer gets and what turning it on means
 (`push.title`, `push.text` and `push.consentNote` in the storefront's three catalogues). Counsel confirms the
-wording of `push.consentNote` before the first campaign; the consent record carries the policy version
+wording of `push.consentNote` **before the VAPID variables are set** (step 1 above), because the card is already
+mounted and setting the key is what shows it to customers; the consent record carries the policy version
 `PUSH_OPT_IN_V1`, so a change of wording is a new version, not an edit.

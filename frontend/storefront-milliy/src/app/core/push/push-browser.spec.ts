@@ -29,3 +29,65 @@ describe('browserPush in a browser with no service worker', () => {
     expect(browser.permission()).toBe('unsupported');
   });
 });
+
+describe('browserPush reading and dropping a subscription', () => {
+  const SUBSCRIPTION_JSON = {
+    endpoint: 'https://fcm.googleapis.com/fcm/send/abc',
+    expirationTime: null,
+    keys: { p256dh: 'p256dh-key', auth: 'auth-secret' },
+  };
+
+  function stubBrowser(registration: unknown) {
+    const register = vi.fn();
+    const getRegistration = vi.fn().mockResolvedValue(registration);
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: { register, getRegistration, ready: Promise.resolve(registration) },
+    });
+    vi.stubGlobal('PushManager', class {});
+    vi.stubGlobal('Notification', { permission: 'default' });
+    return { register, getRegistration };
+  }
+
+  function registrationHolding(subscription: unknown) {
+    return { pushManager: { getSubscription: vi.fn().mockResolvedValue(subscription) } };
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    Reflect.deleteProperty(navigator, 'serviceWorker');
+  });
+
+  it('reads the subscription this browser holds without installing a worker', async () => {
+    const held = { ...SUBSCRIPTION_JSON, toJSON: () => SUBSCRIPTION_JSON, unsubscribe: vi.fn() };
+    const { register } = stubBrowser(registrationHolding(held));
+
+    expect(await browserPush().current()).toEqual(SUBSCRIPTION_JSON);
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it('says it holds none when no worker was ever installed, and does not install one to find out', async () => {
+    const { register } = stubBrowser(undefined);
+
+    expect(await browserPush().current()).toBeNull();
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it('drops the subscription it holds without installing a worker', async () => {
+    const unsubscribe = vi.fn().mockResolvedValue(true);
+    const held = { ...SUBSCRIPTION_JSON, toJSON: () => SUBSCRIPTION_JSON, unsubscribe };
+    const { register } = stubBrowser(registrationHolding(held));
+
+    await browserPush().unsubscribe();
+
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it('has nothing to drop, and says nothing, when no worker was ever installed', async () => {
+    const { register } = stubBrowser(undefined);
+
+    await expect(browserPush().unsubscribe()).resolves.toBeUndefined();
+    expect(register).not.toHaveBeenCalled();
+  });
+});

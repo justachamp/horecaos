@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -31,6 +32,12 @@ import org.junit.jupiter.api.Test;
 class CaddyEdgeConfigurationTests {
 
     private static final Path CADDYFILE = Path.of("infra/production/caddy/Caddyfile");
+
+    /** The Caddyfile the production compose file mounts. It has more origins than the one above. */
+    private static final Path DEPLOYED_CADDYFILE = Path.of("../deploy/infra/caddy/Caddyfile");
+
+    /** An access-log filter on the request URI: the pattern, then what replaces each match. */
+    private static final Pattern URI_FILTER = Pattern.compile("request>uri regexp \"([^\"]*)\" \"([^\"]*)\"");
 
     /** A public site block opens with the origin placeholder the deploy substitutes. */
     private static final Pattern SITE_BLOCK =
@@ -91,10 +98,72 @@ class CaddyEdgeConfigurationTests {
         // matches at position zero and replaces the entire URI, path included.
         // The access log then cannot distinguish a 404 on /admin/* from any other
         // 404, which is a log the disk and incident runbooks read.
-        String source = Files.readString(CADDYFILE, StandardCharsets.UTF_8);
+        for (Path file : List.of(CADDYFILE, DEPLOYED_CADDYFILE)) {
+            String source = Files.readString(file, StandardCharsets.UTF_8);
 
-        assertThat(source).doesNotContain("regexp \"\\\\?");
-        assertThat(source).contains("regexp \"\\?.*$\" \"?redacted\"");
+            assertThat(source).doesNotContain("regexp \"\\\\?");
+            assertThat(source).contains("(\\?).*$");
+            assertThat(redact(source, "/api/v1/orders/abc?q=secret"))
+                    .as("%s: the path survives, the query does not", file)
+                    .isEqualTo("/api/v1/orders/abc?redacted");
+            assertThat(redact(source, "/admin/x")).as("%s", file).isEqualTo("/admin/x");
+        }
+    }
+
+    @Test
+    @DisplayName("a capability token in a path never reaches a log, on the origin that serves it or any other")
+    void theTokensInAPathAreRedactedToo() throws IOException {
+        // /providers/mail/unsubscribe/{token} withdraws a customer's email consent and
+        // /providers/push/clicks/{token} reports a read. The token is the whole credential and it
+        // is a path segment, so a filter that strips only the query writes it to stdout verbatim
+        // for anyone with the edge logs to replay (ADR 0182).
+        for (Path file : List.of(CADDYFILE, DEPLOYED_CADDYFILE)) {
+            String source = Files.readString(file, StandardCharsets.UTF_8);
+
+            assertThat(redact(source, "/providers/mail/unsubscribe/SECRETTOKEN123"))
+                    .as("%s: an unsubscribe link", file)
+                    .isEqualTo("/providers/mail/unsubscribe/redacted");
+            assertThat(redact(source, "/providers/mail/unsubscribe/SECRETTOKEN123?x=1"))
+                    .as("%s: and with a query", file)
+                    .isEqualTo("/providers/mail/unsubscribe/redacted?redacted");
+            assertThat(redact(source, "/providers/push/clicks/SECRETCLICK456"))
+                    .as("%s: a push click", file)
+                    .isEqualTo("/providers/push/clicks/redacted");
+            assertThat(redact(source, "/providers/push/clicks/SECRETCLICK456/?a=b"))
+                    .as("%s: and with a trailing slash and a query", file)
+                    .isEqualTo("/providers/push/clicks/redacted/?redacted");
+            assertThat(redact(source, "/providers/sms/1/receipts"))
+                    .as("%s: other provider paths keep their path, which carries no credential", file)
+                    .isEqualTo("/providers/sms/1/receipts");
+        }
+    }
+
+    @Test
+    @DisplayName("every log block redacts the same way, in both Caddyfiles")
+    void everyLogBlockUsesTheSameFilter() throws IOException {
+        // One literal everywhere, so a block copied from a stale template cannot quietly redact less.
+        List<String> filters = new ArrayList<>();
+        for (Path file : List.of(CADDYFILE, DEPLOYED_CADDYFILE)) {
+            Matcher matcher = URI_FILTER.matcher(Files.readString(file, StandardCharsets.UTF_8));
+            while (matcher.find()) {
+                filters.add(matcher.group());
+            }
+        }
+
+        assertThat(filters).as("the filters found").isNotEmpty();
+        assertThat(new LinkedHashSet<>(filters)).as("distinct filters").hasSize(1);
+    }
+
+    /**
+     * What the first access-log filter in this Caddyfile would write for this URI, applied with
+     * Java's regexp. Go's and Java's agree on this pattern (an anchor, a non-capturing group, an
+     * alternation); only the replacement syntax differs, {@code ${1}} for Go and {@code $1} here.
+     */
+    private static String redact(String caddyfile, String uri) {
+        Matcher filter = URI_FILTER.matcher(caddyfile);
+        assertThat(filter.find()).as("an access-log filter on request>uri").isTrue();
+        String replacement = filter.group(2).replaceAll("\\$\\{(\\d+)}", "\\$$1");
+        return Pattern.compile(filter.group(1)).matcher(uri).replaceAll(replacement);
     }
 
     @Test

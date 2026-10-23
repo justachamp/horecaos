@@ -15,7 +15,14 @@ import { PUSH_BROWSER } from '../core/push/push-browser';
  *                  no account at this brand to opt in with
  *  - `off`         push could be turned on: the customer has not, and the browser has not refused
  *  - `blocked`     the customer, or their browser, has refused notifications; the page cannot ask again
- *  - `on`          the platform holds this customer's subscription
+ *  - `on`          the platform holds this customer's subscription and this browser holds one too
+ *
+ * **`on` is about this browser, not only about the customer.** The platform keeps one live subscription
+ * per customer (the newest browser receives the push), and its status answer says whether the customer
+ * has one, not whose it is. A customer who subscribed on a phone and opens the profile on a laptop is
+ * `off` there until they turn it on, which moves the subscription to the laptop. What cannot be seen is
+ * a browser that still holds a subscription the platform has since replaced: that reads `on` until the
+ * customer turns push off and on again, because the status answer names no endpoint to compare with.
  *
  * **The opt-in is two questions, and both must be answered yes.** The page asks its own (a prompt the
  * customer taps), and only then does the browser ask its own. Neither is asked on page load: a browser
@@ -46,7 +53,7 @@ export class PushSubscriptionService {
         return this.settle('unavailable');
       }
       this.key = status.publicKey;
-      if (status.subscribed) {
+      if (status.subscribed && (await this.browserHoldsOne())) {
         return this.settle('on');
       }
       return this.settle(this.browser.permission() === 'denied' ? 'blocked' : 'off');
@@ -105,13 +112,36 @@ export class PushSubscriptionService {
     }
   }
 
-  /** Forgotten when the session ends: the next customer on this handset must not inherit this one's state. */
+  /**
+   * Forgotten when the session ends: the next customer on this handset must not inherit this one's
+   * state, and must not inherit this one's promotions either, so the browser's own subscription is
+   * dropped too. The platform is not told. Signing out is not withdrawing a consent, and the platform
+   * learns the endpoint is dead from the push service's next answer (404 or 410), which ends the
+   * subscription and leaves the consent as it was; the customer is offered «turn on» again on their
+   * next visit. Best effort and not awaited: a worker that is gone must not stop a sign-out.
+   */
   forget(): void {
     this.key = null;
     this.current.set('unknown');
+    if (this.browser.supported) {
+      void this.browser.unsubscribe().catch(() => undefined);
+    }
   }
 
   private key: string | null = null;
+
+  /**
+   * Whether this browser holds a push subscription. When it cannot say (no worker, a failing push
+   * manager) the platform's word stands, so a broken browser does not turn every opted-in customer
+   * into one who is offered the prompt again.
+   */
+  private async browserHoldsOne(): Promise<boolean> {
+    try {
+      return (await this.browser.current()) !== null;
+    } catch {
+      return true;
+    }
+  }
 
   private settle(state: PushState): PushState {
     this.current.set(state);

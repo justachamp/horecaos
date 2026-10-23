@@ -906,7 +906,7 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.notifications.field.status': 'Faol',
   'settings.notifications.field.activeVersion': 'Versiya',
   'settings.notifications.field.channel.hint':
-    'Hozir faqat SMS, Telegram va Email haqiqatan yuboriladi. Email faqat kampaniyalar uchun va har bir tilda mavzu talab qilinadi. Push sxema va shablon kaliti kanalni olib yurishi uchun eʻlon qilingan, lekin hozircha yetkazuvchi adapter yoʻq.',
+    'Hozir SMS, Telegram, Email va Push haqiqatan yuboriladi. Email va Push faqat kampaniyalar uchun. Emailda har bir tilda mavzu, Pushda har bir tilda sarlavha talab qilinadi. Push faqat vitrinada uni yoqqan mijozlarga va platformaning push kaliti oʻrnatilgandan keyingina yetib boradi.',
   'settings.notifications.field.variant': 'Variant',
   'settings.notifications.field.fulfilmentMode': 'Bajarish usuli',
   'settings.notifications.field.channelSource': 'Kanal manbasi',

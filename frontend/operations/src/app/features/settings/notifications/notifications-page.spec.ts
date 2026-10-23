@@ -298,6 +298,20 @@ describe('NotificationsPage', () => {
     ).toBeTruthy();
   });
 
+  it('tells an author that Push sends campaigns now, and not that no adapter delivers it', () => {
+    const toggle = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
+    ).find((button) => button.textContent?.includes('New template')) as HTMLButtonElement;
+    toggle.click();
+    fixture.detectChanges();
+
+    const hint = (fixture.nativeElement.querySelector('#template-channel') as HTMLElement)
+      .nextElementSibling?.textContent;
+
+    expect(hint).toContain('Push send');
+    expect(hint).not.toContain('no adapter');
+  });
+
   it('creating a template variant sends the chosen fulfilment mode and channel source (gap-map row 10.9a)', async () => {
     const toggle = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll('button'),

@@ -74,6 +74,19 @@ public class JdbcUnsubscribeTokenStore {
                 .optional();
     }
 
+    /**
+     * Removes up to {@code limit} tokens past their expiry: after it a token is the same answer as an
+     * unknown one, and the row names a customer account and a notification for nothing.
+     */
+    public int deleteExpired(Instant now, int limit) {
+        return jdbc.sql("""
+                DELETE FROM notifications.unsubscribe_tokens
+                 WHERE token_hash IN (
+                     SELECT token_hash FROM notifications.unsubscribe_tokens
+                      WHERE expires_at <= :now ORDER BY expires_at LIMIT :limit)
+                """).param("now", utc(now)).param("limit", limit).update();
+    }
+
     private static OffsetDateTime utc(Instant instant) {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
