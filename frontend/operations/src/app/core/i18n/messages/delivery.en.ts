@@ -878,7 +878,7 @@ export const deliveryEn = {
     'Dashed lines are straight lines between two points, not the road. Green: branch to the courier’s position now. Red: the courier’s position to the door, or the branch to the door while nobody is carrying the order.',
   'delivery.rates.reasons.sim.heading': 'Who would this rule have hit?',
   'delivery.rates.reasons.sim.hint':
-    'Replays the rule over recent closed shifts or settlement periods. Nothing is written or paid.',
+    'Replays the rule over the recent closed shifts or settlement periods of every branch, because a rule applies to all of them. Nothing is written or paid.',
   'delivery.rates.reasons.sim.lookback': 'Look back (days)',
   'delivery.rates.reasons.sim.run': 'Preview the rule',
   'delivery.rates.reasons.sim.nobody':
@@ -887,7 +887,8 @@ export const deliveryEn = {
     '{couriers} couriers, {total} in all, over {windows} shifts or periods in the last {days} days.',
   'delivery.rates.reasons.sim.openPeriod':
     'A period that is still open is shown as it stands today and may change before it closes.',
-  'delivery.rates.reasons.sim.truncated': 'More couriers would be hit than are listed.',
+  'delivery.rates.reasons.sim.truncated':
+    'The preview is partial: more couriers would be hit than are listed, or more shifts closed than it could replay. The real figure may be higher.',
   'delivery.rates.reasons.sim.courier': 'Courier',
   'delivery.rates.reasons.sim.reading': 'Reading',
   'delivery.rates.reasons.sim.amount': 'Would post',

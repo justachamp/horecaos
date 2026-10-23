@@ -220,6 +220,11 @@ public class CourierAccessService {
         CourierRow courier = couriers.findCourier(row.tenantId(), row.courierId())
                 .filter(found -> "ACTIVE".equals(found.status()))
                 .orElseThrow(CourierAccessService::invalid);
+        if (couriers.findLiveEngagement(row.tenantId(), row.courierId()).isEmpty()) {
+            // Access is for someone who works here, as issue() requires. CourierLifecycleService voids the
+            // link when the engagement ends through the console; this covers any other way it ended.
+            throw invalid();
+        }
         if (accounts.find(courier.principalSubject()).isEmpty()) {
             throw new ApiException(
                     ErrorCode.RESOURCE_NOT_FOUND,

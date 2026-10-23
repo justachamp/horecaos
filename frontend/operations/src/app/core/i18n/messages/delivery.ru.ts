@@ -879,7 +879,7 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
     'Пунктир — прямые линии между двумя точками, а не дорога. Зелёная: от филиала до текущей позиции курьера. Красная: от позиции курьера до двери, а пока заказ никто не везёт — от филиала до двери.',
   'delivery.rates.reasons.sim.heading': 'Кого бы задело это правило?',
   'delivery.rates.reasons.sim.hint':
-    'Прогоняет правило по недавним закрытым сменам или расчётным периодам. Ничего не записывается и не выплачивается.',
+    'Прогоняет правило по недавним закрытым сменам или расчётным периодам всех филиалов, потому что правило действует во всех. Ничего не записывается и не выплачивается.',
   'delivery.rates.reasons.sim.lookback': 'За сколько дней',
   'delivery.rates.reasons.sim.run': 'Проверить правило',
   'delivery.rates.reasons.sim.nobody':
@@ -888,7 +888,8 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
     'Курьеров: {couriers}, всего {total}, по {windows} сменам или периодам за {days} дн.',
   'delivery.rates.reasons.sim.openPeriod':
     'Незакрытый период показан как сейчас и может измениться до закрытия.',
-  'delivery.rates.reasons.sim.truncated': 'Правило заденет больше курьеров, чем показано.',
+  'delivery.rates.reasons.sim.truncated':
+    'Проверка неполная: правило заденет больше курьеров, чем показано, или закрыто больше смен, чем удалось проверить. Реальная цифра может быть выше.',
   'delivery.rates.reasons.sim.courier': 'Курьер',
   'delivery.rates.reasons.sim.reading': 'Показатель',
   'delivery.rates.reasons.sim.amount': 'Было бы начислено',

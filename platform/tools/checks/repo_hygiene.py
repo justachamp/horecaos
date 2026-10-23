@@ -296,22 +296,44 @@ def check_no_committed_map_key() -> None:
            "The key is delivered by GET .../map-config; nothing may default one. Rotate it in the vendor's console.")
 
 
+# A record's header line, not a sentence that mentions the field: `tools/adr-index` and `tools/file-adrs` read
+# the first one and file the record by it.
+_IMPLEMENTATION_STATUS_LINE = re.compile(r"^- Implementation status:", re.MULTILINE)
+
+
+def adr_status_problems(records: dict[str, str]) -> list[str]:
+    """What is wrong with ADR records' status fields, as `{path: text}`. Pure, so the rule can be proven.
+
+    Both fields must be there, and the implementation status must be said once. A second block does not
+    add information: the tools read the first, a human reads both, and when a wave advances one and
+    forgets the other the record claims two opposite things at once (ADR 0145 carried «built» and «not
+    built» for the same four items). An update replaces the block; it does not stack a new one on top.
+    """
+    problems: list[str] = []
+    for path, text in sorted(records.items()):
+        if not re.search(r"decision status", text, re.I):
+            problems.append(f"{path}: no decision status")
+        if not re.search(r"implementation status", text, re.I):
+            problems.append(f"{path}: no implementation status")
+        blocks = len(_IMPLEMENTATION_STATUS_LINE.findall(text))
+        if blocks > 1:
+            problems.append(
+                f"{path}: {blocks} '- Implementation status:' blocks; keep one and fold what is still true into it"
+            )
+    return problems
+
+
 def check_adr_statuses() -> None:
-    """ADR 0000: every ADR carries a decision status and an implementation status."""
+    """ADR 0000: every ADR carries a decision status and exactly one implementation status."""
     problems = []
     # rglob, not glob: records live under built/, partial/, not-started/ and
     # meta/ since they were filed by status — a flat glob matched zero files
     # and this check silently passed on nothing for weeks of commits.
-    records = sorted(ADR.rglob("[0-9]*.md"))
-    if not records:
+    paths = sorted(ADR.rglob("[0-9]*.md"))
+    if not paths:
         problems.append(f"{rel(ADR)}: no ADR records found — the glob is broken again")
-    for path in records:
-        text = path.read_text(errors="replace")
-        if not re.search(r"decision status", text, re.I):
-            problems.append(f"{rel(path)}: no decision status")
-        if not re.search(r"implementation status", text, re.I):
-            problems.append(f"{rel(path)}: no implementation status")
-    result(f"adr: every ADR carries both status fields ({len(records)} records)", problems)
+    problems.extend(adr_status_problems({rel(path): path.read_text(errors="replace") for path in paths}))
+    result(f"adr: every ADR carries both status fields, one each ({len(paths)} records)", problems)
 
 
 def check_print_debugging() -> None:

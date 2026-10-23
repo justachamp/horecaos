@@ -134,7 +134,7 @@ export const couriersEn = {
   'couriers.access.state.SENT': 'The link was texted and has not been used yet.',
   'couriers.access.state.EXPIRED': 'The link expired before it was used.',
   'couriers.access.state.ACCEPTED': 'The courier has set their password.',
-  'couriers.access.state.VOIDED': 'Replaced by a newer link.',
+  'couriers.access.state.VOIDED': 'Replaced by a newer link, or the courier left before using it.',
   'couriers.access.state.FAILED': 'The text could not be sent.',
   'couriers.access.invite': 'Send invite',
   'couriers.access.reset': 'Reset access',

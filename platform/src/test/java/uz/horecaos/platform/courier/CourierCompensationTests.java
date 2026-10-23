@@ -1462,6 +1462,40 @@ class CourierCompensationTests {
     }
 
     @Test
+    @DisplayName("the simulator says it was cut when more shifts closed than it can replay, so a «nobody» is not read"
+            + " as «safe to ship» (the rule is tenant-wide, so the replay is too)")
+    void theSimulatorSaysWhenItDidNotReplayEveryShift() {
+        ShiftRow shift = openShift();
+        clock.set(NOON.plus(Duration.ofHours(5)));
+        shifts.close(new CourierShiftService.CloseShift(
+                TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
+        CourierRuleSimulator simulator = new CourierRuleSimulator(ledgerStore, shiftStore, courierStore, clock);
+        CourierRuleSimulator.Candidate rule =
+                new CourierRuleSimulator.Candidate("DELIVERED_VOLUME", "GTE", 1, "SHIFT", -50_000, UZS);
+
+        CourierRuleSimulator.Simulation one = simulator.simulate(TENANT, rule, 7, null);
+        assertThat(one.windowsReplayed()).isEqualTo(1);
+        assertThat(one.truncated())
+                .as("everything there was to look at was looked at")
+                .isFalse();
+
+        // Exactly the cap: still everything. Then one more than the cap: something was left out.
+        cloneClosedShift(shift.id(), CourierRuleSimulator.MAX_WINDOWS - 1);
+        CourierRuleSimulator.Simulation atTheCap = simulator.simulate(TENANT, rule, 7, null);
+        assertThat(atTheCap.windowsReplayed()).isEqualTo(CourierRuleSimulator.MAX_WINDOWS);
+        assertThat(atTheCap.truncated()).isFalse();
+
+        cloneClosedShift(shift.id(), 1);
+        CourierRuleSimulator.Simulation overTheCap = simulator.simulate(TENANT, rule, 7, null);
+        assertThat(overTheCap.windowsReplayed())
+                .as("the replay is capped, not widened")
+                .isEqualTo(CourierRuleSimulator.MAX_WINDOWS);
+        assertThat(overTheCap.truncated())
+                .as("more shifts closed in the window than were replayed, and the answer says so")
+                .isTrue();
+    }
+
+    @Test
     @DisplayName("the simulator refuses what the evaluator would never read, and a window or lookback it does not know")
     void theSimulatorRefusesWhatNothingReads() {
         CourierRuleSimulator simulator = new CourierRuleSimulator(ledgerStore, shiftStore, courierStore, clock);
@@ -2488,6 +2522,26 @@ class CourierCompensationTests {
 
     private static RateComponent band(int from, @Nullable Integer to, long perKmMinor) {
         return new RateComponent(UUID.randomUUID(), RateComponentType.PER_KM_BAND, from, perKmMinor, from, to, null);
+    }
+
+    /** {@code copies} more CLOSED shifts like {@code shiftId}, each with its own id and nothing else different. */
+    private void cloneClosedShift(UUID shiftId, int copies) {
+        jdbc.sql("""
+                INSERT INTO fulfillment.courier_shifts (id, tenant_id, brand_id, location_id, courier_id,
+                    engagement_id, status, duty_state, opened_at, closed_at, open_source, close_source,
+                    close_reason_code, paid_seconds, break_seconds, enforcement_mode, enforcement_policy_id,
+                    enforcement_policy_version)
+                SELECT gen_random_uuid(), s.tenant_id, s.brand_id, s.location_id, s.courier_id,
+                       s.engagement_id, s.status, s.duty_state, s.opened_at, s.closed_at, s.open_source,
+                       s.close_source, s.close_reason_code, s.paid_seconds, s.break_seconds,
+                       s.enforcement_mode, s.enforcement_policy_id, s.enforcement_policy_version
+                  FROM fulfillment.courier_shifts s CROSS JOIN generate_series(1, :copies)
+                 WHERE s.tenant_id = :tenantId AND s.id = :shiftId
+                """)
+                .param("copies", copies)
+                .param("tenantId", TENANT)
+                .param("shiftId", shiftId)
+                .update();
     }
 
     private ShiftRow openShift() {

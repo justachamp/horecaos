@@ -425,6 +425,97 @@ class CourierAccessEndpointTests {
         assertThat(accounts.passwords).isEmpty();
     }
 
+    @Test
+    @DisplayName("ending a courier's engagement voids the link already texted and the one still queued (V0657: "
+            + "VOIDED is «the courier left, before it was spent»)")
+    void endingTheEngagementVoidsTheLiveInvitation() throws Exception {
+        invite(MANAGER, "INVITE", "en");
+        relay.runOnce();
+        String texted = tokenOf(messenger.sent.getFirst());
+        assertThat(inspect(texted).getResponse().getStatus())
+                .as("the link works until they leave")
+                .isEqualTo(200);
+
+        assertThat(lifecycle("engagement-ending", "left the company")
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(202);
+
+        assertThat(inspect(texted).getResponse().getStatus())
+                .as("the courier who left cannot open the link texted before")
+                .isEqualTo(404);
+        assertThat(accept(texted, "a-long-enough-password-1").getResponse().getStatus())
+                .isEqualTo(404);
+        assertThat(accounts.passwords)
+                .as("no password was set for someone who left")
+                .isEmpty();
+        assertThat(accounts.loggedOut).isEmpty();
+        assertThat(state(MANAGER).path("state").asText()).isEqualTo("VOIDED");
+        assertThat(invitationAudit("courier.engagement.ended"))
+                .as("the engagement fact says how many invitations it voided")
+                .contains("accessInvitationsVoided");
+    }
+
+    @Test
+    @DisplayName("an invitation still queued when the engagement ends is voided and never texted")
+    void aQueuedInvitationIsNotTextedAfterTheEngagementEnds() throws Exception {
+        invite(MANAGER, "INVITE", "en");
+        assertThat(state(MANAGER).path("state").asText()).isEqualTo("QUEUED");
+
+        assertThat(lifecycle("engagement-ending", "left the company")
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(202);
+
+        assertThat(relay.runOnce()).isZero();
+        assertThat(messenger.sent).as("nothing is texted to someone who left").isEmpty();
+        assertThat(state(MANAGER).path("state").asText()).isEqualTo("VOIDED");
+    }
+
+    @Test
+    @DisplayName("archiving a courier voids the link already texted")
+    void archivingVoidsTheLiveInvitation() throws Exception {
+        invite(MANAGER, "INVITE", "en");
+        relay.runOnce();
+        String texted = tokenOf(messenger.sent.getFirst());
+
+        assertThat(lifecycle("archival", "moved abroad").getResponse().getStatus())
+                .isEqualTo(202);
+
+        assertThat(accept(texted, "a-long-enough-password-1").getResponse().getStatus())
+                .isEqualTo(404);
+        assertThat(accounts.passwords).isEmpty();
+        assertThat(state(MANAGER).path("state").asText()).isEqualTo("VOIDED");
+    }
+
+    @Test
+    @DisplayName("a courier whose engagement ended by some other route is neither texted nor let in: the relay and "
+            + "the accept both require a live engagement, as issuing one does")
+    void theRelayAndTheAcceptRequireALiveEngagement() throws Exception {
+        invite(MANAGER, "INVITE", "en");
+        relay.runOnce();
+        String texted = tokenOf(messenger.sent.getFirst());
+        jdbc.sql("UPDATE fulfillment.courier_engagements SET status = 'ENDED', engaged_until = current_date")
+                .update();
+
+        assertThat(accept(texted, "a-long-enough-password-1").getResponse().getStatus())
+                .as("the account stays ACTIVE, but nobody here works with it any more")
+                .isEqualTo(404);
+        assertThat(accounts.passwords).isEmpty();
+
+        jdbc.sql("UPDATE fulfillment.courier_engagements SET status = 'ACTIVE', engaged_until = NULL")
+                .update();
+        jdbc.sql("UPDATE fulfillment.courier_access_invitations SET requested_at = requested_at - interval '5 minutes'")
+                .update();
+        assertThat(invite(MANAGER, "RESET", "en").getResponse().getStatus()).isEqualTo(202);
+        jdbc.sql("UPDATE fulfillment.courier_engagements SET status = 'ENDED', engaged_until = current_date")
+                .update();
+
+        assertThat(relay.runOnce()).isZero();
+        assertThat(messenger.sent).as("only the first text ever left").hasSize(1);
+        assertThat(state(MANAGER).path("lastErrorCode").asText()).isEqualTo("COURIER_GONE");
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private static String accessPath(UUID courierId) {
@@ -438,6 +529,24 @@ class CourierAccessEndpointTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"kind\":\"" + kind + "\",\"locale\":\"" + locale + "\"}"))
                 .andReturn();
+    }
+
+    /** {@code engagement-ending} or {@code archival}, by the manager, with a reason. */
+    private MvcResult lifecycle(String step, String reason) throws Exception {
+        return mvc.perform(post("/api/v1/operations/tenants/" + TENANT + "/couriers/" + COURIER + "/" + step)
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", step + "-" + UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"" + reason + "\"}"))
+                .andReturn();
+    }
+
+    private String invitationAudit(String action) {
+        return jdbc.sql("SELECT change_document::text FROM audit.audit_events WHERE action_code = :action")
+                .param("action", action)
+                .query(String.class)
+                .list()
+                .toString();
     }
 
     private JsonNode state(String caller) throws Exception {

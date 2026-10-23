@@ -130,7 +130,11 @@ public class CourierAccessRelay {
         }
         Optional<CourierRow> courier =
                 couriers.findCourier(row.tenantId(), row.courierId()).filter(found -> "ACTIVE".equals(found.status()));
-        if (courier.isEmpty()) {
+        if (courier.isEmpty()
+                || couriers.findLiveEngagement(row.tenantId(), row.courierId()).isEmpty()) {
+            // Archived, or no engagement left: access is for someone who works here (the same rule issuing one
+            // applies). The console voids a live invitation when it ends an engagement; this is the backstop for
+            // any other way it ended, and nothing is texted to a number that nobody here is working with.
             store.markFailed(row.id(), row.attempts(), "COURIER_GONE");
             return false;
         }

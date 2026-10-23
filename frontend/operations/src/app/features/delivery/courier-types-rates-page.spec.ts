@@ -537,8 +537,15 @@ describe('CourierTypesRatesPage', () => {
       ruleAmountMinor: 20_000,
       ruleCurrency: 'UZS',
       lookbackDays: 7,
-      locationId: 'l1',
     });
+    // The rule is a tenant-level registry row evaluated at every branch's shift close, so the
+    // preview must replay every branch's shifts. The operator's own branch (`l1` in this scope)
+    // is not sent: with it the platform narrows SHIFT windows to that one branch and the preview
+    // understates who the saved rule will hit. toHaveBeenCalledWith ignores an undefined key,
+    // so the absence is asserted on the request itself.
+    const request = simulateRule.mock.calls[0][1] as Record<string, unknown>;
+    expect(request['locationId'] ?? null).toBeNull();
+    expect(JSON.stringify(request)).not.toContain('l1');
     expect(host.querySelector('[data-testid="rule-simulation-hit"]')?.textContent).toContain(
       'K-014',
     );
