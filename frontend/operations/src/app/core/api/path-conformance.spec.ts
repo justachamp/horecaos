@@ -87,18 +87,7 @@ const PATH_FAMILIES: Readonly<Record<string, Record<string, unknown>>> = {
  * deleted by the change that fixes it; an entry that now conforms is reported by the last test
  * rather than failing, so the order of two merging waves does not matter.
  */
-const KNOWN_MISMATCHES: Readonly<Record<string, string>> = {
-  // Row 10.9a: built on /api/v1/operations/tenants/{t}/brands/{b}/notification-templates, which the
-  // platform does not serve; NotificationTemplateController is mapped under /api/v1/tenants. The
-  // wave that owns row 10.9a (w9) repoints these builders; until it merges this gate lists them.
-  'settings-paths.settingsPaths.notificationTemplates': 'row 10.9a',
-  'settings-paths.settingsPaths.notificationTemplate': 'row 10.9a',
-  'settings-paths.settingsPaths.notificationTemplateVersions': 'row 10.9a',
-  'settings-paths.settingsPaths.notificationTemplateVersion': 'row 10.9a',
-  'settings-paths.settingsPaths.notificationTemplateActivate': 'row 10.9a',
-  'settings-paths.settingsPaths.notificationTemplateTestSend': 'row 10.9a',
-  'settings-paths.settingsPaths.notificationVariableCatalogue': 'row 10.9a',
-};
+const KNOWN_MISMATCHES: Readonly<Record<string, string>> = {};
 
 /**
  * A builder that cannot be called with markers alone names its arguments here, one tuple per
