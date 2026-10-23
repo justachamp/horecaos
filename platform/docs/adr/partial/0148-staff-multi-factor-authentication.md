@@ -101,6 +101,7 @@
 closed on its proposed default.
 
 **Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
+- Status addition, 2026-10-23: "sensitive" now covers a job a company composes under ADR 0186. `SENSITIVE_ROLES` asks the owner, the administrator, finance and the brand manager by `PlatformRole#mfaSensitive`, and asks the holder of a company-made job that carries any power only those four carry (`TenantJobRules#isMfaSensitive`); before this a company-made job was never sensitive and escaped the setting whatever it carried. A job whose capabilities cannot be read is asked. The Decision text above is unchanged and still describes the four code-owned roles; the extension is read from the capabilities a job carries, so no person and no job name is ever listed.
 
 ## Context
 

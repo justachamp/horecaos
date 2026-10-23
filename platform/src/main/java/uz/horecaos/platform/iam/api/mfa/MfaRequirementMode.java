@@ -14,7 +14,11 @@ public enum MfaRequirementMode {
     /** Nobody is asked; an enrolled account is still asked for its code, because Keycloak enforces it. */
     OFF,
 
-    /** The owner, the administrator, finance and the brand manager ({@code PlatformRole#mfaSensitive}). */
+    /**
+     * The owner, the administrator, finance and the brand manager ({@code PlatformRole#mfaSensitive}),
+     * and a job the company composed that carries a power only those jobs carry
+     * ({@code TenantJobRules#isMfaSensitive}, ADR 0186).
+     */
     SENSITIVE_ROLES,
 
     /** Every account holding a job in the tenant. */

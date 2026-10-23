@@ -1,12 +1,15 @@
 package uz.horecaos.platform.iam.application.mfa;
 
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.iam.api.PlatformRole;
+import uz.horecaos.platform.iam.api.TenantJobRules;
 import uz.horecaos.platform.iam.api.mfa.MfaRequirementMode;
 import uz.horecaos.platform.iam.api.mfa.StaffMfaAdministration.Requirement;
 import uz.horecaos.platform.iam.api.mfa.TenantStaffMfaRequirements;
@@ -99,10 +102,32 @@ public class MfaPolicy {
             case OFF -> Requirement.NOT_REQUIRED;
             case ALL_STAFF -> Requirement.REQUIRED;
             case SENSITIVE_ROLES ->
-                roleCodes.stream().anyMatch(PlatformRole::isMfaSensitive)
-                        ? Requirement.REQUIRED
-                        : Requirement.NOT_REQUIRED;
+                holdsSensitiveJob(tenantId, roleCodes) ? Requirement.REQUIRED : Requirement.NOT_REQUIRED;
         };
+    }
+
+    /**
+     * A code-owned job answers from its own flag. A code the platform does not own is the company's
+     * job (ADR 0186), which has no flag and so answers from what it carries; one the facts cannot
+     * account for is sensitive ({@link TenantJobRules#isMfaSensitive}), because a tenant that asked
+     * for the factor on sensitive jobs must not lose it on the day a read comes back short.
+     */
+    private boolean holdsSensitiveJob(UUID tenantId, Set<String> roleCodes) {
+        Set<String> companyJobs = new HashSet<>();
+        for (String code : roleCodes) {
+            Optional<PlatformRole> owned = PlatformRole.find(code);
+            if (owned.isEmpty()) {
+                companyJobs.add(code);
+            } else if (owned.get().mfaSensitive()) {
+                return true;
+            }
+        }
+        if (companyJobs.isEmpty()) {
+            return false;
+        }
+        Map<String, Set<String>> carried = grants.tenantJobCapabilities(tenantId, companyJobs);
+        return companyJobs.stream()
+                .anyMatch(code -> TenantJobRules.isMfaSensitive(carried.getOrDefault(code, Set.of())));
     }
 
     private static boolean isStaffRole(PlatformRole role) {

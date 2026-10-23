@@ -20,7 +20,9 @@
   What is not done: no tenant has defined a job in production; `iam.grants` has no row-level
   security yet; a tenant job has no description and no translations; and nobody has driven the
   branch console's invite dialog with a custom job and a real branch manager's token (the HTTP
-  tests cover the `grant-roles` route she reads).
+  tests cover the `grant-roles` route she reads). Since 2026-10-23 a company's job is held to the
+  tenant's `SENSITIVE_ROLES` second factor (ADR 0148) by what it carries: a power only a sensitive
+  code-owned job holds makes it sensitive (see the status addition below).
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: Ayubkhon Abbosov (platform owner)
@@ -41,6 +43,7 @@
     three names or picks one.
 
 **Decision record, 2026-10-14.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "accept all defaults, start batch 21" (batch 21); each decision below is taken at the value the owner chose or, where the owner said nothing else, at the smallest default the batch-21 plan proposed.
+- Status addition, 2026-10-23: this record said nothing of the second factor, and a job the company composes is not a `PlatformRole`, so `MfaPolicy` read its code as "not sensitive" and a tenant on `SENSITIVE_ROLES` (ADR 0148) was not asking its holders for the factor whatever the job carried. The rule is now: a company's job is sensitive when it carries any power that, among the platform's tenant-visible code-owned jobs, only a `PlatformRole#mfaSensitive` job carries (`TenantJobRules#mfaSensitive`, `TenantJobRules#isMfaSensitive`, derived from the flag, not listed), so a copy of `tenant-finance` is asked exactly as `tenant-finance` is and a job of a branch manager's ordinary powers is not (`TenantJobRulesTests` proves it for every code-owned job). `StaffAccountFacts#tenantJobCapabilities` reads what the job carries under the tenant binding, and a job whose capabilities come back empty or unknown is treated as sensitive, so a short read cannot switch the control off (`MfaPolicyTests`; `JdbcStaffAccountFactsTests` runs the read as the application role, bound and unbound). `ALL_STAFF` and `OFF` were already right for a company's job and are unchanged. This record's Decision, Alternatives and Consequences are unchanged.
 
 ## Context
 
