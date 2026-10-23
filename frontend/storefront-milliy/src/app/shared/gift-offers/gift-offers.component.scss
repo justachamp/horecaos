@@ -36,7 +36,7 @@
   border-radius: var(--radius-sm);
   background: var(--surface-base);
   color: var(--text-primary);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 
   &:disabled {
@@ -57,7 +57,7 @@
 .offer__label {
   flex: 1;
   min-width: 0;
-  padding-left: 6px;
+  padding-inline-start: 6px;
   font: 600 14px/1.3 var(--font-ui);
 }
 

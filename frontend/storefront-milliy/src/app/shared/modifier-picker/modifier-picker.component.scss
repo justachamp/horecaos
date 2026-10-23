@@ -12,8 +12,8 @@
 /* A sheet rising from the bottom edge, over the tab bar. */
 .picker {
   position: fixed;
-  left: 0;
-  right: 0;
+  inset-inline-start: 0;
+  inset-inline-end: 0;
   bottom: 0;
   z-index: 61;
   display: flex;
