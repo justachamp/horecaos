@@ -448,6 +448,17 @@ broadcast reaches a controlled account and records its count; a second gateway
 can be registered without touching the first; and no message is ever sent twice
 because a response was lost.
 
+## Status addition (2026-10-14)
+
+Decision 8, «campaigns and courier broadcasts use the same path», is refined by [ADR 0182](../partial/0182-campaign-channels-email-push-couriers-and-delivery-statistics.md): the courier
+broadcast uses the same router, gateway, receipts and purpose gate, and not the same consent machinery,
+because a courier has no marketing consent and is not a campaign audience (D15). The row of the
+Alternatives table «Build email and push contracts in the same record» had the revisit trigger «a provider
+is named for either»: email now has a delivery through the platform's mail relay (D13), and push is decided
+as Web Push (D14) and not yet built. Delivery statistics derive from the receipts this record defines and
+carry a read through them without a change to the ladder it states. Nothing in this record's Decision,
+Alternatives or Consequences is rewritten.
+
 ## References
 
 - ADR 0005, ADR 0007, ADR 0020, ADR 0026, ADR 0028, ADR 0029, ADR 0033, ADR 0034
@@ -462,3 +473,9 @@ because a response was lost.
   `CampaignMessagePort`, `CampaignTelegramDeliveryService`,
   `CourierBroadcastService`, `SmsSegments`; `V0026`, `V0061`, `V0204`, `V0208`,
   `V0307`; `SecurityConfiguration` (the Click and Telegram `permitAll` pattern)
+
+## Status addition (2026-10-23)
+
+Push, which the 2026-10-14 addition above records as decided and not built, is built: Web Push is a campaign
+channel through its own platform-owned adapter ([ADR 0182](../partial/0182-campaign-channels-email-push-couriers-and-delivery-statistics.md), D14). It reports no delivery and a read by the customer's tap.
+Nothing in this record's Decision, Alternatives or Consequences is rewritten.

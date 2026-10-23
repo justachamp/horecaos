@@ -135,6 +135,16 @@ a `kind` column added here, and `StaffInvitationController.inspect`/`.accept`
 — this record's own public endpoints — now serve either kind of token, tried
 in the order that record's Decision section states.
 
+## Status addition (2026-10-14)
+
+The revisit trigger on this record's Alternatives row «The ADR 0020 notification pipeline» —
+«a tenant sends email to its own customers» — has been met. [ADR 0182](../partial/0182-campaign-channels-email-push-couriers-and-delivery-statistics.md) (D13) decides that a tenant's campaign
+email goes through the ADR 0020 pipeline and out through this record's `mail` module and its one SMTP
+connection, in the brand's name over the one sender address, as a platform-owned notification adapter that
+needs no installation. This record's Decision, Alternatives and Consequences are unchanged and still
+describe staff email; the mail provider, the sending domain's records and counsel's answer remain this
+record's open inputs and now also gate customers' email.
+
 ## References
 
 - ADR 0009, ADR 0062, ADR 0028, ADR 0029

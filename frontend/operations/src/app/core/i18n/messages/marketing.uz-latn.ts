@@ -132,8 +132,7 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.campaign.stats.refused': 'Rad etildi',
   'marketing.campaign.stats.total': 'Jami urinishlar',
   'marketing.campaign.stats.refusedByReason.title': 'Rad etilganlar, sabab boʻyicha',
-  'marketing.campaign.stats.deliveryUnavailableHint':
-    'Yetkazildi/yetkazilmadi hali kuzatilmaydi — bu kampaniya uchun oʻqilganlik xabari yoʻq.',
+  'marketing.campaign.stats.delivery.title': 'Xabarlar nima boʻldi',
   'marketing.campaign.stats.export': 'Qabul qiluvchilarni CSV sifatida eksport qilish',
   'marketing.campaign.stats.exportedCount': '{count} ta hisob ID eksport qilindi',
 
@@ -214,7 +213,7 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   // ------------------------------------------------------------- courier broadcasts 6.4b (T18)
   'marketing.courierBroadcasts.title': 'Kuryerlarga xabarnomalar',
   'marketing.courierBroadcasts.intro':
-    'Dispetcherning kuryerlarga oʻz operativ SMS xabarnomasi — smena almashinuvi, ob-havo, yoʻl yopilishi. Hech qachon mijoz kampaniyasi emas.',
+    'Dispetcherning kuryerlarga oʻz operativ SMS xabarlari — smena almashinuvi, ob-havo, yoʻl yopilishi. SMS-shlyuz tasdiqlagan matn boʻyicha, kuryerning tizimga kirish raqamiga yuboriladi; platforma raqamni bitta xabar uchun oʻqiydi va hech qayerda saqlamaydi. Hech qachon mijoz kampaniyasi emas.',
   'marketing.courierBroadcasts.loading': 'Yuklanmoqda',
   'marketing.courierBroadcasts.empty': 'Hali xabarnoma yoʻq',
   'marketing.courierBroadcasts.create.action': 'Yangi xabarnoma',
@@ -223,10 +222,9 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.courierBroadcasts.create.targetKind.ALL_ACTIVE': 'Barcha faol kuryerlar',
   'marketing.courierBroadcasts.create.targetKind.GROUP': 'Bitta kuryer guruhi',
   'marketing.courierBroadcasts.create.targetGroupId': 'Guruh ID',
-  'marketing.courierBroadcasts.create.message': 'Xabar',
   'marketing.courierBroadcasts.create.submit': 'Qoralamani saqlash',
   'marketing.courierBroadcasts.column.target': 'Qabul qiluvchilar',
-  'marketing.courierBroadcasts.column.message': 'Xabar',
+  'marketing.courierBroadcasts.column.message': 'Matn',
   'marketing.courierBroadcasts.column.status': 'Holat',
   'marketing.courierBroadcasts.column.recipients': 'Qabul qiluvchilar',
   'marketing.courierBroadcasts.status.DRAFT': 'Qoralama',
@@ -234,6 +232,73 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.courierBroadcasts.status.FAILED': 'Muvaffaqiyatsiz',
   'marketing.courierBroadcasts.action.send': 'Yuborish',
   'marketing.courierBroadcasts.refusalReason': 'Rad etildi: {reason}',
+  'marketing.courierBroadcasts.create.template': 'Matn',
+  'marketing.courierBroadcasts.create.template.placeholder': 'Tasdiqlangan matnni tanlang',
+  'marketing.courierBroadcasts.create.template.awaiting': '{key} — SMS-shlyuz tasdigʻini kutmoqda',
+  'marketing.courierBroadcasts.create.templates.none':
+    'Kuryerlar uchun tayyor matn yoʻq. «Sozlamalar → Bildirishnomalar» boʻlimida COURIER_DISPATCH sinfidagi SMS shablonini yarating va shlyuz tasdigʻini kuting.',
+  'marketing.courierBroadcasts.create.variablesHint':
+    'Qisqa qiymatlar, har biri bir qatorda, 80 belgidan oshmasin. Faqat ish matni: ism va telefon raqamlarisiz.',
+  'marketing.courierBroadcasts.create.preview': 'Xabar quyidagicha boʻladi',
+  'marketing.courierBroadcasts.variable.place': 'Joy',
+  'marketing.courierBroadcasts.variable.time': 'Vaqt',
+  'marketing.courierBroadcasts.variable.note': 'Izoh',
+  'marketing.courierBroadcasts.action.results': 'Natijalar',
+  'marketing.courierBroadcasts.action.hideResults': 'Natijalarni yashirish',
+  'marketing.courierBroadcasts.results.title': 'Har bir kuryer xabari nima boʻldi',
+  'marketing.courierBroadcasts.results.loading': 'Yuklanmoqda',
+  'marketing.courierBroadcasts.results.column.courier': 'Kuryer',
+  'marketing.courierBroadcasts.results.column.state': 'Holat',
+  'marketing.courierBroadcasts.results.column.reason': 'Sababi',
+  'marketing.courierBroadcasts.results.empty': 'Hech bir kuryerga xabar yuborilmadi.',
+  'marketing.courierBroadcasts.results.state.NO_CONTACT': 'Raqam yoʻq',
+  'marketing.delivery.reason.COURIER_HAS_NO_NUMBER':
+    'Identifikatsiya provayderida bu kuryer uchun platforma xabar yuboradigan raqam yoʻq. Profilni tuzating va qaytadan qoralama yarating.',
+  'marketing.delivery.reason.RECIPIENT_UNRESOLVABLE':
+    'Xabar yuborilayotganda kuryer raqami yoʻq edi.',
+  'marketing.delivery.reason.SMS_PURPOSE_NOT_PERMITTED':
+    'SMS hisobi kuryer xabarlarini yuborishga ruxsat etilmagan.',
+  'marketing.delivery.reason.RECEIVER_UNREACHABLE': 'Shlyuz raqamga yetib boʻlmasligini aytdi.',
+  'marketing.delivery.reason.PROVIDER_REPORTED_FAILURE':
+    'Shlyuz xabar yetib bormaganini maʻlum qildi.',
+  'marketing.delivery.reason.IDENTITY_PROVIDER_UNAVAILABLE':
+    'Identifikatsiya provayderidan kuryer raqamini soʻrab boʻlmadi; platforma qayta urinadi.',
+  'marketing.delivery.reason.other': 'Sabab kodi: {code}',
+  'marketing.delivery.reason.ADDRESS_REJECTED': 'Pochta serveri bu manzilni butunlay rad etdi',
+  'marketing.delivery.reason.ADDRESS_INVALID': 'Bu yaroqli email manzil emas',
+  'marketing.delivery.reason.MESSAGE_INVALID': 'Pochta serveri xatning oʻzini rad etdi',
+  'marketing.delivery.reason.SMTP_UNAVAILABLE': 'Pochta serveriga ulanib boʻlmadi',
+  'marketing.delivery.reason.EMAIL_NOT_CONFIGURED': 'Bu joylashtirishda pochta serveri sozlanmagan',
+  'marketing.courierBroadcasts.readiness.heading':
+    'Bu brend uchun kuryer SMS-larini hozircha yuborib boʻlmaydi',
+  'marketing.courierBroadcasts.wiring.SMS_PURPOSE_NOT_PERMITTED':
+    'Bu brendning SMS hisobi kuryer xabarlarini yuborishga ruxsat etilmagan. Kirish kodlari va buyurtma xabarlariga bu taʻsir qilmaydi. Platforma egasi hisob kuryer trafigini oʻtkaza olishini yozma tasdiqlamaguncha va u ulanishda koʻrsatilmaguncha kuryerga SMS yuborib boʻlmaydi.',
+  'marketing.courierBroadcasts.wiring.COURIER_CONTACTS_NOT_WIRED':
+    'Platforma hozircha kuryerning oʻz raqamidan unga xabar yuborish uchun foydalana olmaydi. Bu u tizimga kirishda ishlatadigan raqam va platforma uning nusxasini saqlamaydi; platforma egasi uni dispetcher xabari uchun ishlatish mumkinligini qayd etmaguncha kuryerlarga xabarnoma yuborib boʻlmaydi.',
+  'marketing.courierBroadcasts.wiring.COURIER_CONTACTS_UNAVAILABLE':
+    'Identifikatsiya provayderidan kuryerlar raqamlarini soʻrab boʻlmadi. Hech narsa yuborilmadi, xabarnoma qoralama boʻlib qoldi; birozdan keyin qayta urining.',
+  'marketing.courierBroadcasts.wiring.NO_PROVIDER_BINDING':
+    'Bu brend uchun SMS provayderi ulanmagan. Uni brend integratsiyalari sozlamalarida ulang.',
+  'marketing.courierBroadcasts.wiring.INSTALLATION_INACTIVE':
+    'SMS provayderi ulanishi oʻchirilgan.',
+  'marketing.courierBroadcasts.wiring.INSTALLATION_MISSING':
+    'SMS provayderi ulanishi endi mavjud emas.',
+  'marketing.courierBroadcasts.wiring.SMS_ACCOUNT_MISCONFIGURED':
+    'Bu brendning SMS hisobi sozlamalarining bir qismi yetishmaydi.',
+  'marketing.courierBroadcasts.wiring.PROVIDER_ADAPTER_MISMATCH':
+    'Ulangan SMS provayderi uchun bu versiyada adapter yoʻq.',
+  'marketing.courierBroadcasts.wiring.NO_ADAPTER': 'Bu versiyada SMS adapteri yoʻq.',
+  'marketing.courierBroadcasts.wiring.NO_DELIVERY_ADAPTER':
+    'Bu versiyada SMS yetkazish yoʻli yoʻq.',
+  'marketing.courierBroadcasts.wiring.COURIER_TEMPLATE_NOT_AVAILABLE':
+    'Bu xabarnoma matni endi bu brend uchun amaldagi kuryer matni emas.',
+  'marketing.courierBroadcasts.wiring.TEMPLATE_AWAITING_PROVIDER':
+    'Matn hali SMS-shlyuz tasdigʻini kutmoqda, shuning uchun u bilan hozircha hech narsa yuborib boʻlmaydi.',
+  'marketing.courierBroadcasts.wiring.NO_ACTIVE_COURIER': 'Bu tanlovda faol kuryer yoʻq.',
+  'marketing.courierBroadcasts.wiring.NO_COURIER_HAS_A_NUMBER':
+    'Tanlangan kuryerlarning birortasida platforma xabar yuboradigan raqam yoʻq; hech narsa yuborilmadi.',
+  'marketing.courierBroadcasts.wiring.UNKNOWN':
+    'Hozir bu brend uchun kuryerga SMS yuborib boʻlmaydi ({reason}).',
 
   // --------------------------------------------------------- attribution links 6.6a (ADR 0044, T18)
   'marketing.attributionLinks.title': 'Jalb qilish havolalari',
@@ -673,10 +738,15 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.wiring.NO_ADAPTER': 'Ushbu versiyada bu kanal uchun adapter yoʻq.',
   'marketing.wiring.NO_DELIVERY_ADAPTER':
     'Ushbu versiyada bu kanalning yetkazib berish yoʻli yoʻq.',
-  'marketing.wiring.NO_DELIVERY_ADAPTER.EMAIL':
-    'Mehmonlarga email ulanmagan. Platformaning pochta xizmati faqat xodimlarga taklif va parolni tiklash xatlarini yuboradi; muassasaning oʻz mehmonlariga email yuborish alohida qaror boʻlib, u hali qabul qilinmagan.',
-  'marketing.wiring.NO_DELIVERY_ADAPTER.PUSH':
-    'Push ulanmagan: push provayderi hali yoʻq, shuning uchun mehmonga push-xabar yuborib boʻlmaydi.',
+  'marketing.wiring.EMAIL_NOT_CONFIGURED':
+    'Bu joylashtirishda elektron pochta sozlanmagan: pochta serveri koʻrsatilmagan, shuning uchun hech narsa yuborib boʻlmaydi. Platforma egasi yuboruvchi provayderni ulamaguncha email kampaniyasini ishga tushirib boʻlmaydi.',
+  'marketing.wiring.EMAIL_PURPOSE_NOT_PERMITTED':
+    'Platformaning pochta xizmati faqat kampaniya xatlarini yuboradi.',
+  'marketing.wiring.PUSH_NOT_CONFIGURED':
+    'Bu joylashtirishda push sozlanmagan: platformaning push kalitlari va aloqa manzili koʻrsatilmagan, shuning uchun hech narsa yuborib boʻlmaydi. Platforma egasi ularni ulamaguncha push kampaniyasini ishga tushirib boʻlmaydi.',
+  'marketing.wiring.PUSH_PURPOSE_NOT_PERMITTED':
+    'Platformaning push xizmati faqat kampaniya xabarlarini yuboradi.',
+  'marketing.wiring.ACCOUNT_MISCONFIGURED': 'Bu kanal hisobining sozlamalari qisman yetishmaydi.',
   'marketing.wiring.UNKNOWN': 'Ushbu kanal hozir bu brend uchun xabar yetkaza olmaydi ({reason}).',
   'marketing.refusal.SCENARIO_CONFLICT': 'Boshqa faol ssenariy bu mehmonga hozirgina taklif bergan',
   'marketing.refusal.SCENARIO_PRIORITY_LOST':
@@ -1037,6 +1107,41 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.delivery.NO_RECEIPT': 'Yetkazish hisoboti kelmadi',
   'marketing.delivery.HANDED_TO_OPERATOR': 'Operatorga topshirilgan',
   'marketing.delivery.PENDING': 'Hali yuborilmagan',
+  'marketing.delivery.READ': 'Oʻqilgan',
+  'marketing.delivery.WITHHELD': 'Ushlab qolingan',
+  'marketing.delivery.HANDED_TO_OPERATOR.MESSAGING_APP': 'Yuborilgan',
+  'marketing.delivery.HANDED_TO_OPERATOR.PUSH': 'Push xizmati qabul qildi',
+  'marketing.delivery.READ.PUSH': 'Bosilgan',
+  'marketing.delivery.reason.PUSH_SUBSCRIPTION_GONE':
+    'Brauzerning push xizmati obuna tugaganini bildirdi: mijoz push-ni qayta yoqmaguncha unga bu yerdan yetib boʻlmaydi',
+  'marketing.delivery.reason.PUSH_VAPID_REJECTED':
+    'Push xizmati platformaning yuboruvchi kalitini bu obuna uchun qabul qilmadi (mijoz obuna boʻlgandan keyin kalit almashtirilgan)',
+  'marketing.delivery.reason.PUSH_NOT_CONFIGURED': 'Bu joylashtirishda push sozlanmagan',
+  'marketing.delivery.reason.PUSH_PAYLOAD_TOO_LARGE': 'Push xizmati xabar hajmini rad etdi',
+  'marketing.delivery.reason.PUSH_REQUEST_REFUSED': 'Push xizmati xabarni rad etdi',
+  'marketing.delivery.reason.PUSH_PAYLOAD_UNUSABLE': 'Xabarni bu obuna uchun shifrlab boʻlmadi',
+  'marketing.delivery.reason.PUSH_REDIRECT_REFUSED':
+    'Push xizmati soʻrovni boshqa manzilga yoʻnaltirdi; platforma bunga ergashmaydi',
+  'marketing.delivery.reason.PUSH_SERVICE_ERROR': 'Push xizmati qayta-qayta xato qaytardi',
+  'marketing.delivery.reason.PUSH_RATE_LIMITED':
+    'Push xizmati platformadan qayta-qayta sekinroq yuborishni soʻradi',
+  'marketing.delivery.reason.PUSH_SERVICE_UNREACHABLE': 'Push xizmatiga ulanib boʻlmadi',
+  'marketing.delivery.reason.PUSH_SECRET_UNAVAILABLE': 'Platformaning push kaliti mavjud emas',
+  'marketing.delivery.counts.notReported': 'Bu kanal maʻlum qilmaydi',
+  'marketing.delivery.counts.segments': 'Hisoblangan segmentlar',
+  'marketing.delivery.counts.withheldTitle': 'Ushlab qolish sabablari',
+  'marketing.delivery.withheld.TEMPLATE_AWAITING_PROVIDER': 'Matn shlyuz tasdigʻini kutmoqda',
+  'marketing.delivery.withheld.TEMPLATE_REFUSED_BY_PROVIDER': 'Matnni shlyuz rad etgan',
+  'marketing.delivery.withheld.CONSENT_WITHHELD':
+    'Auditoriya tuzilgandan keyin rozilik qaytarib olingan',
+  'marketing.delivery.withheld.PREFERENCE_DISABLED': 'Mijoz buni oʻchirgan',
+  'marketing.delivery.withheld.NO_RECIPIENT_ENDPOINT': 'Yaroqli manzil yoki raqam yoʻq',
+  'marketing.delivery.withheld.NO_RECIPIENT_ACCOUNT': 'Mijoz hisobi yoʻq',
+  'marketing.delivery.withheld.NO_ACTIVE_TEMPLATE': 'Amaldagi matn yoʻq',
+  'marketing.delivery.withheld.NO_TEMPLATE_FOR_LOCALE': 'Mijoz tilida matn yoʻq',
+  'marketing.delivery.withheld.CHANNEL_NOT_AVAILABLE': 'Kanal mavjud emas',
+  'marketing.delivery.withheld.CAMPAIGN_NOT_SENDING': 'Kampaniya toʻxtatilgan',
+  'marketing.delivery.withheld.EXPIRED': 'Yuborilmasdan muddati tugadi',
   'marketing.campaign.recipients.deliveryHint':
     'Yetkazish — shlyuzdan kelgan maʻlumot, vaʻda emas: «operatorga topshirilgan» xabar qabul qilingani va boshqa hech narsa maʻlum qilinmaganini bildiradi.',
   'marketing.campaign.recipients.segments': 'Hisoblangan segmentlar: {count}',

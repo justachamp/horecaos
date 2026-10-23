@@ -166,11 +166,6 @@
   text-align: right;
 }
 
-.not-built-note {
-  margin-top: 8px;
-  color: var(--q-ink-muted);
-}
-
 .secondary {
   height: 32px;
   padding: 0 14px;

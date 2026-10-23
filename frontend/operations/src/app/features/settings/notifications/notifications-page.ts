@@ -45,6 +45,7 @@ const NOTIFICATION_CLASSES: readonly string[] = [
   'TRANSACTIONAL_OPTIONAL',
   'MARKETING',
   'OPERATIONS_ALERT',
+  'COURIER_DISPATCH',
 ];
 
 /** The classes whose template names the consent purpose it is checked against (V0026's check). */
@@ -55,6 +56,15 @@ const CLASSES_NEEDING_A_PURPOSE: ReadonlySet<string> = new Set([
 
 /** The platform's own purpose for the optional order milestones (`PlatformDefaultTemplates`). */
 const ORDER_PROGRESS_PURPOSE = 'ORDER_PROGRESS_UPDATES';
+
+/** The consent purpose a campaign is sent under unless a tenant has defined its own. */
+const DEFAULT_CONSENT_PURPOSE = 'MARKETING_PROMOTIONS';
+
+/**
+ * The channels the platform sends from its own account, for campaigns only (ADR 0182): email through its
+ * mail relay and push through its Web Push. A template on either is a marketing template.
+ */
+const MARKETING_ONLY_CHANNELS: ReadonlySet<string> = new Set(['EMAIL', 'PUSH']);
 
 const PAYMENT_LINK_CODE = 'notifications.payment_link_auto_send';
 const AGGREGATOR_SHIFT_CODE = 'notifications.aggregator_shift_notifications_enabled';
@@ -137,6 +147,8 @@ export class NotificationsPage {
   protected readonly newTemplateKey = signal('');
   protected readonly newNotificationClass = signal(NOTIFICATION_CLASSES[0]);
   protected readonly newChannel = signal(NOTIFICATION_CHANNELS[0]);
+  /** Email and push carry campaigns and nothing else, so the class is not a choice there. */
+  protected readonly classIsFixed = computed(() => MARKETING_ONLY_CHANNELS.has(this.newChannel()));
   /** `''` is "every fulfilment mode" / "every channel source" — the wildcard row, sent as `null`. */
   protected readonly newFulfilmentMode = signal('');
   protected readonly newChannelSource = signal('');
@@ -251,6 +263,17 @@ export class NotificationsPage {
       this.newConsentPurpose.set('');
     } else if (value === 'TRANSACTIONAL_OPTIONAL' && this.newConsentPurpose().trim().length === 0) {
       this.newConsentPurpose.set(ORDER_PROGRESS_PURPOSE);
+    }
+  }
+
+  /** Picking email or push makes the template a marketing one: those channels carry nothing else. */
+  protected chooseChannel(channel: string): void {
+    this.newChannel.set(channel);
+    if (MARKETING_ONLY_CHANNELS.has(channel)) {
+      this.onClassChange('MARKETING');
+      if (this.newConsentPurpose().trim().length === 0) {
+        this.newConsentPurpose.set(DEFAULT_CONSENT_PURPOSE);
+      }
     }
   }
 

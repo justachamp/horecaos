@@ -57,6 +57,16 @@ public interface NotificationChannelAdapter {
     String channel();
 
     /**
+     * Whether this adapter speaks for the platform itself and not for a tenant's own account
+     * (ADR 0182). The platform's mail relay is the deployment's, one for every tenant, so there
+     * is no ADR 0026 installation or binding to find and none to configure: the gateway calls
+     * such an adapter directly and asks it whether it is configured.
+     */
+    default boolean platformOwned() {
+        return false;
+    }
+
+    /**
      * Sends one message for a gateway that needs nothing beside its credential.
      */
     ProviderOutcome send(NotificationDispatch dispatch, ProviderCall call);

@@ -7,9 +7,13 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
@@ -21,7 +25,10 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.marketing.api.CampaignMessagePort.DeliveryEvidence;
+import uz.horecaos.platform.marketing.api.CourierContactSource;
 import uz.horecaos.platform.marketing.application.AttributionLinkService;
+import uz.horecaos.platform.marketing.application.CourierBroadcastLedger;
 import uz.horecaos.platform.marketing.application.CourierBroadcastService;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAttributionLinkStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAttributionLinkStore.AttributionLinkRow;
@@ -58,7 +65,7 @@ class CourierBroadcastAndAttributionLinkTests {
     private CourierBroadcastService broadcasts;
     private AttributionLinkService links;
     private FakeCampaignMessagePort port;
-    private boolean couriersAddressable;
+    private FakeCourierContacts contacts;
     private RecordingAuditRecorder audit;
 
     private UUID courierType;
@@ -82,7 +89,8 @@ class CourierBroadcastAndAttributionLinkTests {
     void setUp() {
         DataSource dataSource = db.dataSource();
         jdbc = JdbcClient.create(dataSource);
-        jdbc.sql("TRUNCATE TABLE marketing.courier_broadcasts, marketing.attribution_links CASCADE")
+        jdbc.sql(
+                        "TRUNCATE TABLE marketing.courier_broadcast_recipients, marketing.courier_broadcasts, marketing.attribution_links CASCADE")
                 .update();
         jdbc.sql("TRUNCATE TABLE marketing.campaigns, marketing.audiences CASCADE")
                 .update();
@@ -94,53 +102,244 @@ class CourierBroadcastAndAttributionLinkTests {
 
         port = new FakeCampaignMessagePort();
         audit = new RecordingAuditRecorder();
-        couriersAddressable = true;
+        contacts = new FakeCourierContacts();
+        port.withCourierTemplate("COURIER_SHIFT_CHANGE", List.of("note", "time"), false);
+        JdbcCourierBroadcastStore store = new JdbcCourierBroadcastStore(jdbc);
         broadcasts = new CourierBroadcastService(
-                new JdbcCourierBroadcastStore(jdbc), port, () -> couriersAddressable, audit, CLOCK);
+                store,
+                port,
+                contacts,
+                new CourierBroadcastLedger(store, port, audit, CLOCK),
+                audit,
+                tools.jackson.databind.json.JsonMapper.builder().build(),
+                CLOCK);
         links = new AttributionLinkService(
                 new JdbcAttributionLinkStore(jdbc), new JdbcCampaignStore(jdbc), audit, CLOCK);
     }
 
     // ------------------------------------------------------------ courier broadcasts
 
+    private UUID draftToAll() {
+        return broadcasts.draft(
+                TENANT,
+                BRAND,
+                "ALL_ACTIVE",
+                null,
+                "COURIER_SHIFT_CHANGE",
+                Map.of("note", "Shift change", "time", "18:00"),
+                AUTHOR);
+    }
+
     @Test
-    @DisplayName("ALL_ACTIVE resolves to every ACTIVE courier of the tenant, and archived ones are excluded")
-    void allActiveResolvesOnlyActiveCouriers() {
-        insertCourier("K-001", "ACTIVE");
-        insertCourier("K-002", "ACTIVE");
+    @DisplayName("ALL_ACTIVE addresses every ACTIVE courier of the tenant, one message each, archived ones excluded")
+    void allActiveAddressesOnlyActiveCouriers() {
+        UUID first = insertCourier("K-001", "ACTIVE");
+        UUID second = insertCourier("K-002", "ACTIVE");
         insertCourier("K-003", "ARCHIVED");
-        UUID broadcastId = broadcasts.draft(TENANT, BRAND, "ALL_ACTIVE", null, "Shift change at 18:00", AUTHOR);
-        CourierBroadcastRow sent = broadcasts.send(TENANT, broadcastId, AUTHOR);
+
+        CourierBroadcastRow sent = broadcasts.send(TENANT, draftToAll(), AUTHOR);
 
         assertThat(sent.status()).isEqualTo("SENT");
         assertThat(sent.recipientCount()).isEqualTo(2);
         assertThat(sent.sentAt()).isNotNull();
+        assertThat(port.courierSent())
+                .extracting(message -> message.courierId())
+                .containsExactlyInAnyOrder(first, second);
+        assertThat(port.courierSent()).allSatisfy(message -> {
+            assertThat(message.templateKey()).isEqualTo("COURIER_SHIFT_CHANGE");
+            assertThat(message.variables())
+                    .containsEntry("note", "Shift change")
+                    .containsEntry("time", "18:00");
+            assertThat(message.idempotencyKey())
+                    .isEqualTo("courier-broadcast:" + sent.id() + ":" + message.courierId());
+        });
+        assertThat(broadcasts.results(TENANT, sent.id()))
+                .extracting(CourierBroadcastService.CourierResult::courierReference)
+                .containsExactly("K-001", "K-002");
     }
 
     @Test
-    @DisplayName("a GROUP broadcast counts only that group's active members")
-    void groupBroadcastCountsOnlyGroupMembers() {
+    @DisplayName("a GROUP broadcast addresses only that group's active members")
+    void groupBroadcastAddressesOnlyGroupMembers() {
         UUID inGroup1 = insertCourier("K-010", "ACTIVE");
         UUID inGroup2 = insertCourier("K-011", "ACTIVE");
         UUID notInGroup = insertCourier("K-012", "ACTIVE");
         addToGroup(inGroup1);
         addToGroup(inGroup2);
 
-        UUID broadcastId = broadcasts.draft(TENANT, BRAND, "GROUP", groupId, "Route closure on Amir Temur", AUTHOR);
+        UUID broadcastId = broadcasts.draft(
+                TENANT,
+                BRAND,
+                "GROUP",
+                groupId,
+                "COURIER_SHIFT_CHANGE",
+                Map.of("note", "Route closure", "time", "now"),
+                AUTHOR);
         CourierBroadcastRow sent = broadcasts.send(TENANT, broadcastId, AUTHOR);
 
         assertThat(sent.recipientCount())
-                .as("K-012 is active but not in the targeted group, so it is not counted")
+                .as("K-012 is active but not in the targeted group, so it is not addressed")
                 .isEqualTo(2);
-        assertThat(notInGroup).isNotNull();
+        assertThat(port.courierSent())
+                .extracting(message -> message.courierId())
+                .doesNotContain(notInGroup);
+    }
+
+    @Test
+    @DisplayName("a courier with no number is in the ledger as NO_CONTACT and is never messaged")
+    void aCourierWithNoNumberIsLedgeredNotMessaged() {
+        UUID numbered = insertCourier("K-020", "ACTIVE");
+        UUID unnumbered = insertCourier("K-021", "ACTIVE");
+        contacts.withNumber = Set.of(numbered);
+
+        CourierBroadcastRow sent = broadcasts.send(TENANT, draftToAll(), AUTHOR);
+
+        assertThat(sent.status()).isEqualTo("SENT");
+        assertThat(sent.recipientCount())
+                .as("the count is the couriers who were messaged, not the couriers who were targeted")
+                .isEqualTo(1);
+        assertThat(port.courierSent())
+                .extracting(message -> message.courierId())
+                .containsExactly(numbered);
+        assertThat(port.courierSent())
+                .extracting(message -> message.courierId())
+                .doesNotContain(unnumbered);
+        assertThat(broadcasts.results(TENANT, sent.id()))
+                .extracting(
+                        CourierBroadcastService.CourierResult::courierReference,
+                        CourierBroadcastService.CourierResult::state,
+                        CourierBroadcastService.CourierResult::reason)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("K-020", "PENDING", null),
+                        org.assertj.core.groups.Tuple.tuple("K-021", "NO_CONTACT", "COURIER_HAS_NO_NUMBER"));
+        assertThat(contacts.askedFor)
+                .as("the identity provider is asked once, for a purpose, and for every targeted courier together")
+                .containsExactly("COURIER_BROADCAST_SEND/2");
+    }
+
+    @Test
+    @DisplayName("what a gateway said about each courier's message is read from its evidence, not copied")
+    void theResultIsTheMessagesOwnEvidence() {
+        UUID courier = insertCourier("K-022", "ACTIVE");
+        CourierBroadcastRow sent = broadcasts.send(TENANT, draftToAll(), AUTHOR);
+        UUID notificationId = port.courierNotificationFor("courier-broadcast:" + sent.id() + ":" + courier);
+
+        port.withEvidence(notificationId, new DeliveryEvidence("DELIVERED", null, 1, null));
+        assertThat(broadcasts.results(TENANT, sent.id()).getFirst().state()).isEqualTo("DELIVERED");
+
+        port.withEvidence(notificationId, new DeliveryEvidence("FAILED", null, 1, "RECEIVER_UNREACHABLE"));
+        var result = broadcasts.results(TENANT, sent.id()).getFirst();
+        assertThat(result.state()).isEqualTo("FAILED");
+        assertThat(result.reason()).isEqualTo("RECEIVER_UNREACHABLE");
+    }
+
+    @Test
+    @DisplayName("nobody having a number fails the broadcast with that reason, and every courier is in the ledger")
+    void nobodyHasANumber() {
+        insertCourier("K-030", "ACTIVE");
+        insertCourier("K-031", "ACTIVE");
+        contacts.withNumber = Set.of();
+
+        ApiException failure =
+                catchThrowableOfType(() -> broadcasts.send(TENANT, draftToAll(), AUTHOR), ApiException.class);
+
+        assertThat(failure.errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
+        CourierBroadcastRow row = broadcasts.list(TENANT, BRAND).getFirst();
+        assertThat(row.status()).isEqualTo("FAILED");
+        assertThat(row.refusalReason()).contains(CourierBroadcastService.NO_COURIER_HAS_A_NUMBER);
+        assertThat(row.recipientCount()).isZero();
+        assertThat(port.courierSent()).isEmpty();
+        assertThat(broadcasts.results(TENANT, row.id()))
+                .extracting(CourierBroadcastService.CourierResult::state)
+                .containsExactly("NO_CONTACT", "NO_CONTACT");
+    }
+
+    @Test
+    @DisplayName(
+            "an identity provider that cannot be asked fails the send visibly and leaves a draft, not a fleet with no numbers")
+    void anIdentityOutageIsNotNoContact() {
+        insertCourier("K-040", "ACTIVE");
+        UUID broadcastId = draftToAll();
+        contacts.unavailable = true;
+
+        ApiException failure =
+                catchThrowableOfType(() -> broadcasts.send(TENANT, broadcastId, AUTHOR), ApiException.class);
+
+        assertThat(failure.errorCode()).isEqualTo(ErrorCode.IDENTITY_PROVIDER_UNAVAILABLE);
+        assertThat(failure.properties()).containsEntry("reason", CourierBroadcastService.CONTACTS_UNAVAILABLE);
+        CourierBroadcastRow row = broadcasts.require(TENANT, broadcastId);
+        assertThat(row.status())
+                .as("a draft the dispatcher can send again when the server is back")
+                .isEqualTo("DRAFT");
+        assertThat(port.courierSent()).isEmpty();
+        assertThat(broadcasts.results(TENANT, broadcastId)).isEmpty();
+
+        contacts.unavailable = false;
+        assertThat(broadcasts.send(TENANT, broadcastId, AUTHOR).status()).isEqualTo("SENT");
     }
 
     @Test
     @DisplayName("a GROUP broadcast must name a targetGroupId, and ALL_ACTIVE must not")
     void targetKindShapeIsEnforced() {
-        assertThatThrownBy(() -> broadcasts.draft(TENANT, BRAND, "GROUP", null, "x", AUTHOR))
+        Map<String, String> values = Map.of("note", "x", "time", "y");
+        assertThatThrownBy(() -> broadcasts.draft(TENANT, BRAND, "GROUP", null, "COURIER_SHIFT_CHANGE", values, AUTHOR))
                 .isInstanceOf(ApiException.class);
-        assertThatThrownBy(() -> broadcasts.draft(TENANT, BRAND, "ALL_ACTIVE", UUID.randomUUID(), "x", AUTHOR))
+        assertThatThrownBy(() -> broadcasts.draft(
+                        TENANT, BRAND, "ALL_ACTIVE", UUID.randomUUID(), "COURIER_SHIFT_CHANGE", values, AUTHOR))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    @DisplayName("a draft names an approved wording and supplies exactly its variables, each short and on one line")
+    void aDraftIsCheckedAgainstTheWording() {
+        assertThatThrownBy(() -> broadcasts.draft(
+                        TENANT,
+                        BRAND,
+                        "ALL_ACTIVE",
+                        null,
+                        "A_MARKETING_WORDING",
+                        Map.of("note", "x", "time", "y"),
+                        AUTHOR))
+                .as("only a wording the tenant authored for couriers, and the gateway approved")
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("No active courier wording");
+        assertThatThrownBy(() -> broadcasts.draft(
+                        TENANT, BRAND, "ALL_ACTIVE", null, "COURIER_SHIFT_CHANGE", Map.of("note", "x"), AUTHOR))
+                .as("a variable the wording declares has no value")
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("\"time\"");
+        assertThatThrownBy(() -> broadcasts.draft(
+                        TENANT,
+                        BRAND,
+                        "ALL_ACTIVE",
+                        null,
+                        "COURIER_SHIFT_CHANGE",
+                        Map.of("note", "x", "time", "y", "extra", "z"),
+                        AUTHOR))
+                .as("a value for a variable the wording does not have could say something it does not")
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("\"extra\"");
+        assertThatThrownBy(() -> broadcasts.draft(
+                        TENANT,
+                        BRAND,
+                        "ALL_ACTIVE",
+                        null,
+                        "COURIER_SHIFT_CHANGE",
+                        Map.of("note", "x".repeat(81), "time", "y"),
+                        AUTHOR))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("80");
+        assertThatThrownBy(() -> broadcasts.draft(
+                        TENANT,
+                        BRAND,
+                        "ALL_ACTIVE",
+                        null,
+                        "COURIER_SHIFT_CHANGE",
+                        Map.of("note", "line one\nline two", "time", "y"),
+                        AUTHOR))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("single line");
+        assertThatThrownBy(() -> broadcasts.draft(TENANT, BRAND, "ALL_ACTIVE", null, " ", Map.of(), AUTHOR))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -148,11 +347,8 @@ class CourierBroadcastAndAttributionLinkTests {
     @DisplayName(
             "send is refused, visibly, when SMS has no wired delivery path — the same isWired honesty campaigns get")
     void sendRefusesWhenSmsIsNotWired() {
-        // FakeCampaignMessagePort answers isWired the same for every channel
-        // name; unwire() flips that shared answer to false, standing in for
-        // production's own SMS — notifications implements isWired for
-        // TELEGRAM only, and SMS has no adapter at all (row 6.4a).
-        UUID broadcastId = broadcasts.draft(TENANT, BRAND, "ALL_ACTIVE", null, "Weather closure", AUTHOR);
+        insertCourier("K-050", "ACTIVE");
+        UUID broadcastId = draftToAll();
         port.unwire();
 
         ApiException failure =
@@ -161,14 +357,18 @@ class CourierBroadcastAndAttributionLinkTests {
 
         CourierBroadcastRow row = broadcasts.require(TENANT, broadcastId);
         assertThat(row.status()).isEqualTo("FAILED");
-        assertThat(row.refusalReason()).contains("SMS");
+        assertThat(row.refusalReason()).contains("SMS").contains("NO_PROVIDER_BINDING");
+        assertThat(contacts.askedFor)
+                .as("the identity provider is not asked for a send that cannot leave")
+                .isEmpty();
     }
 
     @Test
     @DisplayName(
             "an account not cleared for courier traffic refuses the send with the stable code, and the courier purpose is what was asked")
     void sendRefusesWhenTheAccountIsNotClearedForCouriers() {
-        UUID broadcastId = broadcasts.draft(TENANT, BRAND, "ALL_ACTIVE", null, "Road closure", AUTHOR);
+        insertCourier("K-051", "ACTIVE");
+        UUID broadcastId = draftToAll();
         port.refusingPurpose("COURIER");
 
         ApiException failure =
@@ -184,10 +384,11 @@ class CourierBroadcastAndAttributionLinkTests {
 
     @Test
     @DisplayName(
-            "a cleared account still cannot message couriers that nothing can address, and the broadcast is not recorded as sent")
-    void sendRefusesWhenNoCourierCanBeAddressed() {
-        UUID broadcastId = broadcasts.draft(TENANT, BRAND, "ALL_ACTIVE", null, "Road closure", AUTHOR);
-        couriersAddressable = false;
+            "a cleared account still cannot message couriers until the owner says their number may be used, and the broadcast is not recorded as sent")
+    void sendRefusesWhenCourierContactsAreNotWired() {
+        insertCourier("K-052", "ACTIVE");
+        UUID broadcastId = draftToAll();
+        contacts.wired = false;
 
         ApiException failure =
                 catchThrowableOfType(() -> broadcasts.send(TENANT, broadcastId, AUTHOR), ApiException.class);
@@ -197,28 +398,85 @@ class CourierBroadcastAndAttributionLinkTests {
         assertThat(row.status()).isEqualTo("FAILED");
         assertThat(row.refusalReason()).contains(CourierBroadcastService.COURIERS_NOT_ADDRESSABLE);
         assertThat(row.recipientCount()).isZero();
+        assertThat(port.courierSent()).isEmpty();
+        assertThat(contacts.askedFor)
+                .as("and nothing is read from the identity provider while the answer is no")
+                .isEmpty();
     }
 
     @Test
-    @DisplayName("a message over 480 characters is refused at draft time")
-    void overlongMessageIsRefused() {
-        String tooLong = "x".repeat(481);
-        assertThatThrownBy(() -> broadcasts.draft(TENANT, BRAND, "ALL_ACTIVE", null, tooLong, AUTHOR))
-                .isInstanceOf(ApiException.class);
+    @DisplayName("a wording still waiting for the SMS gateway's approval is refused up front (ADR 0091)")
+    void sendRefusesAWordingTheGatewayHasNotApproved() {
+        insertCourier("K-053", "ACTIVE");
+        port.withCourierTemplate("COURIER_SHIFT_CHANGE", List.of("note", "time"), true);
+        UUID broadcastId = draftToAll();
+
+        ApiException failure =
+                catchThrowableOfType(() -> broadcasts.send(TENANT, broadcastId, AUTHOR), ApiException.class);
+
+        assertThat(failure.errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
+        assertThat(broadcasts.require(TENANT, broadcastId).refusalReason())
+                .contains(CourierBroadcastService.TEMPLATE_AWAITING_PROVIDER);
+        assertThat(port.courierSent()).isEmpty();
     }
 
     @Test
-    @DisplayName("drafting and sending a broadcast each write an ADR 0027 audit fact in the same transaction")
+    @DisplayName("a wording withdrawn between draft and send is refused, not sent as it stood")
+    void sendRefusesAWordingThatIsGone() {
+        insertCourier("K-054", "ACTIVE");
+        UUID broadcastId = draftToAll();
+        port.withoutCourierTemplates();
+
+        assertThatThrownBy(() -> broadcasts.send(TENANT, broadcastId, AUTHOR)).isInstanceOf(ApiException.class);
+
+        assertThat(broadcasts.require(TENANT, broadcastId).refusalReason())
+                .contains(CourierBroadcastService.TEMPLATE_NOT_AVAILABLE);
+    }
+
+    @Test
+    @DisplayName("a target with no active courier is refused, not recorded as a send to nobody")
+    void sendRefusesAnEmptyTarget() {
+        insertCourier("K-055", "ARCHIVED");
+        UUID broadcastId = draftToAll();
+
+        assertThatThrownBy(() -> broadcasts.send(TENANT, broadcastId, AUTHOR)).isInstanceOf(ApiException.class);
+
+        assertThat(broadcasts.require(TENANT, broadcastId).refusalReason())
+                .contains(CourierBroadcastService.NO_ACTIVE_COURIER);
+    }
+
+    @Test
+    @DisplayName("a broadcast is sent once: the second send is refused and messages nobody again")
+    void aBroadcastIsSentOnce() {
+        insertCourier("K-056", "ACTIVE");
+        UUID broadcastId = draftToAll();
+        broadcasts.send(TENANT, broadcastId, AUTHOR);
+
+        ApiException second =
+                catchThrowableOfType(() -> broadcasts.send(TENANT, broadcastId, AUTHOR), ApiException.class);
+
+        assertThat(second.errorCode()).isEqualTo(ErrorCode.RESOURCE_CONFLICT);
+        assertThat(port.courierSent()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName(
+            "drafting and sending a broadcast each write an ADR 0027 audit fact, and neither carries the dispatcher's text")
     void draftAndSendAreAudited() {
-        insertCourier("K-020", "ACTIVE");
-        UUID broadcastId = broadcasts.draft(TENANT, BRAND, "ALL_ACTIVE", null, "Shift change", AUTHOR);
+        insertCourier("K-060", "ACTIVE");
+        UUID broadcastId = draftToAll();
         broadcasts.send(TENANT, broadcastId, AUTHOR);
 
         assertThat(audit.facts)
-                .as("a dispatcher's own courier SMS blast is an operator-initiated action "
-                        + "ADR 0027 requires evidence for")
+                .as("a dispatcher's own courier SMS is an operator-initiated action ADR 0027 requires evidence for")
                 .extracting(AuditFact::actionCode)
                 .contains("MARKETING_COURIER_BROADCAST_DRAFTED", "MARKETING_COURIER_BROADCAST_SENT");
+        assertThat(audit.facts.stream()
+                        .map(fact -> fact.changeDocument().toString())
+                        .collect(Collectors.joining()))
+                .as("the values are operational text the dispatcher typed; the audit trail keeps the wording's key")
+                .doesNotContain("Shift change")
+                .doesNotContain("18:00");
     }
 
     // ------------------------------------------------------------ attribution links
@@ -427,6 +685,34 @@ class CourierBroadcastAndAttributionLinkTests {
         @Override
         public void record(AuditFact fact) {
             facts.add(fact);
+        }
+    }
+
+    /** The identity provider, as far as a broadcast sees it: who has a number, and whether it can be asked. */
+    private static final class FakeCourierContacts implements CourierContactSource {
+
+        boolean wired = true;
+        boolean unavailable;
+        /** Null means everyone has a number. */
+        @org.jspecify.annotations.Nullable
+        Set<UUID> withNumber;
+
+        final List<String> askedFor = new CopyOnWriteArrayList<>();
+
+        @Override
+        public boolean isWired() {
+            return wired;
+        }
+
+        @Override
+        public Set<UUID> addressable(UUID tenantId, Collection<UUID> courierIds, String purpose) {
+            askedFor.add(purpose + "/" + courierIds.size());
+            if (unavailable) {
+                throw new UnavailableException("the identity provider is down", new IllegalStateException());
+            }
+            return courierIds.stream()
+                    .filter(id -> withNumber == null || withNumber.contains(id))
+                    .collect(Collectors.toSet());
         }
     }
 }

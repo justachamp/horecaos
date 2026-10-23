@@ -10,7 +10,13 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { Capability, SessionCapabilities } from '../../core/auth/session-capabilities';
 import { I18n } from '../../core/i18n/i18n';
 import { CustomerSummary, CustomersApi } from '../customers/customers-api';
-import { CampaignView, MarketingApi, RecipientCountsView } from '../marketing/marketing-api';
+import {
+  CampaignDeliveryView,
+  CampaignView,
+  DeliveryCountsView,
+  MarketingApi,
+  RecipientCountsView,
+} from '../marketing/marketing-api';
 import {
   CustomerDiscountHistory,
   MarketingReportApi,
@@ -90,6 +96,26 @@ const CAMPAIGN: CampaignView = {
   supersedesCampaignId: null,
 };
 
+/** What became of a campaign's messages (ADR 0182); by default none yet, on a channel that reports nothing. */
+function delivery(overrides: Partial<DeliveryCountsView> = {}): DeliveryCountsView {
+  return {
+    total: 0,
+    delivered: 0,
+    read: 0,
+    failed: 0,
+    rejected: 0,
+    handedToOperator: 0,
+    noReceipt: 0,
+    pending: 0,
+    withheld: 0,
+    withheldByReason: {},
+    segmentsBilled: 0,
+    reportsDelivery: false,
+    reportsRead: false,
+    ...overrides,
+  };
+}
+
 const COUNTS: RecipientCountsView = {
   pending: 1,
   queued: 40,
@@ -97,7 +123,28 @@ const COUNTS: RecipientCountsView = {
   refused: 3,
   total: 46,
   refusedByReason: { SUPPRESSED: 2, CONSENT_WITHHELD: 1 },
+  delivery: delivery({ total: 40, handedToOperator: 37, failed: 2, rejected: 1 }),
 };
+
+const OTHER_CAMPAIGN: CampaignView = {
+  ...CAMPAIGN,
+  campaignId: 'campaign-2',
+  name: 'Telegram digest',
+  channel: 'MESSAGING_APP',
+};
+
+const DELIVERIES: readonly CampaignDeliveryView[] = [
+  {
+    campaignId: 'campaign-1',
+    channel: 'SMS',
+    delivery: delivery({ total: 40, handedToOperator: 37, failed: 2, rejected: 1, withheld: 3 }),
+  },
+  {
+    campaignId: 'campaign-2',
+    channel: 'MESSAGING_APP',
+    delivery: delivery({ total: 10, delivered: 6, failed: 1, reportsDelivery: true }),
+  },
+];
 
 const PROVENANCE = {
   asOf: '2026-10-02T09:00:00Z',
@@ -208,6 +255,7 @@ describe('MarketingReportPage', () => {
   let marketingApi: {
     listCampaigns: ReturnType<typeof vi.fn>;
     recipientCounts: ReturnType<typeof vi.fn>;
+    campaignDeliveryCounts: ReturnType<typeof vi.fn>;
   };
   let discountApi: {
     discountHistory: ReturnType<typeof vi.fn>;
@@ -226,8 +274,9 @@ describe('MarketingReportPage', () => {
         .mockResolvedValue({ items: [CUSTOMER], nextCursor: null } satisfies Page<CustomerSummary>),
     };
     marketingApi = {
-      listCampaigns: vi.fn().mockResolvedValue([CAMPAIGN]),
+      listCampaigns: vi.fn().mockResolvedValue([CAMPAIGN, OTHER_CAMPAIGN]),
       recipientCounts: vi.fn().mockResolvedValue(COUNTS),
+      campaignDeliveryCounts: vi.fn().mockResolvedValue(DELIVERIES),
     };
     discountApi = {
       discountHistory: vi.fn().mockResolvedValue(history()),
@@ -672,7 +721,7 @@ describe('MarketingReportPage', () => {
     expect(host.querySelector('[data-testid="marketing-report-discount-totals"]')).toBeNull();
   });
 
-  it('row 7.9b: lists campaigns and, once one is picked, shows its recipient counts and the read-receipts caveat', async () => {
+  async function openCampaignsTab(): Promise<HTMLElement> {
     await render();
     const host: HTMLElement = fixture.nativeElement;
     const campaignsTab = Array.from(host.querySelectorAll('[role="tab"]')).find(
@@ -682,20 +731,79 @@ describe('MarketingReportPage', () => {
     fixture.detectChanges();
     await flushMicrotasks();
     fixture.detectChanges();
+    return host;
+  }
+
+  async function pickCampaign(host: HTMLElement, index: number): Promise<void> {
+    (
+      host.querySelectorAll('[data-testid="marketing-report-campaign-row"]')[index] as HTMLElement
+    ).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  }
+
+  it('row 7.9b: lists campaigns and, once one is picked, shows the send pipeline’s counts', async () => {
+    const host = await openCampaignsTab();
 
     expect(marketingApi.listCampaigns).toHaveBeenCalledWith(SCOPE);
     expect(host.textContent).toContain('September blast');
 
-    (host.querySelector('[data-testid="marketing-report-campaign-row"]') as HTMLElement).click();
-    fixture.detectChanges();
-    await flushMicrotasks();
-    fixture.detectChanges();
+    await pickCampaign(host, 0);
 
     expect(marketingApi.recipientCounts).toHaveBeenCalledWith(SCOPE, 'campaign-1');
     const counts = host.querySelector('[data-testid="marketing-report-recipient-counts"]');
     expect(counts?.textContent).toContain('40');
     expect(counts?.textContent).toContain('46');
-    expect(host.textContent).toContain('Read receipts are not shown');
+  });
+
+  it('row 7.9b: shows what became of the messages, and says «not reported» for what the channel cannot report', async () => {
+    const host = await openCampaignsTab();
+
+    await pickCampaign(host, 0);
+
+    const delivered = host.querySelector('[data-testid="delivery-counts"]') as HTMLElement;
+    expect(delivered).not.toBeNull();
+    expect(host.querySelector('[data-testid="delivery-handed"]')?.textContent).toContain('37');
+    expect(host.querySelector('[data-testid="delivery-failed"]')?.textContent).toContain('2');
+    expect(host.querySelector('[data-testid="delivery-rejected"]')?.textContent).toContain('1');
+    expect(host.querySelector('[data-testid="delivered-not-reported"]')?.textContent).toContain(
+      'Not reported by this channel',
+    );
+    expect(host.querySelector('[data-testid="read-not-reported"]')).not.toBeNull();
+    expect(host.textContent).not.toContain('Read receipts are not shown');
+  });
+
+  it('row 7.9b: the campaigns list compares campaigns by their delivery figures, with «n/a» where a channel cannot report', async () => {
+    const host = await openCampaignsTab();
+
+    expect(marketingApi.campaignDeliveryCounts).toHaveBeenCalledWith(SCOPE);
+    const rows = Array.from(host.querySelectorAll('[data-testid="marketing-report-campaign-row"]'));
+    const cells = (row: Element, figure: string): string =>
+      (row.querySelector(`[data-testid="campaign-compare-${figure}"]`)?.textContent ?? '').trim();
+
+    expect(cells(rows[0], 'total')).toBe('40');
+    // SMS through a gateway with no receipt source does not know whether anything arrived.
+    expect(cells(rows[0], 'delivered')).toBe('n/a');
+    expect(cells(rows[0], 'failed')).toBe('2');
+    expect(cells(rows[0], 'withheld')).toBe('3');
+    expect(cells(rows[1], 'total')).toBe('10');
+    expect(cells(rows[1], 'delivered')).toBe('6');
+  });
+
+  it('row 7.9b: a failed comparison read leaves the list standing with «n/a» and no zeros', async () => {
+    const host = await openCampaignsTab();
+    marketingApi.campaignDeliveryCounts.mockRejectedValue(new Error('down'));
+
+    (fixture.componentInstance as unknown as { retryCampaigns(): void }).retryCampaigns();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const row = host.querySelector('[data-testid="marketing-report-campaign-row"]') as Element;
+    expect(host.textContent).toContain('September blast');
+    expect(row.querySelector('[data-testid="campaign-compare-total"]')?.textContent?.trim()).toBe(
+      'n/a',
+    );
   });
 
   it('shows the "no access" state and never calls a campaign or customer read', async () => {

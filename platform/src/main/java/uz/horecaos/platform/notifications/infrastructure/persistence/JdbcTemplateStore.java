@@ -162,7 +162,7 @@ public class JdbcTemplateStore {
                        body_template, variables_schema::text AS variables_schema, content_hash,
                        status, approved_by, activated_at, provider_review,
                        provider_review_reference, provider_review_note, provider_review_updated_at,
-                       show_item_prices
+                       show_item_prices, cover_asset_id, target_path
                 FROM notifications.template_versions
                 WHERE tenant_id = :tenantId AND template_id = :templateId
                   AND version_number = :versionNumber AND locale = :locale
@@ -181,7 +181,7 @@ public class JdbcTemplateStore {
                        body_template, variables_schema::text AS variables_schema, content_hash,
                        status, approved_by, activated_at, provider_review,
                        provider_review_reference, provider_review_note, provider_review_updated_at,
-                       show_item_prices
+                       show_item_prices, cover_asset_id, target_path
                 FROM notifications.template_versions
                 WHERE tenant_id = :tenantId AND template_id = :templateId
                   AND version_number = :versionNumber
@@ -206,7 +206,7 @@ public class JdbcTemplateStore {
                        body_template, variables_schema::text AS variables_schema, content_hash,
                        status, approved_by, activated_at, provider_review,
                        provider_review_reference, provider_review_note, provider_review_updated_at,
-                       show_item_prices
+                       show_item_prices, cover_asset_id, target_path
                 FROM notifications.template_versions
                 WHERE tenant_id = :tenantId AND template_id = :templateId
                 ORDER BY version_number DESC, locale
@@ -357,11 +357,15 @@ public class JdbcTemplateStore {
                 contentHash,
                 awaitsGateway,
                 false,
+                null,
+                null,
                 now);
     }
 
     /**
-     * Inserts one draft locale of a version, with the version's «show item prices» setting (ADR 0184).
+     * Inserts one draft locale of a version, with the version's «show item prices» setting (ADR 0184) and what
+     * a push wording adds to it (ADR 0182): a cover (an ADR 0010 media asset id, already checked) and the
+     * storefront path a tap opens.
      *
      * @param showItemPrices the same value on every locale row of one version: the service writes it
      *        once per version, never per language
@@ -378,6 +382,8 @@ public class JdbcTemplateStore {
             String contentHash,
             boolean awaitsGateway,
             boolean showItemPrices,
+            @Nullable UUID coverAssetId,
+            @Nullable String targetPath,
             Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", id);
@@ -391,6 +397,8 @@ public class JdbcTemplateStore {
         parameters.put("hash", contentHash);
         parameters.put("showItemPrices", showItemPrices);
         parameters.put("now", utc(now));
+        parameters.put("cover", coverAssetId);
+        parameters.put("targetPath", targetPath);
         parameters.put("review", awaitsGateway ? "PENDING" : "NOT_REQUIRED");
         parameters.put("reviewedBy", awaitsGateway ? GATEWAY_MODERATION : null);
         parameters.put("reviewedAt", awaitsGateway ? utc(now) : null);
@@ -402,10 +410,10 @@ public class JdbcTemplateStore {
                     id, tenant_id, template_id, version_number, locale, subject_template,
                     body_template, variables_schema, content_hash, status, created_at, updated_at,
                     provider_review, provider_review_updated_by, provider_review_updated_at,
-                    provider_review_note, show_item_prices)
+                    provider_review_note, show_item_prices, cover_asset_id, target_path)
                 VALUES (:id, :tenantId, :templateId, :versionNumber, :locale, :subject,
                     :body, CAST(:schema AS jsonb), :hash, 'DRAFT', :now, :now,
-                    :review, :reviewedBy, :reviewedAt, :reviewNote, :showItemPrices)
+                    :review, :reviewedBy, :reviewedAt, :reviewNote, :showItemPrices, :cover, :targetPath)
                 """).params(parameters).update();
     }
 
@@ -550,7 +558,9 @@ public class JdbcTemplateStore {
                 row.getString("provider_review_reference"),
                 row.getString("provider_review_note"),
                 providerReviewUpdatedAt == null ? null : providerReviewUpdatedAt.toInstant(),
-                row.getBoolean("show_item_prices"));
+                row.getBoolean("show_item_prices"),
+                row.getObject("cover_asset_id", UUID.class),
+                row.getString("target_path"));
     }
 
     private static OffsetDateTime utc(Instant instant) {
@@ -618,7 +628,9 @@ public class JdbcTemplateStore {
             @Nullable String providerReviewNote,
             @Nullable Instant providerReviewUpdatedAt,
             /** ADR 0184: whether {{productList}} follows each item with its line total. */
-            boolean showItemPrices) {}
+            boolean showItemPrices,
+            @Nullable UUID coverAssetId,
+            @Nullable String targetPath) {}
 
     /**
      * One locale row of the version a template list should summarise: the active version, or for a

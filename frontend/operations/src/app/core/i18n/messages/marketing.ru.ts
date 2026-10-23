@@ -132,8 +132,7 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.campaign.stats.refused': 'Отказано',
   'marketing.campaign.stats.total': 'Всего попыток',
   'marketing.campaign.stats.refusedByReason.title': 'Отказано, по причине',
-  'marketing.campaign.stats.deliveryUnavailableHint':
-    'Доставлено/не доставлено пока не отслеживается — для этой кампании нет отчёта о прочтении.',
+  'marketing.campaign.stats.delivery.title': 'Что стало с сообщениями',
   'marketing.campaign.stats.export': 'Экспортировать получателей в CSV',
   'marketing.campaign.stats.exportedCount': 'Экспортировано ID аккаунтов: {count}',
 
@@ -213,7 +212,7 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   // ------------------------------------------------------------- courier broadcasts 6.4b (T18)
   'marketing.courierBroadcasts.title': 'Рассылки курьерам',
   'marketing.courierBroadcasts.intro':
-    'Собственная оперативная SMS-рассылка диспетчера курьерам — смена смены, погодные условия, перекрытие маршрута. Никогда не клиентская кампания.',
+    'Собственные оперативные SMS диспетчера курьерам — смена смены, погодные условия, перекрытие маршрута. Отправляются по формулировке, одобренной SMS-шлюзом, на номер, с которым курьер входит в систему; платформа читает его на время одного сообщения и нигде не хранит. Никогда не клиентская кампания.',
   'marketing.courierBroadcasts.loading': 'Загрузка',
   'marketing.courierBroadcasts.empty': 'Рассылок пока нет',
   'marketing.courierBroadcasts.create.action': 'Новая рассылка',
@@ -222,10 +221,9 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.courierBroadcasts.create.targetKind.ALL_ACTIVE': 'Все активные курьеры',
   'marketing.courierBroadcasts.create.targetKind.GROUP': 'Одна группа курьеров',
   'marketing.courierBroadcasts.create.targetGroupId': 'ID группы',
-  'marketing.courierBroadcasts.create.message': 'Сообщение',
   'marketing.courierBroadcasts.create.submit': 'Сохранить черновик',
   'marketing.courierBroadcasts.column.target': 'Получатели',
-  'marketing.courierBroadcasts.column.message': 'Сообщение',
+  'marketing.courierBroadcasts.column.message': 'Формулировка',
   'marketing.courierBroadcasts.column.status': 'Статус',
   'marketing.courierBroadcasts.column.recipients': 'Получателей',
   'marketing.courierBroadcasts.status.DRAFT': 'Черновик',
@@ -233,6 +231,72 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.courierBroadcasts.status.FAILED': 'Не удалась',
   'marketing.courierBroadcasts.action.send': 'Отправить',
   'marketing.courierBroadcasts.refusalReason': 'Отклонено: {reason}',
+  'marketing.courierBroadcasts.create.template': 'Формулировка',
+  'marketing.courierBroadcasts.create.template.placeholder': 'Выберите одобренную формулировку',
+  'marketing.courierBroadcasts.create.template.awaiting': '{key} — ждёт одобрения SMS-шлюза',
+  'marketing.courierBroadcasts.create.templates.none':
+    'Нет готовой формулировки для курьеров. Создайте SMS-шаблон класса COURIER_DISPATCH в «Настройки → Уведомления» и дождитесь одобрения шлюза.',
+  'marketing.courierBroadcasts.create.variablesHint':
+    'Короткие значения, по одной строке, не более 80 символов. Только рабочий текст: без имён и телефонов.',
+  'marketing.courierBroadcasts.create.preview': 'Сообщение будет таким',
+  'marketing.courierBroadcasts.variable.place': 'Место',
+  'marketing.courierBroadcasts.variable.time': 'Время',
+  'marketing.courierBroadcasts.variable.note': 'Заметка',
+  'marketing.courierBroadcasts.action.results': 'Результаты',
+  'marketing.courierBroadcasts.action.hideResults': 'Скрыть результаты',
+  'marketing.courierBroadcasts.results.title': 'Что стало с сообщением каждому курьеру',
+  'marketing.courierBroadcasts.results.loading': 'Загрузка',
+  'marketing.courierBroadcasts.results.column.courier': 'Курьер',
+  'marketing.courierBroadcasts.results.column.state': 'Состояние',
+  'marketing.courierBroadcasts.results.column.reason': 'Почему',
+  'marketing.courierBroadcasts.results.empty': 'Ни один курьер не получил сообщение.',
+  'marketing.courierBroadcasts.results.state.NO_CONTACT': 'Нет номера',
+  'marketing.delivery.reason.COURIER_HAS_NO_NUMBER':
+    'У провайдера идентификации нет номера этого курьера, на который платформа отправляет сообщения. Исправьте профиль и создайте рассылку заново.',
+  'marketing.delivery.reason.RECIPIENT_UNRESOLVABLE':
+    'К моменту отправки номера курьера уже не было.',
+  'marketing.delivery.reason.SMS_PURPOSE_NOT_PERMITTED':
+    'SMS-аккаунт не допущен к курьерским сообщениям.',
+  'marketing.delivery.reason.RECEIVER_UNREACHABLE': 'Шлюз сообщает, что номер недоступен.',
+  'marketing.delivery.reason.PROVIDER_REPORTED_FAILURE': 'Шлюз сообщил, что сообщение не дошло.',
+  'marketing.delivery.reason.IDENTITY_PROVIDER_UNAVAILABLE':
+    'Провайдер идентификации не ответил на запрос номера курьера; платформа повторит попытку.',
+  'marketing.delivery.reason.other': 'Код причины: {code}',
+  'marketing.delivery.reason.ADDRESS_REJECTED': 'Почтовый сервер навсегда отклонил этот адрес',
+  'marketing.delivery.reason.ADDRESS_INVALID': 'Это не email-адрес',
+  'marketing.delivery.reason.MESSAGE_INVALID': 'Почтовый сервер отклонил само письмо',
+  'marketing.delivery.reason.SMTP_UNAVAILABLE': 'Почтовый сервер недоступен',
+  'marketing.delivery.reason.EMAIL_NOT_CONFIGURED':
+    'На этом развёртывании не настроен почтовый сервер',
+  'marketing.courierBroadcasts.readiness.heading':
+    'Курьерские SMS для этого бренда пока отправить нельзя',
+  'marketing.courierBroadcasts.wiring.SMS_PURPOSE_NOT_PERMITTED':
+    'SMS-аккаунт этого бренда не допущен к курьерским сообщениям. Коды входа и сообщения о заказах это не затрагивает. Пока владелец платформы письменно не подтвердит, что аккаунт может передавать курьерский трафик, и это не будет указано в подключении, курьерское SMS отправить нельзя.',
+  'marketing.courierBroadcasts.wiring.COURIER_CONTACTS_NOT_WIRED':
+    'Платформа пока не вправе использовать номер самого курьера для сообщений ему. Это номер, с которым он входит в систему, копий платформа не хранит; пока владелец платформы не запишет, что его можно использовать для сообщения диспетчера, рассылку курьерам отправить нельзя.',
+  'marketing.courierBroadcasts.wiring.COURIER_CONTACTS_UNAVAILABLE':
+    'Провайдер идентификации не ответил на запрос номеров курьеров. Ничего не отправлено, рассылка осталась черновиком; повторите через минуту.',
+  'marketing.courierBroadcasts.wiring.NO_PROVIDER_BINDING':
+    'Для этого бренда не подключён SMS-провайдер. Подключите его в настройках интеграций бренда.',
+  'marketing.courierBroadcasts.wiring.INSTALLATION_INACTIVE':
+    'Подключение SMS-провайдера отключено.',
+  'marketing.courierBroadcasts.wiring.INSTALLATION_MISSING':
+    'Подключения SMS-провайдера больше нет.',
+  'marketing.courierBroadcasts.wiring.SMS_ACCOUNT_MISCONFIGURED':
+    'В SMS-аккаунте этого бренда не хватает части настроек.',
+  'marketing.courierBroadcasts.wiring.PROVIDER_ADAPTER_MISMATCH':
+    'У подключённого SMS-провайдера нет адаптера в этой версии.',
+  'marketing.courierBroadcasts.wiring.NO_ADAPTER': 'В этой версии нет SMS-адаптера.',
+  'marketing.courierBroadcasts.wiring.NO_DELIVERY_ADAPTER': 'В этой версии нет пути доставки SMS.',
+  'marketing.courierBroadcasts.wiring.COURIER_TEMPLATE_NOT_AVAILABLE':
+    'Формулировка этой рассылки больше не является действующей курьерской формулировкой этого бренда.',
+  'marketing.courierBroadcasts.wiring.TEMPLATE_AWAITING_PROVIDER':
+    'Формулировка ещё ждёт одобрения SMS-шлюза, поэтому с ней пока ничего отправить нельзя.',
+  'marketing.courierBroadcasts.wiring.NO_ACTIVE_COURIER': 'В этой выборке нет активных курьеров.',
+  'marketing.courierBroadcasts.wiring.NO_COURIER_HAS_A_NUMBER':
+    'Ни у одного из выбранных курьеров нет номера, на который платформа отправляет сообщения; ничего не отправлено.',
+  'marketing.courierBroadcasts.wiring.UNKNOWN':
+    'Курьерское SMS сейчас нельзя отправить для этого бренда ({reason}).',
 
   // --------------------------------------------------------- attribution links 6.6a (ADR 0044, T18)
   'marketing.attributionLinks.title': 'Ссылки привлечения',
@@ -666,10 +730,16 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
     'У подключённого провайдера в этой версии нет адаптера для этого канала.',
   'marketing.wiring.NO_ADAPTER': 'В этой версии нет адаптера для этого канала.',
   'marketing.wiring.NO_DELIVERY_ADAPTER': 'В этой версии у этого канала нет пути доставки.',
-  'marketing.wiring.NO_DELIVERY_ADAPTER.EMAIL':
-    'Email гостям не подключён. Почтовый сервис платформы отправляет только приглашения и сброс пароля сотрудникам; отправка писем гостям самого заведения — отдельное решение, которое ещё не принято.',
-  'marketing.wiring.NO_DELIVERY_ADAPTER.PUSH':
-    'Push не подключён: провайдера push-уведомлений пока нет, поэтому отправить гостю push нельзя.',
+  'marketing.wiring.EMAIL_NOT_CONFIGURED':
+    'Почта на этом развёртывании не настроена: почтовый сервер не указан, поэтому отправить ничего нельзя. Пока владелец платформы не подключит провайдера рассылки, email-кампанию запустить нельзя.',
+  'marketing.wiring.EMAIL_PURPOSE_NOT_PERMITTED':
+    'Почтовый сервис платформы отправляет только рассылки кампаний.',
+  'marketing.wiring.PUSH_NOT_CONFIGURED':
+    'Push не настроен на этом развёртывании: у платформы нет ключей и контакта для отправки, поэтому ничего отправить нельзя. Пока владелец платформы их не подключит, push-кампанию запустить нельзя.',
+  'marketing.wiring.PUSH_PURPOSE_NOT_PERMITTED':
+    'Push-сервис платформы передаёт только кампании и ничего другого.',
+  'marketing.wiring.ACCOUNT_MISCONFIGURED':
+    'В аккаунте для этого канала не хватает части настроек.',
   'marketing.wiring.UNKNOWN':
     'Этот канал сейчас не может доставлять сообщения для этого бренда ({reason}).',
   'marketing.refusal.SCENARIO_CONFLICT':
@@ -1018,6 +1088,41 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.delivery.NO_RECEIPT': 'Отчёта о доставке нет',
   'marketing.delivery.HANDED_TO_OPERATOR': 'Передано оператору',
   'marketing.delivery.PENDING': 'Ещё не отправлено',
+  'marketing.delivery.READ': 'Прочитано',
+  'marketing.delivery.WITHHELD': 'Удержано',
+  'marketing.delivery.HANDED_TO_OPERATOR.MESSAGING_APP': 'Отправлено',
+  'marketing.delivery.HANDED_TO_OPERATOR.PUSH': 'Принято push-сервисом',
+  'marketing.delivery.READ.PUSH': 'Нажато',
+  'marketing.delivery.reason.PUSH_SUBSCRIPTION_GONE':
+    'Push-сервис браузера сообщает, что подписка закончилась: пока клиент снова не включит push, достучаться до него здесь нельзя',
+  'marketing.delivery.reason.PUSH_VAPID_REJECTED':
+    'Push-сервис не принял ключ отправителя платформы для этой подписки (ключ сменили после того, как клиент подписался)',
+  'marketing.delivery.reason.PUSH_NOT_CONFIGURED': 'На этом развёртывании не настроен push',
+  'marketing.delivery.reason.PUSH_PAYLOAD_TOO_LARGE': 'Push-сервис отклонил размер сообщения',
+  'marketing.delivery.reason.PUSH_REQUEST_REFUSED': 'Push-сервис отклонил сообщение',
+  'marketing.delivery.reason.PUSH_PAYLOAD_UNUSABLE':
+    'Сообщение не удалось зашифровать для этой подписки',
+  'marketing.delivery.reason.PUSH_REDIRECT_REFUSED':
+    'Push-сервис перенаправил запрос; платформа переадресациям не следует',
+  'marketing.delivery.reason.PUSH_SERVICE_ERROR': 'Push-сервис раз за разом отвечал ошибкой',
+  'marketing.delivery.reason.PUSH_RATE_LIMITED':
+    'Push-сервис раз за разом просил платформу снизить темп',
+  'marketing.delivery.reason.PUSH_SERVICE_UNREACHABLE': 'Push-сервис недоступен',
+  'marketing.delivery.reason.PUSH_SECRET_UNAVAILABLE': 'Ключ push платформы недоступен',
+  'marketing.delivery.counts.notReported': 'Этот канал не сообщает',
+  'marketing.delivery.counts.segments': 'Оплачено сегментов',
+  'marketing.delivery.counts.withheldTitle': 'Удержано по причине',
+  'marketing.delivery.withheld.TEMPLATE_AWAITING_PROVIDER': 'Формулировка ждёт одобрения шлюза',
+  'marketing.delivery.withheld.TEMPLATE_REFUSED_BY_PROVIDER': 'Формулировку отклонил шлюз',
+  'marketing.delivery.withheld.CONSENT_WITHHELD': 'Согласие отозвано после формирования аудитории',
+  'marketing.delivery.withheld.PREFERENCE_DISABLED': 'Клиент отключил это',
+  'marketing.delivery.withheld.NO_RECIPIENT_ENDPOINT': 'Нет пригодного адреса или номера',
+  'marketing.delivery.withheld.NO_RECIPIENT_ACCOUNT': 'Нет аккаунта клиента',
+  'marketing.delivery.withheld.NO_ACTIVE_TEMPLATE': 'Нет действующей формулировки',
+  'marketing.delivery.withheld.NO_TEMPLATE_FOR_LOCALE': 'Нет формулировки на языке клиента',
+  'marketing.delivery.withheld.CHANNEL_NOT_AVAILABLE': 'Канал недоступен',
+  'marketing.delivery.withheld.CAMPAIGN_NOT_SENDING': 'Кампания приостановлена или остановлена',
+  'marketing.delivery.withheld.EXPIRED': 'Срок истёк до отправки',
   'marketing.campaign.recipients.deliveryHint':
     'Доставка — это сведения от шлюза, а не обещание: «передано оператору» значит, что сообщение принято и больше ничего не сообщалось.',
   'marketing.campaign.recipients.segments': 'Тарифицировано сегментов: {count}',

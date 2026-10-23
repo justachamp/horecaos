@@ -38,7 +38,18 @@ public enum NotificationClass {
      * customer. It has no consent to check because there is no data subject in
      * the ADR 0015 sense.
      */
-    OPERATIONS_ALERT(false);
+    OPERATIONS_ALERT(false),
+
+    /**
+     * A dispatcher's operational message to a courier: a shift change, a route closure (ADR 0182, D15).
+     *
+     * <p>Not a customer and not a marketing audience, so like {@link #OPERATIONS_ALERT} it has no
+     * data subject in ADR 0015's sense and nothing to check consent against, no preference a person
+     * set and no quiet hours. It is a class of its own and not an operations alert because it has a
+     * person as its recipient and a gateway account that must be cleared for it (ADR 0146's
+     * {@code COURIER} purpose), and because the variables a dispatcher may fill are not an alert's.
+     */
+    COURIER_DISPATCH(false);
 
     private final boolean requiresConsent;
 

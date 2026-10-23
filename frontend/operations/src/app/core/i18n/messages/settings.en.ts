@@ -785,10 +785,13 @@ export const settingsEn = {
   'settings.notifications.field.templateKey': 'Event',
   'settings.notifications.field.notificationClass': 'Class',
   'settings.notifications.field.channel': 'Delivery channel',
+  'settings.notifications.field.consentPurpose': 'Consent purpose',
+  'settings.notifications.field.consentPurpose.hint':
+    'The consent a customer gave to receive this message. A campaign sends only to customers who agreed to it on this channel; MARKETING_PROMOTIONS is the purpose every tenant has.',
   'settings.notifications.field.status': 'Active',
   'settings.notifications.field.activeVersion': 'Version',
   'settings.notifications.field.channel.hint':
-    'Only SMS and Telegram actually send today. Email and Push are declared so the schema and template key carry a channel, but no adapter delivers them yet.',
+    'Only SMS, Telegram and Email actually send today. Email is for campaigns only and needs a subject in every language. Push is declared so the schema and template key carry a channel, but no adapter delivers it yet.',
   'settings.notifications.field.variant': 'Variant',
   'settings.notifications.field.fulfilmentMode': 'Fulfilment mode',
   'settings.notifications.field.channelSource': 'Channel source',
@@ -815,6 +818,17 @@ export const settingsEn = {
   'settings.notifications.moderation.APPROVED': 'Approved',
   'settings.notifications.moderation.REJECTED': 'Refused by gateway',
   'settings.notifications.editor.subject': 'Subject',
+  'settings.notifications.editor.title': 'Title',
+  'settings.notifications.editor.push.target': 'Opens on tap',
+  'settings.notifications.editor.push.target.hint':
+    'A path on the storefront, for example /menu or /category/pizza. Leave empty to open the front page.',
+  'settings.notifications.editor.push.target.invalid':
+    'Start with a single slash and use no spaces: /menu, not menu or //menu.',
+  'settings.notifications.editor.push.cover': 'Cover picture',
+  'settings.notifications.editor.push.cover.hint':
+    'Optional. A 3:1 picture the customer sees under the text. Crop it to 3:1 before it is saved.',
+  'settings.notifications.editor.push.cover.set': 'A cover is set',
+  'settings.notifications.editor.push.cover.remove': 'Remove the cover',
   'settings.notifications.editor.body': 'Text',
   'settings.notifications.editor.variables': 'Insert a variable',
   'settings.notifications.editor.variables.empty':

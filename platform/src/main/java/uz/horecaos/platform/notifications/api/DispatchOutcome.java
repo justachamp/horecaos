@@ -117,6 +117,25 @@ public record DispatchOutcome(
                 hardBounce);
     }
 
+    /**
+     * The same outcome, attributed to a provider type with no ADR 0026 account behind it: the
+     * platform's own mail relay (ADR 0182), which is the deployment's and not a tenant's binding.
+     */
+    public DispatchOutcome fromProvider(String providerType) {
+        return new DispatchOutcome(
+                status,
+                externalMessageId,
+                providerStatus,
+                errorCode,
+                detail,
+                retryAfter,
+                null,
+                providerType,
+                normalizedStatus,
+                providerSegments,
+                hardBounce);
+    }
+
     public Optional<Duration> retryDelay() {
         return Optional.ofNullable(retryAfter);
     }

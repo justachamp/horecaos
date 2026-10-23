@@ -8,6 +8,7 @@ import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.ParameterizedTypeReference;
@@ -41,6 +42,12 @@ class SmtpPlatformMailerTests {
                 .waitingFor(Wait.forHttp("/api/v1/info").forPort(8025));
         mailpit.start();
         api = RestClient.create("http://" + mailpit.getHost() + ":" + mailpit.getMappedPort(8025));
+    }
+
+    /** Each test reads the server's whole inbox, so each starts with it empty. */
+    @BeforeEach
+    void emptyTheInbox() {
+        api.delete().uri("/api/v1/messages").retrieve().toBodilessEntity();
     }
 
     @AfterAll
@@ -82,6 +89,78 @@ class SmtpPlatformMailerTests {
     }
 
     @Test
+    @DisplayName(
+            "a campaign email is sent in the brand's name over the platform's one address, with a one-click way out")
+    void aCampaignEmailCarriesItsSenderNameAndAWayOut() {
+        SmtpPlatformMailer mailer = mailer(mailpit.getHost(), mailpit.getMappedPort(1025));
+        String unsubscribe = "https://api.horecaos.test/providers/mail/unsubscribe/abc123";
+
+        MailOutcome outcome = mailer.send(new OutgoingMail(
+                "guest@example.uz", "Chegirma", "Chegirma 20%", "<p>Chegirma 20%</p>", "Chilonzor Pizza", unsubscribe));
+
+        assertThat(outcome).isEqualTo(new MailOutcome.Sent());
+        Map<String, Object> message = latestMessage();
+        assertThat(String.valueOf(message.get("From")))
+                .as("the brand's name, the platform's address")
+                .contains("Chilonzor Pizza")
+                .contains("no-reply@horecaos.test");
+        Map<String, Object> headers = api.get()
+                .uri("/api/v1/message/{id}/headers", message.get("ID"))
+                .retrieve()
+                .body(MAP);
+        assertThat(String.valueOf(java.util.Objects.requireNonNull(headers).get("List-Unsubscribe")))
+                .isEqualTo("[<" + unsubscribe + ">]");
+        assertThat(String.valueOf(headers.get("List-Unsubscribe-Post")))
+                .as("RFC 8058: the announcement that a POST to the URL is enough")
+                .isEqualTo("[List-Unsubscribe=One-Click]");
+    }
+
+    @Test
+    @DisplayName("a sender name cannot add a header or change the address the mail claims to come from")
+    void aSenderNameCannotInjectAHeader() {
+        SmtpPlatformMailer mailer = mailer(mailpit.getHost(), mailpit.getMappedPort(1025));
+
+        MailOutcome outcome = mailer.send(new OutgoingMail(
+                "guest@example.uz",
+                "Chegirma",
+                "text",
+                "<p>text</p>",
+                "Evil\r\nBcc: victim@example.uz\" <ceo@bank.uz>",
+                null));
+
+        assertThat(outcome).isEqualTo(new MailOutcome.Sent());
+        Map<String, Object> message = latestMessage();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> from = (Map<String, Object>) message.get("From");
+        assertThat(String.valueOf(java.util.Objects.requireNonNull(from).get("Address")))
+                .as("whatever the name says, the mail claims to come from the platform's one address")
+                .isEqualTo("no-reply@horecaos.test");
+        assertThat(String.valueOf(message.get("Bcc")))
+                .as("and a line break in the name did not become a header")
+                .doesNotContain("victim@example.uz");
+        assertThat(String.valueOf(message.get("To"))).doesNotContain("victim@example.uz");
+    }
+
+    @Test
+    @DisplayName("a configured sender that is not an address stops startup, instead of reading as a bad recipient")
+    void aBadSenderStopsStartup() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> new SmtpPlatformMailer(NO_SECRETS, "localhost", 25, "NONE", "", "", "not an address <<"))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("an unsubscribe address must be one absolute URL")
+    void anUnsubscribeAddressIsOneUrl() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new OutgoingMail(
+                        "guest@example.uz", "s", "t", "<p>t</p>", null, "https://x.test/u\r\nBcc: a@b.uz"))
+                .isInstanceOf(IllegalArgumentException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> new OutgoingMail("guest@example.uz", "s", "t", "<p>t</p>", null, "javascript:alert(1)"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     @DisplayName("with no host configured nothing is attempted, and it says so")
     void anUnconfiguredMailerSaysSo() {
         SmtpPlatformMailer mailer =
@@ -108,6 +187,15 @@ class SmtpPlatformMailerTests {
 
         assertThat(mailer.send(new OutgoingMail("not an address", "s", "t", "<p>t</p>")))
                 .isInstanceOf(MailOutcome.Rejected.class);
+    }
+
+    /** The newest message the server holds, as its list summary. */
+    private static Map<String, Object> latestMessage() {
+        Map<String, Object> list = api.get().uri("/api/v1/messages").retrieve().body(MAP);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> messages = (List<Map<String, Object>>)
+                java.util.Objects.requireNonNull(list).get("messages");
+        return java.util.Objects.requireNonNull(messages).getFirst();
     }
 
     private static SmtpPlatformMailer mailer(String host, int port) {

@@ -199,6 +199,16 @@ public final class NotificationVariableCatalog {
                         new Variable("clock", "Which clock a case passed: FIRST_RESPONSE or RESOLUTION."),
                         new Variable("dueAt", "When the clock was due, ISO-8601.")));
 
+        // ADR 0182, D15: a dispatcher's broadcast to couriers names an approved wording and supplies
+        // these. Short operational values typed at send time, not data from an event: the wording is
+        // what the gateway approves, and these three are the places it leaves for the dispatcher.
+        catalog.put(
+                NotificationClass.COURIER_DISPATCH,
+                List.of(
+                        new Variable("place", "Where it applies: a branch, a zone, a street."),
+                        new Variable("time", "When it applies, as the dispatcher writes it, e.g. \"18:00\"."),
+                        new Variable("note", "A short note from the dispatcher: what changed or what to do.")));
+
         return Map.copyOf(catalog);
     }
 

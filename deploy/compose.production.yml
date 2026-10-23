@@ -446,6 +446,24 @@ services:
       HORECAOS_MAIL_SMTP_SECURITY: ${HORECAOS_MAIL_SMTP_SECURITY:-STARTTLS}
       HORECAOS_MAIL_SMTP_USERNAME: ${HORECAOS_MAIL_SMTP_USERNAME:-}
       HORECAOS_MAIL_SMTP_PASSWORD_REF: ${HORECAOS_MAIL_SMTP_PASSWORD_REF:-}
+      # ADR 0182: a tenant's campaign email leaves through the same relay, in the brand's
+      # name, and each tenant may send this many a UTC day (the excess is held to the
+      # next day, not dropped). Set it against the provider's own sending limits.
+      HORECAOS_NOTIFICATIONS_EMAIL_DAILY_CAP_PER_TENANT: ${HORECAOS_NOTIFICATIONS_EMAIL_DAILY_CAP_PER_TENANT:-1000}
+      # ADR 0182: whether a courier's own login number may be used for a dispatcher's SMS.
+      # The platform owner's answer to give; false until it is recorded, and a courier
+      # broadcast is refused (COURIER_CONTACTS_NOT_WIRED) while it is.
+      HORECAOS_COURIERS_BROADCAST_CONTACT_USE_CLEARED: ${HORECAOS_COURIERS_BROADCAST_CONTACT_USE_CLEARED:-false}
+      # ADR 0182, D14: Web Push from the storefronts, signed as the platform (VAPID). All three empty
+      # means push is off and the console says PUSH_NOT_CONFIGURED. The private key is never a value
+      # here: the reference names it in OpenBao, for example
+      # horecaos:production:provider_notification:platform:vapid, stored with
+      #   bao kv put horecaos/production/provider_notification/platform/vapid value=<base64url private key>
+      # The public key is not a secret. The subject is a mailto: or https: contact for the push services.
+      # See platform/docs/runbooks/external-connections/w7-campaign-channels.md, section 9.
+      HORECAOS_PUSH_VAPID_PUBLIC_KEY: ${HORECAOS_PUSH_VAPID_PUBLIC_KEY:-}
+      HORECAOS_PUSH_VAPID_PRIVATE_KEY_REF: ${HORECAOS_PUSH_VAPID_PRIVATE_KEY_REF:-}
+      HORECAOS_PUSH_VAPID_SUBJECT: ${HORECAOS_PUSH_VAPID_SUBJECT:-}
       # ADR 0069: the grounded assistant's model provider. Empty means the
       # assistant takes no turns. The key is never a value here: the reference
       # names it in OpenBao, for example

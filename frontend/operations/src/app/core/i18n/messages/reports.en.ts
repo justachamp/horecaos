@@ -558,8 +558,12 @@ export const reportsEn = {
   'reports.marketing.campaigns.count.deferred': 'Deferred (quiet hours)',
   'reports.marketing.campaigns.count.refused': 'Refused',
   'reports.marketing.campaigns.count.total': 'Total recipients',
-  'reports.marketing.campaigns.readReceiptsNotBuilt':
-    'Read receipts are not shown: there is no read status or read_at column recorded yet — this is unmeasured, not zero.',
+  'reports.marketing.campaigns.column.messages': 'Messages',
+  'reports.marketing.campaigns.column.delivered': 'Delivered',
+  'reports.marketing.campaigns.column.failed': 'Failed',
+  'reports.marketing.campaigns.column.withheld': 'Withheld',
+  'reports.marketing.campaigns.column.notReported': 'n/a',
+  'reports.marketing.campaigns.delivery.title': 'What became of the messages',
 
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
   'reports.forecast.title': 'Demand forecast',

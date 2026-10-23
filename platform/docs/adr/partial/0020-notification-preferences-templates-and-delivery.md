@@ -544,3 +544,15 @@ Alternatives and Consequences are unchanged.
 - The customer milestones ADR 0045 names (preparing, ready, on the way) are published by ordering
   (`OrderPreparing`, `OrderReady`, `OrderFulfilling`) and trigger `TRANSACTIONAL_OPTIONAL` intents, so the
   status line's «fulfillment ... still do not» no longer holds for these three facts.
+[ADR 0182](../partial/0182-campaign-channels-email-push-couriers-and-delivery-statistics.md) wires the `EMAIL` channel for campaign email only (D13), through a platform-owned adapter with no
+installation or binding, and adds the notification class `COURIER_DISPATCH` and a courier as a recipient
+endpoint (D15). `NotificationChannel.EMAIL` is no longer declared-and-unwired; `PUSH` still is. The channel
+model, the consent gate and the delivery ladder this record states are unchanged.
+
+## Status addition (2026-10-23)
+
+[ADR 0182](../partial/0182-campaign-channels-email-push-couriers-and-delivery-statistics.md) (D14) wires the `PUSH` channel for campaign push only: Web Push to a customer's own browser, through
+a platform-owned adapter with no installation or binding, resolved from a customer-owned `PUSH_TOKEN`
+endpoint that points at an encrypted subscription registry (`notifications.push_subscriptions`). The click a
+customer makes on the notification is the `READ` rung, carried through the delivery ladder this record states
+without a change to it. `NotificationChannel.PUSH` is no longer declared-and-unwired.

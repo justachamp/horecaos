@@ -47,10 +47,9 @@ public class MarketingDeliveryConfiguration {
     private static final Logger log = LoggerFactory.getLogger(MarketingDeliveryConfiguration.class);
 
     /**
-     * Nothing can address a courier by number in this build (see {@link
-     * uz.horecaos.platform.marketing.api.CourierContactSource}), so the default
-     * answers {@code false} and a courier broadcast is refused with a stable
-     * code instead of being recorded as sent.
+     * The fallback for a context in which no {@code IdentityCourierContactSource} is wired (ADR 0182
+     * supplies the real one): nothing can address a courier by number, so the default answers {@code
+     * false} and a courier broadcast is refused with a stable code instead of being recorded as sent.
      */
     @Bean
     @ConditionalOnMissingBean(uz.horecaos.platform.marketing.api.CourierContactSource.class)

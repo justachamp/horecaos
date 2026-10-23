@@ -6,16 +6,25 @@ import uz.horecaos.platform.customers.api.RecipientContactDirectory.ContactMetho
 /**
  * How a message physically reaches someone (ADR 0020).
  *
- * <p>Only {@link #SMS} is wired. The others are declared because the schema and
- * the template key both carry a channel and an open string there would let a typo
- * create a channel nobody sends on, but {@link #isWired} is what the eligibility
- * path actually asks. A tenant authoring an EMAIL template gets a clear refusal
- * rather than a message that is created, resolved, and then never sent.
+ * <p>{@link #SMS}, {@link #TELEGRAM}, {@link #EMAIL} and {@link #PUSH} are wired. The others are declared
+ * because the schema and the template key both carry a channel and an open string there
+ * would let a typo create a channel nobody sends on, but {@link #isWired} is what the
+ * eligibility path actually asks. A message on an unwired channel is suppressed with a
+ * reason a tenant can read, rather than created, resolved, and then never sent.
+ *
+ * <p>{@link #EMAIL} and {@link #PUSH} are wired for campaigns only (ADR 0182): each is a marketing
+ * channel through a platform-owned sender, and a receipt by email or an order status by push is a
+ * later decision.
  */
 public enum NotificationChannel {
     SMS(true, ContactMethod.PHONE, false),
-    EMAIL(false, ContactMethod.EMAIL, false),
-    PUSH(false, null, false),
+    EMAIL(true, ContactMethod.EMAIL, false),
+    /**
+     * Web Push to the customer's browser (ADR 0182, D14). Wired for campaign push only. There is no
+     * {@link ContactMethod} because a subscription is a browser, not a contact point: it is an ADR 0020
+     * endpoint of its own, created when the customer opts in.
+     */
+    PUSH(true, null, false),
     MESSAGING_APP(false, null, false),
 
     /**

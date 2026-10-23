@@ -104,6 +104,11 @@ export const marketingPaths = {
     return `${this.suppressions(scope)}/${enc(suppressionId)}/lifts`;
   },
 
+  /** Every recent campaign's delivery counts in one read, for comparing campaigns (ADR 0182). */
+  campaignDeliveryCounts(scope: BrandScope): string {
+    return `${base(scope)}/campaigns/delivery-counts`;
+  },
+
   /** `OperationsMarketingController.listChannels` — every channel, and whether it is actually wired (T18). */
   channels(scope: BrandScope): string {
     return `${base(scope)}/channels`;
@@ -116,6 +121,16 @@ export const marketingPaths = {
 
   courierBroadcastSends(scope: BrandScope, broadcastId: string): string {
     return `${this.courierBroadcasts(scope)}/${enc(broadcastId)}/sends`;
+  },
+
+  /** Whether a courier SMS can leave for this brand, why not, and the wordings a dispatcher may name (ADR 0182). */
+  courierBroadcastReadiness(scope: BrandScope): string {
+    return `${this.courierBroadcasts(scope)}/readiness`;
+  },
+
+  /** What became of each courier a broadcast targeted (ADR 0182). */
+  courierBroadcastRecipients(scope: BrandScope, broadcastId: string): string {
+    return `${this.courierBroadcasts(scope)}/${enc(broadcastId)}/recipients`;
   },
 
   /** `AttributionLinkController` — trackable acquisition links (T18, ADR 0044, operations 6.6a). */

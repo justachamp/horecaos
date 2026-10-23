@@ -130,8 +130,7 @@ export const marketingEn = {
   'marketing.campaign.stats.refused': 'Refused',
   'marketing.campaign.stats.total': 'Total attempted',
   'marketing.campaign.stats.refusedByReason.title': 'Refused, by reason',
-  'marketing.campaign.stats.deliveryUnavailableHint':
-    'Delivered vs. failed is not tracked yet — no read receipt reaches this campaign.',
+  'marketing.campaign.stats.delivery.title': 'What became of the messages',
   'marketing.campaign.stats.export': 'Export recipients as CSV',
   'marketing.campaign.stats.exportedCount': 'Exported {count} account id(s)',
 
@@ -211,7 +210,7 @@ export const marketingEn = {
   // ------------------------------------------------------------- courier broadcasts 6.4b (T18)
   'marketing.courierBroadcasts.title': 'Courier broadcasts',
   'marketing.courierBroadcasts.intro':
-    'A dispatcher’s own operational SMS blast to couriers — a shift change, a weather closure, a route closure. Never a customer campaign.',
+    'A dispatcher’s own operational SMS to couriers — a shift change, a weather closure, a route closure. Sent from a wording the SMS gateway has approved, to each courier’s own login number, which the platform reads for one message and keeps nowhere. Never a customer campaign.',
   'marketing.courierBroadcasts.loading': 'Loading',
   'marketing.courierBroadcasts.empty': 'No broadcast sent yet',
   'marketing.courierBroadcasts.create.action': 'New broadcast',
@@ -220,10 +219,9 @@ export const marketingEn = {
   'marketing.courierBroadcasts.create.targetKind.ALL_ACTIVE': 'Every active courier',
   'marketing.courierBroadcasts.create.targetKind.GROUP': 'One courier group',
   'marketing.courierBroadcasts.create.targetGroupId': 'Group ID',
-  'marketing.courierBroadcasts.create.message': 'Message',
   'marketing.courierBroadcasts.create.submit': 'Save draft',
   'marketing.courierBroadcasts.column.target': 'Target',
-  'marketing.courierBroadcasts.column.message': 'Message',
+  'marketing.courierBroadcasts.column.message': 'Wording',
   'marketing.courierBroadcasts.column.status': 'Status',
   'marketing.courierBroadcasts.column.recipients': 'Recipients',
   'marketing.courierBroadcasts.status.DRAFT': 'Draft',
@@ -231,6 +229,75 @@ export const marketingEn = {
   'marketing.courierBroadcasts.status.FAILED': 'Failed',
   'marketing.courierBroadcasts.action.send': 'Send',
   'marketing.courierBroadcasts.refusalReason': 'Refused: {reason}',
+  'marketing.courierBroadcasts.create.template': 'Wording',
+  'marketing.courierBroadcasts.create.template.placeholder': 'Choose an approved wording',
+  'marketing.courierBroadcasts.create.template.awaiting':
+    '{key} — waiting for the SMS gateway’s approval',
+  'marketing.courierBroadcasts.create.templates.none':
+    'No courier wording is ready. Author an SMS template of the class COURIER_DISPATCH under Settings → Notifications and have the gateway approve it.',
+  'marketing.courierBroadcasts.create.variablesHint':
+    'Short values, one line each, 80 characters at most. Operational text only: no names or phone numbers.',
+  'marketing.courierBroadcasts.create.preview': 'The message will read',
+  'marketing.courierBroadcasts.variable.place': 'Place',
+  'marketing.courierBroadcasts.variable.time': 'Time',
+  'marketing.courierBroadcasts.variable.note': 'Note',
+  'marketing.courierBroadcasts.action.results': 'Results',
+  'marketing.courierBroadcasts.action.hideResults': 'Hide results',
+  'marketing.courierBroadcasts.results.title': 'What became of each courier’s message',
+  'marketing.courierBroadcasts.results.loading': 'Loading',
+  'marketing.courierBroadcasts.results.column.courier': 'Courier',
+  'marketing.courierBroadcasts.results.column.state': 'State',
+  'marketing.courierBroadcasts.results.column.reason': 'Why',
+  'marketing.courierBroadcasts.results.empty': 'No courier was addressed.',
+  'marketing.courierBroadcasts.results.state.NO_CONTACT': 'No number',
+  'marketing.delivery.reason.COURIER_HAS_NO_NUMBER':
+    'The identity provider holds no number the platform sends to for this courier. Fix their profile and draft again.',
+  'marketing.delivery.reason.RECIPIENT_UNRESOLVABLE':
+    'The courier’s number was gone when the message was sent.',
+  'marketing.delivery.reason.SMS_PURPOSE_NOT_PERMITTED':
+    'The SMS account is not cleared to carry courier messages.',
+  'marketing.delivery.reason.RECEIVER_UNREACHABLE':
+    'The gateway says the number cannot be reached.',
+  'marketing.delivery.reason.PROVIDER_REPORTED_FAILURE':
+    'The gateway reported that the message did not arrive.',
+  'marketing.delivery.reason.IDENTITY_PROVIDER_UNAVAILABLE':
+    'The identity provider could not be asked for the courier’s number; the platform will try again.',
+  'marketing.delivery.reason.other': 'Reason code: {code}',
+  'marketing.delivery.reason.ADDRESS_REJECTED': 'The mail relay refused this address for good',
+  'marketing.delivery.reason.ADDRESS_INVALID': 'This is not a valid email address',
+  'marketing.delivery.reason.MESSAGE_INVALID': 'The mail relay refused the message itself',
+  'marketing.delivery.reason.SMTP_UNAVAILABLE': 'The mail relay could not be reached',
+  'marketing.delivery.reason.EMAIL_NOT_CONFIGURED':
+    'No mail server is configured on this deployment',
+  'marketing.courierBroadcasts.readiness.heading': 'Courier SMS cannot be sent for this brand yet',
+  'marketing.courierBroadcasts.wiring.SMS_PURPOSE_NOT_PERMITTED':
+    'This brand’s SMS account is not cleared to carry courier messages. Sign-in codes and order messages are unaffected. Until the platform owner confirms in writing that the account may carry courier traffic and it is named on the connection, a courier SMS cannot be sent.',
+  'marketing.courierBroadcasts.wiring.COURIER_CONTACTS_NOT_WIRED':
+    'The platform may not yet use a courier’s own number to message them. The number is the one they sign in with and the platform keeps no copy; until the platform owner records that it may be used for a dispatcher’s message, a courier broadcast cannot be sent.',
+  'marketing.courierBroadcasts.wiring.COURIER_CONTACTS_UNAVAILABLE':
+    'The identity provider could not be asked for the couriers’ numbers. Nothing was sent and the broadcast is still a draft; try again in a moment.',
+  'marketing.courierBroadcasts.wiring.NO_PROVIDER_BINDING':
+    'No SMS provider is connected for this brand. Connect one in the brand’s integrations settings.',
+  'marketing.courierBroadcasts.wiring.INSTALLATION_INACTIVE':
+    'The SMS provider connection is switched off.',
+  'marketing.courierBroadcasts.wiring.INSTALLATION_MISSING':
+    'The SMS provider connection no longer exists.',
+  'marketing.courierBroadcasts.wiring.SMS_ACCOUNT_MISCONFIGURED':
+    'The SMS account for this brand is missing part of its configuration.',
+  'marketing.courierBroadcasts.wiring.PROVIDER_ADAPTER_MISMATCH':
+    'The connected SMS provider has no adapter in this release.',
+  'marketing.courierBroadcasts.wiring.NO_ADAPTER': 'This release has no SMS adapter.',
+  'marketing.courierBroadcasts.wiring.NO_DELIVERY_ADAPTER':
+    'This release has no SMS delivery path.',
+  'marketing.courierBroadcasts.wiring.COURIER_TEMPLATE_NOT_AVAILABLE':
+    'The wording this broadcast names is no longer an active courier wording for this brand.',
+  'marketing.courierBroadcasts.wiring.TEMPLATE_AWAITING_PROVIDER':
+    'The wording is still waiting for the SMS gateway’s approval, so nothing can be sent with it yet.',
+  'marketing.courierBroadcasts.wiring.NO_ACTIVE_COURIER': 'No active courier is in this target.',
+  'marketing.courierBroadcasts.wiring.NO_COURIER_HAS_A_NUMBER':
+    'None of the targeted couriers has a number the platform sends to; nothing was sent.',
+  'marketing.courierBroadcasts.wiring.UNKNOWN':
+    'A courier SMS cannot leave for this brand right now ({reason}).',
 
   // --------------------------------------------------------- attribution links 6.6a (ADR 0044, T18)
   'marketing.attributionLinks.title': 'Acquisition links',
@@ -662,10 +729,16 @@ export const marketingEn = {
     'The connected provider has no adapter for this channel in this release.',
   'marketing.wiring.NO_ADAPTER': 'This release has no adapter for this channel.',
   'marketing.wiring.NO_DELIVERY_ADAPTER': 'This channel has no delivery path in this release.',
-  'marketing.wiring.NO_DELIVERY_ADAPTER.EMAIL':
-    'Email to guests is not connected. The platform’s mail service sends staff invitations and password resets only; sending email to a tenant’s own guests is a separate decision that has not been made.',
-  'marketing.wiring.NO_DELIVERY_ADAPTER.PUSH':
-    'Push is not connected: no push provider exists yet, so nothing can send a push notification to a guest.',
+  'marketing.wiring.EMAIL_NOT_CONFIGURED':
+    'Email is not set up on this deployment: no mail server is configured, so nothing can be sent. Until the platform owner connects a sending provider, an email campaign cannot be launched.',
+  'marketing.wiring.EMAIL_PURPOSE_NOT_PERMITTED':
+    'The platform’s mail service carries campaign email and nothing else.',
+  'marketing.wiring.PUSH_NOT_CONFIGURED':
+    'Push is not set up on this deployment: the platform’s push identity (a key pair and a contact) is not configured, so nothing can be sent. Until the platform owner connects it, a push campaign cannot be launched.',
+  'marketing.wiring.PUSH_PURPOSE_NOT_PERMITTED':
+    'The platform’s push service carries campaign push and nothing else.',
+  'marketing.wiring.ACCOUNT_MISCONFIGURED':
+    'The account for this channel is missing part of its configuration.',
   'marketing.wiring.UNKNOWN': 'This channel cannot deliver for this brand right now ({reason}).',
   'marketing.refusal.SCENARIO_CONFLICT':
     'Another live scenario gave this guest an offer a moment ago',
@@ -1016,6 +1089,43 @@ export const marketingEn = {
   'marketing.delivery.NO_RECEIPT': 'No receipt came back',
   'marketing.delivery.HANDED_TO_OPERATOR': 'Handed to the operator',
   'marketing.delivery.PENDING': 'Not sent yet',
+  'marketing.delivery.READ': 'Read',
+  'marketing.delivery.WITHHELD': 'Withheld',
+  'marketing.delivery.HANDED_TO_OPERATOR.MESSAGING_APP': 'Sent',
+  'marketing.delivery.HANDED_TO_OPERATOR.PUSH': 'Accepted by the push service',
+  'marketing.delivery.READ.PUSH': 'Tapped',
+  'marketing.delivery.reason.PUSH_SUBSCRIPTION_GONE':
+    'The browser’s push service says this subscription is over, so the customer is no longer reachable here until they turn push on again',
+  'marketing.delivery.reason.PUSH_VAPID_REJECTED':
+    'The push service did not accept the platform’s sending identity for this subscription (the key was changed after the customer subscribed)',
+  'marketing.delivery.reason.PUSH_NOT_CONFIGURED': 'Push is not set up on this deployment',
+  'marketing.delivery.reason.PUSH_PAYLOAD_TOO_LARGE':
+    'The push service refused the size of the message',
+  'marketing.delivery.reason.PUSH_REQUEST_REFUSED': 'The push service refused the message',
+  'marketing.delivery.reason.PUSH_PAYLOAD_UNUSABLE':
+    'The message could not be encrypted to this subscription',
+  'marketing.delivery.reason.PUSH_REDIRECT_REFUSED':
+    'The push service redirected the request, which is never followed',
+  'marketing.delivery.reason.PUSH_SERVICE_ERROR': 'The push service failed repeatedly',
+  'marketing.delivery.reason.PUSH_RATE_LIMITED':
+    'The push service kept asking the platform to slow down',
+  'marketing.delivery.reason.PUSH_SERVICE_UNREACHABLE': 'The push service could not be reached',
+  'marketing.delivery.reason.PUSH_SECRET_UNAVAILABLE': 'The platform’s push key is not available',
+  'marketing.delivery.counts.notReported': 'Not reported by this channel',
+  'marketing.delivery.counts.segments': 'Segments billed',
+  'marketing.delivery.counts.withheldTitle': 'Withheld because',
+  'marketing.delivery.withheld.TEMPLATE_AWAITING_PROVIDER':
+    'Wording awaiting the gateway’s approval',
+  'marketing.delivery.withheld.TEMPLATE_REFUSED_BY_PROVIDER': 'Wording refused by the gateway',
+  'marketing.delivery.withheld.CONSENT_WITHHELD': 'Consent withdrawn since the audience was built',
+  'marketing.delivery.withheld.PREFERENCE_DISABLED': 'The customer switched this off',
+  'marketing.delivery.withheld.NO_RECIPIENT_ENDPOINT': 'No usable address or number',
+  'marketing.delivery.withheld.NO_RECIPIENT_ACCOUNT': 'No customer account',
+  'marketing.delivery.withheld.NO_ACTIVE_TEMPLATE': 'No active wording',
+  'marketing.delivery.withheld.NO_TEMPLATE_FOR_LOCALE': 'No wording in the customer’s language',
+  'marketing.delivery.withheld.CHANNEL_NOT_AVAILABLE': 'Channel not available',
+  'marketing.delivery.withheld.CAMPAIGN_NOT_SENDING': 'The campaign was paused or stopped',
+  'marketing.delivery.withheld.EXPIRED': 'Expired before it was sent',
   'marketing.campaign.recipients.deliveryHint':
     'Delivery is evidence from the gateway, not a promise: “handed to the operator” means it was accepted and nothing more has been reported.',
   'marketing.campaign.recipients.segments': '{count} segment(s) billed',

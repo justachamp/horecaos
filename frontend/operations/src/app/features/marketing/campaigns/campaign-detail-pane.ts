@@ -17,10 +17,18 @@ import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
-import { WiringSentence, wiringCodeIn, wiringSentence } from '../channel-wiring';
+import {
+  WiringSentence,
+  handedKey,
+  readKey,
+  wiringCodeIn,
+  wiringSentence,
+} from '../channel-wiring';
 import { CampaignView, MarketingApi, RecipientCountsView, RecipientView } from '../marketing-api';
 import { explainRefusal } from '../refusal-explainer';
 import { ScenarioPanel } from '../scenarios/scenario-panel';
+import { explainDeliveryReason } from '../delivery-reasons';
+import { DeliveryCounts } from './delivery-counts';
 
 /**
  * One campaign's full lifecycle (ADR 0044, §6.4 Campaigns) — the dock
@@ -67,7 +75,7 @@ import { ScenarioPanel } from '../scenarios/scenario-panel';
  */
 @Component({
   selector: 'q-campaign-detail-pane',
-  imports: [TPipe, ScenarioPanel],
+  imports: [TPipe, ScenarioPanel, DeliveryCounts],
   templateUrl: './campaign-detail-pane.html',
   styleUrl: './campaign-detail-pane.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -236,10 +244,27 @@ export class CampaignDetailPane implements OnInit {
     return `marketing.campaigns.kind.${kind}` as MessageKey;
   }
 
-  /** What the delivery path has reported about one message, in words. */
+  /**
+   * What the delivery path has reported about one message, in words. A message Telegram accepted is
+   * «sent»: its Bot API has no operator in between to hand it to, and a push a customer tapped is
+   * «tapped», not «read» (ADR 0182).
+   */
   protected deliveryText(state: string): string {
-    const key = DELIVERY_KEYS[state];
+    const channel = this.campaign()?.channel ?? null;
+    let key: MessageKey | undefined;
+    if (state === 'HANDED_TO_OPERATOR') {
+      key = handedKey(channel);
+    } else if (state === 'READ') {
+      key = readKey(channel);
+    } else {
+      key = DELIVERY_KEYS[state];
+    }
     return key ? this.i18n.t(key) : state;
+  }
+
+  /** Why a message was withheld, failed or rejected, in words; a code a newer server added is shown as written. */
+  protected deliveryReasonText(reason: string): string {
+    return explainDeliveryReason(reason, (key, values) => this.i18n.t(key, values));
   }
 
   protected readonly hasDeliveryEvidence = computed(() =>
@@ -477,4 +502,6 @@ const DELIVERY_KEYS: Readonly<Record<string, MessageKey>> = {
   NO_RECEIPT: 'marketing.delivery.NO_RECEIPT',
   HANDED_TO_OPERATOR: 'marketing.delivery.HANDED_TO_OPERATOR',
   PENDING: 'marketing.delivery.PENDING',
+  READ: 'marketing.delivery.READ',
+  WITHHELD: 'marketing.delivery.WITHHELD',
 };

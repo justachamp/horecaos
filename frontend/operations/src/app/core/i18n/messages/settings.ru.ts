@@ -786,10 +786,13 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.notifications.field.templateKey': 'Событие',
   'settings.notifications.field.notificationClass': 'Класс',
   'settings.notifications.field.channel': 'Канал доставки',
+  'settings.notifications.field.consentPurpose': 'Цель согласия',
+  'settings.notifications.field.consentPurpose.hint':
+    'Согласие, которое клиент дал на получение этого сообщения. Кампания уходит только тем, кто согласился на это по этому каналу; MARKETING_PROMOTIONS есть у каждого арендатора.',
   'settings.notifications.field.status': 'Активен',
   'settings.notifications.field.activeVersion': 'Версия',
   'settings.notifications.field.channel.hint':
-    'Сегодня реально отправляют только SMS и Telegram. Email и Push объявлены в схеме и ключе шаблона, но ни один адаптер их не доставляет.',
+    'Сейчас реально отправляются только SMS, Telegram и Email. Email — только для кампаний, и в каждом языке нужна тема. Push объявлен, чтобы схема и ключ шаблона несли канал, но адаптера доставки пока нет.',
   'settings.notifications.field.variant': 'Вариант',
   'settings.notifications.field.fulfilmentMode': 'Способ выполнения',
   'settings.notifications.field.channelSource': 'Источник канала',
@@ -816,6 +819,17 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.notifications.moderation.APPROVED': 'Одобрено',
   'settings.notifications.moderation.REJECTED': 'Отклонено шлюзом',
   'settings.notifications.editor.subject': 'Тема',
+  'settings.notifications.editor.title': 'Заголовок',
+  'settings.notifications.editor.push.target': 'Куда ведёт нажатие',
+  'settings.notifications.editor.push.target.hint':
+    'Путь на витрине, например /menu или /category/pizza. Если пусто, откроется главная страница.',
+  'settings.notifications.editor.push.target.invalid':
+    'Начните с одного слэша и без пробелов: /menu, а не menu и не //menu.',
+  'settings.notifications.editor.push.cover': 'Картинка-обложка',
+  'settings.notifications.editor.push.cover.hint':
+    'Необязательно. Картинка 3:1, которую клиент увидит под текстом. Перед сохранением обрежьте её до 3:1.',
+  'settings.notifications.editor.push.cover.set': 'Обложка задана',
+  'settings.notifications.editor.push.cover.remove': 'Убрать обложку',
   'settings.notifications.editor.body': 'Текст',
   'settings.notifications.editor.variables': 'Вставить переменную',
   'settings.notifications.editor.variables.empty':

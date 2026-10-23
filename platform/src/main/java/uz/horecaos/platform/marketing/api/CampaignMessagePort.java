@@ -2,6 +2,7 @@ package uz.horecaos.platform.marketing.api;
 
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.UUID;
@@ -112,18 +113,165 @@ public interface CampaignMessagePort {
     }
 
     /**
-     * @param state one of {@code PENDING}, {@code HANDED_TO_OPERATOR},
-     *              {@code DELIVERED}, {@code FAILED}, {@code NO_RECEIPT} or
-     *              {@code REJECTED}. {@code HANDED_TO_OPERATOR} is the honest word
-     *              for a message a gateway accepted and nothing has reported on:
-     *              it is neither "delivered" nor a failure
+     * Creates, or finds, the durable ADR 0020 intent for one courier's operational SMS (ADR 0182, D15).
+     *
+     * <p>The same path a campaign message rides -- intent, template approval (ADR 0091), attempt,
+     * gateway, receipts -- with the purpose {@link #PURPOSE_COURIER} and a recipient that is a courier
+     * and not a customer account. The message carries the courier's id and no number: the number is
+     * read from the identity provider when it is sent.
+     *
+     * @return the notification id, or null when no delivery path is wired for the channel
+     */
+    default @Nullable UUID enqueueCourierMessage(CourierMessage message) {
+        return null;
+    }
+
+    /**
+     * The SMS wordings a brand's dispatcher may broadcast to couriers (ADR 0182): the active templates
+     * of the class {@code COURIER_DISPATCH}, with the variables each declares and whether the gateway
+     * has yet to approve the wording.
+     */
+    default List<CourierTemplate> courierTemplates(UUID tenantId, UUID brandId) {
+        return List.of();
+    }
+
+    /**
+     * @param variables short operational values for the template's variables. Not personal data: a
+     *                  dispatcher's note about a shift or a road, which is why it may sit on a row
+     * @param idempotencyKey derived from the broadcast and the courier, so a replayed send cannot
+     *                       message one courier twice
+     */
+    record CourierMessage(
+            UUID tenantId,
+            UUID brandId,
+            UUID courierId,
+            UUID broadcastId,
+            String templateKey,
+            String idempotencyKey,
+            Map<String, String> variables,
+            Instant scheduledAt,
+            @Nullable Instant expiresAt) {
+
+        public CourierMessage {
+            variables = variables == null ? Map.of() : Map.copyOf(variables);
+        }
+    }
+
+    /**
+     * @param variables the variables the wording uses, which a broadcast must supply a value for
+     * @param bodiesByLocale the raw wording per language tag, placeholders unexpanded, so a console
+     *                       can show a dispatcher the message before it is sent
+     * @param awaitingGateway whether the gateway has not approved the active wording (ADR 0091), so a
+     *                        send would be withheld and the console says so before a dispatcher tries
+     */
+    record CourierTemplate(
+            String templateKey, List<String> variables, Map<String, String> bodiesByLocale, boolean awaitingGateway) {
+
+        public CourierTemplate {
+            variables = List.copyOf(variables);
+            bodiesByLocale = Map.copyOf(bodiesByLocale);
+        }
+    }
+
+    /**
+     * What the delivery path knows about one message (ADR 0146, ADR 0182).
+     *
+     * @param state one of {@link #STATE_PENDING}, {@link #STATE_HANDED_TO_OPERATOR},
+     *              {@link #STATE_DELIVERED}, {@link #STATE_READ}, {@link #STATE_FAILED},
+     *              {@link #STATE_NO_RECEIPT}, {@link #STATE_REJECTED} or
+     *              {@link #STATE_WITHHELD}. {@code HANDED_TO_OPERATOR} is the honest word
+     *              for a message a gateway accepted and nothing has reported on: it is
+     *              neither "delivered" nor a failure. {@code READ} is a delivered message
+     *              its channel also reported opened or clicked; {@code WITHHELD} is one
+     *              that was never sent (consent withdrawn since expansion, a wording the
+     *              gateway has not approved, an expiry)
      * @param receiptState {@code NO_RECEIPT} or null
      * @param segmentsBilled null when the provider did not say
+     * @param reason a bounded code that says why, for a withheld, failed or rejected
+     *               message: a suppression reason, or the code the attempt closed with.
+     *               Never a provider's text, a number or an address
      */
     record DeliveryEvidence(
             String state,
             @Nullable String receiptState,
-            @Nullable Integer segmentsBilled) {}
+            @Nullable Integer segmentsBilled,
+            @Nullable String reason) {
+
+        public DeliveryEvidence(String state, @Nullable String receiptState, @Nullable Integer segmentsBilled) {
+            this(state, receiptState, segmentsBilled, null);
+        }
+    }
+
+    String STATE_PENDING = "PENDING";
+    String STATE_HANDED_TO_OPERATOR = "HANDED_TO_OPERATOR";
+    String STATE_DELIVERED = "DELIVERED";
+    String STATE_READ = "READ";
+    String STATE_FAILED = "FAILED";
+    String STATE_NO_RECEIPT = "NO_RECEIPT";
+    String STATE_REJECTED = "REJECTED";
+    String STATE_WITHHELD = "WITHHELD";
+
+    /**
+     * How many of a campaign's messages stand in each delivery state, derived at the moment
+     * of asking from the same evidence a recipient row shows (ADR 0182). Marketing reads it
+     * and holds none of it: a count copied onto the campaign could drift from the attempts
+     * it summarises, which is why ADR 0146 refuses to copy {@code terminal_status}.
+     *
+     * <p>Defaulted to {@link DeliveryCounts#NONE} for a port with no evidence to offer.
+     */
+    default DeliveryCounts deliveryCounts(UUID tenantId, UUID campaignId) {
+        return DeliveryCounts.NONE;
+    }
+
+    /**
+     * What a channel's provider can report back for this brand, so a report prints «not
+     * reported by this channel» where it cannot and a number where it can (ADR 0182).
+     *
+     * <p>Per brand because delivery reporting is a fact about the brand's bound gateway and
+     * whether its receipt source is enabled, not about the channel in the abstract. A channel
+     * that gains a provider that reports a read lights up here, and no report changes.
+     */
+    default ChannelReporting reporting(UUID tenantId, UUID brandId, String channel) {
+        return ChannelReporting.NONE;
+    }
+
+    /**
+     * @param reportsDelivery whether anything after the hand-over is reported: a delivery
+     *                        receipt. False means «handed to the operator» is as far as this
+     *                        channel can say, and a delivered figure is not zero but unknown
+     * @param reportsRead whether an open or a click is reported
+     */
+    record ChannelReporting(boolean reportsDelivery, boolean reportsRead) {
+
+        public static final ChannelReporting NONE = new ChannelReporting(false, false);
+    }
+
+    /**
+     * @param total every message the campaign has created
+     * @param delivered messages the channel confirmed delivered; includes {@code read}
+     * @param read the delivered messages the channel also reported opened or clicked
+     * @param withheldByReason {@code withheld} broken down by reason code
+     * @param segmentsBilled what the gateway says it billed across the campaign
+     */
+    record DeliveryCounts(
+            int total,
+            int delivered,
+            int read,
+            int failed,
+            int rejected,
+            int handedToOperator,
+            int noReceipt,
+            int pending,
+            int withheld,
+            Map<String, Integer> withheldByReason,
+            long segmentsBilled) {
+
+        public static final DeliveryCounts NONE = new DeliveryCounts(0, 0, 0, 0, 0, 0, 0, 0, 0, Map.of(), 0);
+
+        public DeliveryCounts {
+            withheldByReason = Map.copyOf(withheldByReason);
+        }
+    }
 
     /**
      * @param reason a stable code when not wired (for example

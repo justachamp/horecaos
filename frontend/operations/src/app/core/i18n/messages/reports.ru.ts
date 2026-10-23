@@ -563,8 +563,12 @@ export const reportsRu: AreaMessages<typeof reportsEn> = {
   'reports.marketing.campaigns.count.deferred': 'Отложено (тихие часы)',
   'reports.marketing.campaigns.count.refused': 'Отказано',
   'reports.marketing.campaigns.count.total': 'Всего получателей',
-  'reports.marketing.campaigns.readReceiptsNotBuilt':
-    'Отметки о прочтении не показаны: пока не фиксируется ни статус прочтения, ни дата прочтения — это не измерено, а не равно нулю.',
+  'reports.marketing.campaigns.column.messages': 'Сообщений',
+  'reports.marketing.campaigns.column.delivered': 'Доставлено',
+  'reports.marketing.campaigns.column.failed': 'Не доставлено',
+  'reports.marketing.campaigns.column.withheld': 'Удержано',
+  'reports.marketing.campaigns.column.notReported': 'н/д',
+  'reports.marketing.campaigns.delivery.title': 'Что стало с сообщениями',
 
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
   'reports.forecast.title': 'Прогноз спроса',

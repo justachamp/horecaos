@@ -3,9 +3,12 @@ package uz.horecaos.platform.mail.infrastructure;
 import jakarta.mail.MessagingException;
 import jakarta.mail.SendFailedException;
 import jakarta.mail.internet.AddressException;
+import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Properties;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -51,6 +54,7 @@ public class SmtpPlatformMailer implements PlatformMailer {
     private final String username;
     private final String passwordReference;
     private final String from;
+    private final @Nullable InternetAddress configuredFrom;
 
     public SmtpPlatformMailer(
             SecretResolver secrets,
@@ -67,12 +71,29 @@ public class SmtpPlatformMailer implements PlatformMailer {
         this.username = username.strip();
         this.passwordReference = passwordReference.strip();
         this.from = from.strip();
+        this.configuredFrom = parseSender(this.from);
         if (!this.security.equals("STARTTLS") && !this.security.equals("TLS") && !this.security.equals("NONE")) {
             throw new IllegalStateException("horecaos.mail.smtp.security is STARTTLS, TLS or NONE");
         }
         if (!this.username.isEmpty() && !this.passwordReference.isEmpty()) {
             // Parsed now so a malformed reference stops startup, not the first invitation.
             SecretReference.parse(this.passwordReference);
+        }
+    }
+
+    /**
+     * The configured sender, parsed once. A sender that is not an address stops startup rather than
+     * surfacing later as «the recipient is invalid» on every message, which a campaign would read as
+     * a hard bounce for each customer and suppress them all.
+     */
+    private static @Nullable InternetAddress parseSender(String from) {
+        if (from.isEmpty()) {
+            return null;
+        }
+        try {
+            return InternetAddress.parse(from)[0];
+        } catch (AddressException | RuntimeException notAnAddress) {
+            throw new IllegalStateException("horecaos.mail.from is not an email address");
         }
     }
 
@@ -90,10 +111,19 @@ public class SmtpPlatformMailer implements PlatformMailer {
             JavaMailSenderImpl sender = sender();
             MimeMessage message = sender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            helper.setFrom(from);
+            helper.setFrom(senderAddress(mail));
             helper.setTo(mail.to());
             helper.setSubject(mail.subject());
             helper.setText(mail.text(), mail.html());
+            if (mail.unsubscribeUrl() != null) {
+                // RFC 8058: the URL in the header, and the announcement that a POST to it is
+                // enough, which is what lets a mail client's own unsubscribe button work
+                // without a person opening a page. Without it the same button files a spam
+                // complaint, and the complaint lands on the one sender every tenant shares.
+                message.setHeader("List-Unsubscribe", "<" + mail.unsubscribeUrl() + ">");
+                message.setHeader("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
+                message.setHeader("Precedence", "bulk");
+            }
             sender.send(message);
             return new MailOutcome.Sent();
         } catch (AddressException invalid) {
@@ -116,12 +146,52 @@ public class SmtpPlatformMailer implements PlatformMailer {
             log.warn(
                     "The SMTP server did not accept an email ({})",
                     refused.getClass().getSimpleName());
-            return new MailOutcome.Failed("SMTP_UNAVAILABLE");
+            return new MailOutcome.Failed(failureCode(refused));
         } catch (MailException unreachable) {
             log.warn(
                     "The SMTP server could not be reached ({})",
                     unreachable.getClass().getSimpleName());
-            return new MailOutcome.Failed("SMTP_UNAVAILABLE");
+            return new MailOutcome.Failed(failureCode(unreachable));
+        }
+    }
+
+    /**
+     * {@code SMTP_NO_ANSWER} when the connection was lost after the message was on its way, and
+     * {@code SMTP_UNAVAILABLE} when it provably never got there. The difference decides whether a
+     * caller that must not send twice may try again.
+     */
+    private static String failureCode(Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            String message =
+                    cause.getMessage() == null ? "" : cause.getMessage().toLowerCase(Locale.ROOT);
+            if (cause instanceof java.net.SocketTimeoutException && message.contains("read timed out")) {
+                return MailOutcome.SMTP_NO_ANSWER;
+            }
+            if (cause instanceof java.net.SocketException
+                    && (message.contains("connection reset") || message.contains("broken pipe"))) {
+                return MailOutcome.SMTP_NO_ANSWER;
+            }
+            if (cause instanceof java.io.EOFException) {
+                return MailOutcome.SMTP_NO_ANSWER;
+            }
+        }
+        return "SMTP_UNAVAILABLE";
+    }
+
+    /**
+     * The {@code From} address: always the configured one, with the display name of the message when
+     * it has one (a tenant's brand, ADR 0182). The address is never taken from a message, so the
+     * name a tenant chooses can never change who the mail claims to come from.
+     */
+    private InternetAddress senderAddress(OutgoingMail mail) throws MessagingException {
+        InternetAddress configured = Objects.requireNonNull(configuredFrom, "send() runs only when configured");
+        if (mail.senderName() == null) {
+            return configured;
+        }
+        try {
+            return new InternetAddress(configured.getAddress(), mail.senderName(), "UTF-8");
+        } catch (java.io.UnsupportedEncodingException impossible) {
+            throw new MessagingException("UTF-8 is not available", impossible);
         }
     }
 

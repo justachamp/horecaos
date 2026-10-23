@@ -1,0 +1,66 @@
+@if (visible()) {
+  <section class="push" data-testid="push-subscribe" [attr.data-state]="state()">
+    @switch (state()) {
+      @case ('on') {
+        <div class="push__head">
+          <span class="push__tick" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.4"
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          </span>
+          <div class="push__body">
+            <p class="push__title">{{ 'push.onTitle' | t }}</p>
+            <p class="push__text">{{ 'push.onText' | t }}</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          class="push__btn push__btn--quiet"
+          data-testid="push-turn-off"
+          [disabled]="busy()"
+          (click)="turnOff()"
+        >
+          {{ 'push.turnOff' | t }}
+        </button>
+      }
+      @case ('blocked') {
+        <p class="push__title">{{ 'push.title' | t }}</p>
+        <p class="push__text" data-testid="push-blocked">{{ 'push.blocked' | t }}</p>
+      }
+      @default {
+        <p class="push__title">{{ 'push.title' | t }}</p>
+        <p class="push__text">{{ 'push.text' | t }}</p>
+        <div class="push__actions">
+          <button
+            type="button"
+            class="push__btn"
+            data-testid="push-turn-on"
+            [disabled]="busy()"
+            (click)="turnOn()"
+          >
+            {{ 'push.turnOn' | t }}
+          </button>
+          @if (dismissible()) {
+            <button
+              type="button"
+              class="push__btn push__btn--quiet"
+              data-testid="push-not-now"
+              (click)="notNow()"
+            >
+              {{ 'push.notNow' | t }}
+            </button>
+          }
+        </div>
+        <p class="push__note">{{ 'push.consentNote' | t }}</p>
+      }
+    }
+    @if (error()) {
+      <p class="push__error" role="alert" data-testid="push-error">{{ error() }}</p>
+    }
+  </section>
+}
