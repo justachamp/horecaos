@@ -38,6 +38,21 @@ public interface CustomerAccountAlertPort {
     boolean notifyAccount(AccountAlert alert);
 
     /**
+     * Whether an intent for this template key would have something to send for this customer today.
+     *
+     * <p>True when the channel the customer would be reached by exists, a wording for the key is active for the
+     * brand (or the platform's own stands in) and, where the SMS gateway moderates wordings, has been approved.
+     * Those are the facts a tenant controls, and the ones that suppress an intent {@code NO_ACTIVE_TEMPLATE},
+     * {@code NO_TEMPLATE_FOR_LOCALE}, {@code TEMPLATE_AWAITING_PROVIDER} or {@code CHANNEL_NOT_AVAILABLE} after it
+     * is created. A caller whose message may be sent only once asks first: creating an intent that eligibility will
+     * suppress still takes the day's idempotency key, and the caller counts the message as spent.
+     *
+     * <p>What the customer decides -- a preference, quiet hours, a missing contact -- is not asked here: those are
+     * about this customer, and the intent records them as a suppression reason the tenant can read.
+     */
+    boolean canDeliver(UUID tenantId, UUID brandId, UUID customerAccountId, String templateKey);
+
+    /**
      * @param brandId the brand the message is sent in the name of, which selects the template and the consent scope
      * @param customerAccountId the recipient; the intent's {@code recipient_account_id}
      * @param subjectType what the message is about, up to 32 characters

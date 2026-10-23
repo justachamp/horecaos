@@ -70,7 +70,14 @@
   warns about a lot already past its expiry; `LoyaltyExpiryWarningNotifier` (in `notifications`, the
   direction the module graph allows) creates an ADR 0020 intent for the semantic key `LOYALTY_POINTS_EXPIRING`
   with three typed variables, `TRANSACTIONAL_REQUIRED` until counsel rules, and a tenant that has not
-  written and activated the wording sends nothing. Also not built: the campaign-driven accrual rules ADR 0044
+  written and activated the wording sends nothing. Corrected 2026-10-23 against the code: "sends nothing"
+  first meant that the sweep still marked every lot as warned and the intent was then suppressed
+  `NO_ACTIVE_TEMPLATE`, which spent each lot's one warning before a tenant could activate wording. Now
+  `LoyaltyExpiryWarningNotifier` asks `CustomerAccountAlertPort.canDeliver` (an active wording on the channel the
+  customer is reached by, approved by the SMS gateway where it moderates) before creating the intent,
+  `LoyaltyExpiryWarningPort.lotsExpiring` answers whether it handed a message over, and
+  `LoyaltyMaintenanceService.warnExpiringLots` marks a lot only when it did; lots nobody could be told about stay
+  due and are offered again on the next sweep. Also not built: the campaign-driven accrual rules ADR 0044
   owns; counsel's confirmation of the message class and the SMS gateway's approval of each wording
   (`docs/runbooks/external-connections/w6-promotions-reviews-approvals.md`); `fiscal.fiscal_document_lines`, so the
   per-line allocation is written nowhere; the `cash_due_minor` handoff to ADR

@@ -33,10 +33,14 @@ import uz.horecaos.platform.notifications.domain.MoneyText;
  * message renders with.
  *
  * <p><strong>Built dark.</strong> The semantic template key {@value #TEMPLATE_KEY} has no wording until a tenant
- * authors and activates one, and an intent without an active template is suppressed {@code NO_ACTIVE_TEMPLATE}:
- * nothing is sent. The class is {@code TRANSACTIONAL_REQUIRED} (see {@link CustomerAccountAlertPort}) until
- * counsel rules on promotional balances; an SMS wording additionally waits for its gateway's approval
- * ({@code TEMPLATE_AWAITING_PROVIDER}), while Telegram does not.
+ * authors and activates one. Until then nothing is sent <em>and nothing is created</em>: the adapter asks {@link
+ * CustomerAccountAlertPort#canDeliver} first and answers {@code false} when there is no wording the customer could
+ * be reached with, so the sweep does not mark the lots and each lot keeps its one warning for the day the wording
+ * is activated. (An intent created anyway would be suppressed {@code NO_ACTIVE_TEMPLATE}, would hold the day's
+ * idempotency key, and would have the sweep count the warning as spent.) The class is {@code
+ * TRANSACTIONAL_REQUIRED} (see {@link CustomerAccountAlertPort}) until counsel rules on promotional balances; an SMS
+ * wording additionally waits for its gateway's approval ({@code TEMPLATE_AWAITING_PROVIDER}), which counts as dark
+ * for the same reason, while Telegram does not.
  *
  * <p>The idempotency key is the account and the day of the sweep, the second half of "at most one message per
  * customer per day": the loyalty worklist already leaves an account alone for 24 hours after a warning, and this
@@ -74,7 +78,7 @@ public class LoyaltyExpiryWarningNotifier implements LoyaltyExpiryWarningPort {
     }
 
     @Override
-    public void lotsExpiring(
+    public boolean lotsExpiring(
             UUID tenantId,
             UUID brandId,
             UUID customerAccountId,
@@ -83,8 +87,13 @@ public class LoyaltyExpiryWarningNotifier implements LoyaltyExpiryWarningPort {
             List<ExpiringLot> lots,
             Instant now) {
         if (lots.isEmpty()) {
-            return;
+            return false;
         }
+        if (!accountAlerts.canDeliver(tenantId, brandId, customerAccountId, TEMPLATE_KEY)) {
+            return false;
+        }
+        // The key already existing is the sweep retrying after a crash between this hand-over and its mark: the
+        // message was handed over, so the answer is still true and the lots get marked.
         accountAlerts.notifyAccount(new AccountAlert(
                 tenantId,
                 brandId,
@@ -96,6 +105,7 @@ public class LoyaltyExpiryWarningNotifier implements LoyaltyExpiryWarningPort {
                 variables(currency, lots, now),
                 now,
                 expiry));
+        return true;
     }
 
     /** One message per account per UTC day: the same sweep retried within the day produces the same key. */

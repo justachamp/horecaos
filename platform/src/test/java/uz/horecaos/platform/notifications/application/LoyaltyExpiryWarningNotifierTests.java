@@ -29,7 +29,23 @@ class LoyaltyExpiryWarningNotifierTests {
     private static final Instant NOW = Instant.parse("2026-10-14T07:00:00Z");
 
     private final List<CustomerAccountAlertPort.AccountAlert> sent = new ArrayList<>();
-    private final CustomerAccountAlertPort port = alert -> sent.add(alert);
+    private final List<String> asked = new ArrayList<>();
+    private boolean wordingIsActive = true;
+    private boolean intentAlreadyExists;
+    private final CustomerAccountAlertPort port = new CustomerAccountAlertPort() {
+
+        @Override
+        public boolean notifyAccount(AccountAlert alert) {
+            sent.add(alert);
+            return !intentAlreadyExists;
+        }
+
+        @Override
+        public boolean canDeliver(UUID tenantId, UUID brandId, UUID customerAccountId, String templateKey) {
+            asked.add(templateKey);
+            return wordingIsActive;
+        }
+    };
     private final LoyaltyExpiryWarningNotifier notifier =
             new LoyaltyExpiryWarningNotifier(port, "Asia/Tashkent", Duration.ofDays(1));
 
@@ -112,6 +128,44 @@ class LoyaltyExpiryWarningNotifierTests {
         notifier.lotsExpiring(TENANT, BRAND, CUSTOMER, ACCOUNT, "UZS", List.of(), NOW);
 
         assertThat(sent).isEmpty();
+    }
+
+    @Test
+    @DisplayName("with no wording to send the adapter creates nothing and says so, so the lots keep their warning")
+    void withNoDeliverableWordingItHandsNothingOver() {
+        wordingIsActive = false;
+
+        boolean handedOver = notifier.lotsExpiring(
+                TENANT, BRAND, CUSTOMER, ACCOUNT, "UZS", List.of(lot(NOW.plus(Duration.ofDays(5)), 1_000)), NOW);
+
+        assertThat(handedOver).isFalse();
+        assertThat(sent).as("no intent is created to be suppressed later").isEmpty();
+        assertThat(asked).containsExactly("LOYALTY_POINTS_EXPIRING");
+    }
+
+    @Test
+    @DisplayName("with wording to send it hands the message over")
+    void withDeliverableWordingItHandsOver() {
+        boolean handedOver = notifier.lotsExpiring(
+                TENANT, BRAND, CUSTOMER, ACCOUNT, "UZS", List.of(lot(NOW.plus(Duration.ofDays(5)), 1_000)), NOW);
+
+        assertThat(handedOver).isTrue();
+        assertThat(sent).hasSize(1);
+    }
+
+    /**
+     * The sweep crashed between the hand-over and the mark, and the next pass retries: the intent for the day exists
+     * already. That is a message that was handed over, so the lots are marked, not offered again for ever.
+     */
+    @Test
+    @DisplayName("an intent the day already holds counts as handed over")
+    void aRepeatedIntentIsStillHandedOver() {
+        intentAlreadyExists = true;
+
+        boolean handedOver = notifier.lotsExpiring(
+                TENANT, BRAND, CUSTOMER, ACCOUNT, "UZS", List.of(lot(NOW.plus(Duration.ofDays(5)), 1_000)), NOW);
+
+        assertThat(handedOver).isTrue();
     }
 
     @Test

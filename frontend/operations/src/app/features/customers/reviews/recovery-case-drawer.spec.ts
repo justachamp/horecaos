@@ -695,6 +695,83 @@ describe('RecoveryCaseDrawer', () => {
       expect(host().textContent).not.toContain('SORRY-8F3K-2M9Q');
     });
 
+    it('asks for the same expiry instant when an unchanged form is submitted again after a lost response', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(new Date('2026-10-23T05:00:00.000Z'));
+        await openMintForm();
+        api.mintApologyCode.mockRejectedValueOnce(
+          new ApiError(ApiErrorCode.NETWORK_UNREACHABLE, 0, null, 'c-3'),
+        );
+        type('mint-value', '25000');
+        type('mint-days', '14');
+        fixture.detectChanges();
+        await click('mint-submit');
+        expect(host().querySelector('[data-testid="mint-form"]')).not.toBeNull();
+
+        // A minute later the operator clicks again with nothing changed: the same request, not a new one.
+        vi.setSystemTime(new Date('2026-10-23T05:01:00.000Z'));
+        await click('mint-submit');
+
+        expect(api.mintApologyCode).toHaveBeenCalledTimes(2);
+        const first = api.mintApologyCode.mock.calls[0][1];
+        const retry = api.mintApologyCode.mock.calls[1][1];
+        expect(retry).toEqual(first);
+        expect(retry.expiresAt).toBe('2026-11-06T05:00:00.000Z');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('takes a new expiry instant once the form was edited after a lost response', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(new Date('2026-10-23T05:00:00.000Z'));
+        await openMintForm();
+        api.mintApologyCode.mockRejectedValueOnce(
+          new ApiError(ApiErrorCode.NETWORK_UNREACHABLE, 0, null, 'c-3'),
+        );
+        type('mint-value', '25000');
+        type('mint-days', '14');
+        fixture.detectChanges();
+        await click('mint-submit');
+
+        vi.setSystemTime(new Date('2026-10-23T05:01:00.000Z'));
+        type('mint-days', '7');
+        fixture.detectChanges();
+        await click('mint-submit');
+
+        expect(api.mintApologyCode.mock.calls[1][1].expiresAt).toBe('2026-10-30T05:01:00.000Z');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('takes a fresh expiry instant for the next code once one was issued', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(new Date('2026-10-23T05:00:00.000Z'));
+        await openMintForm();
+        type('mint-value', '25000');
+        type('mint-days', '14');
+        fixture.detectChanges();
+        await click('mint-submit');
+        await click('minted-code-done');
+
+        vi.setSystemTime(new Date('2026-10-23T06:00:00.000Z'));
+        await click('mint-open');
+        type('mint-value', '25000');
+        type('mint-days', '14');
+        fixture.detectChanges();
+        await click('mint-submit');
+
+        expect(api.mintApologyCode).toHaveBeenCalledTimes(2);
+        expect(api.mintApologyCode.mock.calls[1][1].expiresAt).toBe('2026-11-06T06:00:00.000Z');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('shows a refusal as a sentence and keeps the form open without a code', async () => {
       await openMintForm();
       api.mintApologyCode.mockRejectedValue(

@@ -27,6 +27,7 @@ import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.customers.api.ConsentDirectory;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory;
 import uz.horecaos.platform.loyalty.api.LoyaltyExpiryWarningPort.ExpiringLot;
+import uz.horecaos.platform.notifications.api.CustomerAccountAlertPort;
 import uz.horecaos.platform.notifications.api.DispatchOutcome;
 import uz.horecaos.platform.notifications.api.NotificationDispatch;
 import uz.horecaos.platform.notifications.api.NotificationTransport;
@@ -74,6 +75,7 @@ class LoyaltyExpiryWarningNotificationTests {
     private NotificationTemplateService templates;
     private NotificationEligibilityService eligibility;
     private LoyaltyExpiryWarningNotifier notifier;
+    private CustomerAccountAlertFanoutService alerts;
     private final Map<UUID, UUID> brandOf = new LinkedHashMap<>();
     private final Map<UUID, UUID> locationOf = new LinkedHashMap<>();
 
@@ -120,10 +122,9 @@ class LoyaltyExpiryWarningNotificationTests {
 
         CustomerTelegramChannelRouter channelRouter =
                 new CustomerTelegramChannelRouter(notifications, new AlwaysEntitledService());
-        notifier = new LoyaltyExpiryWarningNotifier(
-                new CustomerAccountAlertFanoutService(notifications, channelRouter, objectMapper, "SMS"),
-                ZONE,
-                Duration.ofDays(1));
+        alerts = new CustomerAccountAlertFanoutService(
+                notifications, channelRouter, templates, new FakeTransport(), objectMapper, "SMS");
+        notifier = new LoyaltyExpiryWarningNotifier(alerts, ZONE, Duration.ofDays(1));
 
         seedTenant(TENANT);
     }
@@ -143,7 +144,12 @@ class LoyaltyExpiryWarningNotificationTests {
     @DisplayName("two due lots become one account-addressed intent with typed variables, and no order is involved")
     void oneIntentForTheCustomerWhateverTheLotCount() throws Exception {
         UUID customer = seedCustomer(TENANT);
+        activateLoyaltyTemplate(TENANT);
 
+        assertThat(notifier.lotsExpiring(
+                        TENANT, brandId(TENANT), customer, LOYALTY_ACCOUNT, "UZS", lots(3_000, 2_000), NOW))
+                .as("handed over")
+                .isTrue();
         notifier.lotsExpiring(TENANT, brandId(TENANT), customer, LOYALTY_ACCOUNT, "UZS", lots(3_000, 2_000), NOW);
 
         assertThat(messages()).hasSize(1);
@@ -169,6 +175,7 @@ class LoyaltyExpiryWarningNotificationTests {
     @DisplayName("the same sweep retried the same day creates no second message; the next day creates one")
     void atMostOneMessagePerCustomerPerDay() {
         UUID customer = seedCustomer(TENANT);
+        activateLoyaltyTemplate(TENANT);
 
         notifier.lotsExpiring(TENANT, brandId(TENANT), customer, LOYALTY_ACCOUNT, "UZS", lots(3_000, 2_000), NOW);
         notifier.lotsExpiring(
@@ -205,10 +212,61 @@ class LoyaltyExpiryWarningNotificationTests {
     }
 
     @Test
-    @DisplayName("until a tenant activates wording the message is suppressed with its reason, and nothing is sent")
+    @DisplayName("until a tenant activates wording the adapter creates nothing and hands nothing over")
     void builtDarkUntilAWordingIsActive() {
         UUID customer = seedCustomer(TENANT);
-        notifier.lotsExpiring(TENANT, brandId(TENANT), customer, LOYALTY_ACCOUNT, "UZS", lots(3_000, 2_000), NOW);
+
+        boolean handedOver = notifier.lotsExpiring(
+                TENANT, brandId(TENANT), customer, LOYALTY_ACCOUNT, "UZS", lots(3_000, 2_000), NOW);
+
+        assertThat(handedOver)
+                .as("false keeps the lots due: their one warning is not spent on a message nobody can send")
+                .isFalse();
+        assertThat(messages())
+                .as("no intent exists to be suppressed NO_ACTIVE_TEMPLATE and to hold the day's key")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("the day's warning is still sent when the wording is activated after an earlier dark sweep")
+    void activatingTheWordingTheSameDayStillSendsTheWarning() {
+        UUID customer = seedCustomer(TENANT);
+        assertThat(notifier.lotsExpiring(
+                        TENANT, brandId(TENANT), customer, LOYALTY_ACCOUNT, "UZS", lots(3_000, 2_000), NOW))
+                .isFalse();
+
+        activateLoyaltyTemplate(TENANT);
+        clock.set(NOW.plusSeconds(3_600));
+        assertThat(notifier.lotsExpiring(
+                        TENANT,
+                        brandId(TENANT),
+                        customer,
+                        LOYALTY_ACCOUNT,
+                        "UZS",
+                        lots(3_000, 2_000),
+                        NOW.plusSeconds(3_600)))
+                .isTrue();
+
+        assertThat(messages()).hasSize(1);
+        assertThat(eligibility.evaluate(claim(messages().getFirst().id()))).isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "an intent created in the race window before a wording was withdrawn is still suppressed, with its reason")
+    void aWordingWithdrawnAfterTheQuestionIsStillSuppressed() {
+        UUID customer = seedCustomer(TENANT);
+        alerts.notifyAccount(new CustomerAccountAlertPort.AccountAlert(
+                TENANT,
+                brandId(TENANT),
+                customer,
+                LoyaltyExpiryWarningNotifier.TEMPLATE_KEY,
+                LoyaltyExpiryWarningNotifier.SUBJECT_TYPE,
+                LOYALTY_ACCOUNT,
+                "race:" + LOYALTY_ACCOUNT,
+                Map.of("loyaltyPoints", "5000"),
+                NOW,
+                Duration.ofDays(1)));
         UUID id = messages().getFirst().id();
 
         assertThat(eligibility.evaluate(claim(id))).isFalse();
@@ -219,18 +277,36 @@ class LoyaltyExpiryWarningNotificationTests {
     }
 
     @Test
-    @DisplayName("an SMS wording the gateway has not approved is withheld as awaiting the provider")
+    @DisplayName("an SMS wording the gateway has not approved is not deliverable: nothing is created until it is")
     void anSmsWordingAwaitsTheGateway() {
         UUID customer = seedCustomer(TENANT);
         activateLoyaltyTemplate(TENANT);
         setProviderReview(TENANT, "PENDING");
-        notifier.lotsExpiring(TENANT, brandId(TENANT), customer, LOYALTY_ACCOUNT, "UZS", lots(3_000, 2_000), NOW);
-        UUID id = messages().getFirst().id();
 
-        assertThat(eligibility.evaluate(claim(id))).isFalse();
+        assertThat(notifier.lotsExpiring(
+                        TENANT, brandId(TENANT), customer, LOYALTY_ACCOUNT, "UZS", lots(3_000, 2_000), NOW))
+                .as("awaiting the provider is dark for the same reason as no wording")
+                .isFalse();
+        assertThat(messages()).isEmpty();
 
-        assertThat(notifications.find(TENANT, id).orElseThrow().suppressionReason())
-                .isEqualTo("TEMPLATE_AWAITING_PROVIDER");
+        setProviderReview(TENANT, "APPROVED");
+        assertThat(notifier.lotsExpiring(
+                        TENANT, brandId(TENANT), customer, LOYALTY_ACCOUNT, "UZS", lots(3_000, 2_000), NOW))
+                .isTrue();
+        assertThat(messages()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("a wording for another channel than the customer is reached by is not a wording for the customer")
+    void aWordingForTheOtherChannelIsNotDeliverable() {
+        UUID customer = seedCustomer(TENANT);
+        activateLoyaltyTemplate(TENANT, NotificationChannel.TELEGRAM);
+
+        assertThat(notifier.lotsExpiring(
+                        TENANT, brandId(TENANT), customer, LOYALTY_ACCOUNT, "UZS", lots(3_000, 2_000), NOW))
+                .as("the customer has no Telegram link, so is reached by SMS, for which there is no wording")
+                .isFalse();
+        assertThat(messages()).isEmpty();
     }
 
     private void setProviderReview(UUID tenantId, String state) {
@@ -262,12 +338,16 @@ class LoyaltyExpiryWarningNotificationTests {
 
     /** Authors and activates the wording for the loyalty message, the way a tenant would before relying on it. */
     private void activateLoyaltyTemplate(UUID tenantId) {
+        activateLoyaltyTemplate(tenantId, NotificationChannel.SMS);
+    }
+
+    private void activateLoyaltyTemplate(UUID tenantId, NotificationChannel channel) {
         UUID templateId = templates.createTemplate(
                 tenantId,
                 brandId(tenantId),
                 LoyaltyExpiryWarningNotifier.TEMPLATE_KEY,
                 NotificationClass.TRANSACTIONAL_REQUIRED,
-                NotificationChannel.SMS,
+                channel,
                 null);
         Map<MessageLocale, Wording> wordings = new LinkedHashMap<>();
         MessageLocale.required()
