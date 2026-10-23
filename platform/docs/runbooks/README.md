@@ -22,6 +22,7 @@ That shapes them more than any style guide would.
 | [production-setup.md](production-setup.md) | Bare OS to a running platform — first-time setup by a devops engineer with no server access for CI or the assistant (ADR 0061) |
 | [platform-email.md](platform-email.md) | Turning on the platform's own email: provider, DNS records, the SMTP password in OpenBao, and why an invitation is not sending (ADR 0097) |
 | [connect-assistant-provider.md](connect-assistant-provider.md) | Turning on the grounded assistant: the platform's model-provider key in OpenBao, the pilot tenant's entitlement and switch, what bounds its cost, and what to check when it hands customers to a person (ADR 0069) |
+| [external-connections/README.md](external-connections/README.md) | The index of the fourteen batch-21 external-connection files, how every one of them is read, and where a fact lands once it is connected. Read this first; the per-wave files below are the records. |
 | [external-connections/w1-board-shell.md](external-connections/w1-board-shell.md) | What the order board's courier ETA, source, payment, fiscal, distance and partner-number columns, the reprint key and the plan lock are built against, and what to check the day the real provider, printer or plan is connected (batch 21) |
 | [deploy.md](deploy.md) | Shipping a release, bootstrapping a host, rolling back, and everything that goes wrong in between |
 | [restore.md](restore.md) | The database is gone, corrupted, or a migration has to be undone |
