@@ -17,6 +17,11 @@ export interface CashDeclarationRequest {
   declaredMinor?: number;
 }
 
+export interface CheckResponse {
+  kind?: string;
+  outcome?: string;
+}
+
 export interface CloseResponse {
   breakSeconds?: number;
   cashHandoverId?: string;
@@ -71,6 +76,7 @@ export interface CourierDeclineOfferResponse {
 export interface CourierDeliveryResponse {
   assignedAt?: string;
   cashDueMinor?: number;
+  checks?: Array<CheckResponse>;
   currency?: string;
   deliveredAt?: string;
   destinationLabel?: string;
@@ -109,6 +115,10 @@ export interface CourierEngagementView {
   registrationValidUntil?: string;
   status?: string;
   warningState?: string;
+}
+
+export interface CourierGateStepRequest {
+  position?: CourierPositionBody;
 }
 
 export interface CourierObservationBatchRequest {
@@ -226,7 +236,9 @@ export interface Operations {
   "courierGetDelivery": { method: "GET"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}"; request: { parameters: { path: { brandId: string; locationId: string; shipmentId: string; tenantId: string } } }; responses: { "200": CourierDeliveryResponse } };
   "courierAdvanceDelivery": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/advance"; request: { parameters: { path: { brandId: string; locationId: string; shipmentId: string; tenantId: string } }; body: CourierAdvanceDeliveryRequest }; responses: { "200": CourierDeliveryResponse } };
   "courierRevealDeliveryCustomerLocation": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/customer-location-reveals"; request: { parameters: { path: { brandId: string; locationId: string; shipmentId: string; tenantId: string } } }; responses: { "200": CourierCustomerLocationResponse } };
+  "courierHandOverDelivery": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/handover"; request: { parameters: { path: { brandId: string; locationId: string; shipmentId: string; tenantId: string } }; body?: CourierGateStepRequest }; responses: { "200": CourierDeliveryResponse } };
   "courierConfirmDeliveryPayment": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/payment-confirmation"; request: { parameters: { path: { brandId: string; locationId: string; shipmentId: string; tenantId: string } }; body: CourierPaymentConfirmationRequest }; responses: { "200": CourierDeliveryResponse } };
+  "courierPickUpDelivery": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/pickup"; request: { parameters: { path: { brandId: string; locationId: string; shipmentId: string; tenantId: string } }; body?: CourierGateStepRequest }; responses: { "200": CourierDeliveryResponse } };
   "courierGetDutySession": { method: "GET"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/duty-session"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": CourierCurrentDutyResponse } };
   "courierOpenDutySession": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/duty-sessions"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: CourierOpenDutyRequest }; responses: { "200": CourierDutySessionView } };
   "courierCloseDutySession": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/duty-sessions/{sessionId}/closures"; request: { parameters: { path: { brandId: string; locationId: string; sessionId: string; tenantId: string } } }; responses: { "200": unknown } };

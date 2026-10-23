@@ -351,6 +351,18 @@
         },
         "type" : "object"
       },
+      "BundleLink" : {
+        "properties" : {
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "CallbackRequestResponse" : {
         "properties" : {
           "leadId" : {
@@ -452,6 +464,24 @@
           "variantId" : {
             "format" : "uuid",
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CartRedemptionOfferResponse" : {
+        "properties" : {
+          "cartId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "offer" : {
+            "$ref" : "#/components/schemas/RedemptionOfferView"
+          },
+          "orderTotal" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "priced" : {
+            "type" : "boolean"
           }
         },
         "type" : "object"
@@ -719,6 +749,35 @@
         "required" : [ "channel", "fulfillmentMode", "locationId" ],
         "type" : "object"
       },
+      "CustomerBalanceResponse" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "balance" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "held" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "nextExpiryAmount" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "nextExpiryAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "spendable" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          }
+        },
+        "type" : "object"
+      },
       "CustomerCallbackRequest" : {
         "properties" : {
           "forCompany" : {
@@ -886,6 +945,14 @@
         },
         "type" : "object"
       },
+      "EnabledView" : {
+        "properties" : {
+          "enabled" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "EntryDetail" : {
         "properties" : {
           "blocks" : {
@@ -1020,6 +1087,41 @@
           }
         },
         "required" : [ "tableToken" ],
+        "type" : "object"
+      },
+      "ExportRequestStatus" : {
+        "properties" : {
+          "bundleAvailable" : {
+            "type" : "boolean"
+          },
+          "bundleExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "cancelledAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "producedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "requestedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "responseDueAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "FaqEntryResponse" : {
@@ -1334,6 +1436,12 @@
       },
       "HomeDocument" : {
         "properties" : {
+          "brandSwitcher" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SwitcherEntry"
+            },
+            "type" : "array"
+          },
           "carousel" : {
             "items" : {
               "$ref" : "#/components/schemas/CarouselItem"
@@ -1345,6 +1453,9 @@
               "$ref" : "#/components/schemas/Group"
             },
             "type" : "array"
+          },
+          "layout" : {
+            "type" : "string"
           },
           "locale" : {
             "type" : "string"
@@ -2287,6 +2398,41 @@
         },
         "type" : "object"
       },
+      "PaymentSplitResponse" : {
+        "properties" : {
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenders" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PaymentSplitTenderResponse"
+            },
+            "type" : "array"
+          },
+          "total" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          }
+        },
+        "type" : "object"
+      },
+      "PaymentSplitTenderResponse" : {
+        "properties" : {
+          "amount" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "methodCode" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PendingReviewResponse" : {
         "properties" : {
           "locationId" : {
@@ -2361,6 +2507,9 @@
           "city" : {
             "type" : "string"
           },
+          "distanceKnown" : {
+            "type" : "boolean"
+          },
           "distanceMeters" : {
             "format" : "int64",
             "type" : "integer"
@@ -2399,7 +2548,6 @@
             "$ref" : "#/components/schemas/GeoPoint"
           }
         },
-        "required" : [ "point" ],
         "type" : "object"
       },
       "PickupLocations" : {
@@ -2409,6 +2557,16 @@
               "$ref" : "#/components/schemas/PickupLocation"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "PingRequest" : {
+        "properties" : {
+          "channel" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -2763,6 +2921,54 @@
         },
         "type" : "object"
       },
+      "PushStatusResponse" : {
+        "properties" : {
+          "available" : {
+            "type" : "boolean"
+          },
+          "publicKey" : {
+            "type" : "string"
+          },
+          "subscribed" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "PushSubscribeRequest" : {
+        "properties" : {
+          "endpoint" : {
+            "maxLength" : 2048,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "expirationTime" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "keys" : {
+            "$ref" : "#/components/schemas/PushSubscriptionKeys"
+          }
+        },
+        "required" : [ "endpoint", "keys" ],
+        "type" : "object"
+      },
+      "PushSubscriptionKeys" : {
+        "properties" : {
+          "auth" : {
+            "maxLength" : 256,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "p256dh" : {
+            "maxLength" : 256,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "auth", "p256dh" ],
+        "type" : "object"
+      },
       "PutLineRequest" : {
         "properties" : {
           "comboPicks" : {
@@ -2850,6 +3056,27 @@
           }
         },
         "required" : [ "code" ],
+        "type" : "object"
+      },
+      "RedemptionOfferView" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "available" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "maximum" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "redeemable" : {
+            "type" : "boolean"
+          },
+          "refusal" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "ReferralStorefrontControllerRedemptionResponse" : {
@@ -3727,6 +3954,24 @@
         },
         "type" : "object"
       },
+      "SwitcherEntry" : {
+        "properties" : {
+          "logo" : {
+            "$ref" : "#/components/schemas/Media"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "targetBrandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "TermsView" : {
         "properties" : {
           "body" : {
@@ -4116,7 +4361,7 @@
     },
     "/api/v1/storefront/pickup-locations" : {
       "post" : {
-        "description" : "Returns at most twenty active pickup branches, nearest first. Each result carries the same current serviceability answer the checkout path will later re-resolve authoritatively. POST so the caller's coordinate travels in the body rather than the query string; nothing is written and no resource is created.",
+        "description" : "Returns at most twenty active pickup branches, nearest first; with no point, in the brand's own storefront order (distanceKnown is then false on every branch). Each result carries the same current serviceability answer the checkout path will later re-resolve authoritatively. POST so the caller's coordinate travels in the body rather than the query string; nothing is written and no resource is created.",
         "operationId" : "nearbyPickupLocations",
         "requestBody" : {
           "content" : {
@@ -4830,6 +5075,52 @@
         "summary" : "Apply a promo code to the cart",
         "tags" : [ "Storefront ordering" ],
         "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/redemption-offer" : {
+      "get" : {
+        "description" : "Read from the quote the cart is bound to, so the maximum is the figure checkout will accept. A cart that has not been priced, or whose quote has expired, offers nothing and says so in refusal (CART_NOT_PRICED, QUOTE_EXPIRED). Spend the points by sending redeemFromBalanceMinor with the checkout; it is taken inside that transaction and never after the order exists (ADR 0185). refusal is a code: NO_ACCOUNT, REDEMPTION_NOT_ENABLED, CHANNEL_NOT_ELIGIBLE, ACCOUNT_NOT_ACTIVE, ORDER_NOT_ELIGIBLE, INSUFFICIENT_BALANCE or REDEMPTION_BLOCKED_BY_PROMOTION. Nothing is held.",
+        "operationId" : "cartRedemptionOffer",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cartId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CartRedemptionOfferResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What this cart's customer may spend of their points on it",
+        "tags" : [ "Storefront redemption" ],
+        "x-horecaos-surface" : "internal"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/table" : {
@@ -6320,6 +6611,44 @@
         "x-horecaos-surface" : "published"
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/loyalty/balance" : {
+      "get" : {
+        "description" : "The balance, what is spendable today, what an unfinished checkout is holding, and the next lot to expire. A customer who has earned nothing at this brand reads accountId null and no amounts, not a 404. Points are not money: they cannot be withdrawn, cannot be transferred and have no value outside the platform.",
+        "operationId" : "ownBalance",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CustomerBalanceResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The caller's own points balance at this brand",
+        "tags" : [ "Loyalty" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/map-config" : {
       "get" : {
         "description" : "Names the provider, its public, referrer-restricted browser key (delivered here so it can be rotated without rebuilding or redeploying a storefront), the features on offer (TILES, SUGGEST, GEOCODE, REVERSE) and the provider's attribution text. `configured: false` means no map provider is set up in this environment: the screen must say so and let the customer type an address, never show an empty map. The server key is never in this response and is not representable in it. For a signed-in customer of this brand; a guest is not found.",
@@ -6669,7 +6998,7 @@
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/callback-requests" : {
       "post" : {
         "description" : "Creates one lead in the call centre's queue, linked to the caller's own account. 202: what was created is a work item for a person, not a call. The number to ring is in the body. A guest asking on behalf of a company says so with forCompany=true, which files it as a catering enquiry.",
-        "operationId" : "request",
+        "operationId" : "request_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -6822,6 +7151,156 @@
           }
         },
         "summary" : "Withdraw the caller's own PENDING erasure request",
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/export-request" : {
+      "get" : {
+        "description" : "The waiting request if there is one, else the most recent of any status. 204 when I have never asked.",
+        "operationId" : "current",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExportRequestStatus"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "My current request for a copy of my data, if any",
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
+      },
+      "post" : {
+        "description" : "Records the request and the date the tenant owes an answer by; it gathers nothing by itself (ADR 0029). Idempotent: asking again while a request is waiting returns that request.",
+        "operationId" : "request",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExportRequestStatus"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask for a copy of my data",
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/export-request/bundle" : {
+      "get" : {
+        "description" : "The link works for a few minutes. Each call is recorded against me as the reader. 404 until staff have produced the bundle, and after it has expired.",
+        "operationId" : "bundle",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BundleLink"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A short-lived link to my data, once it has been prepared",
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/export-request/cancel" : {
+      "post" : {
+        "description" : "Idempotent for a request already withdrawn. Refused for one already produced.",
+        "operationId" : "cancel_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExportRequestStatus"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Withdraw my waiting request for a copy of my data",
         "tags" : [ "Customer self-service" ],
         "x-horecaos-surface" : "published"
       }
@@ -7162,6 +7641,52 @@
         "x-horecaos-surface" : "published"
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/payment-split" : {
+      "get" : {
+        "description" : "The tenders of the order's settlement in the order they settle: POINTS (what the customer spent of their points) and MONEY (what a provider or the courier collects, with its method code). Status is the tender's: PLANNED, RESERVED, SETTLED, RELEASED (the points went back), REVERSED (refunded) or FAILED. Another customer's order and a missing one are both 404; an order with no settlement is 404 NO_PAYMENT_SPLIT.",
+        "operationId" : "orderPaymentSplit",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentSplitResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "How one of the caller's own orders is being paid",
+        "tags" : [ "Storefront payments" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/receipts" : {
       "get" : {
         "description" : "A list, possibly empty: an order paid in cash has no receipt from a payment provider, and a card payment has none until the provider reports it. A Payme refund is a second receipt beside the first, and a split payment can settle on two paths, so the answer is always a list. Only receipts still in force are listed (a receipt that has been corrected or voided is replaced by the document that corrected it), and only an https link. The link is the one the customer was sent when the receipt was issued; nothing else about the receipt is returned, and the customer's account is a predicate of the check, so another customer's order and a missing one are both 404.",
@@ -7310,6 +7835,83 @@
         "x-horecaos-surface" : "published"
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/page-loads" : {
+      "get" : {
+        "description" : "False until the platform owner switches it on after counsel answers. A storefront sends the ping only when this is true.",
+        "operationId" : "pageLoadCountingEnabled",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EnabledView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether the platform counts page loads",
+        "tags" : [ "Storefront page loads" ],
+        "x-horecaos-surface" : "published"
+      },
+      "post" : {
+        "description" : "Public. Answers 202 whether or not anything was counted. Reads no cookie and stores no address, user agent, session or path; a page load is not a person. Limited per visitor.",
+        "operationId" : "countPageLoad",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PingRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Count one page load (one per browser tab session)",
+        "tags" : [ "Storefront page loads" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/presented-offers" : {
       "get" : {
         "description" : "Counts each returned banner against today's cap. A banner the customer closed, one past the daily cap, and one whose offer has left its validity window are not returned.",
@@ -7395,6 +7997,114 @@
         "summary" : "The customer closed a banner; it is not shown again",
         "tags" : [ "Presented offers" ],
         "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/push" : {
+      "get" : {
+        "description" : "`available` is false until the platform's push identity is configured, and then the storefront does not show the prompt. `publicKey` is the application server key (VAPID, base64url) the browser must subscribe under; it is not a secret. `subscribed` is true when the customer has a live subscription at this brand.",
+        "operationId" : "pushStatus",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PushStatusResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether push can be offered, and whether this customer has turned it on",
+        "tags" : [ "Web Push" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/push/subscription" : {
+      "delete" : {
+        "description" : "Ends the customer's subscription at this brand and withdraws their consent to promotional push. 204 whether or not it was on: turning off what is off is the state that was asked for.",
+        "operationId" : "unsubscribeFromPush",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Turn push off",
+        "tags" : [ "Web Push" ],
+        "x-horecaos-surface" : "internal"
+      },
+      "put" : {
+        "description" : "The browser's own `PushSubscription.toJSON()`. Replaces the customer's earlier subscription at this brand, and ends any other customer's subscription for this browser. Records the customer's consent to promotional push in the same step. 400 with a bounded reason (`PUSH_ENDPOINT_NOT_ALLOWED`, `PUSH_KEYS_INVALID`, ...) when the subscription is not one the platform will send to.",
+        "operationId" : "subscribeToPush",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PushSubscribeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Turn push on in this browser",
+        "tags" : [ "Web Push" ],
+        "x-horecaos-surface" : "internal"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/me" : {
@@ -8043,7 +8753,7 @@
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/terms" : {
       "get" : {
         "description" : "The tenant's own published text when it has one for this language; otherwise the platform's brand-neutral default with brandName interpolated in. Cached briefly like the FAQ, because this changes on the order of weeks.",
-        "operationId" : "current",
+        "operationId" : "current_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -8446,14 +9156,26 @@
     "description" : "Continue with Telegram: mint a sign-in code and poll it into a session (ADR 0063)",
     "name" : "Telegram sign-in"
   }, {
+    "description" : "A customer's own profile, saved addresses, and the products they marked",
+    "name" : "Customer self-service"
+  }, {
     "description" : "Public, non-secret analytics identifiers for a brand",
     "name" : "Storefront analytics"
   }, {
     "description" : "What delivery costs here, and the evidence for it",
     "name" : "Delivery fee"
   }, {
+    "description" : "How a customer's own order is being paid",
+    "name" : "Storefront payments"
+  }, {
     "description" : "Scanning a table code, and the bill it leads to",
     "name" : "QR dine-in"
+  }, {
+    "description" : "A customer's opt-in to promotional notifications in their own browser",
+    "name" : "Web Push"
+  }, {
+    "description" : "An anonymous page-load count, dark until counsel answers (ADR 0183)",
+    "name" : "Storefront page loads"
   }, {
     "description" : "Map configuration and address lookup for a customer's own session (ADR 0145)",
     "name" : "Storefront address lookup"
@@ -8466,6 +9188,9 @@
   }, {
     "description" : "The tenant's own document, or the platform default (ADR 0068)",
     "name" : "Storefront terms of service"
+  }, {
+    "description" : "What a customer may spend of their points on a basket",
+    "name" : "Storefront redemption"
   }, {
     "description" : "A customer's points balance and its movements",
     "name" : "Loyalty"

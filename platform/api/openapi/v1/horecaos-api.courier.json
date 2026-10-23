@@ -22,6 +22,17 @@
         },
         "type" : "object"
       },
+      "CheckResponse" : {
+        "properties" : {
+          "kind" : {
+            "type" : "string"
+          },
+          "outcome" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "CloseResponse" : {
         "properties" : {
           "breakSeconds" : {
@@ -162,6 +173,12 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "checks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CheckResponse"
+            },
+            "type" : "array"
+          },
           "currency" : {
             "type" : "string"
           },
@@ -284,6 +301,14 @@
           },
           "warningState" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierGateStepRequest" : {
+        "properties" : {
+          "position" : {
+            "$ref" : "#/components/schemas/CourierPositionBody"
           }
         },
         "type" : "object"
@@ -810,7 +835,7 @@
     },
     "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/advance" : {
       "post" : {
-        "description" : "Requires If-Match with the delivery's version. step is PICKUP_PENDING (arrived), PICKED_UP or DELIVERED. When the tenant's GPS gate is on, the body carries the courier's own position and the step is refused (422) when it is further than the status-change radius from the branch (arrival, pickup) or the customer's door (handover): reasons GPS_POSITION_REQUIRED, GPS_ACCURACY_INSUFFICIENT, TOO_FAR_FROM_PICKUP, TOO_FAR_FROM_DROPOFF. DELIVERED is also refused (PAYMENT_CONFIRMATION_REQUIRED) while the tenant requires the cash to be confirmed and cash is due and unconfirmed. The position is measured and discarded.",
+        "description" : "Requires If-Match with the delivery's version. step is PICKUP_PENDING (arrived), PICKED_UP or DELIVERED. When the tenant's GPS gate is on, the body carries the courier's own position and the step is refused (422) when it is further than the status-change radius from the branch (arrival, pickup) or the customer's door (handover): reasons GPS_POSITION_REQUIRED, GPS_ACCURACY_INSUFFICIENT, TOO_FAR_FROM_PICKUP, TOO_FAR_FROM_DROPOFF. DELIVERED is also refused (PAYMENT_CONFIRMATION_REQUIRED) while the tenant requires the cash to be confirmed and cash is due and unconfirmed. The position is measured and discarded. PICKED_UP and DELIVERED are the older door to the steps POST .../pickup and .../handover take, held to the same pickup and handover mode: a position check that fails under HARD is refused here with 422 and the reason, where those answer 409 GATE_FAILED; under SOFT it is recorded and the step goes ahead.",
         "operationId" : "courierAdvanceDelivery",
         "parameters" : [ {
           "in" : "path",
@@ -924,6 +949,68 @@
         "tags" : [ "Courier deliveries" ]
       }
     },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/handover" : {
+      "post" : {
+        "description" : "Requires If-Match with the delivery's version; the body may be empty or carry the courier's own position, measured against the customer's door. Held to the location's handover mode exactly as the pickup is (SOFT records and proceeds with checks; HARD refuses a failed position check with 409 GATE_FAILED). The cash step never softens: while the tenant requires the cash to be confirmed and cash is due and unconfirmed the handover is refused (422, PAYMENT_CONFIRMATION_REQUIRED), and a confirmed one reports PAYMENT PASSED in checks.",
+        "operationId" : "courierHandOverDelivery",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "shipmentId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CourierGateStepRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierDeliveryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "I have given it to the customer: hand over my delivery",
+        "tags" : [ "Courier deliveries" ]
+      }
+    },
     "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/payment-confirmation" : {
       "post" : {
         "description" : "Requires If-Match with the delivery's version. Only on a delivery that has been picked up. The amount must equal what the settlement says is due (zero for an order the platform already holds the money for); anything else is refused (422, PAYMENT_AMOUNT_MISMATCH) and nothing is stored.",
@@ -984,6 +1071,68 @@
           }
         },
         "summary" : "Confirm the cash I collected at the door",
+        "tags" : [ "Courier deliveries" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/pickup" : {
+      "post" : {
+        "description" : "Requires If-Match with the delivery's version; the body may be empty or carry the courier's own position. Held to the location's pickup mode (courier policy pickupHandoverGate): SOFT, the default, takes the step whatever the position check came to and answers 200 with checks, [{kind, outcome}] for each check the location asks for (GEO while the GPS switch is on), so a check that failed is told to the courier and recorded for the accrual; HARD refuses a failed check with 409 GATE_FAILED whose detail is the failed check kinds, and nothing changes. Also refused (422) with reason STEP_NOT_ALLOWED when the delivery is not waiting at the pickup. The position is measured and discarded.",
+        "operationId" : "courierPickUpDelivery",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "shipmentId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CourierGateStepRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierDeliveryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "I have the bag: pick up my delivery",
         "tags" : [ "Courier deliveries" ]
       }
     },
