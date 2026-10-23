@@ -91,6 +91,12 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
         return true;
     }
 
+    /** {@inheritDoc} Click's {@code ofd_data} for the captured payment of the document's intent. */
+    @Override
+    public Optional<FiscalSubmission> heldReceipt(FiscalDocument document, ProviderBinding binding) {
+        return capturedPaymentId(document, binding).flatMap(paymentId -> readBack(binding, paymentId, clock.instant()));
+    }
+
     @Override
     public FiscalSubmission submit(FiscalDocument document, ProviderBinding binding) {
         Instant now = clock.instant();

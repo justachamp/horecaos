@@ -275,7 +275,7 @@ public class FiscalDocumentService {
             // true when it was claimed.
             Instant now = clock.instant();
             String note = noteOf(outcome);
-            if (!documents.blockUnsent(tenantId, documentId, blockReason, note, now)) {
+            if (!documents.blockUnsent(tenantId, documentId, blockReason, note, now) && !requestMayHaveLeft(document)) {
                 documents.restateBlock(tenantId, documentId, blockReason, note, now);
             }
         }
@@ -302,6 +302,17 @@ public class FiscalDocumentService {
                 .build());
 
         return new RetryResult(documentId, outcome, expectedVersion + 1);
+    }
+
+    /**
+     * Whether a request for this document has been sent to its provider. The reporting sweep puts {@code
+     * PROVIDER_REPORT_OVERDUE} on a document it found {@code SUBMITTED} and past its deadline, so the reason itself
+     * says the provider was asked and never reported. A retry that cannot rebuild such a receipt leaves the reason
+     * alone: «the receipt could not be built, nothing was sent» is false about it, and the provider may hold the
+     * receipt (the bridge looks before it gives up; what it cannot find stays unresolved, as it was).
+     */
+    private static boolean requestMayHaveLeft(FiscalDocumentRow document) {
+        return FiscalReasonCode.PROVIDER_REPORT_OVERDUE.equals(document.reasonCode());
     }
 
     /** The block reason a builder outcome names, or null when the outcome is not a block on the lines. */

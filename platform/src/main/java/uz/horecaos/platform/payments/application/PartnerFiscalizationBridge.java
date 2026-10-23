@@ -158,11 +158,11 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
                         "Fiscal document {} for order {} was not sent: it holds no seller snapshot",
                         documentId,
                         document.orderId());
-                return Outcome.REJECTED;
+                return unlessAlreadyHeld(document, binding.get(), Outcome.REJECTED);
             }
             switch (lines.build(document, filedUnder.get())) {
                 case ReceiptLineBuilder.Result.MarksIncomplete incomplete -> {
-                    return Outcome.BLOCKED_MARKS;
+                    return unlessAlreadyHeld(document, binding.get(), Outcome.BLOCKED_MARKS);
                 }
                 case ReceiptLineBuilder.Result.Unprojectable unprojectable -> {
                     log.warn(
@@ -170,14 +170,17 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
                             documentId,
                             document.orderId(),
                             unprojectable.reason());
-                    return Outcome.REJECTED;
+                    return unlessAlreadyHeld(document, binding.get(), Outcome.REJECTED);
                 }
                 case ReceiptLineBuilder.Result.Blocked blocked -> {
-                    return switch (blocked.obstacle()) {
-                        case CLASSIFICATION -> Outcome.BLOCKED_CLASSIFICATION;
-                        case TAX -> Outcome.BLOCKED_TAX;
-                        case RECONCILIATION -> Outcome.BLOCKED_RECONCILIATION;
-                    };
+                    return unlessAlreadyHeld(
+                            document,
+                            binding.get(),
+                            switch (blocked.obstacle()) {
+                                case CLASSIFICATION -> Outcome.BLOCKED_CLASSIFICATION;
+                                case TAX -> Outcome.BLOCKED_TAX;
+                                case RECONCILIATION -> Outcome.BLOCKED_RECONCILIATION;
+                            });
                 }
                 case ReceiptLineBuilder.Result.Lines built -> submittable = copyWithLines(document, built.lines());
             }
@@ -194,6 +197,26 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
             // resubmitted.
             default -> Outcome.UNCERTAIN;
         };
+    }
+
+    /**
+     * The refusal to send, unless the provider already holds the receipt.
+     *
+     * <p>A document that is not {@code PENDING} has been asked about: its request may have been filed whatever the
+     * reply said (the adapter reads back before a resubmission for the same reason). Its lines are rebuilt from the
+     * order as it stands now, and an order amended, refunded or reclassified since can no longer be built; the
+     * read-back that finds the receipt sits behind the submission, so a refusal here would never look, the block
+     * would be restated as «nothing was sent», and the tax authority would hold a receipt the platform never
+     * records. The read is made before the refusal is returned. A document never sent is not asked: there is
+     * nothing for the provider to hold.
+     */
+    private Outcome unlessAlreadyHeld(FiscalDocument document, ProviderBinding binding, Outcome refusal) {
+        if (document.status() == FiscalStatus.PENDING) {
+            return refusal;
+        }
+        return fiscalDocuments.recordReceiptAlreadyHeld(document, binding, clock.instant())
+                ? Outcome.ALREADY_ISSUED
+                : refusal;
     }
 
     private static FiscalDocument copyWithLines(FiscalDocument document, List<FiscalReceiptLine> lines) {

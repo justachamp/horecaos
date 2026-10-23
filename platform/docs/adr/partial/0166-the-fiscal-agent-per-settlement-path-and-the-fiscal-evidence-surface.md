@@ -48,6 +48,10 @@
   correction keep NULL and no backfill migration was added. The tender-to-intent link is still not written, deliberately:
   `OrderSettlementService.restateTotal` and `replanMoneyLeg` refuse a money tender that names an intent, so writing it at
   checkout would refuse every catch-weight restatement and every payment-method change.
+  Also 2026-10-23: a retry of a document that is not `PENDING` (a request may have left) asks the provider what it
+  already holds before it rebuilds the lines (`FiscalReceiptPort.heldReceipt`, Click's `ofd_data`), so an order that can no
+  longer be built does not hide a receipt Click filed; and a document blocked as `PROVIDER_REPORT_OVERDUE` keeps that reason
+  when a retry cannot rebuild its receipt, rather than being restated as «nothing was sent».
   `FiscalNodeFacts.requiresMarkingCapablePayment` is called from `CartPaymentOptions` and
   `CheckoutEligibilityGuard` (while `feature.marked_goods` is on for the tenant), so Payme is neither
   offered nor accepted for a basket holding a marked node, and `OrderAmendmentService` refuses
