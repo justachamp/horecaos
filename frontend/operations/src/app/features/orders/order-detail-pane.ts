@@ -274,6 +274,11 @@ export class OrderDetailPane {
 
   protected readonly loading = signal(true);
   protected readonly order = signal<Versioned<OrderDetailResponse> | null>(null);
+
+  /** The server put `REPRINT` in this order's actions: the print section is drawn on that, flags or no flags. */
+  protected readonly reprintOffered = computed(() =>
+    (this.order()?.value.summary.actions ?? []).some((action) => action.action === 'REPRINT'),
+  );
   protected readonly notFound = signal(false);
   protected readonly denied = signal(false);
   protected readonly lastError = signal<ApiError | null>(null);
