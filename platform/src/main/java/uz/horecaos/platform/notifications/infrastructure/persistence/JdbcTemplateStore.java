@@ -125,6 +125,34 @@ public class JdbcTemplateStore {
                 .optional();
     }
 
+    /**
+     * Whether this tenant has any ACTIVE template for the key and channel that could answer this brand,
+     * whatever variant it is pinned to (ADR 0184, D20.3).
+     *
+     * <p>The platform's own wording answers only when this is false. {@link #activeTemplate} cannot be
+     * asked: it takes the order's fulfilment mode and channel source and matches only a row that is
+     * generic or pinned to those, so a tenant that wrote a delivery-only template looks exactly like a
+     * tenant that wrote none to a pickup order. The scope rule is the same as there (this brand's own
+     * rows and the tenant-wide ones; a sibling brand's template is not this brand's to be silenced by),
+     * and the variant predicates are the whole difference.
+     */
+    public boolean hasActiveTemplate(UUID tenantId, UUID brandId, String templateKey, String channel) {
+        return Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT EXISTS (
+                            SELECT 1
+                              FROM notifications.templates
+                             WHERE tenant_id = :tenantId AND template_key = :key AND channel = :channel
+                               AND status = 'ACTIVE'
+                               AND (brand_id = :brandId OR brand_id IS NULL))
+                        """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("key", templateKey)
+                .param("channel", channel)
+                .query(Boolean.class)
+                .single());
+    }
+
     public Optional<TemplateRow> template(UUID tenantId, UUID templateId) {
         return jdbc.sql("""
                 SELECT id, tenant_id, brand_id, template_key, notification_class, channel,

@@ -27,6 +27,8 @@ import uz.horecaos.platform.notifications.domain.PlatformDefaultTemplates;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore;
 import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
+import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcBrandLocaleLookup;
 
 /**
@@ -244,7 +246,128 @@ class PlatformDefaultResolutionTests {
                 .isEqualTo("uz-Latn");
     }
 
+    /**
+     * ADR 0184, D20.3 and ADR 0020's status addition: the platform's wording answers only when the tenant
+     * has <em>no active template at any scope</em> for the key and channel. The resolver used to ask the
+     * narrower question «does a template match this order's variant», so a tenant that wrote only a
+     * delivery wording, deciding that pickup and dine-in customers should hear nothing, had those customers
+     * sent the platform's unreviewed sentence instead.
+     */
+    @Test
+    @DisplayName(
+            "a template pinned to another fulfilment mode is a tenant's choice: the platform does not cover the miss")
+    void aVariantMissIsNotAnAbsenceOfTemplates() {
+        activatePinned(null, FulfillmentMode.DELIVERY, null, "Delivery only");
+
+        Resolution delivery = resolveFor(FulfillmentMode.DELIVERY, SalesChannelSystemType.WEB);
+        Resolution pickup = resolveFor(FulfillmentMode.PICKUP, SalesChannelSystemType.WEB);
+
+        assertThat(bodyOf(delivery)).as("the order the tenant wrote it for").isEqualTo("Delivery only");
+        assertThat(pickup.isPlatformDefault())
+                .as("the tenant has an active template for this key; a pickup order is its decision, not a gap")
+                .isFalse();
+        assertThat(pickup.outcome()).isEqualTo(Resolution.Outcome.NO_ACTIVE_TEMPLATE);
+    }
+
+    @Test
+    @DisplayName(
+            "a template pinned to another channel source is the same: the miss is the tenant's, not the platform's")
+    void aChannelSourceMissIsNotAnAbsenceEither() {
+        activatePinned(brandId, null, SalesChannelSystemType.AGGREGATOR, "Aggregator orders only");
+
+        assertThat(resolveFor(FulfillmentMode.DELIVERY, SalesChannelSystemType.WEB)
+                        .isPlatformDefault())
+                .isFalse();
+        assertThat(bodyOf(resolveFor(FulfillmentMode.DELIVERY, SalesChannelSystemType.AGGREGATOR)))
+                .isEqualTo("Aggregator orders only");
+    }
+
+    @Test
+    @DisplayName("only a template that could have answered this brand on this channel counts: a sibling brand's, "
+            + "another channel's and a retired one do not")
+    void onlyATemplateOfThisBrandAndChannelSilencesTheDefault() {
+        UUID sibling = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status)
+                VALUES (:id, :tenantId, 'SIBLING', 'defaults-sibling', 'Sibling brand', 'ACTIVE')
+                """).param("id", sibling).param("tenantId", tenantId).update();
+        activateAs(
+                sibling,
+                sibling,
+                "ORDER_CONFIRMED",
+                NotificationChannel.SMS,
+                FulfillmentMode.DELIVERY,
+                null,
+                "Sibling");
+        activateAs(
+                null, brandId, "ORDER_CONFIRMED", NotificationChannel.TELEGRAM, FulfillmentMode.DELIVERY, null, "Chat");
+        UUID retired = activatePinned(null, FulfillmentMode.DELIVERY, null, "Retired delivery wording");
+        retire(retired);
+
+        assertThat(resolveFor(FulfillmentMode.PICKUP, SalesChannelSystemType.WEB)
+                        .isPlatformDefault())
+                .as("nothing that was written for this brand's SMS is in force, so the platform answers")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "a caller that knows nothing of the order's variant still gets the platform's wording when no template exists")
+    void noTemplateAtAllStillGetsTheDefaultForAnOrderOfAnyVariant() {
+        assertThat(resolveFor(FulfillmentMode.PICKUP, SalesChannelSystemType.WEB)
+                        .isPlatformDefault())
+                .isTrue();
+    }
+
     // ------------------------------------------------------------- fixtures
+
+    private Resolution resolveFor(FulfillmentMode fulfillmentMode, SalesChannelSystemType channelSource) {
+        return templates.resolve(
+                tenantId,
+                brandId,
+                "ORDER_CONFIRMED",
+                NotificationChannel.SMS,
+                MessageLocale.RU,
+                fulfillmentMode,
+                channelSource,
+                NotificationClass.TRANSACTIONAL_REQUIRED);
+    }
+
+    private UUID activatePinned(
+            @Nullable UUID rowBrand,
+            @Nullable FulfillmentMode fulfillmentMode,
+            @Nullable SalesChannelSystemType channelSource,
+            String body) {
+        return activateAs(
+                rowBrand, brandId, "ORDER_CONFIRMED", NotificationChannel.SMS, fulfillmentMode, channelSource, body);
+    }
+
+    /** {@code authorBrand} is the scope the author holds the capability under; {@code rowBrand} is the row's own. */
+    private UUID activateAs(
+            @Nullable UUID rowBrand,
+            UUID authorBrand,
+            String key,
+            NotificationChannel channel,
+            @Nullable FulfillmentMode fulfillmentMode,
+            @Nullable SalesChannelSystemType channelSource,
+            String body) {
+        UUID templateId = templates.createTemplate(
+                tenantId,
+                rowBrand,
+                key,
+                NotificationClass.TRANSACTIONAL_REQUIRED,
+                channel,
+                null,
+                fulfillmentMode,
+                channelSource);
+        Map<MessageLocale, Wording> wordings = new LinkedHashMap<>();
+        templates
+                .requiredLocales(tenantId, authorBrand)
+                .forEach(locale -> wordings.put(locale, new Wording(null, body)));
+        int version = templates.addVersion(tenantId, authorBrand, templateId, wordings, Map.of());
+        templates.activate(tenantId, authorBrand, templateId, version, "tester");
+        return templateId;
+    }
 
     private Resolution resolveRequired() {
         return resolve(
