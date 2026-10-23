@@ -163,16 +163,14 @@ describe('StopPropagationBanner (ADR 0141)', () => {
 
   describe('the whole list of a dry run (ADR 0180 Decision 3)', () => {
     const dryRun = (wouldPush: number) =>
-      vi
-        .fn()
-        .mockResolvedValue([
-          binding({
-            mode: 'DRY_RUN',
-            displayName: 'Uzum Tezkor',
-            unconfirmed: wouldPush,
-            wouldPush,
-          }),
-        ]);
+      vi.fn().mockResolvedValue([
+        binding({
+          mode: 'DRY_RUN',
+          displayName: 'Uzum Tezkor',
+          unconfirmed: wouldPush,
+          wouldPush,
+        }),
+      ]);
 
     function items(host: HTMLElement): string[] {
       return [...host.querySelectorAll('[data-testid="stop-propagation-would-push-item"]')].map(
