@@ -9,15 +9,18 @@
  *
  * This is a plain data file, not folded into `core/i18n/messages.*.ts`,
  * because it is staff-feature-local — nothing outside 9.1–9.4 needs a
- * capability sentence — and because 121 entries would drown the shared
+ * capability sentence — and because a table this size would drown the shared
  * catalogue. It keeps the same discipline the shared one enforces: every
- * capability the eight tenant-visible jobs can carry has an entry here, all
- * three locales filled in, checked by `capability-sentences.spec.ts` against
- * the exact set `TenantRoleCatalog.tenantVisible()` returns server-side (that
- * set is pasted into the spec rather than fetched, so the check runs with no
- * backend — see the spec file's own comment on drift).
+ * capability the grid and the job editor can show (`TenantJobRules.catalogue()`
+ * on the platform, what `GET .../capabilities` returns) has an entry here, all
+ * three locales filled in, under an area `CAPABILITY_AREAS` names. The build
+ * proves it against the live catalogue, not against a copy of it:
+ * `CapabilitySentencesMirrorTests` (platform) reads this file, and
+ * `capability-sentences.spec.ts` checks the locales and `job-catalogue.spec.ts`
+ * the rows the screens build from it. Adding a capability to a job that a
+ * company can see fails the platform build until its sentence is written.
  *
- * A code with no entry renders as the code itself (`sentenceFor` below) —
+ * A code with no entry renders as the code itself (`capabilitySentence` below) —
  * visibly wrong rather than silently blank, so a missing translation is a bug
  * report, not a mystery.
  */
@@ -85,6 +88,13 @@ export const CAPABILITY_AREAS: Readonly<Record<string, Localized>> = {
     en: 'Conversations',
   },
   assistant: { ru: 'Помощник в чате', 'uz-Latn': 'Chat yordamchisi', en: 'Chat assistant' },
+  marketing: { ru: 'Маркетинг', 'uz-Latn': 'Marketing', en: 'Marketing' },
+  print: { ru: 'Печать', 'uz-Latn': 'Chop etish', en: 'Printing' },
+  referral: { ru: 'Реферальная программа', 'uz-Latn': 'Taklif dasturi', en: 'Referrals' },
+  storefront: { ru: 'Витрина', 'uz-Latn': 'Vitrina', en: 'Storefront' },
+  support: { ru: 'Поддержка HorecaOS', 'uz-Latn': 'HorecaOS yordami', en: 'HorecaOS support' },
+  terms: { ru: 'Условия бренда', 'uz-Latn': 'Brend shartlari', en: 'Brand terms' },
+  voice: { ru: 'Телефония', 'uz-Latn': 'Telefoniya', en: 'Phone calls' },
 };
 
 /** Every capability code the eight tenant-visible jobs can carry — see this file's own doc. */
@@ -106,6 +116,18 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     ru: 'Вести настройку компании при подключении',
     'uz-Latn': 'Kompaniyani ulash jarayonini boshqarish',
     en: 'Manage tenant onboarding',
+  },
+  'tenant.configuration.read': {
+    area: 'tenant',
+    ru: 'Просматривать настройки и откуда взято значение',
+    'uz-Latn': 'Sozlamalarni va qiymat qayerdan olinganini koʻrish',
+    en: 'View settings and where each value comes from',
+  },
+  'tenant.configuration.write': {
+    area: 'tenant',
+    ru: 'Менять настройки компании, бренда и филиала',
+    'uz-Latn': 'Kompaniya, brend va filial sozlamalarini oʻzgartirish',
+    en: 'Change company, brand and location settings',
   },
 
   'brand.read': {
@@ -249,6 +271,18 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     'uz-Latn': 'Ombor qoldigʻini toʻgʻrilash',
     en: 'Adjust stock levels',
   },
+  'inventory.availability.manage': {
+    area: 'inventory',
+    ru: 'Ставить блюда на стоп-лист и снимать, сразу по несколько',
+    'uz-Latn': 'Taomlarni stop-roʻyxatga qoʻyish va olib tashlash, bir nechtasini birdan',
+    en: 'Stop and restart several dishes at once',
+  },
+  'inventory.stop.manage': {
+    area: 'inventory',
+    ru: 'Ставить блюдо на стоп для всего бренда, меню или канала',
+    'uz-Latn': 'Taomni butun brend, menyu yoki kanal uchun stopga qoʻyish',
+    en: 'Stop a dish across a whole brand, menu or channel',
+  },
 
   'pricing.read': {
     area: 'pricing',
@@ -267,6 +301,12 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     ru: 'Применять цены',
     'uz-Latn': 'Narxlarni kuchga kiritish',
     en: 'Activate prices',
+  },
+  'pricing.promotion.manage': {
+    area: 'pricing',
+    ru: 'Создавать и запускать промокоды',
+    'uz-Latn': 'Promokodlarni yaratish va ishga tushirish',
+    en: 'Create and run promo codes',
   },
 
   'order.read': {
@@ -342,6 +382,24 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     'uz-Latn': 'Toʻlov hisobini filialga biriktirish',
     en: 'Manage merchant account bindings',
   },
+  'payment.initiate': {
+    area: 'payment',
+    ru: 'Отправлять клиенту ссылку на оплату вместо него',
+    'uz-Latn': 'Mijoz nomidan unga toʻlov havolasini yuborish',
+    en: 'Send a payment link on a customer’s behalf',
+  },
+  'payment-method.manage': {
+    area: 'payment',
+    ru: 'Заводить и настраивать способы оплаты',
+    'uz-Latn': 'Toʻlov usullarini yaratish va sozlash',
+    en: 'Set up payment methods',
+  },
+  'payment-method.read': {
+    area: 'payment',
+    ru: 'Просматривать способы оплаты',
+    'uz-Latn': 'Toʻlov usullarini koʻrish',
+    en: 'View payment methods',
+  },
 
   'fiscal.document.read': {
     area: 'fiscal',
@@ -361,6 +419,18 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     'uz-Latn':
       'Fiskal chek identifikatorlarini toʻliq ochish (har bir koʻrish maqsadi bilan yoziladi)',
     en: 'Open fiscal receipt identifiers in full (each look is recorded with its purpose)',
+  },
+  'fiscal-terminal.manage': {
+    area: 'fiscal',
+    ru: 'Подключать, проверять и отключать фискальные терминалы',
+    'uz-Latn': 'Fiskal terminallarni ulash, tekshirish va oʻchirish',
+    en: 'Register, check and retire fiscal terminals',
+  },
+  'fiscal-terminal.read': {
+    area: 'fiscal',
+    ru: 'Видеть фискальные терминалы и их состояние',
+    'uz-Latn': 'Fiskal terminallar va ularning holatini koʻrish',
+    en: 'View fiscal terminals and their health',
   },
 
   'refund.request': {
@@ -479,6 +549,24 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     'uz-Latn': 'Yetkazib berish tannarxini koʻrish',
     en: 'View delivery cost',
   },
+  'delivery.policy.read': {
+    area: 'delivery',
+    ru: 'Просматривать правила оплаты и работы курьеров',
+    'uz-Latn': 'Kuryerlar ish haqi va ish qoidalarini koʻrish',
+    en: 'View the courier pay and work rules',
+  },
+  'delivery.policy.write': {
+    area: 'delivery',
+    ru: 'Менять правила оплаты и работы курьеров',
+    'uz-Latn': 'Kuryerlar ish haqi va ish qoidalarini oʻzgartirish',
+    en: 'Change the courier pay and work rules',
+  },
+  'delivery.tariff.read': {
+    area: 'delivery',
+    ru: 'Просматривать тарифы доставки',
+    'uz-Latn': 'Yetkazib berish tariflarini koʻrish',
+    en: 'View delivery tariffs',
+  },
 
   'shipment.cancel': {
     area: 'shipment',
@@ -498,6 +586,24 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     ru: 'Открывать на карте точки доставки сегодняшних заказов',
     'uz-Latn': 'Bugungi buyurtmalar yetkazish nuqtalarini xaritada ochish',
     en: "Open the day's delivery points on the map",
+  },
+  'order.bulk-action': {
+    area: 'order',
+    ru: 'Продвигать или отменять сразу несколько заказов',
+    'uz-Latn': 'Bir nechta buyurtmani birdan siljitish yoki bekor qilish',
+    en: 'Advance or cancel several orders at once',
+  },
+  'order.place': {
+    area: 'order',
+    ru: 'Оформлять заказ за клиента, например по телефону',
+    'uz-Latn': 'Mijoz nomidan buyurtma rasmiylashtirish, masalan telefon orqali',
+    en: 'Place an order for a customer, for example by phone',
+  },
+  'order.provenance.record': {
+    area: 'order',
+    ru: 'Отмечать, с какого звонка пришёл заказ',
+    'uz-Latn': 'Buyurtma qaysi qoʻngʻiroqdan kelganini belgilash',
+    en: 'Record which phone call an order came from',
   },
   'courier.duty.manage': {
     area: 'courier',
@@ -564,6 +670,54 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     ru: 'Согласовывать расхождение по смене курьера',
     'uz-Latn': 'Kuryer smenasidagi farqni tasdiqlash',
     en: 'Approve a courier shift variance',
+  },
+  'courier.adjustment.reason.manage': {
+    area: 'courier',
+    ru: 'Настраивать причины премий и штрафов курьеров',
+    'uz-Latn': 'Kuryerlar mukofoti va jarimalari sabablarini sozlash',
+    en: 'Set up the reasons for courier bonuses and penalties',
+  },
+  'courier.broadcast.manage': {
+    area: 'courier',
+    ru: 'Отправлять курьерам служебные SMS-рассылки',
+    'uz-Latn': 'Kuryerlarga xizmat SMS xabarlarini yuborish',
+    en: 'Send operational text messages to couriers',
+  },
+  'courier.cash.read': {
+    area: 'courier',
+    ru: 'Видеть список сдачи наличных по всем курьерам',
+    'uz-Latn': 'Barcha kuryerlarning naqd pul topshirish roʻyxatini koʻrish',
+    en: 'View the cash handover list for all couriers',
+  },
+  'courier.ratecard.read': {
+    area: 'courier',
+    ru: 'Просматривать тарифные сетки курьеров',
+    'uz-Latn': 'Kuryerlar tarif jadvallarini koʻrish',
+    en: 'View courier rate cards',
+  },
+  'courier.read': {
+    area: 'courier',
+    ru: 'Видеть список курьеров и их загрузку',
+    'uz-Latn': 'Kuryerlar roʻyxati va bandligini koʻrish',
+    en: 'View the courier roster and workload',
+  },
+  'courier.settlement.read': {
+    area: 'courier',
+    ru: 'Видеть расчётные периоды курьеров и кому сколько выплатить',
+    'uz-Latn': 'Kuryerlar hisob-kitob davrlarini va kimga qancha toʻlanishini koʻrish',
+    en: 'View courier settlement periods and who is owed',
+  },
+  'courier.shift.read': {
+    area: 'courier',
+    ru: 'Видеть смены курьеров филиала',
+    'uz-Latn': 'Filial kuryerlari smenalarini koʻrish',
+    en: 'View courier shifts at the branch',
+  },
+  'courier.type.manage': {
+    area: 'courier',
+    ru: 'Настраивать виды транспорта курьеров',
+    'uz-Latn': 'Kuryerlar transport turlarini sozlash',
+    en: 'Manage courier vehicle types',
   },
 
   'kiosk.device.manage': {
@@ -643,6 +797,12 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     ru: 'Отпускать тикет досрочно или несмотря на ожидание оплаты',
     'uz-Latn': 'Chiptani muddatidan oldin yoki toʻlov kutilayotgan boʻlsa ham chiqarish',
     en: 'Fire a ticket early, or while it waits for payment',
+  },
+  'kitchen.ticket.handover': {
+    area: 'kitchen',
+    ru: 'Передавать готовый заказ клиенту или курьеру',
+    'uz-Latn': 'Tayyor buyurtmani mijoz yoki kuryerga topshirish',
+    en: 'Hand a finished order to the customer or a courier',
   },
 
   'dinein.floorplan.manage': {
@@ -756,6 +916,42 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     'uz-Latn': 'Mijozlarni import qilish',
     en: 'Import customers',
   },
+  'customer.create': {
+    area: 'customer',
+    ru: 'Заводить карточку клиента вручную',
+    'uz-Latn': 'Mijoz kartasini qoʻlda yaratish',
+    en: 'Create a customer record by hand',
+  },
+  'customer.erasure.execute': {
+    area: 'customer',
+    ru: 'Безвозвратно стирать данные клиента по его запросу',
+    'uz-Latn': 'Mijoz soʻroviga koʻra uning maʼlumotlarini qaytarib boʻlmaydigan tarzda oʻchirish',
+    en: 'Irreversibly erase a customer’s data on request',
+  },
+  'customer.erasure.raise': {
+    area: 'customer',
+    ru: 'Видеть все запросы клиентов на удаление данных',
+    'uz-Latn': 'Mijozlarning maʼlumotlarni oʻchirish boʻyicha barcha soʻrovlarini koʻrish',
+    en: 'See every customer data-erasure request',
+  },
+  'customer.lead.manage': {
+    area: 'customer',
+    ru: 'Вести обращения из колл-центра и передавать их филиалу',
+    'uz-Latn': 'Aloqa markazi murojaatlarini yuritish va filialga topshirish',
+    en: 'Work call-centre leads and hand them to a branch',
+  },
+  'customer.lead.read': {
+    area: 'customer',
+    ru: 'Видеть очередь обратных звонков и обращения',
+    'uz-Latn': 'Qayta qoʻngʻiroqlar navbati va murojaatlarni koʻrish',
+    en: 'View the callback queue and leads',
+  },
+  'customer.pii.export': {
+    area: 'customer',
+    ru: 'Выгружать отчёты вместе с контактами клиентов',
+    'uz-Latn': 'Hisobotlarni mijozlarning aloqa maʼlumotlari bilan yuklab olish',
+    en: 'Export reports including customers’ contact details',
+  },
 
   'integration.installation.manage': {
     area: 'integration',
@@ -824,6 +1020,12 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     'uz-Latn': 'Kassaga yuklama xatolarini hal qilish',
     en: 'Resolve a POS export failure',
   },
+  'pos.sync.manage': {
+    area: 'pos',
+    ru: 'Вручную сопоставлять данные кассы с платформой',
+    'uz-Latn': 'Kassa maʼlumotlarini platforma bilan qoʻlda moslashtirish',
+    en: 'Match POS records to the platform by hand',
+  },
 
   'notification.read': {
     area: 'notification',
@@ -848,6 +1050,12 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     ru: 'Публиковать шаблон уведомления',
     'uz-Latn': 'Bildirishnoma shablonini eʼlon qilish',
     en: 'Activate a notification template',
+  },
+  'notification.routing.manage': {
+    area: 'notification',
+    ru: 'Выбирать, какие уведомления приходят в чат Telegram',
+    'uz-Latn': 'Qaysi bildirishnomalar Telegram chatiga kelishini tanlash',
+    en: 'Choose which alerts go to a Telegram chat',
   },
 
   'audience.read': {
@@ -907,6 +1115,36 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     'uz-Latn': 'Tarif boʻyicha sarfni koʻrish',
     en: 'View plan usage',
   },
+  'commercial.arrears.read': {
+    area: 'commercial',
+    ru: 'Видеть, нет ли задолженности по тарифу и что она ограничивает',
+    'uz-Latn': 'Tarif boʻyicha qarzdorlik bor-yoʻqligini va u nimani cheklashini koʻrish',
+    en: 'See whether the plan is past due and what that restricts',
+  },
+  'commercial.card.manage': {
+    area: 'commercial',
+    ru: 'Привязывать карту для оплаты тарифа и выбирать способ списания',
+    'uz-Latn': 'Tarif toʻlovi uchun karta biriktirish va yechib olish usulini tanlash',
+    en: 'Keep a card on file and choose how the plan is paid',
+  },
+  'commercial.module.read': {
+    area: 'commercial',
+    ru: 'Просматривать модули, которые продаёт HorecaOS',
+    'uz-Latn': 'HorecaOS sotadigan modullarni koʻrish',
+    en: 'Browse the modules HorecaOS sells',
+  },
+  'commercial.wallet.read': {
+    area: 'commercial',
+    ru: 'Видеть баланс кошелька, его историю и счета',
+    'uz-Latn': 'Hamyon balansi, uning tarixi va hisoblarni koʻrish',
+    en: 'View the wallet balance, its history and statements',
+  },
+  'commercial.wallet.topup': {
+    area: 'commercial',
+    ru: 'Пополнять кошелёк: картой или по счёту',
+    'uz-Latn': 'Hamyonni toʻldirish: karta orqali yoki hisob-faktura boʻyicha',
+    en: 'Top up the wallet by card or by invoice',
+  },
 
   'loyalty.read': {
     area: 'loyalty',
@@ -925,6 +1163,12 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     ru: 'Настраивать правила программы лояльности',
     'uz-Latn': 'Sodiqlik dasturi qoidalarini sozlash',
     en: 'Manage the loyalty policy',
+  },
+  'loyalty.sync.manage': {
+    area: 'loyalty',
+    ru: 'Разбирать расхождения баллов с кассой (может начислять баллы)',
+    'uz-Latn': 'Kassa bilan ball farqlarini hal qilish (ball qoʻshishi mumkin)',
+    en: 'Resolve loyalty point differences with the till (can credit points)',
   },
 
   'iam.grant.manage': {
@@ -1025,6 +1269,18 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     'uz-Latn': 'Hisobotlarni koʻrish',
     en: 'View reports',
   },
+  'report.export': {
+    area: 'reporting',
+    ru: 'Выгружать отчёты в Excel и CSV',
+    'uz-Latn': 'Hisobotlarni Excel va CSV formatida yuklab olish',
+    en: 'Export reports to Excel or CSV',
+  },
+  'reporting.classification.run': {
+    area: 'reporting',
+    ru: 'Запускать ABC/XYZ-классификацию блюд',
+    'uz-Latn': 'Taomlarni ABC/XYZ boʻyicha tasniflashni ishga tushirish',
+    en: 'Run an ABC/XYZ classification of dishes',
+  },
 
   'audit.read': {
     area: 'audit',
@@ -1051,6 +1307,18 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     ru: 'Вести счета партнёров',
     'uz-Latn': 'Hamkor hisob-fakturalarini yuritish',
     en: 'Manage partner invoices',
+  },
+  'partner.api-client.manage': {
+    area: 'partner',
+    ru: 'Выдавать, менять и отзывать ключи доступа партнёров',
+    'uz-Latn': 'Hamkorlarga kirish kalitlarini berish, almashtirish va bekor qilish',
+    en: 'Issue, rotate and revoke partners’ access keys',
+  },
+  'partner.invoice.read': {
+    area: 'partner',
+    ru: 'Просматривать счета партнёров по доставке',
+    'uz-Latn': 'Yetkazib berish hamkorlarining hisob-fakturalarini koʻrish',
+    en: 'View partner delivery invoices',
   },
 
   'conversation.flow.manage': {
@@ -1079,6 +1347,115 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     ru: 'Писать и обновлять заметки, по которым отвечает помощник',
     'uz-Latn': 'Yordamchi javob beradigan yozuvlarni yozish va yangilash',
     en: 'Write and update the notes the chat assistant answers from',
+  },
+
+  'marketing.contact_policy.manage': {
+    area: 'marketing',
+    ru: 'Ограничивать частоту и время рассылок гостям',
+    'uz-Latn': 'Mehmonlarga xabar yuborish chastotasi va vaqtini cheklash',
+    en: 'Tighten how often and when guests are messaged',
+  },
+  'marketing-link.manage': {
+    area: 'marketing',
+    ru: 'Создавать ссылки для привлечения гостей и смотреть созданные',
+    'uz-Latn': 'Mehmonlarni jalb qilish havolalarini yaratish va yaratilganlarini koʻrish',
+    en: 'Create and view acquisition links',
+  },
+  'marketing.offer.manage': {
+    area: 'marketing',
+    ru: 'Готовить и публиковать предложения для гостей',
+    'uz-Latn': 'Mehmonlar uchun takliflarni tayyorlash va eʼlon qilish',
+    en: 'Create and publish guest offers',
+  },
+
+  'print.manage': {
+    area: 'print',
+    ru: 'Подключать принтеры и настраивать печать',
+    'uz-Latn': 'Printerlarni ulash va chop etishni sozlash',
+    en: 'Set up printers and printing',
+  },
+  'print.read': {
+    area: 'print',
+    ru: 'Видеть принтеры, очередь печати и предпросмотр',
+    'uz-Latn': 'Printerlar, chop etish navbati va oldindan koʻrishni koʻrish',
+    en: 'View printers, the print queue and previews',
+  },
+  'print.reprint': {
+    area: 'print',
+    ru: 'Печатать повторно чек или тикет по запросу',
+    'uz-Latn': 'Chek yoki chiptani soʻrov boʻyicha qayta chop etish',
+    en: 'Reprint a receipt or ticket on demand',
+  },
+
+  'referral.policy.manage': {
+    area: 'referral',
+    ru: 'Настраивать награды реферальной программы',
+    'uz-Latn': 'Taklif dasturi mukofotlarini sozlash',
+    en: 'Set the referral program rewards',
+  },
+  'referral.read': {
+    area: 'referral',
+    ru: 'Видеть реферальную программу и её результаты',
+    'uz-Latn': 'Taklif dasturi va uning natijalarini koʻrish',
+    en: 'View the referral program and its results',
+  },
+
+  'storefront-app.authorise': {
+    area: 'storefront',
+    ru: 'Выбирать, какое приложение служит витриной бренда',
+    'uz-Latn': 'Qaysi ilova brend vitrinasi boʻlishini tanlash',
+    en: 'Choose which app serves as a brand’s storefront',
+  },
+
+  'support.session.read': {
+    area: 'support',
+    ru: 'Видеть, кто из поддержки HorecaOS заходил в компанию',
+    'uz-Latn': 'HorecaOS yordam xodimlaridan kim kompaniyaga kirganini koʻrish',
+    en: 'See who from HorecaOS support has entered the company',
+  },
+
+  'terms.manage': {
+    area: 'terms',
+    ru: 'Публиковать новую версию условий бренда',
+    'uz-Latn': 'Brend shartlarining yangi versiyasini eʼlon qilish',
+    en: 'Publish a new version of a brand’s terms',
+  },
+  'terms.read': {
+    area: 'terms',
+    ru: 'Просматривать условия бренда и их версии',
+    'uz-Latn': 'Brend shartlari va ularning versiyalarini koʻrish',
+    en: 'View a brand’s terms and their versions',
+  },
+
+  'voice.call-log.read': {
+    area: 'voice',
+    ru: 'Видеть список последних звонков филиала',
+    'uz-Latn': 'Filialning oxirgi qoʻngʻiroqlari roʻyxatini koʻrish',
+    en: 'View the branch’s recent calls',
+  },
+  'voice.presence.manage': {
+    area: 'voice',
+    ru: 'Отмечать себя на линии, на паузе или не на связи',
+    'uz-Latn': 'Oʻzini liniyada, tanaffusda yoki aloqada emas deb belgilash',
+    en: 'Mark yourself online, paused or offline',
+  },
+  'voice.presence.read': {
+    area: 'voice',
+    ru: 'Видеть, кто сейчас на линии в филиале',
+    'uz-Latn': 'Filialda hozir kim liniyada ekanini koʻrish',
+    en: 'See who is online at the branch',
+  },
+  'voice.screen-pop.acknowledge': {
+    area: 'voice',
+    ru: 'Принимать входящий звонок, чтобы его карточку не видели другие',
+    'uz-Latn': 'Kiruvchi qoʻngʻiroqni qabul qilish, kartasini boshqalar koʻrmasligi uchun',
+    en: 'Take an incoming call so others stop seeing its card',
+  },
+  'voice.screen-pop.read': {
+    area: 'voice',
+    ru: 'Видеть карточку входящего звонка',
+    'uz-Latn': 'Kiruvchi qoʻngʻiroq kartasini koʻrish',
+    en: 'See the card of an incoming call',
   },
 };
 
