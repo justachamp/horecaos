@@ -12,6 +12,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
+import uz.horecaos.platform.audit.api.PiiEgressActions;
 import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -68,6 +69,11 @@ public class AuditQueryService {
         if (query.targetId() != null) {
             sql.append(" AND target_id = :targetId");
         }
+        // Settings 10.11: the merchant's egress log is the facts the platform registered as personal data leaving
+        // (PiiEgressActions), filtered here so the page cap counts egress and not every security event around it.
+        if (query.piiEgress()) {
+            sql.append(" AND action_code = ANY(:egressCodes)");
+        }
         if (query.auditClass() != null) {
             sql.append(" AND audit_class = :auditClass");
         }
@@ -117,6 +123,9 @@ public class AuditQueryService {
         }
         if (query.targetId() != null) {
             statement = statement.param("targetId", query.targetId());
+        }
+        if (query.piiEgress()) {
+            statement = statement.param("egressCodes", PiiEgressActions.codes().toArray(String[]::new));
         }
         if (query.auditClass() != null) {
             statement = statement.param("auditClass", query.auditClass());
@@ -454,7 +463,43 @@ public class AuditQueryService {
             @Nullable Instant from,
             @Nullable Instant to,
             @Nullable Integer limit,
-            @Nullable String cursor) {
+            @Nullable String cursor,
+            boolean piiEgress) {
+
+        /**
+         * Settings 10.11's egress log is additive too: a query that does not say {@code piiEgress} reads every action, as
+         * every caller built before it did.
+         */
+        public AuditQuery(
+                @Nullable UUID tenantId,
+                @Nullable String actorSubject,
+                @Nullable String actionCode,
+                @Nullable UUID targetId,
+                @Nullable String auditClass,
+                @Nullable String outcome,
+                @Nullable String scopeType,
+                @Nullable UUID scopeId,
+                @Nullable String correlationId,
+                @Nullable Instant from,
+                @Nullable Instant to,
+                @Nullable Integer limit,
+                @Nullable String cursor) {
+            this(
+                    tenantId,
+                    actorSubject,
+                    actionCode,
+                    targetId,
+                    auditClass,
+                    outcome,
+                    scopeType,
+                    scopeId,
+                    correlationId,
+                    from,
+                    to,
+                    limit,
+                    cursor,
+                    false);
+        }
 
         /**
          * Staff 9.3's cursor paging is additive: every caller built before this

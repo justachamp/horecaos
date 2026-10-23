@@ -1259,6 +1259,61 @@ export const operationsPaths = {
   ): string {
     return `${this.customerErasureRequests(scope, accountId)}/${encodeURIComponent(requestId)}/execute`;
   },
+
+  /** What would stop this customer's erasure right now: a legal hold, an open order, an open recovery case. */
+  customerErasureBlocks(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/erasure-blocks`;
+  },
+
+  /** What an executed erasure changed, per module and table (ADR 0029's proof). */
+  customerErasureProof(scope: LocationScope, accountId: string, requestId: string): string {
+    return `${this.customerErasureRequests(scope, accountId)}/${encodeURIComponent(requestId)}/proof`;
+  },
+
+  /** `GET` this customer's legal holds, `POST` to place one (a second person approves). */
+  customerLegalHolds(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/legal-holds`;
+  },
+
+  /** Lift a hold (a second person approves). Mutation: key and `CUSTOMER_ERASURE_EXECUTE`. */
+  customerLegalHoldLift(scope: LocationScope, accountId: string, holdId: string): string {
+    return `${this.customerLegalHolds(scope, accountId)}/${encodeURIComponent(holdId)}/lift`;
+  },
+
+  /** `GET` this customer's requests for a copy of her data, `POST` to ask on her behalf (ADR 0029). */
+  customerExportRequests(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/export-requests`;
+  },
+
+  /** Gather her data into a bundle, under a stated purpose. Mutation: key and `CUSTOMER_PII_EXPORT`. */
+  customerExportRequestProduce(scope: LocationScope, accountId: string, requestId: string): string {
+    return `${this.customerExportRequests(scope, accountId)}/${encodeURIComponent(requestId)}/produce`;
+  },
+
+  /** A short-lived link to the produced bundle (`purpose` as a query value). `CUSTOMER_PII_EXPORT`. */
+  customerExportRequestBundle(scope: LocationScope, accountId: string, requestId: string): string {
+    return `${this.customerExportRequests(scope, accountId)}/${encodeURIComponent(requestId)}/bundle`;
+  },
+
+  /** Withdraw a PENDING export request. Mutation: key required. */
+  customerExportRequestCancel(scope: LocationScope, accountId: string, requestId: string): string {
+    return `${this.customerExportRequests(scope, accountId)}/${encodeURIComponent(requestId)}/cancel`;
+  },
+
+  /** `GET` what has been corrected on this customer's data (without the values), newest first. */
+  customerCorrections(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/corrections`;
+  },
+
+  /** `PUT` a correction against evidence: `display-name`, `date-of-birth`, `contact-points/{id}`, `addresses/{id}`. */
+  customerCorrection(scope: LocationScope, accountId: string, subjectPath: string): string {
+    return `${this.customerCorrections(scope, accountId)}/${subjectPath}`;
+  },
+
+  /** `GET` every data-subject request across the tenant: erasure, export and correction (Settings 10.11). */
+  customerPrivacyRequests(scope: LocationScope): string {
+    return `${OPERATIONS}${tenant(scope)}/customers/privacy-requests`;
+  },
 } as const;
 
 /**

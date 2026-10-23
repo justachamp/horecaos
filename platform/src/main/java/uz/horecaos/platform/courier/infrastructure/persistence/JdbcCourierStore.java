@@ -22,6 +22,7 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import uz.horecaos.platform.courier.api.CourierConfigurationKeys;
 import uz.horecaos.platform.courier.domain.ComplianceField;
 import uz.horecaos.platform.courier.domain.EngagementStatus;
 import uz.horecaos.platform.courier.domain.RegistrationWarningState;
@@ -1229,40 +1230,69 @@ public class JdbcCourierStore {
     // ------------------------------------------------------ applicant retention
 
     /**
-     * Couriers who applied and were never verified, untouched since {@code
-     * cutoff} (ADR 0092, decided 2026-09-11), claimed for erasure.
+     * Couriers who applied and were never verified, untouched for their own tenant's retention window (ADR 0092, decided
+     * 2026-09-11; per tenant since batch 21), claimed for erasure.
      *
-     * <p>Never verified means no engagement of theirs carries a verification,
-     * and no shift or ledger entry names them -- a person who was paid is a
-     * courier with a settlement history, not an applicant, whatever their
-     * engagement says now. Locks the courier row only; the application role
-     * holds UPDATE on it.
+     * <p>The window is resolved per tenant in the statement ({@code TenantRetention.WINDOWS_SQL}): the tenant's own number of
+     * months, else the platform's, else {@code defaultMonths}, raised to {@code floorMonths}. A tenant that asked for six months
+     * has its dead applications erased at six, and the one beside it that asked for nothing keeps twelve.
+     *
+     * <p>Never verified means no engagement of theirs carries a verification, and no shift or ledger entry names them -- a
+     * person who was paid is a courier with a settlement history, not an applicant, whatever their engagement says now. Locks
+     * the courier row only; the application role holds UPDATE on it.
      */
-    public List<ApplicantRef> claimUnverifiedApplicants(Instant cutoff, int batchSize) {
-        return jdbc.sql("""
+    public List<ApplicantRef> claimUnverifiedApplicants(
+            Instant now, int batchSize, int defaultMonths, int floorMonths) {
+        return jdbc.sql(unverifiedApplicantsStatement(true))
+                .param("now", utc(now))
+                .param("batchSize", batchSize)
+                .param("keyCode", CourierConfigurationKeys.APPLICANT_RETENTION_MONTHS_CODE)
+                .param("defaultValue", defaultMonths)
+                .param("floor", floorMonths)
+                .query((row, number) ->
+                        new ApplicantRef(row.getObject("tenant_id", UUID.class), row.getObject("id", UUID.class)))
+                .list();
+    }
+
+    /** How many applicants {@link #claimUnverifiedApplicants} would claim now: the report-only mode's count. */
+    public int countUnverifiedApplicants(Instant now, int defaultMonths, int floorMonths) {
+        return jdbc.sql(unverifiedApplicantsStatement(false))
+                .param("now", utc(now))
+                .param("keyCode", CourierConfigurationKeys.APPLICANT_RETENTION_MONTHS_CODE)
+                .param("defaultValue", defaultMonths)
+                .param("floor", floorMonths)
+                .query(Integer.class)
+                .single();
+    }
+
+    private static String unverifiedApplicantsStatement(boolean claim) {
+        String select = """
+                WITH windows AS (%s)
                 SELECT c.tenant_id, c.id
                   FROM fulfillment.couriers c
+                  JOIN windows w ON w.tenant_id = c.tenant_id
                  WHERE c.status = 'ACTIVE'
-                   AND c.updated_at < :cutoff
+                   AND c.updated_at < CAST(:now AS timestamptz) - (w.value * INTERVAL '1 month')
                    AND NOT EXISTS (
                        SELECT 1 FROM fulfillment.courier_engagements e
                         WHERE e.tenant_id = c.tenant_id AND e.courier_id = c.id
-                          AND (e.registration_verified_at IS NOT NULL OR e.updated_at >= :cutoff))
+                          AND (e.registration_verified_at IS NOT NULL
+                               OR e.updated_at >= CAST(:now AS timestamptz) - (w.value * INTERVAL '1 month')))
                    AND NOT EXISTS (
                        SELECT 1 FROM fulfillment.courier_shifts s
                         WHERE s.tenant_id = c.tenant_id AND s.courier_id = c.id)
                    AND NOT EXISTS (
                        SELECT 1 FROM fulfillment.courier_ledger_entries l
                         WHERE l.tenant_id = c.tenant_id AND l.courier_id = c.id)
+                """.formatted(uz.horecaos.platform.configuration.TenantRetention.WINDOWS_SQL);
+        if (!claim) {
+            return "SELECT count(*) FROM (" + select + ") applicants";
+        }
+        return select + """
                  ORDER BY c.updated_at
                  LIMIT :batchSize
                  FOR UPDATE OF c SKIP LOCKED
-                """)
-                .param("cutoff", utc(cutoff))
-                .param("batchSize", batchSize)
-                .query((row, number) ->
-                        new ApplicantRef(row.getObject("tenant_id", UUID.class), row.getObject("id", UUID.class)))
-                .list();
+                """;
     }
 
     /**

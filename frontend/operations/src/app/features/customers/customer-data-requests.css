@@ -1,0 +1,58 @@
+:host {
+  display: block;
+}
+
+h3 {
+  margin: 20px 0 4px;
+}
+
+.grid {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+.grid th {
+  text-align: start;
+  color: var(--q-ink-muted);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.grid td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.q-form {
+  margin-top: 12px;
+  max-width: 420px;
+  display: grid;
+  gap: 12px;
+}
+
+.q-field {
+  display: grid;
+  gap: 4px;
+}
+
+.link {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-inline-end: 12px;
+  color: var(--q-primary);
+  cursor: pointer;
+  text-decoration: underline;
+  font: inherit;
+  font-size: var(--q-type-body-xs);
+}
+
+.empty {
+  color: var(--q-ink-subtle);
+  text-align: center;
+}
+
+.q-error-text {
+  color: var(--q-error-text);
+}

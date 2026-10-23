@@ -578,6 +578,19 @@ public class JdbcRecoveryCaseStore {
                 .list();
     }
 
+    /** How many service-recovery cases of this customer are still being worked: the platform's open disputes. */
+    public int openCasesOf(UUID tenantId, UUID customerAccountId) {
+        return jdbc.sql("""
+                SELECT count(*) FROM reviews.recovery_cases
+                 WHERE tenant_id = :tenantId AND customer_account_id = :accountId
+                   AND state IN ('NEW', 'IN_PROGRESS')
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", customerAccountId)
+                .query(Integer.class)
+                .single();
+    }
+
     /** An erasure: nulls every note on every case of this customer's reviews. Returns how many were nulled. */
     public int eraseNotesOf(UUID tenantId, UUID customerAccountId) {
         return jdbc.sql("""

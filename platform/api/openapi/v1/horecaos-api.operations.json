@@ -3194,6 +3194,18 @@
         },
         "type" : "object"
       },
+      "BundleLinkResponse" : {
+        "properties" : {
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "BypassRequest" : {
         "properties" : {
           "reasonCode" : {
@@ -5222,6 +5234,23 @@
         "required" : [ "decision", "policyVersion", "purpose", "source" ],
         "type" : "object"
       },
+      "ConsentTypeControllerLocaleSetResponse" : {
+        "properties" : {
+          "configured" : {
+            "type" : "boolean"
+          },
+          "defaultLocale" : {
+            "type" : "string"
+          },
+          "locales" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "ConsentTypeResponse" : {
         "properties" : {
           "active" : {
@@ -5248,6 +5277,12 @@
           },
           "labelUz" : {
             "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           },
           "policyVersion" : {
             "type" : "string"
@@ -5624,6 +5659,95 @@
         },
         "type" : "object"
       },
+      "CorrectAddressRequest" : {
+        "properties" : {
+          "coordinateSource" : {
+            "enum" : [ "NOT_GEOCODED", "LANDMARK_ONLY", "GEOCODER", "CUSTOMER_PIN", "OPERATOR_PIN", "LEGACY_UNSOURCED" ],
+            "type" : "string"
+          },
+          "deliveryInstructions" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "evidenceReference" : {
+            "minLength" : 1,
+            "pattern" : "^[A-Za-z0-9][A-Za-z0-9._:/#-]{2,79}$",
+            "type" : "string"
+          },
+          "fields" : {
+            "$ref" : "#/components/schemas/AddressFields"
+          },
+          "label" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "latitude" : {
+            "format" : "double",
+            "maximum" : 90,
+            "minimum" : -90,
+            "type" : "number"
+          },
+          "longitude" : {
+            "format" : "double",
+            "maximum" : 180,
+            "minimum" : -180,
+            "type" : "number"
+          }
+        },
+        "required" : [ "coordinateSource", "evidenceReference", "fields", "label" ],
+        "type" : "object"
+      },
+      "CorrectContactPointRequest" : {
+        "properties" : {
+          "evidenceReference" : {
+            "minLength" : 1,
+            "pattern" : "^[A-Za-z0-9][A-Za-z0-9._:/#-]{2,79}$",
+            "type" : "string"
+          },
+          "value" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "evidenceReference", "value" ],
+        "type" : "object"
+      },
+      "CorrectDateOfBirthRequest" : {
+        "properties" : {
+          "dateOfBirth" : {
+            "description" : "ISO-8601 date, yyyy-MM-dd",
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "evidenceReference" : {
+            "minLength" : 1,
+            "pattern" : "^[A-Za-z0-9][A-Za-z0-9._:/#-]{2,79}$",
+            "type" : "string"
+          }
+        },
+        "required" : [ "dateOfBirth", "evidenceReference" ],
+        "type" : "object"
+      },
+      "CorrectDisplayNameRequest" : {
+        "properties" : {
+          "displayName" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "evidenceReference" : {
+            "description" : "A reference to the evidence (a ticket or document number): letters, digits and . _ : / # -, 3 to 80 characters, no spaces. Not the evidence itself.",
+            "minLength" : 1,
+            "pattern" : "^[A-Za-z0-9][A-Za-z0-9._:/#-]{2,79}$",
+            "type" : "string"
+          }
+        },
+        "required" : [ "evidenceReference" ],
+        "type" : "object"
+      },
       "CorrectionRequest" : {
         "properties" : {
           "breakSeconds" : {
@@ -5730,6 +5854,52 @@
           },
           "request" : {
             "$ref" : "#/components/schemas/CorrectionRequestResponse"
+          }
+        },
+        "type" : "object"
+      },
+      "CorrectionResponse" : {
+        "properties" : {
+          "correctedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "correctedByActorId" : {
+            "type" : "string"
+          },
+          "correctedByActorType" : {
+            "type" : "string"
+          },
+          "evidenceReference" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "subject" : {
+            "type" : "string"
+          },
+          "targetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CorrectionResultResponse" : {
+        "properties" : {
+          "applied" : {
+            "type" : "boolean"
+          },
+          "correctionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "The stored version after the write, where the corrected thing has one",
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -9511,6 +9681,43 @@
         "required" : [ "memberId", "plannedEnd", "plannedStart" ],
         "type" : "object"
       },
+      "ErasureBlockResponse" : {
+        "properties" : {
+          "amount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "code" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ErasureProofResponse" : {
+        "properties" : {
+          "completedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "completedByActorId" : {
+            "type" : "string"
+          },
+          "participants" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ParticipantProofResponse"
+            },
+            "type" : "array"
+          },
+          "requestId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "EstimateResponse" : {
         "properties" : {
           "candidates" : {
@@ -9772,6 +9979,56 @@
           }
         },
         "required" : [ "purpose" ],
+        "type" : "object"
+      },
+      "ExportRequestResponse" : {
+        "properties" : {
+          "bundleAvailable" : {
+            "description" : "Whether a link can be had right now: produced, not expired, not removed",
+            "type" : "boolean"
+          },
+          "bundleExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "cancelledAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "manifest" : {
+            "$ref" : "#/components/schemas/ManifestResponse"
+          },
+          "producedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "producedByActorId" : {
+            "type" : "string"
+          },
+          "requestedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "requestedVia" : {
+            "type" : "string"
+          },
+          "responseDueAt" : {
+            "description" : "The day the tenant owes the customer her data, fixed when the request was raised",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "ExternalBookRequest" : {
@@ -12071,6 +12328,35 @@
         },
         "type" : "object"
       },
+      "LegalHoldResponse" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "liftedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "liftedByActorId" : {
+            "type" : "string"
+          },
+          "placedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "placedByActorId" : {
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "Level" : {
         "properties" : {
           "authored" : {
@@ -12134,6 +12420,17 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "LiftLegalHoldRequest" : {
+        "properties" : {
+          "note" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "note" ],
         "type" : "object"
       },
       "LiftSuppressionResponse" : {
@@ -12832,6 +13129,52 @@
           }
         },
         "required" : [ "reason", "reasonCode" ],
+        "type" : "object"
+      },
+      "ManifestResponse" : {
+        "properties" : {
+          "sections" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ManifestSection"
+            },
+            "type" : "array"
+          },
+          "withheld" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "ManifestSection" : {
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "tables" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ManifestTable"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "ManifestTable" : {
+        "properties" : {
+          "rows" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "table" : {
+            "type" : "string"
+          },
+          "truncated" : {
+            "type" : "boolean"
+          }
+        },
         "type" : "object"
       },
       "MapConfigResponse" : {
@@ -17376,6 +17719,20 @@
         "required" : [ "mode", "reason" ],
         "type" : "object"
       },
+      "ParticipantProofResponse" : {
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "tables" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TableRowsResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "PartnerClientResponse" : {
         "properties" : {
           "clientId" : {
@@ -18135,6 +18492,22 @@
             "type" : "array"
           }
         },
+        "type" : "object"
+      },
+      "PlaceLegalHoldRequest" : {
+        "properties" : {
+          "note" : {
+            "description" : "Why, for the second person who signs it. Not stored on the hold.",
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "enum" : [ "LITIGATION", "REGULATORY_REQUEST", "INVESTIGATION", "OTHER" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "note", "reason" ],
         "type" : "object"
       },
       "PlaceOrderRequest" : {
@@ -19461,6 +19834,56 @@
           }
         },
         "required" : [ "orderedPromotionIds", "stackingGroup" ],
+        "type" : "object"
+      },
+      "PrivacyRequestResponse" : {
+        "properties" : {
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "dueAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "requestedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "requestedVia" : {
+            "type" : "string"
+          },
+          "settledAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "subject" : {
+            "description" : "For a correction: what was amended (DISPLAY_NAME, DATE_OF_BIRTH, CONTACT_POINT, ADDRESS)",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ProduceExportRequest" : {
+        "properties" : {
+          "purpose" : {
+            "description" : "Why the data is being revealed, in your words. Recorded on the audit trail, shown to the second approver and passed to every decryption.",
+            "maxLength" : 200,
+            "minLength" : 3,
+            "type" : "string"
+          }
+        },
+        "required" : [ "purpose" ],
         "type" : "object"
       },
       "ProductivityResponse" : {
@@ -23156,6 +23579,42 @@
           "years" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "RetentionWindowResponse" : {
+        "properties" : {
+          "appliesTo" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "configured" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "effective" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "enforcedBy" : {
+            "type" : "string"
+          },
+          "floor" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "platformDefault" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "provisional" : {
+            "type" : "boolean"
+          },
+          "unit" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -27335,6 +27794,18 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "TableRowsResponse" : {
+        "properties" : {
+          "rows" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "table" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -32015,6 +32486,15 @@
           "schema" : {
             "description" : "The nextCursor of the previous page",
             "type" : "string"
+          }
+        }, {
+          "description" : "true: only the actions the platform registers as personal data leaving (a reveal of a protected value, an export). Settings 10.11's egress log reads this instead of keeping its own list of codes.",
+          "in" : "query",
+          "name" : "piiEgress",
+          "required" : false,
+          "schema" : {
+            "description" : "true: only the actions the platform registers as personal data leaving (a reveal of a protected value, an export). Settings 10.11's egress log reads this instead of keeping its own list of codes.",
+            "type" : "boolean"
           }
         } ],
         "responses" : {
@@ -47991,7 +48471,7 @@
     "/api/v1/operations/tenants/{tenantId}/payment-methods/locale-set" : {
       "get" : {
         "description" : "Row 10.12. A payment method is a tenant-level row every brand's customers read, so its names are edited in the union of the tenant's brands' supported languages, default first; the default is the tenant's first brand's. A brand that has chosen no set contributes the platform triple (ru, uz-Latn, en). The set is a menu, not a constraint: a language outside it that a method already carries is kept, never deleted, by an edit. Needs only payment-method.read, so a manager pinned to one brand still sees every brand's languages.",
-        "operationId" : "localeSet_1",
+        "operationId" : "localeSet_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -48603,7 +49083,7 @@
     "/api/v1/operations/tenants/{tenantId}/regions/locale-set" : {
       "get" : {
         "description" : "Row 10.12. A region belongs to the tenant, not to a brand, so it is edited in the union of the tenant's brands' supported languages, default first; the default is the tenant's first brand's. A brand that has chosen no set contributes the platform triple. The set is a menu, not a constraint: a language outside it that a region already carries is kept, never deleted, by an edit.",
-        "operationId" : "localeSet",
+        "operationId" : "localeSet_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -48982,6 +49462,38 @@
         },
         "summary" : "Remedy totals, per type, split by who moved the money",
         "tags" : [ "Order remedies" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/retention-windows" : {
+      "get" : {
+        "description" : "One entry per tenant-visible retention key: the value this tenant stored, the window the job acts on today, the floor a lower value is raised to, whether the window is the tenant's own or shared with every tenant (courier tracks live in shared daily partitions), and whether the number is still provisional pending legal's confirmation.",
+        "operationId" : "windows",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/RetentionWindowResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The effective retention window and the platform floor behind each retention setting",
+        "tags" : [ "Retention" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/shipments/{shipmentId}/external-delivery-cost/reconcile" : {
@@ -66972,7 +67484,7 @@
     },
     "/api/v1/tenants/{tenantId}/consent-types" : {
       "get" : {
-        "description" : "Bootstraps the code-owned default catalogue on this tenant's first read, so a tenant with no rows yet still sees the two purposes already in production use (MARKETING_PROMOTIONS, TERMS_OF_SERVICE) rather than an empty registry.",
+        "description" : "Bootstraps the code-owned default catalogue on this tenant's first read, so a tenant with no rows yet still sees the purposes already in production use (MARKETING_PROMOTIONS, TERMS_OF_SERVICE, review.public_display) rather than an empty registry. A purpose's name is `labels`, a map by locale (ADR 0149): every language it has a name in, whether or not the tenant's brands currently offer it. labelRu/labelUz/labelEn are the platform triple's legacy columns, still sent for one release for a client that has not been rebuilt.",
         "operationId" : "list_29",
         "parameters" : [ {
           "in" : "path",
@@ -66999,6 +67511,35 @@
           }
         },
         "summary" : "Every consent purpose this tenant has defined",
+        "tags" : [ "Consent types" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/consent-types/locale-set" : {
+      "get" : {
+        "description" : "ADR 0149 Decision 4. A purpose belongs to the tenant, shared by every brand, so it is read in the union of the tenant's brands' supported languages, default first; the default is the tenant's first brand's. A brand that has chosen no set contributes the platform languages. The set is a menu for choosing a fallback order, not a constraint: a language outside it that a purpose already has a name in is still returned in `labels`.",
+        "operationId" : "localeSet",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ConsentTypeControllerLocaleSetResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The languages a consent purpose is read in",
         "tags" : [ "Consent types" ]
       }
     },
@@ -67370,6 +67911,62 @@
         },
         "summary" : "One import run's per-row report",
         "tags" : [ "Customer CSV import" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/privacy-requests" : {
+      "get" : {
+        "description" : "Erasure requests, export requests and corrections in one list, for Settings 10.11. Filter with kind=ERASURE|EXPORT|CORRECTION and status=PENDING|COMPLETED|CANCELLED, or omit either. A line names the kind, the customer account, where it stands and when; never a value. Acting on a line goes through the per-customer endpoints using the customerAccountId it carries.",
+        "operationId" : "privacyRequests",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "kind",
+          "required" : false,
+          "schema" : {
+            "pattern" : "ERASURE|EXPORT|CORRECTION",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "pattern" : "PENDING|COMPLETED|CANCELLED",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PrivacyRequestResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every data-subject request across the tenant, newest first",
+        "tags" : [ "Customer privacy requests" ]
       }
     },
     "/api/v1/tenants/{tenantId}/customers/resolve" : {
@@ -68277,6 +68874,250 @@
         "tags" : [ "Customers" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/corrections" : {
+      "get" : {
+        "description" : "What was amended, against which evidence reference, by whom and when. The value that was replaced is kept but is not returned here: it is part of a data-subject export.",
+        "operationId" : "correctionHistory",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/CorrectionResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The corrections made to this customer's data, newest first",
+        "tags" : [ "Customer privacy requests" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/corrections/addresses/{addressId}" : {
+      "put" : {
+        "description" : "Replaces the whole address, keeping the previous one under retention. Requires If-Match.",
+        "operationId" : "correctAddress",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "addressId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CorrectAddressRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CorrectionResultResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Correct an address against evidence",
+        "tags" : [ "Customer privacy requests" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/corrections/contact-points/{contactPointId}" : {
+      "put" : {
+        "description" : "The type stays; verification resets because the value changed. The previous value is kept under retention. `applied` is false when the value normalises to what was already there.",
+        "operationId" : "correctContactPoint",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "contactPointId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CorrectContactPointRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CorrectionResultResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Correct a contact point's value against evidence",
+        "tags" : [ "Customer privacy requests" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/corrections/date-of-birth" : {
+      "put" : {
+        "description" : "Replaces a wrong date with the right one, keeping the previous date under retention. Clearing a date is not a correction. Requires If-Match.",
+        "operationId" : "correctDateOfBirth",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CorrectDateOfBirthRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CorrectionResultResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Correct the date of birth against evidence",
+        "tags" : [ "Customer privacy requests" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/corrections/display-name" : {
+      "put" : {
+        "description" : "The same edit as the profile PUT, with the previous name kept under retention and the evidence reference recorded. A blank name clears it. Requires If-Match. `applied` is false when the name was already that.",
+        "operationId" : "correctDisplayName",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CorrectDisplayNameRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CorrectionResultResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Correct the display name against evidence",
+        "tags" : [ "Customer privacy requests" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/customers/{accountId}/date-of-birth" : {
       "get" : {
         "description" : "Requires a stated purpose, recorded as an audit fact.",
@@ -68418,6 +69259,46 @@
           }
         },
         "summary" : "Whether this customer may be reached for a purpose and channel, right now",
+        "tags" : [ "Customers" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/erasure-blocks" : {
+      "get" : {
+        "description" : "A legal hold, an order still on its way, a service-recovery case still open. Codes and counts only; empty when nothing stands in the way. Execute refuses with 422 UNPROCESSABLE_STATE naming the same blocks.",
+        "operationId" : "erasureBlocks",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ErasureBlockResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What would stop this customer's erasure from executing right now",
         "tags" : [ "Customers" ]
       }
     },
@@ -68583,6 +69464,419 @@
           }
         },
         "summary" : "Execute an erasure request",
+        "tags" : [ "Customers" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/erasure-requests/{requestId}/proof" : {
+      "get" : {
+        "description" : "The evidence ADR 0029 asks for: which participants ran and how many rows each overwrote or removed in each table, with when and by whom. Counts and table names only. 404 for a request that has not completed or that completed before proofs were kept.",
+        "operationId" : "erasureProof",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "requestId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErasureProofResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What an executed erasure changed, per module and table",
+        "tags" : [ "Customers" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/export-requests" : {
+      "get" : {
+        "description" : "Whether a request is waiting, produced, withdrawn or expired, and what the bundle contains by module and table (counts, never values).",
+        "operationId" : "exportRequests",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ExportRequestResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "This customer's export requests, newest first",
+        "tags" : [ "Customer privacy requests" ]
+      },
+      "post" : {
+        "description" : "Records the request and the date the tenant owes an answer by; it gathers nothing by itself (ADR 0029). Idempotent: a second call while one is PENDING returns that same request.",
+        "operationId" : "requestExport_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExportRequestResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask for a copy of this customer's data on her behalf",
+        "tags" : [ "Customer privacy requests" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/export-requests/{requestId}/bundle" : {
+      "get" : {
+        "description" : "The link works for a few minutes and is not stored. Each call is an audit fact naming you and your purpose, and appears in the merchant's egress log. 404 when the request has no bundle (not produced, expired, or removed by an erasure).",
+        "operationId" : "exportBundle",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "requestId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "purpose",
+          "required" : true,
+          "schema" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BundleLinkResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A short-lived link to the produced bundle",
+        "tags" : [ "Customer privacy requests" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/export-requests/{requestId}/cancel" : {
+      "post" : {
+        "description" : "Idempotent for a request already withdrawn. Refused for one already produced.",
+        "operationId" : "cancelExport",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "requestId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExportRequestResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Withdraw a PENDING export request",
+        "tags" : [ "Customer privacy requests" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/export-requests/{requestId}/produce" : {
+      "post" : {
+        "description" : "Reads her data from every module, decrypted under the purpose you state, into one JSON document that is kept for a limited time (ADR 0029). The purpose is recorded on the audit trail and appears in the merchant's egress log. Under an ADR 0027 approval when the tenant has published a customer.pii.export policy: the first call answers 422 SECOND_APPROVER_REQUIRED naming approvalRequestId, and once a second person has approved it the same call produces the bundle. Idempotent: a request already produced returns itself.",
+        "operationId" : "produceExport",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "requestId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ProduceExportRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExportRequestResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Gather the customer's data into a bundle",
+        "tags" : [ "Customer privacy requests" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/legal-holds" : {
+      "get" : {
+        "operationId" : "legalHolds",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/LegalHoldResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "This customer's legal holds, newest first",
+        "tags" : [ "Customers" ]
+      },
+      "post" : {
+        "description" : "While a hold stands, executing the customer's erasure is refused and the retention jobs that expire her data skip her (ADR 0029). Under an ADR 0027 approval: the first call answers 422 SECOND_APPROVER_REQUIRED naming approvalRequestId, and once a second person has approved it the same call places the hold. Idempotent: a customer who already has a hold gets that hold back.",
+        "operationId" : "placeLegalHold",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlaceLegalHoldRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LegalHoldResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Place a legal hold on this customer",
+        "tags" : [ "Customers" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{accountId}/legal-holds/{holdId}/lift" : {
+      "post" : {
+        "description" : "Releases the customer to an erasure request that was waiting behind the hold. Under an ADR 0027 approval, like placing one: the first call answers 422 SECOND_APPROVER_REQUIRED. Idempotent for a hold already lifted.",
+        "operationId" : "liftLegalHold",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "holdId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LiftLegalHoldRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LegalHoldResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Lift a legal hold",
         "tags" : [ "Customers" ]
       }
     },
@@ -71967,6 +73261,9 @@
     "description" : "The tenant's own consent-purpose registry",
     "name" : "Consent types"
   }, {
+    "description" : "A data-subject copy of her data, corrections against evidence, and the worklist of both",
+    "name" : "Customer privacy requests"
+  }, {
     "description" : "Why the assistant said what it said",
     "name" : "Assistant turns"
   }, {
@@ -72176,6 +73473,9 @@
   }, {
     "description" : "Deterministic cart pricing and checkout acceptance",
     "name" : "Quotes"
+  }, {
+    "description" : "What each retention setting does for a tenant",
+    "name" : "Retention"
   }, {
     "description" : "Customer accounts, contact details, addresses, and consent",
     "name" : "Customers"

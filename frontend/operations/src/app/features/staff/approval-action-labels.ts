@@ -34,6 +34,10 @@ const ACTION_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
   'fiscal.correction.request': 'staff.approvals.action.fiscalCorrectionRequest',
   /** ADR 0166: attaching the reference the agent returned, which becomes a linked document the customer is shown. */
   'fiscal.correction.attach': 'staff.approvals.action.fiscalCorrectionAttach',
+  /** ADR 0029: placing a legal hold on a customer, which refuses her erasure and suspends her data's expiry. */
+  'customer.legal-hold.place': 'staff.approvals.action.customerLegalHoldPlace',
+  /** ADR 0029: lifting that hold, which releases her to the erasure waiting behind it. */
+  'customer.legal-hold.lift': 'staff.approvals.action.customerLegalHoldLift',
 };
 
 /** The label key for a known action code, or `null` for one this map does not (yet) name. */

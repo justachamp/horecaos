@@ -5,8 +5,13 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.customers.spi.CustomerErasureParticipant;
+import uz.horecaos.platform.customers.spi.ErasesCustomerData;
+import uz.horecaos.platform.customers.spi.ErasureCounts;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.SessionRow;
+import uz.horecaos.platform.iam.api.protection.DataClass;
+import uz.horecaos.platform.iam.api.protection.FieldProtection;
+import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
 
 /**
  * Clears a customer's account id from the table sessions they opened (ADR 0015,
@@ -33,28 +38,57 @@ import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.Se
  *       0029).
  * </ol>
  *
+ * <p>The reservations a guest made are hers too: a booking made with her account, or typed by a host for a guest who
+ * quoted a number her account held, keeps a name, two numbers and a note under the envelope (V0034). Those are
+ * overwritten and the booking's own facts (party, window, status, table) stay.
+ *
  * <p>Idempotent under retry, as {@link CustomerErasureParticipant} requires: a second
  * call finds no live claim and nothing left to clear.
  */
 @Component
+@ErasesCustomerData(
+        name = "dinein",
+        tables = {"dinein.table_sessions", "dinein.reservations"})
 public class DineInErasureParticipant implements CustomerErasureParticipant {
 
     private static final ActorRef ERASURE = ActorRef.systemJob("dinein.customer-erasure");
 
+    private static final String TOMBSTONE = "ERASED";
+    private static final String RESERVATION_TABLE = "dinein.reservations";
+
     private final JdbcDineInStore store;
     private final TableSessionService sessions;
+    private final FieldProtection protection;
 
-    public DineInErasureParticipant(JdbcDineInStore store, TableSessionService sessions) {
+    public DineInErasureParticipant(JdbcDineInStore store, TableSessionService sessions, FieldProtection protection) {
         this.store = store;
         this.sessions = sessions;
+        this.protection = protection;
     }
 
     @Override
     @Transactional
-    public void erase(UUID tenantId, UUID customerAccountId) {
+    public ErasureCounts erase(UUID tenantId, UUID customerAccountId, ErasedContacts held) {
+        int lapsed = 0;
         for (SessionRow claim : store.liveUnconfirmedClaimsOf(tenantId, customerAccountId)) {
             sessions.lapseClaim(tenantId, claim.id(), ERASURE);
+            lapsed++;
         }
-        store.clearClaimant(tenantId, customerAccountId);
+        int cleared = store.clearClaimant(tenantId, customerAccountId);
+        int reservations = store.eraseReservationsOf(
+                tenantId,
+                customerAccountId,
+                held.phoneLookupHashes(),
+                (reservationId, column) -> protection
+                        .protect(
+                                tenantId,
+                                DataClass.PERSONAL,
+                                new RecordRef(RESERVATION_TABLE, column, reservationId),
+                                TOMBSTONE)
+                        .serialize());
+        return ErasureCounts.builder()
+                .add("dinein.table_sessions", lapsed + cleared)
+                .add(RESERVATION_TABLE, reservations)
+                .build();
     }
 }

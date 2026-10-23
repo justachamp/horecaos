@@ -322,7 +322,21 @@
     "errors": {
       "avatarUnavailable": "Profile photos are not available yet.",
       "avatarFailed": "That image could not be saved. Please try another."
-    }
+    },
+    "privacy": "My data",
+    "privacyTitle": "My data",
+    "privacySignInRequired": "Sign in to ask for a copy of your data.",
+    "privacyCopyTitle": "A copy of your data",
+    "privacyCopyBenefit": "You can ask for a copy of the personal data we hold about you. Someone on our team prepares it, and we tell you here when it is ready.",
+    "privacyAsk": "Ask for a copy of my data",
+    "privacyPreparing": "We are preparing your data.",
+    "privacyDueBy": "We will have it ready by",
+    "privacyWithdraw": "Withdraw my request",
+    "privacyReady": "Your data is ready.",
+    "privacyGetFile": "Get my data",
+    "privacyOpenFile": "Open my data",
+    "privacyLinkShort": "This link works for a few minutes. Ask again here if it stops working.",
+    "privacyExpired": "The file has expired. You can ask for a new copy."
   },
   "product": {
     "variants": "Variants",

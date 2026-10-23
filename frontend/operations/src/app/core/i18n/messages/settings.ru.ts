@@ -1206,7 +1206,7 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
     'В HorecaOS нет модели данных для найма или кандидатов — здесь нечего хранить.',
   'settings.dataPrivacy.retention.status.notApplicable': 'Не применимо',
   'settings.dataPrivacy.retention.lead':
-    'Задайте, как долго хранится каждый вид данных. Любое значение ниже можно только увеличить для всей платформы — более коротким значением очистка никогда не удалит данные другой компании раньше срока.',
+    'Задайте, как долго хранится каждый вид данных. Под значением показано, что платформа делает с ним для вашей компании: срок, по которому очистка работает сейчас, и нижний предел платформы, до которого поднимается слишком короткое значение. Брошенные корзины и непроверенные заявки курьеров очищаются по вашему сроку; история локации курьеров общая для всех компаний, поэтому очищается по самому длинному сроку из нужных им.',
   'settings.dataPrivacy.retention.column.value': 'Текущее значение',
   'settings.dataPrivacy.retention.column.enforcedBy': 'Кто исполняет',
   'settings.dataPrivacy.retention.unit.days': 'дней',
@@ -1222,6 +1222,14 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.dataPrivacy.retention.invalidValue': 'Введите целое число больше нуля',
   'settings.dataPrivacy.retention.staleVersion':
     'Кто-то уже изменил это значение — показано текущее значение; измените снова, если всё ещё нужно.',
+  'settings.dataPrivacy.retention.effective': 'Действует для вашей компании: {value} {unit}',
+  'settings.dataPrivacy.retention.floor':
+    'Нижний предел платформы: {value} {unit}. Меньшее значение поднимается до него.',
+  'settings.dataPrivacy.retention.scope.perTenant': 'Относится только к вашей компании.',
+  'settings.dataPrivacy.retention.scope.allTenants':
+    'Общий срок для всех компаний: история курьеров хранится в суточных разделах, где данные всех компаний вместе, поэтому раздел удаляется по самому длинному сроку из нужных. Более короткое значение здесь его не сокращает.',
+  'settings.dataPrivacy.retention.provisional':
+    'Предварительное значение — ждёт подтверждения юристов',
   'settings.dataPrivacy.consent.title': 'Согласие',
   'settings.dataPrivacy.consent.lead':
     'Что решение о согласии может фиксировать сегодня, на аккаунте клиента.',
@@ -1232,20 +1240,32 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.dataPrivacy.consent.channelSpecific.yes': 'Да',
   'settings.dataPrivacy.consent.channelSpecific.no': 'Нет',
   'settings.dataPrivacy.requests.title': 'Запросы субъектов данных',
-  'settings.dataPrivacy.erasure.title': 'Запросы на удаление',
-  'settings.dataPrivacy.erasure.lead':
-    'Все запросы на удаление персональных данных по всей компании. Подать, исполнить или отменить запрос можно на карточке клиента.',
-  'settings.dataPrivacy.erasure.filter.label': 'Статус',
-  'settings.dataPrivacy.erasure.filter.all': 'Все',
-  'settings.dataPrivacy.erasure.status.pending': 'Ожидает',
-  'settings.dataPrivacy.erasure.status.completed': 'Исполнен',
-  'settings.dataPrivacy.erasure.status.cancelled': 'Отменён',
-  'settings.dataPrivacy.erasure.column.status': 'Статус',
-  'settings.dataPrivacy.erasure.column.customer': 'Аккаунт клиента',
-  'settings.dataPrivacy.erasure.column.requestedVia': 'Откуда подан',
-  'settings.dataPrivacy.erasure.column.requestedAt': 'Дата запроса',
-  'settings.dataPrivacy.erasure.column.resolvedAt': 'Дата решения',
-  'settings.dataPrivacy.erasure.empty': 'В этой компании ещё не подавали запрос на удаление.',
+  'settings.dataPrivacy.requests.lead':
+    'Все запросы субъектов данных по всей организации, любого вида: удаление, копия данных и исправления. Создавайте, готовьте, исправляйте и выполняйте их в карточке клиента.',
+  'settings.dataPrivacy.requests.filter.kind': 'Вид',
+  'settings.dataPrivacy.requests.filter.status': 'Статус',
+  'settings.dataPrivacy.requests.filter.all': 'Все',
+  'settings.dataPrivacy.requests.kind.erasure': 'Удаление',
+  'settings.dataPrivacy.requests.kind.export': 'Копия данных',
+  'settings.dataPrivacy.requests.kind.correction': 'Исправление',
+  'settings.dataPrivacy.requests.status.pending': 'Ожидает',
+  'settings.dataPrivacy.requests.status.completed': 'Выполнен',
+  'settings.dataPrivacy.requests.status.cancelled': 'Отозван',
+  'settings.dataPrivacy.requests.via.storefront': 'Клиент сам',
+  'settings.dataPrivacy.requests.via.operations': 'Сотрудник',
+  'settings.dataPrivacy.requests.column.kind': 'Вид',
+  'settings.dataPrivacy.requests.column.status': 'Статус',
+  'settings.dataPrivacy.requests.column.customer': 'Аккаунт клиента',
+  'settings.dataPrivacy.requests.column.requestedVia': 'Источник',
+  'settings.dataPrivacy.requests.column.requestedAt': 'Запрошено',
+  'settings.dataPrivacy.requests.column.resolvedAt': 'Завершено',
+  'settings.dataPrivacy.requests.column.detail': 'Подробности',
+  'settings.dataPrivacy.requests.subject.DISPLAY_NAME': 'Имя',
+  'settings.dataPrivacy.requests.subject.DATE_OF_BIRTH': 'Дата рождения',
+  'settings.dataPrivacy.requests.subject.CONTACT_POINT': 'Контакт',
+  'settings.dataPrivacy.requests.subject.ADDRESS': 'Адрес',
+  'settings.dataPrivacy.requests.dueBy': 'Ответить до {date}',
+  'settings.dataPrivacy.requests.empty': 'В организации не было запросов субъектов данных.',
   'settings.dataPrivacy.egress.title': 'Журнал выгрузок и просмотров персональных данных',
   'settings.dataPrivacy.egress.lead':
     'Каждый случай, когда сотрудник открыл или выгрузил персональные данные клиента за последние 90 дней, из собственного журнала аудита платформы.',
@@ -1261,6 +1281,8 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.dataPrivacy.egress.action.dateOfBirthRevealed': 'Открыта дата рождения',
   'settings.dataPrivacy.egress.action.blacklistRevealed': 'Открыта причина блокировки',
   'settings.dataPrivacy.egress.action.listExported': 'Выгружен отфильтрованный список клиентов',
+  'settings.dataPrivacy.egress.action.dsarExported': 'Собрал данные клиента в копию для неё',
+  'settings.dataPrivacy.egress.action.dsarBundleRevealed': 'Открыл копию данных клиента',
   'settings.dataPrivacy.egress.action.audienceExported': 'Выгружена маркетинговая аудитория',
   'settings.dataPrivacy.egress.action.lineNoteRevealed': 'Открыт комментарий клиента к заказу',
   'settings.dataPrivacy.egress.action.orderPhoneRevealed': 'Открыт телефон клиента в заказе',
@@ -1403,6 +1425,27 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
     'Передвиньте точку к входу в филиал: щёлкните по карте, перетащите точку или введите координаты. Точка сохраняется, только если вы её сдвинули; точку филиала можно переносить, но нельзя удалить.',
   'settings.dataPrivacy.egress.action.orderMapPointsRevealed':
     'Открыты на карте точки доставки за день',
+  'settings.dataPrivacy.egress.action.leadRevealed':
+    'Показаны имя или номер звонившего из колл-центра',
+  'settings.dataPrivacy.egress.action.redemptionCustomerRevealed':
+    'Показано, кто воспользовался акцией',
+  'settings.dataPrivacy.egress.action.dropoffRevealed':
+    'Показаны адреса доставки сгруппированных заказов',
+  'settings.dataPrivacy.egress.action.courierCustomerLocationRevealed':
+    'Курьеру показано местоположение клиента',
+  'settings.dataPrivacy.egress.action.fiscalEvidenceRevealed':
+    'Показан сохранённый запрос или ответ фискального чека',
+  'settings.dataPrivacy.egress.action.reservationGuestRevealed':
+    'Показаны имя или номер гостя брони',
+  'settings.dataPrivacy.egress.action.callerNumberRevealed':
+    'Показан номер звонящего в карточке звонка',
+  'settings.dataPrivacy.egress.action.reportExported': 'Выгружен отчёт',
+  'settings.dataPrivacy.egress.action.courierTrackRevealed': 'Показан трек курьера',
+  'settings.dataPrivacy.egress.action.courierRegistrationRevealed':
+    'Показан регистрационный номер курьера',
+  'settings.dataPrivacy.egress.action.courierComplianceRevealed': 'Показаны документы курьера',
+  'settings.dataPrivacy.egress.action.invitationRecipientRevealed':
+    'Показано, кому отправлено приглашение',
 
   // Chat assistant (ADR 0069).
   'settings.nav.assistant': 'Помощник в чате',

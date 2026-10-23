@@ -81,12 +81,16 @@ public class DataProtectionController {
                 new RetentionRule(
                         "ABANDONED_CARTS",
                         environment.getProperty("horecaos.ordering.cart-retention.days", "90")
-                                + " days after a cart that never became an order was last touched",
+                                + " days after a cart that never became an order was last touched; each tenant's"
+                                + " own value (ADR 0030 key ordering.cart_retention_days) governs its carts,"
+                                + " raised to a one-day floor",
                         "uz.horecaos.platform.ordering.application.CartRetentionSweeper"),
                 new RetentionRule(
                         "COURIER_APPLICANTS",
                         environment.getProperty("horecaos.courier.applicant-retention.months", "12")
-                                + " months after an application nobody verified was last touched",
+                                + " months after an application nobody verified was last touched; each tenant's"
+                                + " own value (ADR 0030 key courier.applicant_retention_months) governs its"
+                                + " applicants, raised to a one-month floor",
                         "uz.horecaos.platform.courier.application.CourierApplicantRetentionSweeper"));
     }
 

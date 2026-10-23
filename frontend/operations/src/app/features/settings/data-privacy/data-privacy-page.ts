@@ -4,6 +4,7 @@ import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { ConfigurationResolutionView } from '../../../core/api/configuration';
 import { ApiError } from '../../../core/api/problem-details';
 import { I18n } from '../../../core/i18n/i18n';
+import { LocaleSetView, pickLabel } from '../../../core/i18n/locale-labels';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { ActorChip } from '../../../shared/ui/actor-chip';
@@ -11,12 +12,20 @@ import { describeApiError } from '../../orders/order-errors';
 import { ActivityLogApi, AuditEventView } from '../../staff/activity-log-api';
 import { ConfigurationApi } from '../configuration-api';
 import { SettingsSaved } from '../settings-saved';
-import { ConsentType, DataPrivacyApi, TenantErasureRequest } from './data-privacy-api';
-import { PII_ACTION_CODES, piiEgressLabelKey } from './pii-audit-labels';
+import {
+  ConsentType,
+  DataPrivacyApi,
+  PrivacyRequest,
+  PrivacyRequestKind,
+  PrivacyRequestStatus,
+  RetentionWindow,
+} from './data-privacy-api';
+import { piiEgressLabelKey } from './pii-audit-labels';
 
 type LoadState = 'loading' | 'ready' | 'denied' | 'error';
 type SectionState = 'loading' | 'ready' | 'denied' | 'error';
-type ErasureStatusFilter = 'ALL' | 'PENDING' | 'COMPLETED' | 'CANCELLED';
+type StatusFilter = 'ALL' | PrivacyRequestStatus;
+type KindFilter = 'ALL' | PrivacyRequestKind;
 
 const EGRESS_LOOKBACK_DAYS = 90;
 
@@ -38,6 +47,8 @@ interface RetentionRowVm {
   readonly unitKey: MessageKey;
   readonly enforcedByKey: MessageKey;
   readonly resolution: WritableSignal<ConfigurationResolutionView | null>;
+  /** What the platform does with the value for this tenant: the effective window and the floor (ADR 0109). */
+  readonly window: WritableSignal<RetentionWindow | null>;
   readonly editValue: WritableSignal<string>;
   readonly saving: WritableSignal<boolean>;
   readonly error: WritableSignal<string | null>;
@@ -55,6 +66,7 @@ function retentionRow(
     unitKey,
     enforcedByKey,
     resolution: signal<ConfigurationResolutionView | null>(null),
+    window: signal<RetentionWindow | null>(null),
     editValue: signal(''),
     saving: signal(false),
     error: signal<string | null>(null),
@@ -76,44 +88,30 @@ function retentionRow(
  * holds no location grant at all — the exact failure `CurrentTenant`'s own
  * doc comment names Staff and Finance as needing it for.
  *
- * **What changed this wave (ADR 0109), inventoried against the backend
- * before writing a line of copy, per this wave's own mandate.**
+ * **What this screen reads, and from where.**
  *
- * - **DSAR erasure: built, and now shown.** The tenant-scoped backend
- *   (raise, history, execute, cancel) has existed since `V0178` and
- *   `CustomerErasureService`; the only thing missing was a tenant-wide
- *   screen — the control-plane console could already read it, tenant staff
- *   could not. `CustomerController.tenantErasureRequests` is the one new
- *   read this wave adds; raising, executing and cancelling a request stay
- *   per-customer acts on the customer's own record (`P40`), so this card is
- *   a worklist to see what is outstanding, not a place to act on a row.
- * - **Retention: read and write, reusing ADR 0030.** Courier location
- *   retention (`telemetry.track_retention_days`) was already a tenant-level
- *   configuration key — just never marked `tenantVisible()`, so only the
- *   `PLATFORM_ADMIN` surface could reach it. Abandoned-cart and unverified
- *   courier-applicant retention were plain `@Value` properties, identical
- *   for every tenant, with no key at all. All three are now `tenantVisible()`
- *   ADR 0030 keys a tenant can read and set through the same
- *   `OperationsConfigurationController` every other settings row uses
- *   (`TENANT_CONFIGURATION_WRITE`), and `CartRetentionSweeper` /
- *   `CourierApplicantRetentionSweeper` now sweep on the longer of the
- *   platform default and whatever a tenant configured — the identical rule
- *   `TrackRetentionSweeper` already used for courier tracks. Candidate
- *   records stay not-applicable: HorecaOS deliberately excludes a
- *   recruitment ATS (frontend-information-architecture.md's own note).
- * - **Consent: the type registry now exists.** `ConsentTypeService`
- *   (`customer.consent_types`, V0289) is the tenant-wide catalogue this
- *   card used to say did not exist — seeded with the two purposes already
- *   in production use (`MARKETING_PROMOTIONS`, `TERMS_OF_SERVICE`) the first
- *   time a tenant reads it. It is a reference catalogue, not an enforcement
- *   point: `ConsentService` still accepts whatever purpose its caller
- *   passes, unchanged.
- * - **Data-subject export & correction: still not built.** ADR 0029 still
- *   lists these as the larger privacy-operations surface this wave's
- *   narrower scope does not reach.
- * - **Personal-data export & reveal log: unchanged, still real.** Built on
- *   `AuditController.operationsSearch`, filtered client-side to the closed
- *   set of `CUSTOMER_PII_REVEAL`-gated action codes (`pii-audit-labels.ts`).
+ * - **Data-subject requests: built, and listed here as the tenant-wide worklist.** Erasure, a copy of her data and
+ *   corrections to it are three kinds of request on the customer's own record (the customers pane): raising,
+ *   producing the file under a stated purpose and a second person's approval, correcting against an evidence reference,
+ *   executing an erasure with its proof and the legal hold that suspends it. This card is the one list that says what is
+ *   outstanding, whichever kind (`CustomerPrivacyController.privacyRequests`), with the day an export is owed by.
+ * - **Retention: read and written through ADR 0030, explained by the jobs themselves.** The three retention periods are
+ *   `tenantVisible()` keys set through `ConfigurationApi`. Beside each field the card shows what the platform does with
+ *   the value (`RetentionWindowController`, asked of the same sweepers that delete): the effective window, the platform
+ *   floor below which a value is raised, whether the window is this tenant's alone or shared with every tenant (courier
+ *   tracks live in shared daily partitions, so a shorter value cannot shorten what the others keep) and whether the
+ *   number is still provisional pending legal's confirmation (ADR 0029). Abandoned carts and unverified courier
+ *   applicants are swept on each tenant's own window, so a shorter value is honoured down to the floor. Candidate
+ *   records stay not-applicable: HorecaOS deliberately excludes a recruitment ATS.
+ * - **Consent: the type registry.** `customer.consent_types` is the tenant-wide catalogue of purposes, worded per
+ *   locale (a map, not three fixed columns) and read in the console's language, then the tenant's default, then any.
+ *   It is a reference catalogue; `ConsentService` can report, behind a flag that defaults off, a decision recorded
+ *   under a purpose that is not in it.
+ * - **Personal-data export & reveal log.** Built on `AuditController.operationsSearch` with `piiEgress=true`: the
+ *   backend registers which action codes are personal data leaving (`PiiEgressActions`, held to the code by a build
+ *   test; it includes a data-subject export and every link to one), and this card asks for exactly those and shows what
+ *   comes back. `pii-audit-labels.ts` is a table of words,
+ *   not a filter.
  */
 @Component({
   selector: 'q-data-privacy-page',
@@ -155,14 +153,17 @@ export class DataPrivacyPage {
     ),
   ];
 
-  protected readonly erasureState = signal<SectionState>('loading');
-  protected readonly erasureErrorText = signal<string | null>(null);
-  protected readonly erasureRequests = signal<readonly TenantErasureRequest[]>([]);
-  protected readonly erasureStatusFilter = signal<ErasureStatusFilter>('ALL');
+  protected readonly requestsState = signal<SectionState>('loading');
+  protected readonly requestsErrorText = signal<string | null>(null);
+  protected readonly requests = signal<readonly PrivacyRequest[]>([]);
+  protected readonly statusFilter = signal<StatusFilter>('ALL');
+  protected readonly kindFilter = signal<KindFilter>('ALL');
 
   protected readonly consentState = signal<SectionState>('loading');
   protected readonly consentErrorText = signal<string | null>(null);
   protected readonly consentTypes = signal<readonly ConsentType[]>([]);
+  /** The languages the tenant's brands support, default first: where a purpose's wording is looked for after the console's own. */
+  private readonly consentLocaleSet = signal<LocaleSetView | null>(null);
 
   constructor() {
     void this.load();
@@ -181,14 +182,14 @@ export class DataPrivacyPage {
       return;
     }
     try {
+      // The platform decides which actions are personal data leaving (`PiiEgressActions`); this asks for exactly those,
+      // so the 200-row page is 200 egress events and not 200 security events of any kind.
       const page = await this.api.search(tenantId, {
-        auditClass: 'SECURITY',
+        piiEgress: true,
         from: isoDaysAgo(EGRESS_LOOKBACK_DAYS),
         limit: 200,
       });
-      this.egressEvents.set(
-        page.items.filter((event) => PII_ACTION_CODES.includes(event.actionCode)),
-      );
+      this.egressEvents.set(page.items);
       this.state.set('ready');
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
@@ -199,13 +200,14 @@ export class DataPrivacyPage {
       }
     }
     void this.loadRetention(tenantId);
-    void this.loadErasureWorklist(tenantId);
+    void this.loadRequests(tenantId);
     void this.loadConsentTypes(tenantId);
   }
 
   // ---------------------------------------------------------------- retention
 
   private async loadRetention(tenantId: string): Promise<void> {
+    void this.loadRetentionWindows(tenantId);
     await Promise.all(
       this.retentionRows.map(async (row) => {
         try {
@@ -216,6 +218,33 @@ export class DataPrivacyPage {
           row.error.set(this.describe(error));
         }
       }),
+    );
+  }
+
+  /**
+   * What the platform does with each value for this tenant: the window the job acts on, the floor below which it will not
+   * go, and whether the window is shared with other tenants. Read from the jobs themselves, so the card cannot say one
+   * thing and the sweep do another; a failure leaves the editable value showing without the explanation, which is the
+   * card as it was.
+   */
+  private async loadRetentionWindows(tenantId: string): Promise<void> {
+    try {
+      const windows = await this.dataPrivacyApi.retentionWindows(tenantId);
+      for (const row of this.retentionRows) {
+        row.window.set(windows.find((window) => window.code === row.code) ?? null);
+      }
+    } catch (error) {
+      if (!(error instanceof ApiError)) {
+        throw error;
+      }
+    }
+  }
+
+  protected unitLabel(window: RetentionWindow): string {
+    return this.i18n.t(
+      window.unit === 'DAYS'
+        ? 'settings.dataPrivacy.retention.unit.days'
+        : 'settings.dataPrivacy.retention.unit.months',
     );
   }
 
@@ -243,6 +272,7 @@ export class DataPrivacyPage {
       const resolution = await this.configurationApi.resolution(tenantId, row.code, 'TENANT');
       row.resolution.set(resolution);
       row.editValue.set(String(resolution.value ?? ''));
+      void this.loadRetentionWindows(tenantId);
       this.saved.announce(
         'set',
         this.i18n.t(row.categoryKey),
@@ -265,49 +295,102 @@ export class DataPrivacyPage {
     }
   }
 
-  // -------------------------------------------------------- DSAR / erasure
+  // -------------------------------------------------------- data-subject requests
 
-  private async loadErasureWorklist(tenantId: string): Promise<void> {
-    this.erasureState.set('loading');
+  private async loadRequests(tenantId: string): Promise<void> {
+    this.requestsState.set('loading');
     try {
-      const status = this.erasureStatusFilter();
-      this.erasureRequests.set(
-        await this.dataPrivacyApi.erasureWorklist(tenantId, status === 'ALL' ? undefined : status),
+      const status = this.statusFilter();
+      const kind = this.kindFilter();
+      this.requests.set(
+        await this.dataPrivacyApi.privacyWorklist(tenantId, {
+          kind: kind === 'ALL' ? undefined : kind,
+          status: status === 'ALL' ? undefined : status,
+        }),
       );
-      this.erasureState.set('ready');
+      this.requestsState.set('ready');
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
-        this.erasureState.set('denied');
+        this.requestsState.set('denied');
       } else {
-        this.erasureErrorText.set(this.describe(error));
-        this.erasureState.set('error');
+        this.requestsErrorText.set(this.describe(error));
+        this.requestsState.set('error');
       }
     }
   }
 
-  protected setErasureStatusFilter(value: string): void {
-    this.erasureStatusFilter.set(value as ErasureStatusFilter);
+  protected setStatusFilter(value: string): void {
+    this.statusFilter.set(value as StatusFilter);
+    this.reloadRequests();
+  }
+
+  protected setKindFilter(value: string): void {
+    this.kindFilter.set(value as KindFilter);
+    this.reloadRequests();
+  }
+
+  protected retryRequests(): void {
+    this.reloadRequests();
+  }
+
+  private reloadRequests(): void {
     const tenantId = this.tenant.tenantId();
     if (tenantId) {
-      void this.loadErasureWorklist(tenantId);
+      void this.loadRequests(tenantId);
     }
   }
 
-  protected retryErasureWorklist(): void {
-    const tenantId = this.tenant.tenantId();
-    if (tenantId) {
-      void this.loadErasureWorklist(tenantId);
-    }
-  }
-
-  protected erasureStatusLabelKey(status: TenantErasureRequest['status']): MessageKey {
+  protected requestStatusLabelKey(status: PrivacyRequestStatus): MessageKey {
     switch (status) {
       case 'PENDING':
-        return 'settings.dataPrivacy.erasure.status.pending';
+        return 'settings.dataPrivacy.requests.status.pending';
       case 'COMPLETED':
-        return 'settings.dataPrivacy.erasure.status.completed';
+        return 'settings.dataPrivacy.requests.status.completed';
       case 'CANCELLED':
-        return 'settings.dataPrivacy.erasure.status.cancelled';
+        return 'settings.dataPrivacy.requests.status.cancelled';
+    }
+  }
+
+  protected requestKindLabelKey(kind: PrivacyRequestKind): MessageKey {
+    switch (kind) {
+      case 'ERASURE':
+        return 'settings.dataPrivacy.requests.kind.erasure';
+      case 'EXPORT':
+        return 'settings.dataPrivacy.requests.kind.export';
+      case 'CORRECTION':
+        return 'settings.dataPrivacy.requests.kind.correction';
+    }
+  }
+
+  protected requestViaLabelKey(via: PrivacyRequest['requestedVia']): MessageKey {
+    return via === 'STOREFRONT'
+      ? 'settings.dataPrivacy.requests.via.storefront'
+      : 'settings.dataPrivacy.requests.via.operations';
+  }
+
+  /** What a line adds to its kind: the day an export is owed by, or what a correction amended. */
+  protected requestDetail(request: PrivacyRequest): string {
+    if (request.kind === 'CORRECTION' && request.subject) {
+      return this.i18n.t(this.correctionSubjectKey(request.subject));
+    }
+    if (request.kind === 'EXPORT' && request.dueAt) {
+      return this.i18n.t('settings.dataPrivacy.requests.dueBy', {
+        date: request.dueAt.slice(0, 10),
+      });
+    }
+    return '—';
+  }
+
+  private correctionSubjectKey(subject: string): MessageKey {
+    switch (subject) {
+      case 'DISPLAY_NAME':
+        return 'settings.dataPrivacy.requests.subject.DISPLAY_NAME';
+      case 'DATE_OF_BIRTH':
+        return 'settings.dataPrivacy.requests.subject.DATE_OF_BIRTH';
+      case 'CONTACT_POINT':
+        return 'settings.dataPrivacy.requests.subject.CONTACT_POINT';
+      default:
+        return 'settings.dataPrivacy.requests.subject.ADDRESS';
     }
   }
 
@@ -316,7 +399,13 @@ export class DataPrivacyPage {
   private async loadConsentTypes(tenantId: string): Promise<void> {
     this.consentState.set('loading');
     try {
-      this.consentTypes.set(await this.dataPrivacyApi.consentTypes(tenantId));
+      const [types, localeSet] = await Promise.all([
+        this.dataPrivacyApi.consentTypes(tenantId),
+        // The menu only picks a fallback order; without it a purpose still reads in the console's language or any it has.
+        this.dataPrivacyApi.consentLocaleSet(tenantId).catch(() => null),
+      ]);
+      this.consentLocaleSet.set(localeSet);
+      this.consentTypes.set(types);
       this.consentState.set('ready');
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
@@ -335,15 +424,15 @@ export class DataPrivacyPage {
     }
   }
 
+  /**
+   * The purpose's name in the console's language, else the tenant's default, else the tenant's other languages in order,
+   * else any wording it has: never an empty cell because one language is missing, and never a switch over three fixed
+   * columns that cannot show a fourth language (ADR 0149).
+   */
   protected consentLabel(type: ConsentType): string {
-    switch (this.i18n.locale()) {
-      case 'ru':
-        return type.labelRu;
-      case 'uz-Latn':
-        return type.labelUz;
-      default:
-        return type.labelEn;
-    }
+    const set = this.consentLocaleSet();
+    const fallbacks = set ? [set.defaultLocale, ...set.locales] : [];
+    return pickLabel(type.labels, this.i18n.locale(), fallbacks) || type.code;
   }
 
   // -------------------------------------------------------------- egress

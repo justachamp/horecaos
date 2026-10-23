@@ -1227,14 +1227,54 @@ reference, and a small request queue. Tier 3.
 
 | Item | Source |
 |---|---|
-| Сроки хранения: брошенные корзины, локация курьера, записи кандидатов | ADR 0029 — **not built** |
-| Определения состояний согласия | ADR 0015 consent model — partially built (`customer.*`) |
-| Запросы на выгрузку и удаление (DSAR) | ADR 0029 — **not built** |
-| Аудит выгрузок PII | `audit.audit_events` where `action_code` is an export and `audit_class='SECURITY'` — the table exists (V0007) |
+| Сроки хранения: брошенные корзины, локация курьера, неподтверждённые кандидаты-курьеры | **built (ADR 0109, batch 21):** three tenant-visible ADR 0030 keys (`ordering.cart_retention_days`, `courier.applicant_retention_months`, `telemetry.track_retention_days`) written through the generic configuration write. Beside each field the card shows what the platform does with the value, asked of the job that deletes (`GET /api/v1/operations/tenants/{tenantId}/retention-windows`, `RetentionWindowController`, capability `TENANT_CONFIGURATION_READ`): the tenant's own value, the **effective** window, the **platform floor**, whether the window is the tenant's alone or shared, and whether the number is still provisional. Carts and unverified applicants are swept **per tenant** on the tenant's own window, so a shorter value is honoured down to the floor (a day for carts, a month for applicants). Courier tracks live in shared daily partitions, so a shorter tenant value cannot shorten what other tenants keep; the card says so, and the floor is the legal one (settlement period plus dispute window). *Candidate records* stay not-applicable: HorecaOS deliberately has no recruitment ATS |
+| Определения состояний согласия | **built:** `customer.consent_types`, a tenant-wide catalogue worded per language in `customer.consent_type_translations` (V0683) over the languages the tenant's brands offer, read in the console's language, then the tenant's default, then any. A reference catalogue: the card does not author purposes. `ConsentService.record` still accepts any purpose; a flag that defaults off (`HORECAOS_CUSTOMERS_CONSENT_PURPOSE_CHECK=REPORT_ONLY`) counts and logs, without the purpose, a decision recorded under an unregistered one, until legal answers which basis each purpose rests on |
+| Запросы на выгрузку и удаление (DSAR) | **built (ADR 0029, batch 21):** the tenant-wide worklist lists three kinds beside one another, erasure, a copy of her data and a correction, with the day a copy is owed by (`GET /api/v1/tenants/{tenantId}/customers/privacy-requests`, capability `CUSTOMER_ERASURE_RAISE`). Each is raised and worked on the customer's own record (the customers pane, tab *Copy & corrections*, and the erasure section beside it), and by the customer herself on the storefront (Profile → My data). See the lifecycle below |
+| Аудит выгрузок PII | **built:** `audit.audit_events` rows whose action is registered in `PiiEgressActions` (the backend list of every code that is personal data leaving: reveals, exports, the data-subject copy and each link to it), asked of `AuditController.operationsSearch` with `piiEgress=true`. A build test (`PiiEgressRegistryTests`) requires every audit code in the code shaped like a reveal, an export or a disclosure to be registered or excused with a reason, so the merchant's egress log cannot silently omit a new one |
 
 The one thing worth building early even in a thin form: **an export from any screen in the console
 is an audited PII egress event**, and the merchant should be able to see their own egress log. The
 audit table already supports it (`actor_display`, `capability_used`, `evidence_reference`).
+
+**Built (batch 21, wave w10-privacy): the data-subject request lifecycles.** Three requests, one
+worklist, each on the customer's record.
+
+- **Erasure** (since V0178, completed here). Raise, execute under the tighter capability, cancel. An
+  executed erasure reaches **every module's copy** of the customer through
+  `customers.spi.CustomerErasureParticipant` (ordering snapshots and recipients, loyalty, marketing,
+  referral, pricing grants, notifications, conversations, assistant transcripts, voice, reviews,
+  dine-in, Telegram bindings) and stores the **per-module row counts as its proof**
+  (`GET .../erasure-requests/{id}/proof`, V0681), which the pane shows. A build test
+  (`ErasureInventoryTests`) requires every table carrying a customer key or a PERSONAL column to
+  have a participant or a named exemption, so the next module that stores a phone number cannot
+  escape. Financial history survives, anonymised. The erasure is **refused** while the customer has an
+  open order, an open service-recovery case (the platform's only record of a dispute) or a **legal
+  hold** (`customer.legal_holds`, V0682), which a second person must approve both to place and to lift
+  (ADR 0027) and which also keeps the retention jobs away from her.
+- **A copy of her data** (`customer.export_requests`, V0684). Raised by the customer on the storefront
+  (`POST /api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/export-request`) or by staff for her (`customer.manage`); produced by a
+  person who holds `customer.pii.export`, with a purpose they state and, where the tenant published
+  a policy for the action, a second person's approval (ADR 0027). Each module contributes through
+  `customers.spi.CustomerExportParticipant`; the result is **one JSON document** in object storage,
+  a section per module, values decrypted under the declared purpose with the audit fact written
+  before the first decrypt, a manifest of counts, and a cover note whose wording and response
+  deadline are ADR 0030 keys (provisional until legal confirms; the file says `PROVISIONAL` or
+  `AUTHORED`). The download is a link that lives five minutes and is itself an audit fact; the file
+  is removed after `customers.dsar_bundle_retention_days` (default 7) or at once on erasure. Asking
+  twice returns the first request; producing twice writes one file and one fact. The request, the
+  manifest and the audit facts carry counts and codes, never a value (ADR 0029).
+- **A correction** (`customer.profile_corrections`, V0684). Staff amend the display name, date of
+  birth, a contact point or an address against an **evidence reference** (a ticket or document
+  number, never prose). The prior value is kept encrypted, bound to its own row, and is returned
+  only inside a data-subject export.
+
+What stays open is legal's, not the build's: the retention periods and the lawful basis per purpose,
+the wording and deadline of the cover note, whether a data subject is entitled to the tenant's
+internal notes about her, and what happens to a remaining loyalty balance on erasure. A production
+start is refused (`ProvisionalRetentionGuard`) while any retention value or the cover note is
+unconfirmed; the steps to confirm are in `docs/runbooks/external-connections/w10-privacy.md`.
+Key rotation, re-encryption and masked projections are ADR 0029's other items and are not part of
+this screen.
 
 ---
 

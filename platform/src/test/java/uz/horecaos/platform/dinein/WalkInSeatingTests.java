@@ -42,6 +42,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.customers.spi.CustomerErasureParticipant;
 import uz.horecaos.platform.dinein.application.ClaimLifecycleService;
 import uz.horecaos.platform.dinein.application.ClaimMetrics;
 import uz.horecaos.platform.dinein.application.DineInErasureParticipant;
@@ -1262,8 +1263,9 @@ class WalkInSeatingTests {
                 status -> sessions.addRound(TENANT, confirmed.session().id(), order, account, "guest:t", "Placed"));
         Seating lapsing = seat(tableTwo, account, 2);
 
-        transactions.executeWithoutResult(
-                status -> new DineInErasureParticipant(store, sessions).erase(TENANT, account));
+        transactions.executeWithoutResult(status -> new DineInErasureParticipant(
+                        store, sessions, uz.horecaos.platform.support.TestProtection.envelope())
+                .erase(TENANT, account, CustomerErasureParticipant.ErasedContacts.none()));
 
         assertThat(store.findSession(TENANT, lapsing.session().id())
                         .orElseThrow()
@@ -1297,8 +1299,9 @@ class WalkInSeatingTests {
                 .isEqualTo(SessionOrigin.GUEST_QR);
 
         // Idempotent under retry.
-        transactions.executeWithoutResult(
-                status -> new DineInErasureParticipant(store, sessions).erase(TENANT, account));
+        transactions.executeWithoutResult(status -> new DineInErasureParticipant(
+                        store, sessions, uz.horecaos.platform.support.TestProtection.envelope())
+                .erase(TENANT, account, CustomerErasureParticipant.ErasedContacts.none()));
     }
 
     // -------------------------------------------------------------- vocabulary

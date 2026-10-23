@@ -13,6 +13,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import uz.horecaos.platform.ordering.api.OrderingConfigurationKeys;
 import uz.horecaos.platform.ordering.domain.CartStatus;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.web.api.Quantities;
@@ -1027,39 +1028,70 @@ public class JdbcCartStore {
     }
 
     /**
-     * Deletes carts that never became an order and have not been touched since
-     * {@code cutoff} (ADR 0092, decided 2026-09-11), their lines and
-     * destination with them through the cascades V0022 and V0056 declare.
+     * Deletes carts that never became an order and have not been touched for their own tenant's retention window (ADR 0092,
+     * decided 2026-09-11; per tenant since batch 21), their lines and destination with them through the cascades V0022 and
+     * V0056 declare.
      *
-     * <p>A cart an order names is kept whatever its status says: it is that
-     * order's history, and {@code fk_order_cart} would refuse the delete
-     * anyway. A converted cart is never even read. Batch-limited and
-     * lock-skipping, so two replicas split the work instead of queueing on it;
-     * the application role holds UPDATE on this table, which the lock needs.
+     * <p>The window is read per tenant in the statement itself ({@code TenantRetention.WINDOWS_SQL}): the tenant's own value,
+     * else the platform's, else {@code defaultDays}, raised to {@code floorDays}. A tenant that asked for thirty days has its
+     * carts swept at thirty, and the tenant beside it that asked for nothing keeps ninety. Before this a single cutoff
+     * served every tenant, so a shorter value was silently ignored (ADR 0109's negative consequence).
+     *
+     * <p>A cart an order names is kept whatever its status says: it is that order's history, and {@code fk_order_cart} would
+     * refuse the delete anyway. A cart whose customer is under a legal hold is kept too (ADR 0029). Batch-limited and
+     * lock-skipping, so two replicas split the work instead of queueing on it; the application role holds UPDATE on this
+     * table, which the lock needs.
      *
      * @return how many carts were deleted -- a count, never which or whose
      */
-    public int deleteAbandoned(Instant cutoff, int batchSize) {
-        return jdbc.sql("""
-                WITH doomed AS (
-                    SELECT c.id, c.tenant_id
-                      FROM ordering.carts c
-                     WHERE c.status <> 'CONVERTED'
-                       AND c.updated_at < :cutoff
-                       AND c.expires_at < :cutoff
-                       AND NOT EXISTS (
-                           SELECT 1 FROM ordering.orders o
-                            WHERE o.tenant_id = c.tenant_id AND o.cart_id = c.id)
-                     ORDER BY c.updated_at
-                     LIMIT :batchSize
-                     FOR UPDATE OF c SKIP LOCKED
+    public int deleteAbandoned(Instant now, int batchSize, int defaultDays, int floorDays) {
+        return jdbc.sql(abandonedStatement(true))
+                .param("now", java.time.OffsetDateTime.ofInstant(now, java.time.ZoneOffset.UTC))
+                .param("batchSize", batchSize)
+                .param("keyCode", OrderingConfigurationKeys.CART_RETENTION_DAYS_CODE)
+                .param("defaultValue", defaultDays)
+                .param("floor", floorDays)
+                .update();
+    }
+
+    /** What {@link #deleteAbandoned} would delete right now, for the report-only mode ADR 0029 asks destructive jobs to start in. */
+    public int countAbandoned(Instant now, int defaultDays, int floorDays) {
+        return jdbc.sql(abandonedStatement(false))
+                .param("now", java.time.OffsetDateTime.ofInstant(now, java.time.ZoneOffset.UTC))
+                .param("keyCode", OrderingConfigurationKeys.CART_RETENTION_DAYS_CODE)
+                .param("defaultValue", defaultDays)
+                .param("floor", floorDays)
+                .query(Integer.class)
+                .single();
+    }
+
+    private static String abandonedStatement(boolean delete) {
+        String candidates = """
+                SELECT c.id, c.tenant_id
+                  FROM ordering.carts c
+                  JOIN windows w ON w.tenant_id = c.tenant_id
+                 WHERE c.status <> 'CONVERTED'
+                   AND c.updated_at < CAST(:now AS timestamptz) - (w.value * INTERVAL '1 day')
+                   AND c.expires_at < CAST(:now AS timestamptz) - (w.value * INTERVAL '1 day')
+                   AND NOT EXISTS (
+                       SELECT 1 FROM ordering.orders o
+                        WHERE o.tenant_id = c.tenant_id AND o.cart_id = c.id)
+                   AND %s
+                """.formatted(
+                        uz.horecaos.platform.customers.api.LegalHolds.notHeld("c.tenant_id", "c.customer_account_id"));
+        if (!delete) {
+            return "WITH windows AS (" + uz.horecaos.platform.configuration.TenantRetention.WINDOWS_SQL
+                    + "), doomed AS (" + candidates + ") SELECT count(*) FROM doomed";
+        }
+        return "WITH windows AS (" + uz.horecaos.platform.configuration.TenantRetention.WINDOWS_SQL + "), doomed AS ("
+                + candidates + """
+                 ORDER BY c.updated_at
+                 LIMIT :batchSize
+                 FOR UPDATE OF c SKIP LOCKED
                 )
                 DELETE FROM ordering.carts c
                  USING doomed
                  WHERE c.id = doomed.id AND c.tenant_id = doomed.tenant_id
-                """)
-                .param("cutoff", java.time.OffsetDateTime.ofInstant(cutoff, java.time.ZoneOffset.UTC))
-                .param("batchSize", batchSize)
-                .update();
+                """;
     }
 }

@@ -96,6 +96,12 @@ public class CustomerMetricProjectionService {
         return metrics.erase(tenantId, accountId);
     }
 
+    /** ADR 0029 erasure: the drift observations that quote her metrics. Counts left alone, as {@link #erase} does. */
+    @Transactional
+    public int eraseDriftObservations(UUID tenantId, UUID accountId) {
+        return metrics.eraseDriftObservations(tenantId, accountId);
+    }
+
     /** What one sweep did, and what it refused to fix. */
     public record SweepResult(int rowsRecomputed, int driftObservations) {}
 }

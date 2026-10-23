@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -171,6 +172,10 @@ class StorefrontCustomerSurfaceTests {
                 .update();
         jdbc.sql("DELETE FROM pricing.quotes WHERE tenant_id = :t")
                 .param("t", SHARED_TENANT)
+                .update();
+        jdbc.sql("DELETE FROM customer.export_requests WHERE tenant_id IN (:a, :b)")
+                .param("a", SHARED_TENANT)
+                .param("b", ISOLATED_TENANT)
                 .update();
         jdbc.sql("DELETE FROM customer.addresses WHERE tenant_id IN (:a, :b)")
                 .param("a", SHARED_TENANT)
@@ -1080,6 +1085,135 @@ class StorefrontCustomerSurfaceTests {
                 .param("id", accountId)
                 .query(String.class)
                 .single();
+    }
+
+    // ------------------------------------------------------------ a copy of my data
+
+    @Test
+    @DisplayName(
+            "a customer asks for a copy of her data, sees where it stands and the date she is owed it by, and may withdraw")
+    void aCustomerAsksForACopyOfHerData() throws Exception {
+        String path = me(SHARED_TENANT, BRAND) + "/export-request";
+        assertThat(mvc.perform(get(path).with(token(OWNER)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .as("nothing asked yet")
+                .isEqualTo(204);
+
+        MvcResult asked = mvc.perform(post(path).with(token(OWNER)).header("Idempotency-Key", "ask-copy-1"))
+                .andReturn();
+        assertThat(asked.getResponse().getStatus()).isEqualTo(201);
+        JsonNode request = json(asked);
+        assertThat(request.path("status").asText()).isEqualTo("PENDING");
+        assertThat(request.path("responseDueAt").asText()).isNotBlank();
+        assertThat(request.path("bundleAvailable").asBoolean()).isFalse();
+        assertThat(asked.getResponse().getContentAsString())
+                .as("no operator, no manifest, no object key: where it stands and when, nothing more")
+                .doesNotContain("producedBy")
+                .doesNotContain("manifest")
+                .doesNotContain("bundleKey");
+
+        MvcResult again = mvc.perform(post(path).with(token(OWNER)).header("Idempotency-Key", "ask-copy-2"))
+                .andReturn();
+        assertThat(json(again).path("id").asText())
+                .as("asking again while one waits is the same request")
+                .isEqualTo(request.path("id").asText());
+
+        assertThat(json(mvc.perform(get(path).with(token(OWNER))).andReturn())
+                        .path("id")
+                        .asText())
+                .isEqualTo(request.path("id").asText());
+        assertThat(mvc.perform(get(path).with(token(STRANGER)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .as("another customer has asked for nothing")
+                .isEqualTo(204);
+        assertThat(mvc.perform(get(path + "/bundle").with(token(OWNER)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .as("nothing has been produced for her to read")
+                .isEqualTo(404);
+
+        MvcResult withdrawn = mvc.perform(
+                        post(path + "/cancel").with(token(OWNER)).header("Idempotency-Key", "withdraw-copy-1"))
+                .andReturn();
+        assertThat(withdrawn.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json(withdrawn).path("status").asText()).isEqualTo("CANCELLED");
+    }
+
+    @Test
+    @DisplayName("a caller with no account here is told there is nothing, and a stranger cannot read her bundle")
+    void aGuestAndAStrangerGetNothing() throws Exception {
+        String path = me(SHARED_TENANT, BRAND) + "/export-request";
+        assertThat(statusOf(post(path).with(token(NO_ACCOUNT)).header("Idempotency-Key", "guest-ask")))
+                .isEqualTo(404);
+        assertThat(statusOf(get(path + "/bundle").with(token(NO_ACCOUNT)))).isEqualTo(404);
+
+        seedProducedExport(ownerAccount);
+        assertThat(statusOf(get(path + "/bundle").with(token(STRANGER))))
+                .as("her bundle is not reachable from another customer's token")
+                .isEqualTo(404);
+    }
+
+    @Test
+    @DisplayName("once staff have produced the bundle she is given a link, and the read is recorded against her")
+    void onceProducedSheIsGivenALink() throws Exception {
+        UUID request = seedProducedExport(ownerAccount);
+        String path = me(SHARED_TENANT, BRAND) + "/export-request";
+
+        MvcResult status = mvc.perform(get(path).with(token(OWNER))).andReturn();
+        assertThat(json(status).path("bundleAvailable").asBoolean()).isTrue();
+        assertThat(json(status).path("id").asText()).isEqualTo(request.toString());
+
+        MvcResult link = mvc.perform(get(path + "/bundle").with(token(OWNER))).andReturn();
+        assertThat(link.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json(link).path("url").asText()).contains("dsar-exports").contains(request.toString());
+
+        assertThat(jdbc.sql("""
+                                SELECT reason FROM audit.audit_events
+                                 WHERE action_code = 'customer.dsar.bundle_revealed' AND target_id = :account
+                                """)
+                        .param("account", ownerAccount)
+                        .query(String.class)
+                        .list())
+                .as("the read is an audit fact against her, with the purpose that says she read her own")
+                .containsExactly("CUSTOMER_SELF_SERVICE");
+
+        MvcResult cancel = mvc.perform(
+                        post(path + "/cancel").with(token(OWNER)).header("Idempotency-Key", "cancel-produced"))
+                .andReturn();
+        assertThat(cancel.getResponse().getStatus())
+                .as("a request already produced cannot be withdrawn")
+                .isEqualTo(422);
+    }
+
+    /** A produced export for the account, as {@code CustomerExportService.produce} leaves it. */
+    private UUID seedProducedExport(UUID accountId) {
+        UUID request = UUID.randomUUID();
+        Instant now = Instant.now();
+        jdbc.sql("""
+                INSERT INTO customer.export_requests (id, tenant_id, customer_account_id, status, requested_via,
+                    requested_by_actor_type, requested_by_actor_id, requested_at, response_due_at, produced_at,
+                    produced_by_actor_type, produced_by_actor_id, bundle_bucket, bundle_key, bundle_sha256,
+                    bundle_bytes, manifest, bundle_expires_at)
+                VALUES (:id, :tenant, :account, 'COMPLETED', 'STOREFRONT', 'SERVICE', 'storefront-export-request',
+                        :asked, :due, :produced, 'USER', 'owner-1', 'horecaos-media', :key, :hash, 100,
+                        '{"sections":[],"withheld":[]}'::jsonb, :expires)
+                """)
+                .param("id", request)
+                .param("tenant", SHARED_TENANT)
+                .param("account", accountId)
+                .param("asked", now.minusSeconds(3_600).atOffset(ZoneOffset.UTC))
+                .param("due", now.plusSeconds(86_400).atOffset(ZoneOffset.UTC))
+                .param("produced", now.minusSeconds(60).atOffset(ZoneOffset.UTC))
+                .param("key", "tenants/" + SHARED_TENANT + "/dsar-exports/" + request + ".json")
+                .param("hash", "f".repeat(64))
+                .param("expires", now.plusSeconds(86_400).atOffset(ZoneOffset.UTC))
+                .update();
+        return request;
     }
 
     private String displayNameOf(UUID accountId) {

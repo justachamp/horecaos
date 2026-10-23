@@ -99,7 +99,8 @@ public class AssistantTurnService implements ConversationParticipant {
 
     private static final Logger log = LoggerFactory.getLogger(AssistantTurnService.class);
 
-    private static final String CUSTOMER_PSEUDONYM_DOMAIN = "assistant.customer";
+    /** The lookup domain of the customer pseudonym; the erasure participant recomputes the hash with it. */
+    static final String CUSTOMER_PSEUDONYM_DOMAIN = "assistant.customer";
 
     /** Characters of any one earlier or current message the model is shown. */
     static final int MAX_TURN_CHARACTERS = 600;

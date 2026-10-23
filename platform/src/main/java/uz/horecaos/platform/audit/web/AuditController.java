@@ -91,7 +91,8 @@ public class AuditController {
                 from,
                 to,
                 limit,
-                cursor);
+                cursor,
+                false);
     }
 
     @GetMapping("/control-plane/tenants/{tenantId}/audit-events/{eventId}")
@@ -127,8 +128,13 @@ public class AuditController {
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
             @RequestParam(required = false) Integer limit,
-            @RequestParam(required = false) @Schema(description = "The nextCursor of the previous page")
-                    String cursor) {
+            @RequestParam(required = false) @Schema(description = "The nextCursor of the previous page") String cursor,
+            @RequestParam(required = false)
+                    @Schema(
+                            description = "true: only the actions the platform registers as personal data leaving "
+                                    + "(a reveal of a protected value, an export). Settings 10.11's egress log "
+                                    + "reads this instead of keeping its own list of codes.")
+                    Boolean piiEgress) {
         return searchAndRecord(
                 tenantId,
                 actorSubject,
@@ -142,7 +148,8 @@ public class AuditController {
                 from,
                 to,
                 limit,
-                cursor);
+                cursor,
+                Boolean.TRUE.equals(piiEgress));
     }
 
     @GetMapping("/operations/tenants/{tenantId}/audit-events/{eventId}")
@@ -166,7 +173,8 @@ public class AuditController {
             Instant from,
             Instant to,
             Integer limit,
-            String cursor) {
+            String cursor,
+            boolean piiEgress) {
 
         int pageSize = AuditQueryService.boundedLimit(limit);
         List<AuditQueryService.AuditEventView> events = audits.search(new AuditQueryService.AuditQuery(
@@ -182,7 +190,8 @@ public class AuditController {
                 from,
                 to,
                 pageSize,
-                cursor));
+                cursor,
+                piiEgress));
 
         recordTheRead(tenantId, events.size(), actorSubject, actionCode);
 

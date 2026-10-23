@@ -4,75 +4,47 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * The seam another module's own erasure operation is called through (ADR 0029,
- * ADR 0044).
+ * The seam another module's own erasure operation is called through (ADR 0029, ADR 0044).
  *
- * <p>Customers owns the account and the request that governs erasure, but it
- * does not own every table that carries a copy of a customer's identity or
- * their behaviour. ADR 0044 names two such operations directly —
- * {@code CustomerMetricProjectionService.erase} and
- * {@code JdbcAudienceStore.eraseMembership} in {@code marketing} — and records
- * that they "exist and are tested" but that "nothing in the platform ever
- * produces the fact a sweep would consume". This interface is that missing
- * production point on the customers side: {@code CustomerErasureService}
- * calls every registered participant, in the same transaction as its own
- * anonymisation, whenever a request is executed.
+ * <p>Customers owns the account and the request that governs erasure, but it does not own every table that
+ * carries a copy of a customer's identity or their behaviour. {@code CustomerErasureService} calls every
+ * registered participant, in the same transaction as its own anonymisation, whenever a request is executed, and
+ * stores what each one reports as the request's proof.
  *
- * <p><strong>Customers depends on nothing here; other modules depend on this.</strong>
- * A module that keeps a copy of customer identity or behaviour — {@code
- * marketing}'s projection and audience snapshots are the first candidates —
- * registers a bean implementing this interface. Customers never imports
- * {@code marketing}, which would invert the module boundary ADR 0044 itself
- * draws ("marketing consumes customer.api"); marketing instead provides an
- * adapter that customers discovers by type, the same direction {@code
- * customers.spi.VerificationCodeTransport} already uses for the SMS adapter
- * customers does not own.
+ * <p><strong>Customers depends on nothing here; other modules depend on this.</strong> A module that keeps a
+ * copy of customer identity or behaviour registers a bean implementing this interface and carrying {@link
+ * ErasesCustomerData}. Customers never imports {@code marketing}, {@code loyalty} or {@code ordering}, which would
+ * invert the module boundary; it discovers the adapters by type, the same direction {@code
+ * customers.spi.VerificationCodeTransport} already uses for the SMS adapter customers does not own.
  *
- * <p><strong>No implementation ships with this wave.</strong> Wiring {@code
- * marketing}'s two operations to this interface is that module's own file to
- * touch, deliberately left to the wave that owns it. Until one exists, {@code
- * CustomerErasureService} collects an empty {@code List<CustomerErasureParticipant>} —
- * Spring supplies an empty list rather than failing when no bean implements an
- * interface collected this way, so an erasure with zero participants registered
- * completes exactly as it does today: it erases what {@code customers} itself
- * owns and calls nothing further. That is a known, visible gap rather than a
- * silent one — see this record's own ADR 0029/ADR 0044 status update.
+ * <p><strong>The inventory is a build failure, not a convention.</strong> {@code ErasureInventoryTests} reads
+ * the database catalog for every table that carries a customer id or a PERSONAL-class column and requires each to
+ * be named by a participant's {@link ErasesCustomerData} or by an exemption with a reason. A module that adds a
+ * table holding a phone number cannot merge without saying who erases it.
  *
- * <p>Every participant is called inside the same database transaction as the
- * request's own transition to {@code COMPLETED}, so a participant that throws
- * rolls the whole execution back rather than leaving the account anonymised
- * while a projection row survives it.
+ * <p>Every participant is called inside the same database transaction as the request's own transition to {@code
+ * COMPLETED}, so a participant that throws rolls the whole execution back rather than leaving the account
+ * anonymised while a projection row survives it.
  */
 public interface CustomerErasureParticipant {
 
     /**
-     * Erases or anonymises whatever this participant's own module holds for one
-     * customer.
+     * Erases or anonymises whatever this participant's own module holds for one customer, and reports how many
+     * rows it changed per table.
      *
-     * <p>Never called outside a transaction already bound to {@code tenantId}.
-     * Implementations should be idempotent under retry, the same way {@code
-     * CustomerErasureService} itself is: an execution that failed after some
-     * participants ran and is retried will call every participant again.
+     * <p>Never called outside a transaction already bound to {@code tenantId}. Implementations are idempotent
+     * under retry, the same way {@code CustomerErasureService} itself is: an execution that failed after some
+     * participants ran and is retried calls every participant again.
+     *
+     * @param held what the account held that identifies her in another module's rows, read <em>before</em> the
+     *             account's own contact points were overwritten, because afterwards no number is left to match on
      */
-    void erase(UUID tenantId, UUID customerAccountId);
+    ErasureCounts erase(UUID tenantId, UUID customerAccountId, ErasedContacts held);
 
     /**
-     * As {@link #erase(UUID, UUID)}, and told what the account held that identifies her in
-     * another module's rows -- read <em>before</em> the account's own contact points were
-     * overwritten, because afterwards no number is left to match on.
-     *
-     * <p>The default ignores {@code held}, so a participant that reaches its rows by the
-     * account id alone implements only the two-argument method. {@code CustomerErasureService}
-     * always calls this one.
-     */
-    default void erase(UUID tenantId, UUID customerAccountId, ErasedContacts held) {
-        erase(tenantId, customerAccountId);
-    }
-
-    /**
-     * The keyed lookup hashes (ADR 0029) of the phone numbers an erased account held, as they were
-     * when the erasure began. A hash, never a number: a participant can find its own rows that hold
-     * the same number without the number leaving {@code customers}.
+     * The keyed lookup hashes (ADR 0029) of the phone numbers an erased account held, as they were when the
+     * erasure began. A hash, never a number: a participant can find its own rows that hold the same number
+     * without the number leaving {@code customers}.
      */
     record ErasedContacts(Set<String> phoneLookupHashes) {
 

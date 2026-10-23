@@ -246,6 +246,28 @@ public class JdbcLoyaltyStore {
                 .update();
     }
 
+    /**
+     * ADR 0029 erasure: stops the points accounts of an erased customer from being redeemed.
+     *
+     * <p>{@code SUSPENDED}, not {@code CLOSED}: closure forfeits the remaining balance with a ledger entry, which
+     * is a decision about what happens to the customer's points that erasure does not make. Suspension moves no
+     * points and no money, keeps the ledger whole, and can be undone; it leaves the balance to whoever the tenant
+     * decides it belongs to. An account already {@code CLOSED} is left as it is.
+     *
+     * @return how many accounts were suspended
+     */
+    public int suspendAccountsOfCustomer(UUID tenantId, UUID customerAccountId, Instant now) {
+        return jdbc.sql("""
+                UPDATE loyalty.accounts
+                   SET status = 'SUSPENDED', version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND customer_account_id = :customerAccountId AND status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("customerAccountId", customerAccountId)
+                .param("now", utc(now))
+                .update();
+    }
+
     public void setAccountStatus(UUID tenantId, UUID accountId, AccountStatus status, Instant now) {
         jdbc.sql("""
                 UPDATE loyalty.accounts

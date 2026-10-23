@@ -1206,7 +1206,7 @@ export const settingsEn = {
     'HorecaOS has no recruitment or candidate data model — there is nothing here to retain.',
   'settings.dataPrivacy.retention.status.notApplicable': 'Not applicable',
   'settings.dataPrivacy.retention.lead':
-    'Set how long each kind of data is kept. Every value below can only ever be raised for the whole platform by a shorter one you set — the sweep never deletes another tenant’s data early.',
+    'Set how long each kind of data is kept. Under each value the card shows what the platform actually does with it for your company: the window the schedule uses now, and the platform floor a value below it is raised to. Abandoned carts and unverified courier applicants are cleared on your own window; courier location history is shared by every company, so it is cleared on the longest window any of them needs.',
   'settings.dataPrivacy.retention.column.value': 'Current value',
   'settings.dataPrivacy.retention.column.enforcedBy': 'Enforced by',
   'settings.dataPrivacy.retention.unit.days': 'days',
@@ -1222,6 +1222,13 @@ export const settingsEn = {
   'settings.dataPrivacy.retention.invalidValue': 'Enter a whole number greater than zero',
   'settings.dataPrivacy.retention.staleVersion':
     'Somebody else changed this value first — the current value is shown; change it again if you still want to.',
+  'settings.dataPrivacy.retention.effective': 'In force for your company: {value} {unit}',
+  'settings.dataPrivacy.retention.floor':
+    'Platform floor: {value} {unit}. A lower value is raised to it.',
+  'settings.dataPrivacy.retention.scope.perTenant': 'Applies to your company only.',
+  'settings.dataPrivacy.retention.scope.allTenants':
+    'Shared with every company: courier history is stored in daily partitions that hold all of them, so a partition is dropped on the longest window any company needs. A shorter value here does not shorten it.',
+  'settings.dataPrivacy.retention.provisional': 'Provisional — awaiting legal confirmation',
   'settings.dataPrivacy.consent.title': 'Consent',
   'settings.dataPrivacy.consent.lead':
     'What a consent decision can record today, on a customer’s own account.',
@@ -1232,20 +1239,32 @@ export const settingsEn = {
   'settings.dataPrivacy.consent.channelSpecific.yes': 'Yes',
   'settings.dataPrivacy.consent.channelSpecific.no': 'No',
   'settings.dataPrivacy.requests.title': 'Data subject requests',
-  'settings.dataPrivacy.erasure.title': 'Erasure requests',
-  'settings.dataPrivacy.erasure.lead':
-    'Every data-subject erasure request across the whole tenant. Raise, execute, or cancel one from the customer’s own record.',
-  'settings.dataPrivacy.erasure.filter.label': 'Status',
-  'settings.dataPrivacy.erasure.filter.all': 'All',
-  'settings.dataPrivacy.erasure.status.pending': 'Pending',
-  'settings.dataPrivacy.erasure.status.completed': 'Completed',
-  'settings.dataPrivacy.erasure.status.cancelled': 'Cancelled',
-  'settings.dataPrivacy.erasure.column.status': 'Status',
-  'settings.dataPrivacy.erasure.column.customer': 'Customer account',
-  'settings.dataPrivacy.erasure.column.requestedVia': 'Requested via',
-  'settings.dataPrivacy.erasure.column.requestedAt': 'Requested at',
-  'settings.dataPrivacy.erasure.column.resolvedAt': 'Resolved at',
-  'settings.dataPrivacy.erasure.empty': 'No erasure request has been raised in this tenant.',
+  'settings.dataPrivacy.requests.lead':
+    'Every data-subject request across the whole tenant, whichever kind: erasure, a copy of her data, and corrections. Raise, produce, correct or execute one from the customer’s own record.',
+  'settings.dataPrivacy.requests.filter.kind': 'Kind',
+  'settings.dataPrivacy.requests.filter.status': 'Status',
+  'settings.dataPrivacy.requests.filter.all': 'All',
+  'settings.dataPrivacy.requests.kind.erasure': 'Erasure',
+  'settings.dataPrivacy.requests.kind.export': 'Copy of her data',
+  'settings.dataPrivacy.requests.kind.correction': 'Correction',
+  'settings.dataPrivacy.requests.status.pending': 'Pending',
+  'settings.dataPrivacy.requests.status.completed': 'Done',
+  'settings.dataPrivacy.requests.status.cancelled': 'Withdrawn',
+  'settings.dataPrivacy.requests.via.storefront': 'By the customer',
+  'settings.dataPrivacy.requests.via.operations': 'By staff',
+  'settings.dataPrivacy.requests.column.kind': 'Kind',
+  'settings.dataPrivacy.requests.column.status': 'Status',
+  'settings.dataPrivacy.requests.column.customer': 'Customer account',
+  'settings.dataPrivacy.requests.column.requestedVia': 'Requested via',
+  'settings.dataPrivacy.requests.column.requestedAt': 'Requested at',
+  'settings.dataPrivacy.requests.column.resolvedAt': 'Resolved at',
+  'settings.dataPrivacy.requests.column.detail': 'Detail',
+  'settings.dataPrivacy.requests.subject.DISPLAY_NAME': 'Name',
+  'settings.dataPrivacy.requests.subject.DATE_OF_BIRTH': 'Date of birth',
+  'settings.dataPrivacy.requests.subject.CONTACT_POINT': 'Contact',
+  'settings.dataPrivacy.requests.subject.ADDRESS': 'Address',
+  'settings.dataPrivacy.requests.dueBy': 'Owed by {date}',
+  'settings.dataPrivacy.requests.empty': 'No data-subject request has been raised in this tenant.',
   'settings.dataPrivacy.egress.title': 'Personal-data export & reveal log',
   'settings.dataPrivacy.egress.lead':
     'Every time someone on staff revealed or exported a customer’s personal data in the last 90 days, from the platform’s own audit trail.',
@@ -1260,6 +1279,9 @@ export const settingsEn = {
   'settings.dataPrivacy.egress.action.dateOfBirthRevealed': 'Revealed date of birth',
   'settings.dataPrivacy.egress.action.blacklistRevealed': 'Revealed a blacklist reason',
   'settings.dataPrivacy.egress.action.listExported': 'Exported a filtered customer list',
+  'settings.dataPrivacy.egress.action.dsarExported':
+    'Gathered a customer’s data into a copy for her',
+  'settings.dataPrivacy.egress.action.dsarBundleRevealed': 'Opened a customer’s data copy',
   'settings.dataPrivacy.egress.action.audienceExported': 'Exported a marketing audience',
   'settings.dataPrivacy.egress.action.lineNoteRevealed': 'Revealed a customer’s order note',
   'settings.dataPrivacy.egress.action.orderPhoneRevealed':
@@ -1407,6 +1429,27 @@ export const settingsEn = {
     "Move the pin to the branch's door: click the map, drag the pin or type the coordinates. The point is saved only if you moved it, and a branch's pin can be moved but not removed.",
   'settings.dataPrivacy.egress.action.orderMapPointsRevealed':
     "Opened the day's delivery points on a map",
+  'settings.dataPrivacy.egress.action.leadRevealed':
+    'Revealed a caller’s name or number from the call desk',
+  'settings.dataPrivacy.egress.action.redemptionCustomerRevealed':
+    'Revealed who redeemed a promotion',
+  'settings.dataPrivacy.egress.action.dropoffRevealed':
+    'Revealed the drop-off addresses of grouped orders',
+  'settings.dataPrivacy.egress.action.courierCustomerLocationRevealed':
+    'A courier was shown a customer’s location',
+  'settings.dataPrivacy.egress.action.fiscalEvidenceRevealed':
+    'Revealed the stored request or response of a fiscal receipt',
+  'settings.dataPrivacy.egress.action.reservationGuestRevealed':
+    'Revealed a booking guest’s name or number',
+  'settings.dataPrivacy.egress.action.callerNumberRevealed':
+    'Revealed a caller’s number on the call card',
+  'settings.dataPrivacy.egress.action.reportExported': 'Exported a report',
+  'settings.dataPrivacy.egress.action.courierTrackRevealed': 'Revealed a courier’s track',
+  'settings.dataPrivacy.egress.action.courierRegistrationRevealed':
+    'Revealed a courier’s registration reference',
+  'settings.dataPrivacy.egress.action.courierComplianceRevealed': 'Revealed a courier’s documents',
+  'settings.dataPrivacy.egress.action.invitationRecipientRevealed':
+    'Revealed who an invitation was sent to',
 
   // Chat assistant (ADR 0069).
   'settings.nav.assistant': 'Chat assistant',

@@ -379,4 +379,46 @@ public class JdbcVoiceStore {
     private static OffsetDateTime utc(Instant instant) {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
+
+    /** A call event that carries a caller number and was resolved to an account. */
+    public record CallerNumberRef(UUID id, boolean hasNumber) {}
+
+    /**
+     * ADR 0029 erasure: the call events the platform resolved to this customer.
+     *
+     * <p>The caller number is kept encrypted for the screen-pop and masked for the call list (V0146). Both are overwritten:
+     * the ciphertext with a tombstone, the masked form with a marker, and the link to the account is cut. The event itself
+     * (type, direction, line, duration, time, operator) stays: that a call was answered is the branch's record, who called
+     * is the caller's.
+     *
+     * @param tombstone the ciphertext to write for a given event
+     * @return how many events were overwritten
+     */
+    public int eraseCallerNumbersOf(
+            UUID tenantId, UUID customerAccountId, java.util.function.Function<UUID, String> tombstone) {
+        List<CallerNumberRef> events = jdbc.sql("""
+                SELECT id, caller_number_encrypted IS NOT NULL AS has_number
+                  FROM voice.call_events
+                 WHERE tenant_id = :tenantId AND resolved_customer_account_id = :accountId
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", customerAccountId)
+                .query((row, number) ->
+                        new CallerNumberRef(row.getObject("id", UUID.class), row.getBoolean("has_number")))
+                .list();
+        for (CallerNumberRef event : events) {
+            jdbc.sql("""
+                    UPDATE voice.call_events
+                       SET caller_number_encrypted = :encrypted,
+                           caller_number_masked = CASE WHEN caller_number_masked IS NULL THEN NULL ELSE '[erased]' END,
+                           resolved_customer_account_id = NULL
+                     WHERE tenant_id = :tenantId AND id = :id
+                    """)
+                    .param("encrypted", event.hasNumber() ? tombstone.apply(event.id()) : null)
+                    .param("tenantId", tenantId)
+                    .param("id", event.id())
+                    .update();
+        }
+        return events.size();
+    }
 }

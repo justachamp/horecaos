@@ -155,6 +155,25 @@ public class JdbcBenefitGrantStore {
                 == 1;
     }
 
+    /**
+     * ADR 0029 erasure: revokes the grants an erased customer still holds unredeemed. A grant is a personal offer
+     * (a discount code issued to this person); one nobody can use any more is revoked rather than left to be
+     * redeemed against an anonymous account. A redeemed grant is history and stays.
+     *
+     * @return how many grants were revoked
+     */
+    public int revokeActiveGrantsOfCustomer(UUID tenantId, UUID customerAccountId, java.time.Instant now) {
+        return jdbc.sql("""
+                UPDATE pricing.benefit_grants
+                   SET status = 'REVOKED', version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND customer_account_id = :customerAccountId AND status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("customerAccountId", customerAccountId)
+                .param("now", java.time.OffsetDateTime.ofInstant(now, java.time.ZoneOffset.UTC))
+                .update();
+    }
+
     private static @Nullable Instant instant(@Nullable OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }

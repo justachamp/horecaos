@@ -11,6 +11,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.customers.spi.CustomerErasureParticipant;
+import uz.horecaos.platform.customers.spi.ErasesCustomerData;
+import uz.horecaos.platform.customers.spi.ErasureCounts;
 import uz.horecaos.platform.reviews.api.ReviewCommentModerated;
 import uz.horecaos.platform.reviews.domain.CommentState;
 import uz.horecaos.platform.reviews.domain.ModerationReason;
@@ -37,6 +39,14 @@ import uz.horecaos.platform.reviews.infrastructure.persistence.JdbcReviewStore.E
  * implementations by type, and never imports {@code reviews}.
  */
 @Component
+@ErasesCustomerData(
+        name = "reviews",
+        tables = {
+            "reviews.order_reviews",
+            "reviews.review_publications",
+            "reviews.recovery_cases",
+            "reviews.recovery_case_events"
+        })
 public class ReviewsErasureParticipant implements CustomerErasureParticipant {
 
     private final JdbcReviewStore reviews;
@@ -66,11 +76,11 @@ public class ReviewsErasureParticipant implements CustomerErasureParticipant {
 
     @Override
     @Transactional
-    public void erase(UUID tenantId, UUID customerAccountId) {
+    public ErasureCounts erase(UUID tenantId, UUID customerAccountId, ErasedContacts held) {
         Instant now = clock.instant();
         List<ErasedComment> erased = reviews.eraseCommentsOf(tenantId, customerAccountId);
         List<Hidden> hidden = publications.hideAllOf(tenantId, customerAccountId, now);
-        cases.eraseNotesOf(tenantId, customerAccountId);
+        int notes = cases.eraseNotesOf(tenantId, customerAccountId);
 
         Set<UUID> brandsToEvict = new LinkedHashSet<>();
         erased.forEach(comment -> brandsToEvict.add(comment.brandId()));
@@ -90,5 +100,10 @@ public class ReviewsErasureParticipant implements CustomerErasureParticipant {
             metrics.commentDecided(CommentState.HIDDEN.name(), ModerationReason.CUSTOMER_ERASED.name());
         }
         brandsToEvict.forEach(brandId -> publicCache.evictAfterCommit(tenantId, brandId));
+        return ErasureCounts.builder()
+                .add("reviews.order_reviews", erased.size())
+                .add("reviews.review_publications", hidden.size())
+                .add("reviews.recovery_case_events", notes)
+                .build();
     }
 }

@@ -87,6 +87,10 @@ final class StorefrontPublishedSurface {
             ME + "/addresses/{addressId}",
             ME + "/erasure-request",
             ME + "/erasure-request/cancel",
+            // A customer's own request for a copy of her data (ADR 0029), beside her erasure request.
+            ME + "/export-request",
+            ME + "/export-request/bundle",
+            ME + "/export-request/cancel",
             ME + "/favourites",
             ME + "/favourites/{productId}",
             // Asking the restaurant to ring back (ADR 0111): a lead, not an order.

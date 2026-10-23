@@ -266,13 +266,15 @@ class ConversationMessageStore {
                       JOIN conversations.conversations c
                         ON c.tenant_id = m.tenant_id AND c.id = m.conversation_id
                      WHERE m.occurred_at < (CAST(:now AS timestamptz) - (c.retention_months * INTERVAL '1 month'))
+                       AND %s
                      ORDER BY m.occurred_at
                      LIMIT :batchSize
                 )
                 DELETE FROM conversations.conversation_messages m
                  USING doomed
                  WHERE m.id = doomed.id
-                """)
+                """.formatted(uz.horecaos.platform.customers.api.LegalHolds.notHeld(
+                        "c.tenant_id", "c.customer_account_id")))
                 .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
                 .param("batchSize", batchSize)
                 .update();

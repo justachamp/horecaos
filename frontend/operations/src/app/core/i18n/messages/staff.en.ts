@@ -423,6 +423,8 @@ export const staffEn = {
   'staff.approvals.action.fiscalCorrectionRequest': 'Fiscal receipt correction or void',
   'staff.approvals.action.fiscalCorrectionAttach':
     'Attaching a fiscal agent’s reference to a receipt',
+  'staff.approvals.action.customerLegalHoldPlace': 'Placing a legal hold on a customer',
+  'staff.approvals.action.customerLegalHoldLift': 'Lifting a legal hold from a customer',
   // end: Fiscal receipt correction approval (ADR 0166)
   'staff.approvals.tab.pending': 'Waiting',
   'staff.approvals.tab.decided': 'Decided',

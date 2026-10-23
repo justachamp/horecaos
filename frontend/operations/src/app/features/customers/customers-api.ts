@@ -380,6 +380,119 @@ export interface ErasureRequest {
   readonly cancelledByActorId: string | null;
 }
 
+/** `CustomerController.ErasureBlockResponse` — one thing in the way of an erasure, as a code and a count. */
+export interface ErasureBlock {
+  /** `LEGAL_HOLD`, `OPEN_ORDER` or `OPEN_RECOVERY_CASE`; a code this console has no words for is shown as it is. */
+  readonly code: string;
+  readonly amount: number;
+}
+
+/** One table's line in an erasure's proof. */
+export interface ErasureProofTable {
+  readonly table: string;
+  readonly rows: number;
+}
+
+/** One module's line in an erasure's proof. */
+export interface ErasureProofParticipant {
+  readonly name: string;
+  readonly tables: readonly ErasureProofTable[];
+}
+
+/** `CustomerController.ErasureProofResponse` — counts and table names, never a value. */
+export interface ErasureProof {
+  readonly requestId: string;
+  readonly status: string;
+  readonly completedAt: string | null;
+  readonly completedByActorId: string | null;
+  readonly participants: readonly ErasureProofParticipant[];
+}
+
+/** `CustomerController.LegalHoldResponse` — no free text, because none is stored. */
+export interface LegalHold {
+  readonly id: string;
+  /** ACTIVE or LIFTED. */
+  readonly status: string;
+  readonly reasonCode: string;
+  readonly placedByActorId: string;
+  readonly placedAt: string;
+  readonly liftedByActorId: string | null;
+  readonly liftedAt: string | null;
+}
+
+/** Why a hold is placed: the closed set `LegalHoldService.Reason` accepts. */
+export type LegalHoldReason = 'LITIGATION' | 'REGULATORY_REQUEST' | 'INVESTIGATION' | 'OTHER';
+
+// ------------------------------------------------- ADR 0029: a copy of her data, and corrections
+
+/** One table of a produced bundle: how many rows and whether it was cut off. Counts, never values. */
+export interface ExportManifestTable {
+  readonly table: string;
+  readonly rows: number;
+  readonly truncated: boolean;
+}
+
+/** One module's part of a produced bundle. */
+export interface ExportManifestSection {
+  readonly name: string;
+  readonly tables: readonly ExportManifestTable[];
+}
+
+/** What a bundle contains, and what was left out on purpose (codes such as `reviews:recovery_case_events.staff_notes`). */
+export interface ExportManifest {
+  readonly sections: readonly ExportManifestSection[];
+  readonly withheld: readonly string[];
+}
+
+/** `CustomerPrivacyController.ExportRequestResponse`. */
+export interface ExportRequest {
+  readonly id: string;
+  readonly customerAccountId: string;
+  /** PENDING, COMPLETED or CANCELLED. */
+  readonly status: string;
+  readonly requestedVia: string;
+  readonly requestedAt: string;
+  /** The day the tenant owes the customer her data, fixed when the request was raised. */
+  readonly responseDueAt: string;
+  readonly producedAt: string | null;
+  readonly producedByActorId: string | null;
+  readonly bundleExpiresAt: string | null;
+  /** Whether a link can be had right now: produced, not expired, not removed. */
+  readonly bundleAvailable: boolean;
+  readonly cancelledAt: string | null;
+  readonly manifest: ExportManifest | null;
+}
+
+/** `CustomerPrivacyController.BundleLinkResponse`: works for a few minutes and is never stored. */
+export interface ExportBundleLink {
+  readonly url: string;
+  readonly expiresAt: string;
+}
+
+/** What may be corrected, as `CustomerCorrectionService.Subject` names it. */
+export type CorrectionSubject = 'DISPLAY_NAME' | 'DATE_OF_BIRTH' | 'CONTACT_POINT' | 'ADDRESS';
+
+/** `CustomerPrivacyController.CorrectionResponse`: what was corrected against which reference, never the values. */
+export interface CustomerCorrection {
+  readonly id: string;
+  readonly subject: CorrectionSubject;
+  readonly targetId: string | null;
+  readonly evidenceReference: string;
+  readonly correctedByActorType: string;
+  readonly correctedByActorId: string;
+  readonly correctedAt: string;
+}
+
+/** `CustomerPrivacyController.CorrectionResultResponse`: `applied` is false when the value was already that. */
+export interface CorrectionResult {
+  readonly applied: boolean;
+  readonly correctionId: string | null;
+  readonly version: number | null;
+}
+
+/** A reference to the evidence, never the evidence: the same pattern the server and the database hold. */
+export const EVIDENCE_REFERENCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/#-]{2,79}$/;
+
 // ------------------------------------------------------------ row X.13/5.1b: import
 
 /** `CustomerImportController.CustomerImportSubmitResponse`/`CustomerImportStatusResponse`'s shared status vocabulary. */
@@ -998,6 +1111,67 @@ export class CustomersApi {
     );
   }
 
+  /** What would stop this customer's erasure from executing right now. Empty when nothing does. */
+  async erasureBlocks(scope: LocationScope, accountId: string): Promise<readonly ErasureBlock[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly ErasureBlock[]>(
+        operationsPaths.customerErasureBlocks(scope, accountId),
+      ),
+    );
+    return result.value ?? [];
+  }
+
+  /** What an executed request changed, per module and table. 404 for a request with no proof. */
+  async erasureProof(
+    scope: LocationScope,
+    accountId: string,
+    requestId: string,
+  ): Promise<ErasureProof> {
+    const result = await firstValueFrom(
+      this.api.get<ErasureProof>(operationsPaths.customerErasureProof(scope, accountId, requestId)),
+    );
+    return result.value;
+  }
+
+  async legalHolds(scope: LocationScope, accountId: string): Promise<readonly LegalHold[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly LegalHold[]>(operationsPaths.customerLegalHolds(scope, accountId)),
+    );
+    return result.value ?? [];
+  }
+
+  /**
+   * Places a hold. Under an approval: the first call answers 422 `SECOND_APPROVER_REQUIRED` naming the request a second
+   * person must decide, and once they have, the same call places it.
+   */
+  async placeLegalHold(
+    scope: LocationScope,
+    accountId: string,
+    body: { readonly reason: LegalHoldReason; readonly note: string },
+  ): Promise<LegalHold> {
+    return firstValueFrom(
+      this.api.post<{ readonly reason: LegalHoldReason; readonly note: string }, LegalHold>(
+        operationsPaths.customerLegalHolds(scope, accountId),
+        command(body),
+      ),
+    );
+  }
+
+  /** Lifts a hold, under the same second-person approval as placing one. */
+  async liftLegalHold(
+    scope: LocationScope,
+    accountId: string,
+    holdId: string,
+    body: { readonly note: string },
+  ): Promise<LegalHold> {
+    return firstValueFrom(
+      this.api.post<{ readonly note: string }, LegalHold>(
+        operationsPaths.customerLegalHoldLift(scope, accountId, holdId),
+        command(body),
+      ),
+    );
+  }
+
   /** The transition that actually anonymises the account. Idempotent for one already COMPLETED. */
   async executeErasure(
     scope: LocationScope,
@@ -1008,6 +1182,161 @@ export class CustomersApi {
       this.api.post<null, ErasureRequest>(
         operationsPaths.customerErasureRequestExecute(scope, accountId, requestId),
         command(null),
+      ),
+    );
+  }
+
+  // ------------------------------------------- ADR 0029: a copy of her data
+
+  async exportRequests(scope: LocationScope, accountId: string): Promise<readonly ExportRequest[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly ExportRequest[]>(
+        operationsPaths.customerExportRequests(scope, accountId),
+      ),
+    );
+    return result.value ?? [];
+  }
+
+  /** Idempotent server-side: a second call while one request is PENDING returns that same request. */
+  async requestExport(scope: LocationScope, accountId: string): Promise<ExportRequest> {
+    return firstValueFrom(
+      this.api.post<null, ExportRequest>(
+        operationsPaths.customerExportRequests(scope, accountId),
+        command(null),
+      ),
+    );
+  }
+
+  /**
+   * Gathers her data into a bundle under `purpose`. With a tenant policy for the export the first call answers 422
+   * `SECOND_APPROVER_REQUIRED` naming the request a second person must decide; once they have, the same call produces it.
+   */
+  async produceExport(
+    scope: LocationScope,
+    accountId: string,
+    requestId: string,
+    purpose: string,
+  ): Promise<ExportRequest> {
+    return firstValueFrom(
+      this.api.post<{ readonly purpose: string }, ExportRequest>(
+        operationsPaths.customerExportRequestProduce(scope, accountId, requestId),
+        command({ purpose }),
+      ),
+    );
+  }
+
+  /** A link to the produced bundle. Each call is an audit fact naming the caller and `purpose`. */
+  async exportBundleLink(
+    scope: LocationScope,
+    accountId: string,
+    requestId: string,
+    purpose: string,
+  ): Promise<ExportBundleLink> {
+    const result = await firstValueFrom(
+      this.api.get<ExportBundleLink>(
+        operationsPaths.customerExportRequestBundle(scope, accountId, requestId),
+        { params: { purpose } },
+      ),
+    );
+    return result.value;
+  }
+
+  /** Withdraws a PENDING request. Idempotent for one already CANCELLED. */
+  async cancelExport(
+    scope: LocationScope,
+    accountId: string,
+    requestId: string,
+  ): Promise<ExportRequest> {
+    return firstValueFrom(
+      this.api.post<null, ExportRequest>(
+        operationsPaths.customerExportRequestCancel(scope, accountId, requestId),
+        command(null),
+      ),
+    );
+  }
+
+  // ------------------------------------------- ADR 0029: corrections against evidence
+
+  async corrections(
+    scope: LocationScope,
+    accountId: string,
+  ): Promise<readonly CustomerCorrection[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly CustomerCorrection[]>(
+        operationsPaths.customerCorrections(scope, accountId),
+      ),
+    );
+    return result.value ?? [];
+  }
+
+  /** The same edit as the profile PUT, with the previous name kept and `evidenceReference` recorded. */
+  async correctDisplayName(
+    scope: LocationScope,
+    accountId: string,
+    body: { readonly displayName: string | null; readonly evidenceReference: string },
+    expectedVersion: number,
+  ): Promise<CorrectionResult> {
+    return firstValueFrom(
+      this.api.put<typeof body, CorrectionResult>(
+        operationsPaths.customerCorrection(scope, accountId, 'display-name'),
+        command(body),
+        { expectedVersion },
+      ),
+    );
+  }
+
+  /** Replaces a wrong date with the right one. Clearing a date is not a correction. */
+  async correctDateOfBirth(
+    scope: LocationScope,
+    accountId: string,
+    body: { readonly dateOfBirth: string; readonly evidenceReference: string },
+    expectedVersion: number,
+  ): Promise<CorrectionResult> {
+    return firstValueFrom(
+      this.api.put<typeof body, CorrectionResult>(
+        operationsPaths.customerCorrection(scope, accountId, 'date-of-birth'),
+        command(body),
+        { expectedVersion },
+      ),
+    );
+  }
+
+  /** The type stays; verification resets because the value changed. */
+  async correctContactPoint(
+    scope: LocationScope,
+    accountId: string,
+    contactPointId: string,
+    body: { readonly value: string; readonly evidenceReference: string },
+  ): Promise<CorrectionResult> {
+    return firstValueFrom(
+      this.api.put<typeof body, CorrectionResult>(
+        operationsPaths.customerCorrection(
+          scope,
+          accountId,
+          `contact-points/${encodeURIComponent(contactPointId)}`,
+        ),
+        command(body),
+      ),
+    );
+  }
+
+  /** Replaces the whole address, keeping the previous one under retention. */
+  async correctAddress(
+    scope: LocationScope,
+    accountId: string,
+    addressId: string,
+    body: SaveCustomerAddressRequest & { readonly evidenceReference: string },
+    expectedVersion: number,
+  ): Promise<CorrectionResult> {
+    return firstValueFrom(
+      this.api.put<typeof body, CorrectionResult>(
+        operationsPaths.customerCorrection(
+          scope,
+          accountId,
+          `addresses/${encodeURIComponent(addressId)}`,
+        ),
+        command(body),
+        { expectedVersion },
       ),
     );
   }

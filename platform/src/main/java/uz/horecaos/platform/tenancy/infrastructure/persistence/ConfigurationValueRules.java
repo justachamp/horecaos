@@ -44,6 +44,9 @@ public final class ConfigurationValueRules {
      */
     static final int DISCLOSURE_TEXT_MAXIMUM_CHARACTERS = 500;
 
+    /** The longest cover note on a data-subject export (ADR 0029); {@code CustomerConfigurationKeys} holds the same number. */
+    static final int DSAR_COVER_NOTE_MAXIMUM_CHARACTERS = 2_000;
+
     /**
      * The languages a printed document can be written in (ADR 0154): the ones the language registry has
      * live for messages (ADR 0149), the same list {@code printing.api.PrintingConfigurationKeys} reads;
@@ -92,6 +95,27 @@ public final class ConfigurationValueRules {
                             "DEVICE_ONLY",
                             "PERSON_OPTIONAL",
                             "PERSON_REQUIRED")),
+            // ADR 0029, batch 21: a data-subject export. The deadline is days to answer (a day to a quarter: past
+            // either end
+            // it is a typo, not a promise), the bundle is kept a day to a month, and the cover note is plain text.
+            Map.entry(
+                    "customers.dsar_response_deadline_days",
+                    integerBetween("customers.dsar_response_deadline_days", 1, 90)),
+            Map.entry(
+                    "customers.dsar_bundle_retention_days",
+                    integerBetween("customers.dsar_bundle_retention_days", 1, 30)),
+            Map.entry(
+                    "customers.dsar_cover_note_ru",
+                    value -> requirePlainText(
+                            "customers.dsar_cover_note_ru", value, DSAR_COVER_NOTE_MAXIMUM_CHARACTERS)),
+            Map.entry(
+                    "customers.dsar_cover_note_uz_latn",
+                    value -> requirePlainText(
+                            "customers.dsar_cover_note_uz_latn", value, DSAR_COVER_NOTE_MAXIMUM_CHARACTERS)),
+            Map.entry(
+                    "customers.dsar_cover_note_en",
+                    value -> requirePlainText(
+                            "customers.dsar_cover_note_en", value, DSAR_COVER_NOTE_MAXIMUM_CHARACTERS)),
             // ADR 0176: a sign-in row is kept thirty days to two years; past either end it is a typo.
             Map.entry("iam.staff_sign_in_retention_days", integerBetween("iam.staff_sign_in_retention_days", 30, 730)),
             // ADR 0156: the working-time keys. Each range is the record's own.
@@ -185,11 +209,14 @@ public final class ConfigurationValueRules {
      * chat. Blank is allowed -- it means "keep the platform's wording".
      */
     private static void requirePlainShortText(String code, Object value) {
+        requirePlainText(code, value, DISCLOSURE_TEXT_MAXIMUM_CHARACTERS);
+    }
+
+    private static void requirePlainText(String code, Object value, int maximumCharacters) {
         String text = String.valueOf(value);
-        if (text.length() > DISCLOSURE_TEXT_MAXIMUM_CHARACTERS) {
+        if (text.length() > maximumCharacters) {
             throw new ApiException(
-                    ErrorCode.VALIDATION_FAILED,
-                    "%s must be at most %d characters".formatted(code, DISCLOSURE_TEXT_MAXIMUM_CHARACTERS));
+                    ErrorCode.VALIDATION_FAILED, "%s must be at most %d characters".formatted(code, maximumCharacters));
         }
         boolean hasControlCharacter =
                 text.codePoints().anyMatch(codePoint -> Character.isISOControl(codePoint) && codePoint != '\n');

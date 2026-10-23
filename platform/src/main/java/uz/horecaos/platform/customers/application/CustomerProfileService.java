@@ -663,7 +663,8 @@ public class CustomerProfileService {
         audit.record(fact.build());
     }
 
-    private RevealedAddress reveal(UUID tenantId, JdbcCustomerStore.AddressRow row, String purpose) {
+    /** Package-private: the data-subject export decrypts addresses the way a reveal does, under its own audit fact. */
+    RevealedAddress reveal(UUID tenantId, JdbcCustomerStore.AddressRow row, String purpose) {
         return new RevealedAddress(
                 row.id(),
                 row.label(),
