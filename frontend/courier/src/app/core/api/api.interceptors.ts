@@ -32,7 +32,9 @@ export const conventionsInterceptor: HttpInterceptorFn = (request, next) => {
  *
  * A platform refusal as nobody (401) gets exactly one renewal and one retry; if the renewal is
  * refused too the session is over, so the sign-in is started from here and the caller receives a
- * `SESSION_EXPIRED` error it can ignore, because the page is about to be replaced.
+ * `SESSION_EXPIRED` error it can ignore, because the page is about to be replaced. A renewal that
+ * could not be made because the identity provider did not answer is not a refusal: the caller
+ * receives `NETWORK` and the session stays.
  */
 export const bearerInterceptor: HttpInterceptorFn = (request, next) => {
   if (!request.context.get(PLATFORM_API_REQUEST)) {
@@ -67,9 +69,10 @@ export const bearerInterceptor: HttpInterceptorFn = (request, next) => {
         return throwError(() => error);
       }
       return from(auth.forceRefresh()).pipe(
-        switchMap((renewed) =>
-          renewed
-            ? from(auth.accessToken()).pipe(
+        switchMap((renewal) => {
+          switch (renewal) {
+            case 'renewed':
+              return from(auth.accessToken()).pipe(
                 switchMap((token) => next(withToken(token, request))),
                 catchError((second: unknown) => {
                   const secondError = toApiError(second);
@@ -77,9 +80,25 @@ export const bearerInterceptor: HttpInterceptorFn = (request, next) => {
                     ? sessionOver(secondError)
                     : throwError(() => secondError);
                 }),
-              )
-            : sessionOver(error),
-        ),
+              );
+            case 'kept':
+              // The identity provider could not be reached, so nobody said the session is over: the
+              // caller is told the request did not get through -- the same word as any other
+              // dropped connection, so it keeps its idempotency key and tries again -- and the
+              // page stays where it is.
+              return throwError(
+                () =>
+                  new ApiError({
+                    status: 0,
+                    code: 'NETWORK',
+                    detail:
+                      'the session could not be renewed: the identity provider did not answer',
+                  }),
+              );
+            case 'ended':
+              return sessionOver(error);
+          }
+        }),
       );
     }),
   );

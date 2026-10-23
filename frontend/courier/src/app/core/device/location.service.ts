@@ -14,7 +14,9 @@ export const ONCE_TIMEOUT_MS = 8_000;
  * picking up, handing over, opening or closing a shift).
  *
  * A position is read, handed to the one call that needs it, and forgotten: it is never logged, never
- * put in a URL and never stored. The duty sender feeds the latest fix in, so while a courier is on
+ * put in a URL and never stored. The one place it waits is `IntentKeys`, which holds it with the
+ * idempotency key while a request that never arrived is retried, so the retry is the same request;
+ * it goes when the platform answers or at sign-out. The duty sender feeds the latest fix in, so while a courier is on
  * duty a step uses the position the app already has and does not wait for a new one.
  *
  * `null` is an honest answer, not an error: the gate that wanted the position answers

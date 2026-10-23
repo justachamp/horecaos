@@ -113,9 +113,12 @@ export class OffersStore {
 
   async accept(offer: CourierOffer): Promise<OfferOutcome> {
     return this.decide(offer, async (where) => {
-      const position = await this.location.position();
-      const result = await this.keys.run(`accept:${offer.offerId}:${offer.version}`, (key) =>
-        this.api.acceptOffer(where, offer, position, key),
+      // The position is part of the body the platform hashes under the key: read once for this
+      // intent, and sent again as it was if the connection dropped and the courier taps again.
+      const result = await this.keys.runWith(
+        `accept:${offer.offerId}:${offer.version}`,
+        () => this.location.position(),
+        (key, position) => this.api.acceptOffer(where, offer, position, key),
       );
       if (result.outcome === 'ACCEPTED' && result.delivery !== null) {
         this.deliveries.adopt(result.delivery);

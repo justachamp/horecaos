@@ -1,6 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 
 import { TEST_CONFIG, courierProfile } from '../../../testing/fixtures';
+import { IntentKeys } from '../api/intent-keys';
+import { ApiError } from '../api/problem-details';
 import { APP_CONFIG } from '../config/app-config';
 import { CourierApi } from '../courier/courier-api';
 import { DeliveriesStore } from '../deliveries/deliveries.store';
@@ -89,6 +91,100 @@ describe('WorkSession', () => {
 
     expect(me).toHaveBeenCalledTimes(2);
     expect(shiftEnded).toHaveBeenCalledOnce();
+  });
+
+  describe('when the first read of the record fails', () => {
+    const offline = () => new ApiError({ status: 0, code: 'NETWORK', detail: 'offline' });
+
+    it('tears nothing down and starts nothing on a record it does not have', async () => {
+      me.mockRejectedValueOnce(offline());
+
+      await TestBed.inject(WorkSession).begin();
+
+      // Nothing is known about the shift: a courier whose phone has just lost the signal is not
+      // a courier who has no shift, so duty is not ended and the deliveries are not cleared.
+      expect(shiftEnded).not.toHaveBeenCalled();
+      expect(stopOffers).not.toHaveBeenCalled();
+      expect(startOffers).not.toHaveBeenCalled();
+      expect(restore).not.toHaveBeenCalled();
+      expect(refreshDeliveries).not.toHaveBeenCalled();
+    });
+
+    it('reads the record again the next time something asks it to begin, and then brings everything up', async () => {
+      me.mockRejectedValueOnce(offline());
+      const work = TestBed.inject(WorkSession);
+      await work.begin();
+
+      await work.begin();
+
+      expect(me).toHaveBeenCalledTimes(2);
+      expect(restore).toHaveBeenCalledOnce();
+      expect(startOffers).toHaveBeenCalledOnce();
+      expect(refreshDeliveries).toHaveBeenCalledOnce();
+    });
+
+    it('brings everything up when the Retry that finally loads the record goes through refresh, and then counts as begun', async () => {
+      me.mockRejectedValueOnce(offline());
+      const work = TestBed.inject(WorkSession);
+      await work.begin();
+
+      await work.refresh();
+
+      expect(restore).toHaveBeenCalledOnce();
+      expect(startOffers).toHaveBeenCalledOnce();
+      expect(refreshDeliveries).toHaveBeenCalledOnce();
+
+      await work.begin();
+      expect(me).toHaveBeenCalledTimes(2);
+      expect(restore).toHaveBeenCalledOnce();
+    });
+
+    it('keeps trying while the record cannot be had, and does not reconcile on a refresh that failed too', async () => {
+      me.mockRejectedValue(offline());
+      const work = TestBed.inject(WorkSession);
+      await work.begin();
+
+      await work.refresh();
+
+      expect(shiftEnded).not.toHaveBeenCalled();
+      expect(startOffers).not.toHaveBeenCalled();
+      expect(refreshDeliveries).not.toHaveBeenCalled();
+
+      me.mockResolvedValue(courierProfile());
+      await work.begin();
+      expect(startOffers).toHaveBeenCalledOnce();
+    });
+
+    it('treats an account that is no courier here as an answer, not a failure to retry', async () => {
+      me.mockRejectedValue(
+        new ApiError({ status: 404, code: 'RESOURCE_NOT_FOUND', detail: 'not a courier' }),
+      );
+      const work = TestBed.inject(WorkSession);
+
+      await work.begin();
+      await work.begin();
+
+      expect(me).toHaveBeenCalledOnce();
+      expect(shiftEnded).toHaveBeenCalledOnce();
+    });
+  });
+
+  it('forgets the requests it was retrying at sign-out, positions included', async () => {
+    const keys = TestBed.inject(IntentKeys);
+    await expect(
+      keys.runWith(
+        'pickup:ship-1',
+        async () => ({ latitude: 41.3, longitude: 69.2 }),
+        async () => {
+          throw new ApiError({ status: 0, code: 'NETWORK', detail: 'offline' });
+        },
+      ),
+    ).rejects.toBeInstanceOf(ApiError);
+    expect(keys.holds('pickup:ship-1')).toBe(true);
+
+    TestBed.inject(WorkSession).end();
+
+    expect(keys.holds('pickup:ship-1')).toBe(false);
   });
 
   it('stops everything at sign-out and starts again at the next sign-in', async () => {

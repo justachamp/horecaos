@@ -77,6 +77,12 @@ describe('classifying what the platform answered to a step', () => {
     expect(classifyStepFailure(failure({ status: 412, code: 'STALE_VERSION' })).kind).toBe('stale');
   });
 
+  it('treats a key the platform saw with another body as a change under the courier: reload, do not report an error', () => {
+    expect(classifyStepFailure(failure({ status: 409, code: 'IDEMPOTENCY_KEY_REUSED' })).kind).toBe(
+      'stale',
+    );
+  });
+
   it('carries anything else as a failure with the error, including a request that never arrived', () => {
     const offline = failure({ status: 0, code: 'NETWORK' });
 

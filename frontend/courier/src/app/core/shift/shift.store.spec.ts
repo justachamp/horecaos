@@ -8,6 +8,7 @@ import { CourierApi } from '../courier/courier-api';
 import type { CourierProfile } from '../courier/courier-profile';
 import { CourierProfileStore } from '../courier/courier-profile.store';
 import { GEOLOCATION } from '../device/geolocation';
+import { LocationService } from '../device/location.service';
 import { DutyStore } from '../telemetry/duty.store';
 import { WorkSession } from '../work/work-session';
 import { ShiftStore } from './shift.store';
@@ -133,6 +134,21 @@ describe('ShiftStore', () => {
       expect(api['openShift'].mock.calls[1][2]).toBe(api['openShift'].mock.calls[0][2]);
     });
 
+    it('sends the same point under the same key when the connection dropped, however the phone has moved since', async () => {
+      geo.onceAnswer = fix({ latitude: 41.3, longitude: 69.2 });
+      api['openShift']
+        .mockRejectedValueOnce(new ApiError({ status: 0, code: 'NETWORK', detail: 'off' }))
+        .mockResolvedValueOnce({ shiftId: 's1' });
+      const shift = await create(CLOSED);
+
+      await shift.open();
+      TestBed.inject(LocationService).remember(fix({ latitude: 41.31, longitude: 69.21 }));
+      await shift.open();
+
+      expect(api['openShift'].mock.calls[1][2]).toBe(api['openShift'].mock.calls[0][2]);
+      expect(api['openShift'].mock.calls[1][1]).toBe('41.3,69.2');
+    });
+
     it('does nothing with two taps at once', async () => {
       let release: () => void = () => undefined;
       api['openShift'].mockReturnValue(new Promise<void>((resolve) => (release = resolve)));
@@ -254,6 +270,24 @@ describe('ShiftStore', () => {
         expect.any(String),
       );
       expect(shift.cashDeclared()).toBe(true);
+    });
+
+    it('replays the same key for the same amount after a dropped connection, and a new key for an amount typed again', async () => {
+      api['declareCash']
+        .mockRejectedValueOnce(new ApiError({ status: 0, code: 'NETWORK', detail: 'off' }))
+        .mockRejectedValueOnce(new ApiError({ status: 0, code: 'NETWORK', detail: 'off' }))
+        .mockResolvedValue(null);
+      const shift = await create(OPEN);
+      await shift.close();
+
+      await shift.declareCash(12_500_000);
+      await shift.declareCash(12_500_000);
+      await shift.declareCash(12_000_000);
+
+      // Same amount, same intent. A different amount is a different request, and the platform
+      // refuses one key for two bodies (409 IDEMPOTENCY_KEY_REUSED).
+      expect(api['declareCash'].mock.calls[1][3]).toBe(api['declareCash'].mock.calls[0][3]);
+      expect(api['declareCash'].mock.calls[2][3]).not.toBe(api['declareCash'].mock.calls[1][3]);
     });
 
     it('is not offered when the shift took no cash', async () => {

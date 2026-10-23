@@ -9,6 +9,7 @@ import { CourierApi } from '../courier/courier-api';
 import { CourierProfileStore } from '../courier/courier-profile.store';
 import { DeliveriesStore } from '../deliveries/deliveries.store';
 import { GEOLOCATION } from '../device/geolocation';
+import { LocationService } from '../device/location.service';
 import { OFFER_POLL_SECONDS, OffersStore } from './offers.store';
 
 describe('OffersStore', () => {
@@ -224,6 +225,26 @@ describe('OffersStore', () => {
 
       expect(first.kind).toBe('failed');
       expect(api['acceptOffer'].mock.calls[1][3]).toBe(api['acceptOffer'].mock.calls[0][3]);
+    });
+
+    it('sends the same position under the same key when the connection dropped, however the phone has moved since', async () => {
+      api['acceptOffer']
+        .mockRejectedValueOnce(new ApiError({ status: 0, code: 'NETWORK', detail: 'x' }))
+        .mockResolvedValueOnce({ outcome: 'ACCEPTED', delivery: delivery() });
+
+      await store.accept(soon);
+      TestBed.inject(LocationService).remember(
+        fix({ latitude: 41.31, longitude: 69.21, accuracyMeters: 5 }),
+      );
+      const second = await store.accept(soon);
+
+      expect(second.kind).toBe('accepted');
+      expect(api['acceptOffer'].mock.calls[1][3]).toBe(api['acceptOffer'].mock.calls[0][3]);
+      expect(api['acceptOffer'].mock.calls[1][2]).toEqual({
+        latitude: 41.3,
+        longitude: 69.2,
+        accuracyMeters: 9,
+      });
     });
 
     it('does one thing at a time', async () => {

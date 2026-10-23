@@ -11,7 +11,12 @@ export interface StepMessage {
   readonly text: string;
 }
 
-/** Typed maps, not built keys: a reason added on the platform is a compile error here, not raw text on a phone. */
+/**
+ * Typed maps, not built keys: a reason added to `GATE_REFUSAL_REASONS` without its sentence is a
+ * compile error here. A member added to the platform's `GateRefusal` enum is not something the
+ * compiler can see; `gate-refusal-drift.spec.ts` reads the enum's source and fails the build until
+ * the list (and so this map and the catalogues) follows.
+ */
 const REFUSAL_KEYS: Readonly<Record<GateRefusalReason, MessageKey>> = {
   GPS_POSITION_REQUIRED: 'work.refusal.GPS_POSITION_REQUIRED',
   GPS_ACCURACY_INSUFFICIENT: 'work.refusal.GPS_ACCURACY_INSUFFICIENT',

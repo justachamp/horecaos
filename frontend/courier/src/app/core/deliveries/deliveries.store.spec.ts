@@ -8,6 +8,7 @@ import { APP_CONFIG } from '../config/app-config';
 import { CourierApi } from '../courier/courier-api';
 import { CourierProfileStore } from '../courier/courier-profile.store';
 import { GEOLOCATION } from '../device/geolocation';
+import { LocationService } from '../device/location.service';
 import { DutyStore } from '../telemetry/duty.store';
 import { DeliveriesStore } from './deliveries.store';
 
@@ -31,6 +32,13 @@ describe('DeliveriesStore', () => {
     assignedAt: '2026-10-14T04:00:00Z',
     status: 'DELIVERED',
   });
+
+  /** The position the on-duty sender reports a few seconds after the first tap. */
+  const MOVED = { latitude: 41.31, longitude: 69.21, accuracyMeters: 5 };
+
+  function movePhone() {
+    TestBed.inject(LocationService).remember(fix(MOVED));
+  }
 
   async function create(record = courierProfile()) {
     api['me'].mockResolvedValue(record);
@@ -179,6 +187,20 @@ describe('DeliveriesStore', () => {
       expect(store.byId('ship-late')?.status).toBe('PICKUP_PENDING');
     });
 
+    it('sends the same body under the same key when the connection dropped, as pickup does', async () => {
+      await create();
+      api['advance']
+        .mockRejectedValueOnce(new ApiError({ status: 0, code: 'NETWORK', detail: 'x' }))
+        .mockResolvedValueOnce({ ...later, status: 'PICKUP_PENDING', version: 2 });
+
+      await store.arrive(later);
+      movePhone();
+      await store.arrive(later);
+
+      expect(api['advance'].mock.calls[1][4]).toBe(api['advance'].mock.calls[0][4]);
+      expect(api['advance'].mock.calls[1][3]).toEqual(api['advance'].mock.calls[0][3]);
+    });
+
     it('goes ahead without a position when the phone has none -- the gate says whether that is enough', async () => {
       await create();
       geo.onceAnswer = 'denied';
@@ -267,6 +289,22 @@ describe('DeliveriesStore', () => {
       expect(store.byId('ship-late')?.version).toBe(5);
     });
 
+    it('reloads the delivery when the platform says the key was used for another request, rather than showing a bare error', async () => {
+      await create();
+      api['pickUp'].mockRejectedValue(
+        new ApiError({ status: 409, code: 'IDEMPOTENCY_KEY_REUSED', detail: 'x' }),
+      );
+      api['delivery'].mockResolvedValue(
+        delivery({ shipmentId: 'ship-late', status: 'PICKED_UP', version: 2 }),
+      );
+
+      const outcome = await store.pickUp(later);
+
+      expect(outcome).toEqual({ kind: 'stale' });
+      expect(api['delivery']).toHaveBeenCalledWith(WHERE, 'ship-late');
+      expect(store.byId('ship-late')?.status).toBe('PICKED_UP');
+    });
+
     it('replays the same key when the connection dropped and the courier taps again', async () => {
       await create();
       api['pickUp']
@@ -279,6 +317,50 @@ describe('DeliveriesStore', () => {
       expect(first.kind).toBe('failed');
       expect(second.kind).toBe('done');
       expect(api['pickUp'].mock.calls[1][3]).toBe(api['pickUp'].mock.calls[0][3]);
+    });
+
+    it('sends the same body under the same key when the connection dropped, however the position has moved since', async () => {
+      await create();
+      api['pickUp']
+        .mockRejectedValueOnce(new ApiError({ status: 0, code: 'NETWORK', detail: 'x' }))
+        .mockResolvedValueOnce({ ...later, status: 'PICKED_UP', version: 2 });
+
+      await store.pickUp(later);
+      // While on duty the sender hands the app a new fix every few seconds.
+      movePhone();
+      const second = await store.pickUp(later);
+
+      // The platform hashes the body under the key: a second request with another position would be
+      // 409 IDEMPOTENCY_KEY_REUSED rather than the replay of the first answer.
+      expect(second.kind).toBe('done');
+      expect(api['pickUp'].mock.calls[1][3]).toBe(api['pickUp'].mock.calls[0][3]);
+      expect(api['pickUp'].mock.calls[1][2]).toEqual(api['pickUp'].mock.calls[0][2]);
+      expect(api['pickUp'].mock.calls[1][2]).toEqual({
+        latitude: 41.3,
+        longitude: 69.2,
+        accuracyMeters: 9,
+      });
+    });
+
+    it('reads the position afresh once the platform has answered, even with a refusal: a new tap is a new decision', async () => {
+      await create();
+      api['pickUp']
+        .mockRejectedValueOnce(
+          new ApiError({
+            status: 422,
+            code: 'UNPROCESSABLE_STATE',
+            reason: 'TOO_FAR_FROM_PICKUP',
+            detail: 'x',
+          }),
+        )
+        .mockResolvedValueOnce({ ...later, status: 'PICKED_UP', version: 2 });
+
+      await store.pickUp(later);
+      movePhone();
+      await store.pickUp(later);
+
+      expect(api['pickUp'].mock.calls[1][3]).not.toBe(api['pickUp'].mock.calls[0][3]);
+      expect(api['pickUp'].mock.calls[1][2]).toEqual(MOVED);
     });
 
     it('does not run a second step on the same delivery while one is in the air', async () => {
@@ -299,6 +381,20 @@ describe('DeliveriesStore', () => {
 
   describe('handing over', () => {
     const carried = delivery({ shipmentId: 'ship-late', status: 'PICKED_UP', version: 3 });
+
+    it('sends the same body under the same key when the connection dropped, as pickup does', async () => {
+      await create();
+      api['handOver']
+        .mockRejectedValueOnce(new ApiError({ status: 0, code: 'NETWORK', detail: 'x' }))
+        .mockResolvedValueOnce({ ...carried, status: 'DELIVERED', version: 4 });
+
+      await store.handOver(carried);
+      movePhone();
+      await store.handOver(carried);
+
+      expect(api['handOver'].mock.calls[1][3]).toBe(api['handOver'].mock.calls[0][3]);
+      expect(api['handOver'].mock.calls[1][2]).toEqual(api['handOver'].mock.calls[0][2]);
+    });
 
     it('delivers through the handover gate, and the delivery is no longer carried', async () => {
       await create();

@@ -128,8 +128,9 @@ emulated, not read from a phone. Offers are polled, not pushed.
 - Make an offer to the courier from the dispatch board: it appears on the Offers tab within
   fifteen seconds; accept it, and the delivery appears under Deliveries. Walk it through arrival,
   pickup, the cash and the handover on the phone. **Pickup and handover call
-  `POST .../deliveries/{id}/pickup` and `.../handover`, which the delivery-maps wave builds** (see
-  section 4); until that is merged they answer `404`.
+  `POST .../deliveries/{id}/pickup` and `.../handover`, which the platform serves
+  (`CourierDeliveryController`, merged in the batch-21 integration)**; section 4 says what to try
+  with the location's gate mode.
 
 **Rollback.** Delete the Keycloak client (every courier session ends), unset
 `HORECAOS_COURIER_ORIGIN`, and `docker compose up -d`. Close every duty session to stop
@@ -150,23 +151,27 @@ fallback ADR 0045 requires of every live surface.
 phone and opens the app on the offer. Until then the polling path is the whole of the
 mechanism, and the dispatcher's board is the place a lapsed offer is seen.
 
-## 4. The pickup and handover endpoints (a dependency, not a fact)
+## 4. The pickup and handover gates (merged; what to try on the handset)
 
-**What exists.** The courier app calls `POST .../deliveries/{id}/pickup` and `.../handover` and
-branches on the answer exactly as the cross-wave contract states: `409` with problem code
-`GATE_FAILED` (the failed check kinds in `detail`) when the location's gate mode is HARD and a
-check fails; a success carrying `checks: [{kind, outcome}]` in SOFT mode, whose unconfirmed
-checks the courier is told about. The specs pin both branches and both paths.
+**What exists.** The courier app calls `POST .../deliveries/{id}/pickup` and `.../handover`, which
+the platform serves (`CourierDeliveryController.pickUp` and `handOver`, operations
+`courierPickUpDelivery` and `courierHandOverDelivery`, capability `courier.delivery.advance`), and
+branches on the answer as the contract states: `409` with problem code `GATE_FAILED` (the failed
+check kinds in `detail`) when the location's gate mode is HARD and a check fails; a success
+carrying `checks: [{kind, outcome}]` in SOFT mode, whose unconfirmed checks the courier is told
+about. The specs pin both branches and both paths.
 
-**Where it connects.** The server side is the delivery-maps wave's. The client's one point of
-contact is `CourierApi.gateStep` (`frontend/courier/src/app/core/courier/courier-api.ts`): if the
-merged server takes another path, another body, or reports its checks elsewhere in the answer,
-that method and `describeSuccess` (`core/deliveries/step-outcome.ts`) are the two places to
-change. The request body is the courier's position when the phone has one, and `If-Match` and
-`Idempotency-Key` as on every step; the contract names no photo upload, so a `PHOTO` check is
-reported and cannot be satisfied from this app.
+**Where it connects.** Both paths are in the published courier OpenAPI baseline
+(`platform/api/openapi/v1/horecaos-api.courier.json`), and
+`frontend/courier/src/app/core/courier/courier-gate-contract.spec.ts` reads the paths, the request
+body and the `checks` field names from it, so a rename on either side fails a build before it
+reaches a phone. The client's one point of contact is `CourierApi.gateStep`
+(`frontend/courier/src/app/core/courier/courier-api.ts`) and `describeSuccess`
+(`core/deliveries/step-outcome.ts`). The request body is the courier's position when the phone has
+one, and `If-Match` and `Idempotency-Key` as on every step; the contract names no photo upload, so a
+`PHOTO` check is reported and cannot be satisfied from this app.
 
-**Prove it.** With the server side merged, set a location's gate mode to HARD, stand away from
-the branch and tap "Picked up": the app says the location could not be confirmed and the delivery
-stays where it was. Set it to SOFT and repeat: the delivery moves and the app says what the
-platform could not confirm. The persisted outcome is what `GEO_UNVERIFIED_RATE` reads.
+**Prove it.** Set a location's gate mode to HARD, stand away from the branch and tap "Picked up":
+the app says the location could not be confirmed and the delivery stays where it was. Set it to
+SOFT and repeat: the delivery moves and the app says what the platform could not confirm. The
+persisted outcome is what `GEO_UNVERIFIED_RATE` reads.

@@ -22,8 +22,8 @@ words whether the position is really arriving.
 
 Not built, and not code's to build: acceptance on a real handset, the pre-production Keycloak
 client and a courier account (`platform/docs/runbooks/external-connections/w4-courier-client.md`),
-the notice's final wording, push for offers (ADR 0020), and the pickup and handover endpoints the
-gate contract names, which another wave builds (ADR 0179, "The gates").
+the notice's final wording, and push for offers (ADR 0020). The pickup and handover endpoints the
+gate contract names are served by the platform (ADR 0179, status addition of 2026-10-23).
 
 ## Sign-in
 
