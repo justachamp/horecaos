@@ -981,7 +981,7 @@ describe('SettingsHomePage', () => {
     ]);
   });
 
-  it('still finds the key, and says what it can, when where it is set could not be read', async () => {
+  it('still finds the key, and says it does not know where it is set, when that could not be read', async () => {
     const fixture = await render(
       { validate: () => Promise.resolve(PASSING) },
       [LATE_KEY],
@@ -990,8 +990,13 @@ describe('SettingsHomePage', () => {
 
     type(fixture, 'late-order');
 
+    // «not set» would be a statement about a read that never came back: a brand may hold 15 minutes.
     expect(options(fixture).map(column)).toEqual([
-      ['Late-order threshold', 'Selling → Order policy', 'not set · default 10 min'],
+      [
+        'Late-order threshold',
+        'Selling → Order policy',
+        'where it is set: unknown · default 10 min',
+      ],
     ]);
   });
 

@@ -197,6 +197,16 @@ describe('CommandPalette', () => {
     });
   });
 
+  it('does not say a setting is not set when where it is set could not be read', async () => {
+    await render({ placements: new Error('timed out') });
+
+    type('late-order');
+
+    const row = rows().find((candidate) => candidate.textContent?.includes('Late-order threshold'));
+    expect(row?.textContent).toContain('where it is set: unknown · default 10 min');
+    expect(row?.textContent).not.toContain('not set');
+  });
+
   it('does not read the settings for someone who may not read the configuration, and still serves the rest', async () => {
     await render({ held: ['ORDER_READ'] });
 
