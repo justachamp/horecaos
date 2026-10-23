@@ -41,14 +41,17 @@ public class StorefrontPickupLocationQuery {
         this.clock = clock;
     }
 
+    /**
+     * @param brandId the one brand to search, or null for every brand with a published storefront menu
+     */
     @Transactional(readOnly = true)
-    public PickupLocations nearby(@Nullable GeoPoint point, int limit) {
+    public PickupLocations nearby(@Nullable GeoPoint point, @Nullable UUID brandId, int limit) {
         if (limit < 1 || limit > MAXIMUM_LIMIT) {
             throw new IllegalArgumentException("limit must be between 1 and " + MAXIMUM_LIMIT);
         }
 
         Instant now = clock.instant();
-        List<PickupLocation> result = locations.nearestTo(point, limit).stream()
+        List<PickupLocation> result = locations.nearestTo(point, brandId, limit).stream()
                 .map(candidate -> viewOf(candidate, now))
                 .toList();
         return new PickupLocations(result);
@@ -93,8 +96,9 @@ public class StorefrontPickupLocationQuery {
      * One branch a customer may browse, plus its current pickup availability.
      *
      * @param distanceMeters from the customer's point; 0 when {@code distanceKnown} is false
-     * @param distanceKnown false when the customer shared no point (ADR 0183 D17): the branches then come in the order the
-     *                      brand set for its storefront, and no distance is claimed
+     * @param distanceKnown false when the customer shared no point (ADR 0183 D17): the branches then come in the order their
+     *                      brand set for its storefront (one brand's when the search names it, else every brand's interleaved
+     *                      by rank), and no distance is claimed
      */
     public record PickupLocation(
             UUID tenantId,

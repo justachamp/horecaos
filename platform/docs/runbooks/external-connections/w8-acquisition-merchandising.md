@@ -165,5 +165,7 @@ with Marketplace the category rail shows five categories and an «All categories
   with no edit; verifying it puts it back.
 - The customer apps do not call the public pickup search yet (they use the location the deployment is configured with), so the
   branch order is served by `POST /api/v1/storefront/pickup-locations` and proved there, and a customer sees it only once a
-  branch chooser is built on that endpoint. The marketplace layout needs a tenant to say what its category navigation should do;
+  branch chooser is built on that endpoint. A brand's own storefront must send its `brandId` in that request to get the brand's own
+  order; without it the search spans every brand and, with no point, lists each brand's first branch, then each brand's second, and
+  so on. The marketplace layout needs a tenant to say what its category navigation should do;
   what is built is the smallest honest version (ADR 0183, Consequences).

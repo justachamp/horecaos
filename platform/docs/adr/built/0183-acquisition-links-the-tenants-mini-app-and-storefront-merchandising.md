@@ -19,6 +19,16 @@
   `TelegramCustomerLanding` puts a chat's own Mini App button back to the default at that customer's next `/start`
   (`TelegramBotLandingTests.aMiniAppSwitchedOffTakesTheChatsButtonOff`). Still outside the platform: a chat that never starts
   the bot again, and a main Mini App address held in @BotFather; the runbook says where each is corrected.
+  **Correction, 2026-10-23 (fix wave H, the no-point pickup search).** D17 and the endpoint's description said that with no
+  point the public search lists «the brand's branches in the order the brand set». The request named no brand and the query had no
+  tenant or brand predicate (the search is platform-wide by design, with a point as without), so the answer was every brand's
+  branches sorted by one raw `storefront_sort_order`: numbers one brand chose were compared with numbers another chose, and a brand
+  that placed nothing sorted behind every placed branch of every other brand. `brandId` is now an optional field of the request
+  that limits the search to one brand, whose own order then applies exactly as D17 says (a brand's own storefront names itself).
+  Without it, a search with no point orders by each branch's rank inside its own brand's order, then by the brand's name, so every
+  brand's first branch precedes any brand's second; one brand's order is never disturbed by another's numbers
+  (`StorefrontBranchOrderEndpointTests.noPointAcrossBrandsInterleavesEachBrandsOwnOrder`, `aBrandNamedInTheSearchGetsItsOwnOrderAlone`).
+  The customer apps still do not call the search, so the runbook says what a branch chooser built on it must send.
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: proposed by Claude (batch 21); Ayubkhon Abbosov (platform owner) decides

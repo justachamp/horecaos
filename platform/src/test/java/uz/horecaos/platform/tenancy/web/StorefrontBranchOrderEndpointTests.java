@@ -68,6 +68,8 @@ class StorefrontBranchOrderEndpointTests {
     private static final UUID DUP_ONE = UUID.fromString("018f9a30-4000-7000-8000-0000000000d5");
     private static final UUID DUP_TWO = UUID.fromString("018f9a30-4000-7000-8000-0000000000d6");
     private static final UUID FOREIGN_LOCATION = UUID.fromString("018f9a30-4000-7000-8000-0000000000d7");
+    private static final UUID YAK = UUID.fromString("018f9a30-4000-7000-8000-0000000000d8");
+    private static final UUID ZED = UUID.fromString("018f9a30-4000-7000-8000-0000000000d9");
 
     private static final String OWNER = "branch-order-owner";
     private static final String READER = "branch-order-reader";
@@ -238,6 +240,46 @@ class StorefrontBranchOrderEndpointTests {
                     .as("an unknown distance is reported as nothing, not as a branch that is zero metres away")
                     .isZero();
         });
+    }
+
+    @Test
+    @DisplayName(
+            "with no point and no brand, every brand's own order is kept and the brands are interleaved by rank, not blended by their numbers")
+    void noPointAcrossBrandsInterleavesEachBrandsOwnOrder() throws Exception {
+        openSecondStorefront();
+        grant(OWNER, PlatformRole.TENANT_OWNER, OTHER_TENANT);
+        setOrder("order-main", CHARLIE, ALPHA);
+        setOrderAs(OWNER, OTHER_TENANT, OTHER_TENANTS_BRAND, "order-theirs", YAK);
+
+        // MAIN placed Charlie at 10 and Alpha at 20; THEIRS placed Yak at 10 and left Zed unset. Sorting by the raw
+        // numbers
+        // would put THEIRS' unplaced Zed behind every one of MAIN's branches, placed or not; ranking inside each brand
+        // puts
+        // each brand's second branch (Alpha, Zed) ahead of any brand's third.
+        assertThat(search("{\"limit\": 4}")).containsExactly("Charlie", "Yak", "Alpha", "Zed");
+        assertThat(search("{\"limit\": 20}"))
+                .containsExactly("Charlie", "Yak", "Alpha", "Zed", "Bravo", "Delta", "Dup 1", "Dup 2");
+    }
+
+    @Test
+    @DisplayName("naming a brand lists that brand's branches alone, in the order that brand set")
+    void aBrandNamedInTheSearchGetsItsOwnOrderAlone() throws Exception {
+        openSecondStorefront();
+        grant(OWNER, PlatformRole.TENANT_OWNER, OTHER_TENANT);
+        setOrder("order-main", DELTA, CHARLIE);
+        setOrderAs(OWNER, OTHER_TENANT, OTHER_TENANTS_BRAND, "order-theirs", ZED, YAK);
+
+        assertThat(search("{\"brandId\": \"" + BRAND + "\", \"limit\": 20}"))
+                .containsExactly("Delta", "Charlie", "Alpha", "Bravo", "Dup 1", "Dup 2");
+        assertThat(search("{\"brandId\": \"" + OTHER_TENANTS_BRAND + "\", \"limit\": 20}"))
+                .containsExactly("Zed", "Yak");
+        assertThat(search("{\"brandId\": \"" + OTHER_TENANTS_BRAND + "\", \"point\": {\"latitude\": 41.3110, "
+                        + "\"longitude\": 69.2400}}"))
+                .as("a point narrows nothing beyond the brand: the other brand's branches stay out")
+                .containsExactlyInAnyOrder("Yak", "Zed");
+        assertThat(search("{\"brandId\": \"" + UUID.randomUUID() + "\"}"))
+                .as("a brand with no published storefront has nothing to list")
+                .isEmpty();
     }
 
     @Test
@@ -420,6 +462,43 @@ class StorefrontBranchOrderEndpointTests {
                     .param("locationId", locationId)
                     .update();
         }
+    }
+
+    /** A second tenant whose brand also has a published storefront menu and two branches that take pickup. */
+    private void openSecondStorefront() {
+        UUID channel = UUID.fromString("018f9a30-4000-7000-8000-0000000000b2");
+        jdbc.sql("""
+                INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name, status, version)
+                VALUES (:id, :tenantId, 'STOREFRONT', 'WEB', 'Storefront', 'ACTIVE', 1)
+                """).param("id", channel).param("tenantId", OTHER_TENANT).update();
+        jdbc.sql("""
+                INSERT INTO tenant.channel_fulfillment_modes (tenant_id, channel_id, fulfillment_mode, enabled)
+                VALUES (:tenantId, :channelId, 'PICKUP', true)
+                """)
+                .param("tenantId", OTHER_TENANT)
+                .param("channelId", channel)
+                .update();
+        insertLocation(OTHER_TENANT, OTHER_TENANTS_BRAND, YAK, "Yak", 41.0, 69.0, channel);
+        insertLocation(OTHER_TENANT, OTHER_TENANTS_BRAND, ZED, "Zed", 41.0001, 69.0001, channel);
+        UUID catalog = UUID.fromString("018f9a30-4000-7000-8000-0000000000e3");
+        jdbc.sql("""
+                INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
+                VALUES (:id, :tenantId, :brandId, 'MENU', 'Menu', 'ACTIVE')
+                """)
+                .param("id", catalog)
+                .param("tenantId", OTHER_TENANT)
+                .param("brandId", OTHER_TENANTS_BRAND)
+                .update();
+        jdbc.sql("""
+                INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel, status, content_hash,
+                    activated_at)
+                VALUES (:id, :tenantId, :brandId, :catalogId, 'STOREFRONT', 'PUBLISHED', 'hash', now())
+                """)
+                .param("id", UUID.fromString("018f9a30-4000-7000-8000-0000000000e4"))
+                .param("tenantId", OTHER_TENANT)
+                .param("brandId", OTHER_TENANTS_BRAND)
+                .param("catalogId", catalog)
+                .update();
     }
 
     private void publishMenu() {
