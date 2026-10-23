@@ -66,9 +66,10 @@ export class ShiftStore {
     }
     const where: BranchRef = { brandId: branch.brandId, locationId: branch.locationId };
     await this.act(async () => {
-      const point = await this.locations.point();
-      await this.keys.run(`shift-open:${where.locationId}`, (key) =>
-        this.api.openShift(where, point, key),
+      await this.keys.runWith(
+        `shift-open:${where.locationId}`,
+        () => this.locations.point(),
+        (key, point) => this.api.openShift(where, point, key),
       );
       this.closed.set(null);
       this.closedAt.set(null);
@@ -84,9 +85,10 @@ export class ShiftStore {
       return;
     }
     await this.act(async () => {
-      const point = await this.locations.point();
-      const result = await this.keys.run(`shift-close:${shift.shiftId}`, (key) =>
-        this.api.closeShift(where, shift.shiftId, point, key),
+      const result = await this.keys.runWith(
+        `shift-close:${shift.shiftId}`,
+        () => this.locations.point(),
+        (key, point) => this.api.closeShift(where, shift.shiftId, point, key),
       );
       this.closed.set(result);
       this.closedAt.set(where);
@@ -116,7 +118,8 @@ export class ShiftStore {
       return;
     }
     await this.act(async () => {
-      await this.keys.run(`cash-declare:${handoverId}`, (key) =>
+      // The amount is in the body, so a different amount is a different intent.
+      await this.keys.run(`cash-declare:${handoverId}:${declaredMinor}`, (key) =>
         this.api.declareCash(where, handoverId, declaredMinor, key),
       );
       this.declared.set(true);

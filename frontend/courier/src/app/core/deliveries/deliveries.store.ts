@@ -25,9 +25,10 @@ export type RevealAnswer =
  * The courier's deliveries and the steps that move them (couriers.md section 16).
  *
  * Every step goes through one routine: the courier's position (when the phone has one), one
- * idempotency key for the intent -- the same one if the connection dropped and the courier taps
- * again -- the delivery's own version as `If-Match`, and an answer sorted into the branches the
- * screen has sentences for (`StepOutcome`). A step is one at a time per delivery.
+ * idempotency key for the intent -- the same one, with the same position, if the connection
+ * dropped and the courier taps again -- the delivery's own version as `If-Match`, and an answer
+ * sorted into the branches the screen has sentences for (`StepOutcome`). A step is one at a time
+ * per delivery.
  *
  * **The customer's address is not kept here.** The reveal is audited on the platform and returned
  * to the screen that asked, which holds it in its own state and drops it when the screen goes.
@@ -177,10 +178,12 @@ export class DeliveriesStore {
     }
     this.working.set(delivery.shipmentId);
     try {
-      const position = wantsPosition ? await this.location.position() : null;
-      const result = await this.keys.run(
+      // The position is part of the body the platform hashes under the key, so it is read once for
+      // the intent and sent again as it was if the connection dropped and the courier taps again.
+      const result = await this.keys.runWith(
         `${intent}:${delivery.shipmentId}:${delivery.version}`,
-        (key) => call(where, position, key),
+        () => (wantsPosition ? this.location.position() : Promise.resolve(null)),
+        (key, position) => call(where, position, key),
       );
       this.upsert(result);
       return describeSuccess(result);

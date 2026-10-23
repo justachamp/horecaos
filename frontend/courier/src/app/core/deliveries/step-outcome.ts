@@ -41,7 +41,9 @@ const CHECK_KINDS: readonly GateCheckKind[] = ['GEO', 'PHOTO', 'PAYMENT'];
  *   the platform named (cross-wave contract with the delivery-maps wave, which builds the gate).
  * - `refused`: a rule refused it with `422` and a `reason` from {@link GATE_REFUSAL_REASONS};
  *   `reason` is null for one this build has no sentence for.
- * - `stale`: someone else moved the delivery first; the screen reloads and says it changed.
+ * - `stale`: someone else moved the delivery first (`STALE_VERSION`), or the platform saw the step's
+ *   key with another body (`IDEMPOTENCY_KEY_REUSED`) and the first request may have been taken; the
+ *   screen reloads and says it changed.
  * - `failed`: anything else, including no connection.
  */
 export type StepOutcome<T = CourierDelivery> =
@@ -96,7 +98,10 @@ export function classifyStepFailure(failure: unknown): Exclude<StepOutcome, { ki
   if (error.status === 409 && error.code === 'GATE_FAILED') {
     return { kind: 'gate-failed', failed: failedKinds(error.detail) };
   }
-  if (error.code === 'STALE_VERSION') {
+  // A key the platform saw with another body is also a delivery that may have moved: the first
+  // request could have been taken, so the screen reloads and says it changed rather than
+  // reporting an error the courier can do nothing about.
+  if (error.code === 'STALE_VERSION' || error.code === 'IDEMPOTENCY_KEY_REUSED') {
     return { kind: 'stale' };
   }
   if (error.status === 422) {

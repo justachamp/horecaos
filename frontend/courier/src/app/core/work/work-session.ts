@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 
+import { IntentKeys } from '../api/intent-keys';
 import { CourierProfileStore } from '../courier/courier-profile.store';
 import { DeliveriesStore } from '../deliveries/deliveries.store';
 import { OffersStore } from '../offers/offers.store';
@@ -22,6 +23,7 @@ export class WorkSession {
   private readonly duty = inject(DutyStore);
   private readonly offers = inject(OffersStore);
   private readonly deliveries = inject(DeliveriesStore);
+  private readonly keys = inject(IntentKeys);
 
   private started = false;
 
@@ -83,5 +85,7 @@ export class WorkSession {
     this.duty.shiftEnded();
     this.offers.stop();
     this.deliveries.clear();
+    // A request being retried carries the courier's position; it does not outlive the sign-in.
+    this.keys.clear();
   }
 }

@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 
 import { TEST_CONFIG, courierProfile } from '../../../testing/fixtures';
+import { IntentKeys } from '../api/intent-keys';
 import { ApiError } from '../api/problem-details';
 import { APP_CONFIG } from '../config/app-config';
 import { CourierApi } from '../courier/courier-api';
@@ -166,6 +167,24 @@ describe('WorkSession', () => {
       expect(me).toHaveBeenCalledOnce();
       expect(shiftEnded).toHaveBeenCalledOnce();
     });
+  });
+
+  it('forgets the requests it was retrying at sign-out, positions included', async () => {
+    const keys = TestBed.inject(IntentKeys);
+    await expect(
+      keys.runWith(
+        'pickup:ship-1',
+        async () => ({ latitude: 41.3, longitude: 69.2 }),
+        async () => {
+          throw new ApiError({ status: 0, code: 'NETWORK', detail: 'offline' });
+        },
+      ),
+    ).rejects.toBeInstanceOf(ApiError);
+    expect(keys.holds('pickup:ship-1')).toBe(true);
+
+    TestBed.inject(WorkSession).end();
+
+    expect(keys.holds('pickup:ship-1')).toBe(false);
   });
 
   it('stops everything at sign-out and starts again at the next sign-in', async () => {
