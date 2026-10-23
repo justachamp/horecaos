@@ -261,15 +261,17 @@ public class SchedulingConfiguration {
      * sweeper (ADR 0159), {@code StaffSignInSweeper.sweepOnce} (ADR 0176), which ends the records of
      * sessions Keycloak no longer lists and deletes sign-in history past its retention, the IKPU/MXIK list's
      * freshness check (ADR 0173), the customer funnel's backfill, health probe and retention sweeper (ADR
-     * 0167) and the till-balance sync tick (ADR 0171). Batch 21 added six across its waves: the
+     * 0167) and the till-balance sync tick (ADR 0171). Batch 21 added seven across its waves: the
      * courier-access relay ({@code CourierAccessRelay}, ADR 0178), the data-subject export bundle sweeper
      * ({@code ExportBundleSweeper}, ADR 0029), the fiscal amendment-correction sweeper and the fiscal retention
      * report ({@code FiscalAmendmentCorrectionSweeper}, {@code FiscalRetentionSweeper}, ADR 0166), the till
-     * balance sync scheduler ({@code PosBalanceSyncScheduler}, ADR 0171) and the Web Push click-token sweeper
-     * ({@code PushClickTokenSweeper}, ADR 0182). Each wave raised this line on a branch that could not see the
-     * others; the integration counted them together. The pool-size test counts them.
+     * balance sync scheduler ({@code PosBalanceSyncScheduler}, ADR 0171), the Web Push click-token sweeper
+     * ({@code PushClickTokenSweeper}, ADR 0182) and the campaign email's unsubscribe-token sweeper
+     * ({@code EmailUnsubscribeTokenSweeper}, ADR 0182, added by the review of the integrated branch). Each
+     * wave raised this line on a branch that could not see the others; the integration counted them
+     * together. The pool-size test counts them.
      */
-    static final int DEFAULT_POOL_SIZE = 99;
+    static final int DEFAULT_POOL_SIZE = 100;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

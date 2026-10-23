@@ -14,6 +14,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.customers.api.ConsentDirectory;
 import uz.horecaos.platform.customers.api.ConsentRecorder;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcUnsubscribeTokenStore;
@@ -152,6 +153,15 @@ public class EmailUnsubscribeService {
         }
         return Optional.of(new Preview(
                 brands.displayName(stands.tenantId(), stands.brandId()).orElse(""), stands.locale()));
+    }
+
+    /**
+     * Housekeeping for the sweeper: tokens past their expiry answer like unknown ones and hold a row
+     * that names a customer account for nothing.
+     */
+    @Transactional
+    public int purgeExpired(int limit) {
+        return tokens.deleteExpired(clock.instant(), limit);
     }
 
     /** What an unsubscribe page is allowed to know. */

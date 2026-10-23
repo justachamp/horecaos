@@ -66,6 +66,7 @@ import uz.horecaos.platform.notifications.application.CampaignEmailEnvelopes;
 import uz.horecaos.platform.notifications.application.CampaignMessageRouter;
 import uz.horecaos.platform.notifications.application.EmailDailyCap;
 import uz.horecaos.platform.notifications.application.EmailUnsubscribeService;
+import uz.horecaos.platform.notifications.application.EmailUnsubscribeTokenSweeper;
 import uz.horecaos.platform.notifications.application.NotificationDispatchService;
 import uz.horecaos.platform.notifications.application.NotificationEligibilityService;
 import uz.horecaos.platform.notifications.application.NotificationTemplateService;
@@ -285,6 +286,68 @@ class CampaignEmailDeliveryTests {
         assertThat(everythingIn("notifications.unsubscribe_tokens"))
                 .as("only the token's hash is kept")
                 .doesNotContain(tokenOf(mail));
+    }
+
+    @Test
+    @DisplayName("an unsubscribe token that can no longer be used is removed, and one that still can is kept")
+    void expiredUnsubscribeTokensAreSwept() {
+        grantEmailConsent();
+        enqueue("m1");
+        worker.drain();
+        String live = tokenOf(relay.sent.getFirst());
+        assertThat(everythingIn("notifications.unsubscribe_tokens")).isNotEmpty();
+        var sweeper = new EmailUnsubscribeTokenSweeper(unsubscribes);
+
+        assertThat(sweeper.purgeExpired()).as("nothing has expired yet").isZero();
+        clock.advance(Duration.ofDays(399));
+        assertThat(sweeper.purgeExpired())
+                .as("one day before its 400-day expiry the link still works, so it stays")
+                .isZero();
+        assertThat(unsubscribes.preview(live)).isPresent();
+
+        clock.advance(Duration.ofDays(2));
+        assertThat(unsubscribes.preview(live))
+                .as("expired: the same answer as unknown")
+                .isEmpty();
+        assertThat(sweeper.purgeExpired()).isEqualTo(1);
+        assertThat(everythingIn("notifications.unsubscribe_tokens")).isEmpty();
+        assertThat(sweeper.purgeExpired())
+                .as("and a second pass has nothing left to do")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("a retried message leaves a token per attempt, and the sweeper clears more than one batch of them")
+    void theSweeperClearsEveryBatchAndOnlyTheExpired() {
+        grantEmailConsent();
+        UUID notificationId = enqueue("m1");
+        worker.drain();
+        JdbcUnsubscribeTokenStore store = new JdbcUnsubscribeTokenStore(jdbc);
+        int expiring = 1100;
+        for (int attempt = 0; attempt < expiring; attempt++) {
+            store.insert(
+                    "%064x".formatted(attempt),
+                    TENANT,
+                    BRAND,
+                    accountId,
+                    notificationId,
+                    "PROMOTIONS",
+                    "uz-Latn",
+                    clock.instant(),
+                    clock.instant().plus(Duration.ofHours(1)));
+        }
+        var sweeper = new EmailUnsubscribeTokenSweeper(unsubscribes);
+
+        clock.advance(Duration.ofDays(2));
+
+        assertThat(sweeper.purgeExpired())
+                .as("1100 expired rows are three batches of 500, 500 and 100")
+                .isEqualTo(expiring);
+        assertThat(jdbc.sql("SELECT count(*) FROM notifications.unsubscribe_tokens")
+                        .query(Long.class)
+                        .single())
+                .as("the one token minted at dispatch has 400 days and is not touched")
+                .isEqualTo(1L);
     }
 
     @Test
