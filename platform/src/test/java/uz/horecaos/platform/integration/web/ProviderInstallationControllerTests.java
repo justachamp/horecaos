@@ -340,6 +340,32 @@ class ProviderInstallationControllerTests {
                 .isZero();
     }
 
+    /** ADR 0095, ADR 0096: HorecaOS's own accounts share the environment catalogue, so the door itself refuses them. */
+    @Test
+    void installRefusesAProviderThatIsHorecaOSsOwnAccount() {
+        environment("click_card_sandbox", "PAYMENT", "CLICK_CARD");
+        environment("didox_production", "OTHER", "DIDOX");
+
+        for (var attempt : List.of(
+                Map.entry(uz.horecaos.platform.integration.api.provider.ProviderCategory.PAYMENT, "click_card_sandbox"),
+                Map.entry(uz.horecaos.platform.integration.api.provider.ProviderCategory.OTHER, "didox_production"))) {
+            String providerType = attempt.getValue().startsWith("click") ? "click_card" : "Didox";
+            var refused = org.assertj.core.api.Assertions.catchThrowable(() -> controller.install(
+                    TENANT,
+                    new ProviderInstallationController.InstallRequest(
+                            attempt.getKey(), providerType, attempt.getValue(), "By hand", null, "x")));
+
+            assertThat(refused)
+                    .isInstanceOf(uz.horecaos.platform.web.api.ApiException.class)
+                    .hasMessageContaining("HorecaOS's own account");
+        }
+        assertThat(jdbc.sql("SELECT count(*) FROM integration.installations WHERE tenant_id = :tenantId")
+                        .param("tenantId", TENANT)
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
     private void environment(String code, String category, String providerType) {
         jdbc.sql("""
                 INSERT INTO integration.provider_environments

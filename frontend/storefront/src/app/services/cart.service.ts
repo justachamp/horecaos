@@ -372,12 +372,17 @@ export class CartService {
    *        guest is still at that table before it puts the order on the table's
    *        bill; a bound cart checked out without it is refused
    *        (`TABLE_TOKEN_REQUIRED`). Left out for every other cart.
+   * @param redeemFromBalanceMinor the points the customer pays part of the order
+   *        with, in whole som (ADR 0046, ADR 0185). They are debited inside the
+   *        checkout transaction, never after it, and the rest is paid by
+   *        `paymentMethodCode`. Left out when no points are spent.
    */
   async checkout(input: {
     priced: PricedCart;
     paymentMethodCode: string;
     idempotencyKey: string;
     guestToken?: string;
+    redeemFromBalanceMinor?: number;
   }): Promise<CheckoutResult> {
     return this.api.mutate<CheckoutResult>('POST', `${this.brandPath}/checkouts`, {
       body: {
@@ -386,6 +391,9 @@ export class CartService {
         quoteId: input.priced.quoteId,
         contextHash: input.priced.contextHash,
         paymentMethodCode: input.paymentMethodCode,
+        ...(input.redeemFromBalanceMinor && input.redeemFromBalanceMinor > 0
+          ? { redeemFromBalanceMinor: input.redeemFromBalanceMinor }
+          : {}),
       },
       idempotencyKey: input.idempotencyKey,
       ...(input.guestToken ? { headers: { 'X-Dine-In-Token': input.guestToken } } : {}),

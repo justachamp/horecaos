@@ -1,0 +1,16 @@
+@if (rows().length > 0) {
+  <section class="mt-4 rounded-2xl bg-surface-raised px-4 py-4" data-testid="payment-split">
+    <p class="text-sm font-bold text-text-primary">{{ 'split.title' | t }}</p>
+    <ul class="mt-2 flex flex-col gap-2">
+      @for (row of rows(); track row.key) {
+        <li class="flex items-center justify-between gap-3 text-sm" data-testid="payment-split-row">
+          <span class="min-w-0 flex-1">
+            <span class="text-text-primary">{{ row.label }}</span>
+            <span class="block text-xs text-zinc-400">{{ row.statusKey | t }}</span>
+          </span>
+          <span class="shrink-0 font-medium text-text-primary">{{ row.amount }}</span>
+        </li>
+      }
+    </ul>
+  </section>
+}

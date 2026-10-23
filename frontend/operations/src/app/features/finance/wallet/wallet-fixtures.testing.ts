@@ -66,6 +66,24 @@ export const ENROLMENT: EnrolmentStartedView = {
   expiresAt: '2026-10-07T10:15:00Z',
 };
 
+/**
+ * A provider whose card number goes from the browser straight to the provider (Click's documented card-token
+ * call): the session names where to tokenise and with which public id, and the console never types a token.
+ */
+export const ENROLMENT_BROWSER: EnrolmentStartedView = {
+  sessionReference: 'session-2',
+  hostedFormUrl: null,
+  clientParameters: {
+    provider: 'CLICK_CARD',
+    handoff: 'BROWSER_TOKENISE',
+    tokeniseUrl: 'https://api.click.uz/v2/merchant/card_token/request',
+    serviceId: '100100',
+    temporary: '0',
+    expiryFormat: 'MMYY',
+  },
+  expiresAt: '2026-10-07T10:15:00Z',
+};
+
 export const TOP_UP_SUCCEEDED: TopUpView = {
   topUpId: 'tu-1',
   amount: uzs(150_000),

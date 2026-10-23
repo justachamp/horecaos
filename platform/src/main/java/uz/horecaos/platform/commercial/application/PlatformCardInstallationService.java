@@ -14,6 +14,7 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.commercial.api.CardProviderAdapter;
 import uz.horecaos.platform.commercial.domain.PlatformCardInstallation;
 import uz.horecaos.platform.commercial.infrastructure.PlatformCardGateway;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcCardChargeAttemptStore;

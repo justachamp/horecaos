@@ -433,6 +433,67 @@ public class OrderSettlementService implements CashDueLookupPort {
                 clock.instant());
     }
 
+    /**
+     * Re-plans a not-yet-paid settlement's money leg onto another payment method and, when the order was repriced in the
+     * same amendment, onto its new total (ADR 0039 {@code CHANGE_PAYMENT_METHOD}, ADR 0185).
+     *
+     * <p>The balance tender is left exactly as it is: the customer's redemption was taken at checkout and an
+     * amendment does not take or give back points. What moves is the money tender, to {@code newTotalMinor} less
+     * the balance tender, and to the registry row of the new method, so the tenders still sum to the order total,
+     * at least one is money, and {@code payment[]} names the method the customer will actually pay with.
+     *
+     * <p>Only a settlement that is still {@code PLANNED} with nothing settled and exactly one money tender that is
+     * still {@code PLANNED} with no payment intent: the shape of an order whose money has not moved. Anything else
+     * has money in motion, and the answer is empty, which refuses the amendment.
+     *
+     * @param newMethodId the tenant's registry row for the new method, registered by the planner on first use
+     * @return the new money figure, or empty when the settlement cannot be re-planned; nothing is written then
+     */
+    @Transactional
+    public OptionalLong replanMoneyLeg(
+            UUID tenantId, UUID orderId, long newTotalMinor, UUID newMethodId, String actor) {
+        Optional<SettlementRow> found = store.findSettlement(tenantId, orderId);
+        if (found.isEmpty()) {
+            return OptionalLong.empty();
+        }
+        SettlementRow settlement = found.get();
+        if (settlement.status() != SettlementStatus.PLANNED || settlement.settledMinor() != 0L) {
+            return OptionalLong.empty();
+        }
+        List<TenderRow> tenders = store.tendersOf(tenantId, settlement.id());
+        List<TenderRow> money =
+                tenders.stream().filter(tender -> !tender.settlesFromBalance()).toList();
+        if (money.size() != 1
+                || money.get(0).status() != TenderStatus.PLANNED
+                || money.get(0).paymentIntentId() != null) {
+            return OptionalLong.empty();
+        }
+        MethodRow method = store.findMethod(tenantId, newMethodId).orElse(null);
+        if (method == null || method.settlesFromBalance() || !"ACTIVE".equals(method.status())) {
+            return OptionalLong.empty();
+        }
+        long balance = tenders.stream()
+                .filter(TenderRow::settlesFromBalance)
+                .mapToLong(TenderRow::amountMinor)
+                .reduce(0L, Math::addExact);
+        long newMoney = Math.subtractExact(newTotalMinor, balance);
+        if (newMoney <= 0) {
+            // ADR 0046: an order settles at least one som in money. A change that would leave only points
+            // paying for it is refused, not rounded up.
+            return OptionalLong.empty();
+        }
+        boolean moved = store.replanMoneyTender(
+                tenantId,
+                settlement.id(),
+                settlement.version(),
+                newTotalMinor,
+                money.get(0).id(),
+                newMoney,
+                newMethodId,
+                clock.instant());
+        return moved ? OptionalLong.of(newMoney) : OptionalLong.empty();
+    }
+
     /** The figure the courier app is shown, snapshotted onto the ADR 0014 assignment. */
     @Transactional(readOnly = true)
     public long cashDueMinor(UUID tenantId, UUID orderId, String cashMethodCode) {

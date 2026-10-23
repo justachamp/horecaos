@@ -1,4 +1,4 @@
-package uz.horecaos.platform.commercial.application;
+package uz.horecaos.platform.commercial.api;
 
 import java.time.Instant;
 import java.util.Map;
@@ -34,6 +34,21 @@ public interface CardEnrolment {
      * reference HorecaOS may charge later.
      */
     ConfirmOutcome confirm(UUID tenantId, String sessionReference, String providerToken, String verificationCode);
+
+    /**
+     * {@link #confirm(UUID, String, String, String)} for a provider whose confirmation does not return the
+     * card's expiry, so the cardholder's own entry of it travels with the token (month and year only,
+     * {@code MMYY}; never the number). A provider that returns the expiry itself ignores it, which is what
+     * this default does.
+     */
+    default ConfirmOutcome confirm(
+            UUID tenantId,
+            String sessionReference,
+            String providerToken,
+            String verificationCode,
+            @Nullable String cardExpiry) {
+        return confirm(tenantId, sessionReference, providerToken, verificationCode);
+    }
 
     /**
      * Tells the provider to forget a reference, so a card a tenant removed

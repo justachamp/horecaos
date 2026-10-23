@@ -40,6 +40,8 @@
               </div>
             }
           </div>
+          <!-- X.1 (ADR 0185): the points and the money that pay for this order, where both do -->
+          <app-payment-split [split]="activeSplit()" />
         </section>
       }
 

@@ -3,6 +3,7 @@ package uz.horecaos.platform.commercial.application;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import uz.horecaos.platform.commercial.api.CardCharger;
 
 /**
  * The form a card reference takes on {@code tenant_billing} (ADR 0095): the

@@ -189,7 +189,8 @@
       "add": "Add your free {{name}}",
       "addMany": "Add your free {{name}} ×{{count}}"
     },
-    "autoAdded": "Added automatically"
+    "autoAdded": "Added automatically",
+    "pointsChanged": "The most you can pay with points has changed. Check the amount and place the order again."
   },
   "orders": {
     "title": "Orders",
@@ -571,6 +572,34 @@
       "title": "Filter by tag",
       "clear": "Clear",
       "empty": "No dish carries all of the selected tags."
+    }
+  },
+  "points": {
+    "title": "Pay with points",
+    "summary": "You have {{available}} in points. Up to {{maximum}} can go towards this order.",
+    "use": "Use my points",
+    "amount": "Points to use",
+    "useMaximum": "Use the most",
+    "cashToPay": "Left to pay",
+    "exceeds": "That is more than the {{maximum}} this order allows.",
+    "adjusted": "The most you can use changed, so the amount was lowered.",
+    "blockedByPromotion": "Points cannot be used together with the offer on this order.",
+    "spent": "Paid with points",
+    "profileTitle": "My points",
+    "profileSpendable": "Points you can spend: {{amount}}",
+    "profileTotal": "Total points: {{amount}}. The rest are not spendable yet."
+  },
+  "split": {
+    "title": "How this order is paid",
+    "points": "Points",
+    "money": "Money",
+    "status": {
+      "PLANNED": "To pay",
+      "RESERVED": "Held",
+      "SETTLED": "Paid",
+      "RELEASED": "Returned to you",
+      "REVERSED": "Refunded",
+      "FAILED": "Did not go through"
     }
   }
 }

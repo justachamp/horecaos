@@ -26,6 +26,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
+import uz.horecaos.platform.commercial.api.CardEnrolment;
 import uz.horecaos.platform.commercial.application.WalletService.WalletChangeOutcome;
 import uz.horecaos.platform.commercial.domain.PlanTerms;
 import uz.horecaos.platform.commercial.domain.StatementPayment;
@@ -183,7 +184,7 @@ abstract class WalletBillingFixture {
 
         approvals = new JdbcApprovalService(jdbc, audit, clock, new SimpleMeterRegistry(), json);
         fake = new FakeCardProvider(clock);
-        gateway = new PlatformCardGateway(installationStore, List.of(fake), true);
+        gateway = new PlatformCardGateway(installationStore, adapters(), true);
         wallet = new WalletService(
                 walletStore, subscriptionStore, attemptStore, approvals, gateway, audit, meters, transactions, clock);
         EntitlementQueryService entitlements = new EntitlementQueryService(
@@ -217,6 +218,15 @@ abstract class WalletBillingFixture {
     }
 
     // ----------------------------------------------------------------- the card account
+
+    /**
+     * The adapters the gateway can reach. The test double alone by default; a test that runs the same flows through
+     * the real adapter overrides it, and is built while the fixture's wiring is being assembled, so it may use
+     * {@link #clock} and {@link #jdbc}.
+     */
+    List<uz.horecaos.platform.commercial.api.CardProviderAdapter> adapters() {
+        return List.of(fake);
+    }
 
     /** Creates and activates the fake through the installation service, as an operator would. */
     UUID activateFake() {

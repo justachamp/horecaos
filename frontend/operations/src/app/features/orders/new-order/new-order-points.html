@@ -1,0 +1,99 @@
+@if (visible()) {
+  <section class="new-order-points" data-testid="new-order-points">
+    <p class="q-caption new-order-points__title">{{ 'orders.newOrder.points.title' | t }}</p>
+
+    @if (offer(); as o) {
+      <p class="q-caption new-order-points__row" data-testid="new-order-points-available">
+        <span>{{ 'orders.newOrder.points.available' | t }}</span>
+        <span>{{ formatted(o.available.amountMinor, o.available.currency) }}</span>
+      </p>
+
+      @if (refusalText(); as refusal) {
+        <p
+          class="q-caption new-order-points__hint"
+          role="status"
+          data-testid="new-order-points-refusal"
+        >
+          {{ refusal }}
+        </p>
+      }
+
+      @if (o.redeemable || requestedMinor() > 0) {
+        <p class="q-caption new-order-points__row" data-testid="new-order-points-maximum">
+          <span>{{ 'orders.newOrder.points.maximum' | t }}</span>
+          <span>{{ formatted(o.maximum.amountMinor, o.maximum.currency) }}</span>
+        </p>
+
+        <label class="new-order-points__field">
+          <span class="q-caption">{{ 'orders.newOrder.points.amount' | t }}</span>
+          <q-money-input
+            [valueMinor]="requestedMinor()"
+            (valueMinorChange)="setRequested($event)"
+            [ariaLabel]="'orders.newOrder.points.amount' | t"
+            data-testid="new-order-points-amount"
+          />
+        </label>
+
+        <div class="new-order-points__actions">
+          <button
+            type="button"
+            class="new-order-points__link q-caption"
+            [disabled]="!o.redeemable"
+            (click)="useMaximum()"
+            data-testid="new-order-points-use-maximum"
+          >
+            {{ 'orders.newOrder.points.useMaximum' | t }}
+          </button>
+          @if (requestedMinor() > 0) {
+            <button
+              type="button"
+              class="new-order-points__link q-caption"
+              (click)="clear()"
+              data-testid="new-order-points-clear"
+            >
+              {{ 'orders.newOrder.points.clear' | t }}
+            </button>
+          }
+        </div>
+
+        @if (exceedsMaximum()) {
+          <p
+            class="q-caption new-order-points__error"
+            role="status"
+            data-testid="new-order-points-exceeds"
+          >
+            {{ 'orders.newOrder.points.exceeds' | t }}
+          </p>
+        }
+
+        @if (requestedMinor() > 0) {
+          <label class="new-order-points__agreement q-caption">
+            <input
+              type="checkbox"
+              [checked]="agreed()"
+              (change)="setAgreed($any($event.target).checked)"
+              data-testid="new-order-points-agreed"
+            />
+            {{ 'orders.newOrder.points.agreed' | t }}
+          </label>
+          @if (cashToCollect(); as cash) {
+            <p class="q-caption new-order-points__row" data-testid="new-order-points-cash">
+              <span>{{ 'orders.newOrder.points.cashToCollect' | t }}</span>
+              <span>{{ formatted(cash.amountMinor, cash.currency) }}</span>
+            </p>
+          }
+        }
+      }
+    }
+
+    @if (unavailable()) {
+      <p
+        class="q-caption new-order-points__error"
+        role="status"
+        data-testid="new-order-points-unavailable"
+      >
+        {{ 'orders.newOrder.points.unavailable' | t }}
+      </p>
+    }
+  </section>
+}

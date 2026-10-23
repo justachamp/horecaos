@@ -6,6 +6,7 @@ import { BrandScope, catalogPaths } from '../../../core/api/catalog-paths';
 import { IntentCommandRegistry, command } from '../../../core/api/idempotency';
 import { LocationScope, operationsPaths } from '../../../core/api/operations-paths';
 import { CursorState, Page } from '../../../core/api/page';
+import { Money } from '../../../core/format/money';
 
 /**
  * Types mirror `OperationsOrderController`, `CatalogAuthoringController` and
@@ -323,6 +324,19 @@ export interface PlaceOrderRequest {
    * `ruleId` that quote named. The cart never evaluates them into this order. Absent means none.
    */
   readonly declinedAutoAddRuleIds?: readonly string[];
+  /**
+   * ADR 0046 / ADR 0185: the points the customer pays part of the order with, in whole som. They are debited
+   * inside the transaction that creates the order, never after it, and the order's money leg is what is left.
+   * Absent or null when none are spent. The server refuses an amount the brand's rules do not allow, and refuses
+   * any amount without {@link operatorAttestsCustomerAgreement}.
+   */
+  readonly redeemFromBalanceMinor?: number | null;
+  /**
+   * ADR 0039: the operator's statement that the customer, on the phone, agreed to pay `redeemFromBalanceMinor`
+   * with their points. A person spending another person's points needs someone to answer for the consent; the
+   * order records who. True only with a redemption.
+   */
+  readonly operatorAttestsCustomerAgreement?: boolean | null;
 }
 
 // -------------------------------------------------------- §5.6 the server's price (row 1.3e)
@@ -392,6 +406,40 @@ export interface QuotedAutoAddLine {
   readonly baseAmountMinor: number;
   readonly finalAmountMinor: number;
   readonly taxAmountMinor: number;
+}
+
+// -------------------------------------------------------- X.1: spending points on the order (ADR 0185)
+
+/**
+ * `RedemptionOfferResponses.RedemptionOfferView` -- what the customer may spend of their points on this order.
+ * `maximum` is zero exactly when `redeemable` is false, and `refusal` then says why (`NO_ACCOUNT`,
+ * `REDEMPTION_NOT_ENABLED`, `CHANNEL_NOT_ELIGIBLE`, `ACCOUNT_NOT_ACTIVE`, `ORDER_NOT_ELIGIBLE`,
+ * `INSUFFICIENT_BALANCE`, `REDEMPTION_BLOCKED_BY_PROMOTION`).
+ */
+export interface RedemptionOffer {
+  readonly accountId: string | null;
+  readonly available: Money;
+  readonly maximum: Money;
+  readonly redeemable: boolean;
+  readonly refusal: string | null;
+}
+
+/**
+ * `OperationsRedemptionOfferController.OperatorRedemptionOfferResponse` -- the offer against the figure the
+ * order would be booked at, and, when the request names an amount, the cash the customer would still owe.
+ *
+ * @property requested the amount the request asked for, null when it asked for none.
+ * @property requestedRefusal `EXCEEDS_MAXIMUM` when `requested` is above what the offer permits.
+ * @property cashToCollect the order total less the accepted redemption; null when the request was refused.
+ */
+export interface OperatorRedemptionOffer {
+  readonly customerAccountId: string;
+  readonly orderTotal: Money;
+  readonly deliveryFee: Money;
+  readonly offer: RedemptionOffer;
+  readonly requested?: Money | null;
+  readonly requestedRefusal?: string | null;
+  readonly cashToCollect?: Money | null;
 }
 
 // -------------------------------------------------------- §5.4 branch resolution (row 1.3)
@@ -628,6 +676,26 @@ export class NewOrderApi {
     return firstValueFrom(
       this.api.post<PlaceOrderRequest, OrderQuote>(
         `${operationsPaths.orders(scope)}/quote`,
+        command(request),
+      ),
+    );
+  }
+
+  /**
+   * X.1 (ADR 0185) -- what the customer on the phone may spend of their points on the order being taken, and the
+   * cash they would still owe for `request.redeemFromBalanceMinor`: `POST .../orders/redemption-offer`,
+   * `ORDER_PLACE` at `LOCATION` scope. The body is the one {@link quote} takes, priced by the same path.
+   *
+   * Writes and holds nothing, so a fresh `Idempotency-Key` per call (the plain {@link command} helper) is right,
+   * exactly as for {@link quote}. The points are spent by {@link placeOrder}, inside its transaction.
+   */
+  redemptionOffer(
+    scope: LocationScope,
+    request: PlaceOrderRequest,
+  ): Promise<OperatorRedemptionOffer> {
+    return firstValueFrom(
+      this.api.post<PlaceOrderRequest, OperatorRedemptionOffer>(
+        `${operationsPaths.orders(scope)}/redemption-offer`,
         command(request),
       ),
     );

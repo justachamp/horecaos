@@ -189,7 +189,8 @@
       "add": "Sovg'ani qo'shish: {{name}}",
       "addMany": "Sovg'ani qo'shish: {{name}} ×{{count}}"
     },
-    "autoAdded": "Avtomatik qoʻshildi"
+    "autoAdded": "Avtomatik qoʻshildi",
+    "pointsChanged": "Ball bilan to'lash mumkin bo'lgan eng ko'p miqdor o'zgardi. Miqdorni tekshirib, buyurtmani qayta bering."
   },
   "orders": {
     "title": "Buyurtmalar",
@@ -571,6 +572,34 @@
       "title": "Teglar boʻyicha filtr",
       "clear": "Tozalash",
       "empty": "Tanlangan teglarning hammasiga ega taom yoʻq."
+    }
+  },
+  "points": {
+    "title": "Ball bilan to'lash",
+    "summary": "Sizda {{available}} ball bor. Ushbu buyurtmaga {{maximum}} gacha sarflash mumkin.",
+    "use": "Ballarimdan foydalanish",
+    "amount": "Sarflanadigan ball",
+    "useMaximum": "Eng ko'pini sarflash",
+    "cashToPay": "To'lash uchun qoladi",
+    "exceeds": "Bu buyurtma uchun ruxsat etilgan {{maximum}} dan ko'p.",
+    "adjusted": "Eng ko'p miqdor o'zgargani uchun summa kamaytirildi.",
+    "blockedByPromotion": "Bu buyurtmadagi aksiya bilan ballarni birga ishlatib bo'lmaydi.",
+    "spent": "Ball bilan to'landi",
+    "profileTitle": "Mening ballarim",
+    "profileSpendable": "Sarflash mumkin bo'lgan ball: {{amount}}",
+    "profileTotal": "Jami ball: {{amount}}. Qolganlarini hozircha sarflab bo'lmaydi."
+  },
+  "split": {
+    "title": "Bu buyurtma qanday to'lanadi",
+    "points": "Ballar",
+    "money": "Pul",
+    "status": {
+      "PLANNED": "To'lanadi",
+      "RESERVED": "Ushlab turilgan",
+      "SETTLED": "To'langan",
+      "RELEASED": "Sizga qaytarildi",
+      "REVERSED": "Qaytarilgan",
+      "FAILED": "O'tmadi"
     }
   }
 }

@@ -636,7 +636,8 @@ public class OrderAmendmentService {
             // Asked again here: a priced amendment outlives the call that priced it, and this is the
             // statement that opens the provider intent.
             requireWeighedLinesStayAtHandover(order, decoded, liveLines);
-            paymentProjectionPatch = applyPaymentMethodChange(tenantId, order, amendment, decoded.paymentMethodCode());
+            paymentProjectionPatch = applyPaymentMethodChange(
+                    tenantId, order, amendment, decoded.paymentMethodCode(), totalMinor, actorId);
             fiscalCorrectionRequired = true;
         }
 
@@ -1893,7 +1894,12 @@ public class OrderAmendmentService {
      *         NOT_REQUIRED} projection alone
      */
     private @Nullable String applyPaymentMethodChange(
-            UUID tenantId, OrderRow order, AmendmentRow amendment, String paymentMethodCode) {
+            UUID tenantId,
+            OrderRow order,
+            AmendmentRow amendment,
+            String paymentMethodCode,
+            long newTotalMinor,
+            @Nullable String actorId) {
         if (CASH_METHOD_CODE.equalsIgnoreCase(paymentMethodCode)) {
             return null;
         }
@@ -1901,10 +1907,15 @@ public class OrderAmendmentService {
             throw new AmendmentRefusedException(
                     "PAYMENT_METHOD_NOT_ACCEPTED", "This location cannot accept " + paymentMethodCode);
         }
+        // ADR 0185. The settlement is the authority and the intent is told: the money tender is moved to the new
+        // method (and to the amended total, when this amendment repriced the order) and the provider is asked for
+        // what that leg now collects. It used to be asked for the order total, which on a points-plus-cash order is
+        // the money the customer had already part-paid in points, while the tender went on saying CASH.
+        long moneyDueMinor = removals.replanMoneyLeg(order, newTotalMinor, paymentMethodCode, actorId);
         payments.createIntent(
                 tenantId,
                 order.orderId(),
-                order.totalMinor(),
+                moneyDueMinor,
                 order.currency(),
                 paymentMethodCode,
                 amendment.idempotencyKey() + ":payment-method");

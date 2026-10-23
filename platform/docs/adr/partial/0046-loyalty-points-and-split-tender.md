@@ -828,3 +828,14 @@ recomputing today's accrual rules.
 - [ADR 0019](../partial/0019-cart-checkout-and-order-orchestration.md) — `OrderCompleted`, the fact `OrderCompletionAccrualTrigger` listens for, and `OrderStateService`'s publish site.
 - [ADR 0032](../built/0032-event-contract-governance-and-topic-policy.md) — why `OrderCompleted` has a catalogue entry and schema before this record's trigger could consume it.
 - [Fiscalization via payment providers](../../providers/fiscalization-via-payment-providers.md) — the Click and Payme field lists that force the discount representation.
+
+## Status notes
+
+### 2026-10-14 — a redemption is never recorded after checkout
+
+[ADR 0185](../built/0185-a-redemption-is-taken-at-checkout-and-order-entry-never-recorded-after.md)
+declines a loyalty-redemption leg recorded after checkout and names what stands instead: the
+redemption stays inside checkout and operator order entry, as this record decides, and the console
+and both storefronts offer it there, never after. This record's Decision, Alternatives and
+Consequences are unchanged. The storefront balance endpoints that "need a staff capability"
+(the status line above) gain a customer-owned read in the same wave.

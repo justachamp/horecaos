@@ -55,6 +55,25 @@ describe('describeWalletError', () => {
     expect(describeWalletError(unknown, translate)).toContain('error.detailed');
   });
 
+  it('words what the real card provider’s adapter says, and a numbered refusal of its own without its number', () => {
+    for (const reason of [
+      'CARD_EXPIRED',
+      'CARD_EXPIRY_REQUIRED',
+      'PROVIDER_UNAVAILABLE',
+      'PROVIDER_NOT_CONNECTED',
+    ]) {
+      expect(
+        describeWalletError(refusal(ApiErrorCode.UNPROCESSABLE_STATE, 422, reason), translate),
+      ).toBe(`finance.wallet.reason.${reason}`);
+    }
+    expect(
+      describeWalletError(
+        refusal(ApiErrorCode.UNPROCESSABLE_STATE, 422, 'CLICK_ERROR_-300'),
+        translate,
+      ),
+    ).toBe('finance.wallet.reason.PROVIDER_REFUSED');
+  });
+
   it('says something went wrong, without a reference, for an error that is not an ApiError', () => {
     expect(describeWalletError(new Error('boom'), translate)).toBe('error.unknown.noReference');
   });
@@ -67,5 +86,11 @@ describe('declineReasonKey', () => {
     );
     expect(declineReasonKey('SOMETHING_ELSE')).toBeNull();
     expect(declineReasonKey(null)).toBeNull();
+  });
+
+  it('words the declines the real card adapter reports, and a provider’s numbered one without its number', () => {
+    expect(declineReasonKey('PAYMENT_DECLINED')).toBe('finance.wallet.decline.PAYMENT_DECLINED');
+    expect(declineReasonKey('PROVIDER_REJECTED')).toBe('finance.wallet.decline.PROVIDER_REJECTED');
+    expect(declineReasonKey('CLICK_ERROR_-104')).toBe('finance.wallet.decline.PROVIDER_ERROR');
   });
 });

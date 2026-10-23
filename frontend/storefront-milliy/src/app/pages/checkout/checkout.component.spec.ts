@@ -16,6 +16,7 @@ import {
   PaymentSessionService,
   type PaymentSessionResponse,
 } from '../../services/payment-session.service';
+import { type CartPointsOffer, PointsService } from '../../services/points.service';
 import { TranslateService } from '../../services/translate.service';
 import type { PricedCart, CheckoutResult, FulfillmentMode } from '../../services/cart.service';
 import { HorecaOSApiError } from '../../core/api/problem-details';
@@ -94,6 +95,10 @@ class FakeUiCartService {
   addGift = vi.fn(async (_variantId: string) => true);
   readonly errorKey = signal<string | null>(null);
   readonly priceRefusalKey = signal<string | null>(null);
+  /** The last pricing answer; the points control reads the cart and quote it names. */
+  readonly priced = signal<PricedCart | null>(null);
+  formatPrice = (value: number): string =>
+    `${value.toLocaleString('en-US').replace(/,/g, ' ')} so'm`;
   orderComment = '';
 
   items = () => this.cartData()?.items ?? [];
@@ -140,6 +145,34 @@ class FakeDeliverySelectionService {
   setRecipient = vi.fn();
 }
 
+/** X.1 (ADR 0185): by default a brand with no points to offer, so the control is not there. */
+class FakePointsService {
+  redemptionOffer = vi.fn<(cartId: string) => Promise<CartPointsOffer>>(async () =>
+    pointsOffer({ redeemable: false, refusal: 'REDEMPTION_NOT_ENABLED' }),
+  );
+  paymentSplit = vi.fn();
+}
+
+/** A cart priced at 25 000 so'm, for a customer with 12 000 in points, of which 4 000 may be spent. */
+function pointsOffer(
+  overrides: { redeemable?: boolean; maximum?: number; refusal?: string | null } = {},
+): CartPointsOffer {
+  const redeemable = overrides.redeemable ?? true;
+  const maximum = redeemable ? (overrides.maximum ?? 4_000) : 0;
+  return {
+    cartId: 'cart-1',
+    priced: true,
+    orderTotal: { amountMinor: 25_000, currency: 'UZS' },
+    offer: {
+      accountId: 'pa-1',
+      available: { amountMinor: 12_000, currency: 'UZS' },
+      maximum: { amountMinor: maximum, currency: 'UZS' },
+      redeemable,
+      refusal: redeemable ? null : (overrides.refusal ?? 'INSUFFICIENT_BALANCE'),
+    },
+  };
+}
+
 class FakeAddressBookService {
   list = vi.fn(async () => []);
 }
@@ -166,17 +199,21 @@ interface Fakes {
   delivery: FakeDeliverySelectionService;
   addressBook: FakeAddressBookService;
   paymentSession: FakePaymentSessionService;
+  points: FakePointsService;
   router: Router;
 }
 
 async function setUp(
   configure: (cart: FakeUiCartService, delivery: FakeDeliverySelectionService) => void = () => {},
+  configurePoints: (points: FakePointsService) => void = () => {},
 ): Promise<Fakes> {
   const cart = new FakeUiCartService();
   const delivery = new FakeDeliverySelectionService();
   const addressBook = new FakeAddressBookService();
   const paymentSession = new FakePaymentSessionService();
+  const points = new FakePointsService();
   configure(cart, delivery);
+  configurePoints(points);
 
   TestBed.configureTestingModule({
     imports: [CheckoutComponent],
@@ -189,6 +226,7 @@ async function setUp(
       { provide: DeliverySelectionService, useValue: delivery },
       { provide: AddressBookService, useValue: addressBook },
       { provide: PaymentSessionService, useValue: paymentSession },
+      { provide: PointsService, useValue: points },
       { provide: TranslateService, useClass: FakeTranslateService },
     ],
   });
@@ -198,7 +236,15 @@ async function setUp(
   await fixture.whenStable();
   await new Promise((resolve) => setTimeout(resolve, 0));
   fixture.detectChanges();
-  return { fixture, cart, delivery, addressBook, paymentSession, router: TestBed.inject(Router) };
+  return {
+    fixture,
+    cart,
+    delivery,
+    addressBook,
+    paymentSession,
+    points,
+    router: TestBed.inject(Router),
+  };
 }
 
 describe('CheckoutComponent -- denied/empty states', () => {
@@ -788,5 +834,135 @@ describe('CheckoutComponent -- items sold by weight (ADR 0137)', () => {
     expect(
       fixture.nativeElement.querySelector('[data-testid="summary-provisional-notice"]'),
     ).toBeNull();
+  });
+});
+
+describe('CheckoutComponent -- paying part of the order with points (ADR 0046, ADR 0185)', () => {
+  /** A checkout whose cart is priced, so the points control has a quote to ask about. */
+  async function withPoints(offer: CartPointsOffer = pointsOffer()) {
+    const setup = await setUp(
+      (cart) => cart.priced.set(priced()),
+      (points) => points.redemptionOffer.mockResolvedValue(offer),
+    );
+    // The control is drawn once the screen is ready, and only then asks what may be spent.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    setup.fixture.detectChanges();
+    return setup;
+  }
+
+  type View = { fixture: { nativeElement: unknown; detectChanges(): void } };
+  const byId = ({ fixture }: View, id: string) =>
+    (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(`[data-testid="${id}"]`);
+  /** The text of one element with every kind of space read as a plain one: amounts are grouped with a no-break space. */
+  const textOf = (view: View, id: string) =>
+    (byId(view, id)?.textContent ?? '').replace(/\s+/g, ' ');
+  const cta = ({ fixture }: View) =>
+    (fixture.nativeElement as HTMLElement).querySelector('.cta') as HTMLButtonElement;
+
+  async function settle(view: View): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    view.fixture.detectChanges();
+  }
+
+  async function switchOn(view: View): Promise<void> {
+    byId(view, 'points-toggle')!.click();
+    await settle(view);
+  }
+
+  async function type(view: View, value: string): Promise<void> {
+    const input = byId(view, 'points-amount') as HTMLInputElement;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+    await settle(view);
+  }
+
+  it('asks what may be spent against the quote the cart is priced under, and offers nothing it was not given', async () => {
+    const view = await withPoints(pointsOffer({ redeemable: false }));
+
+    expect(view.points.redemptionOffer).toHaveBeenCalledWith('cart-1');
+    expect(byId(view, 'points-redemption')).toBeNull();
+  });
+
+  it('shows the control, and sends no points, until the customer switches them on', async () => {
+    const view = await withPoints();
+
+    expect(byId(view, 'points-redemption')).not.toBeNull();
+    cta(view).click();
+    await view.fixture.whenStable();
+
+    expect(view.cart.checkout).toHaveBeenCalledTimes(1);
+    expect((view.cart.checkout.mock.calls[0] as unknown[])[0]).not.toHaveProperty(
+      'redeemFromBalanceMinor',
+    );
+  });
+
+  it('starts from the most the platform allows, shows what is left to pay, and sends that amount with the checkout', async () => {
+    const view = await withPoints();
+
+    await switchOn(view);
+
+    expect((byId(view, 'points-amount') as HTMLInputElement).value).toBe('4000');
+    expect(textOf(view, 'points-cash')).toContain('21 000');
+    cta(view).click();
+    await view.fixture.whenStable();
+
+    expect(view.cart.checkout).toHaveBeenCalledWith({
+      priced: expect.anything(),
+      paymentMethodCode: 'CASH',
+      idempotencyKey: expect.any(String),
+      redeemFromBalanceMinor: 4_000,
+    });
+  });
+
+  it('shows the points and the cash left in the summary and on the button', async () => {
+    const view = await withPoints();
+
+    await switchOn(view);
+
+    expect(textOf(view, 'summary-points')).toContain('4 000');
+    expect(textOf(view, 'summary-cash')).toContain('21 000');
+    expect(cta(view).textContent).toContain('21 000');
+  });
+
+  it('keeps the order from being placed while the amount typed is more than the platform allows', async () => {
+    const view = await withPoints();
+    await switchOn(view);
+
+    await type(view, '9 000');
+
+    expect(byId(view, 'points-exceeds')).not.toBeNull();
+    expect(cta(view).disabled).toBe(true);
+    cta(view).click();
+    await view.fixture.whenStable();
+    expect(view.cart.checkout).not.toHaveBeenCalled();
+  });
+
+  it('asks again after pricing, and does not place the order when the most allowed has fallen below the amount chosen', async () => {
+    const view = await withPoints();
+    await switchOn(view);
+    // The re-pricing at confirm moved the cap (a promotion landed).
+    view.points.redemptionOffer.mockResolvedValue(pointsOffer({ maximum: 1_000 }));
+
+    cta(view).click();
+    await view.fixture.whenStable();
+    view.fixture.detectChanges();
+
+    expect(view.cart.checkout).not.toHaveBeenCalled();
+    expect(view.fixture.nativeElement.textContent).toContain('cart.pointsChanged');
+    const asked = view.points.redemptionOffer.mock.invocationCallOrder.at(-1)!;
+    expect(view.cart.priceCart.mock.invocationCallOrder[0]).toBeLessThan(asked);
+  });
+
+  it('still places the order when the second look cannot be had: the platform checks the amount at checkout', async () => {
+    const view = await withPoints();
+    await switchOn(view);
+    view.points.redemptionOffer.mockRejectedValue(new Error('offline'));
+
+    cta(view).click();
+    await view.fixture.whenStable();
+
+    expect(view.cart.checkout).toHaveBeenCalledWith(
+      expect.objectContaining({ redeemFromBalanceMinor: 4_000 }),
+    );
   });
 });

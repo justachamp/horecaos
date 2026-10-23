@@ -311,6 +311,35 @@ public class LineRemovalCoordinator {
         }
     }
 
+    /**
+     * The money leg of the order's settlement, moved to the method an amendment chose and to the order's new total
+     * (ADR 0039 {@code CHANGE_PAYMENT_METHOD}, ADR 0185).
+     *
+     * <p>Returns what the new method is to collect, which is what the provider's intent must be created for: the
+     * order total on a cash-only order, and the total less the points on a split-tender one. An order with no
+     * settlement (a build with no payments module, or an order that predates the seam) answers the total, which is
+     * what it has always been asked for. A settlement that cannot be moved refuses the amendment, so the order and
+     * its tenders never name two methods.
+     */
+    public long replanMoneyLeg(OrderRow order, long newTotalMinor, String paymentMethodCode, @Nullable String actorId) {
+        OrderSettlementPort.MoneyLegReplan replan = settlement.replanMoneyLeg(
+                order.tenantId(),
+                order.orderId(),
+                order.locationId(),
+                newTotalMinor,
+                paymentMethodCode,
+                actorId == null ? "ordering" : actorId);
+        return switch (replan.status()) {
+            case REPLANNED -> replan.moneyDueMinor();
+            case NO_SETTLEMENT -> newTotalMinor;
+            case NOT_REPLANNABLE ->
+                throw new AmendmentRefusedException(
+                        "SETTLEMENT_NOT_REPLANNABLE",
+                        "The order's payment plan cannot be moved to " + paymentMethodCode
+                                + "; cancel and take a new order instead");
+        };
+    }
+
     // ------------------------------------------------------------------------------------------ internals
 
     @SuppressWarnings("checkstyle:ParameterNumber")

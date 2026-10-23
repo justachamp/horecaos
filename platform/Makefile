@@ -20,7 +20,7 @@ OPENAPI_GROUPS := storefront control-plane operations providers courier
 
 .DEFAULT_GOAL := help
 
-.PHONY: help verify test arch build lint format run up down logs eval fmt-check hooks-test bands-test shards-test print-agent-test makefile-test routing-gate-test geo-bakeoff-test hygiene-map-key-test doc-links openapi-client-check openapi-baseline seed-payments pay-fake-click ci seed-marketplace
+.PHONY: help verify test arch build lint format run up down logs eval fmt-check hooks-test bands-test shards-test print-agent-test makefile-test routing-gate-test geo-bakeoff-test hygiene-map-key-test doc-links openapi-client-check openapi-baseline seed-payments pay-fake-click ci seed-marketplace seed-card-provider
 
 help: ## List targets
 	@grep -hE '^[a-z][a-zA-Z0-9_-]*:.*?## ' $(MAKEFILE_LIST) \
@@ -130,6 +130,9 @@ seed-payments: ## Seed a local dev CLICK payment setup for the docs/local-fixtur
 
 seed-marketplace: ## Seed a local fake aggregator (stop propagation, stale alert, dry run) for the demo tenant
 	@./tools/seed-marketplace
+
+seed-card-provider: ## Point the local database at the fake Click card API so the wallet's card flow can be walked on a laptop
+	@./tools/seed-card-provider
 
 pay-fake-click: ## Pay an order's open CLICK checkout as a fake customer (ORDER_ID=<uuid> [TENANT_ID=<uuid>])
 	@./tools/pay-fake-click $(ORDER_ID) $(TENANT_ID)

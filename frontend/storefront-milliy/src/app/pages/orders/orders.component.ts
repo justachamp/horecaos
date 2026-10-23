@@ -16,6 +16,8 @@ import {
   type ApiOrder,
   type ReorderPlanResponse,
 } from '../../services/orders.service';
+import { PaymentSplitComponent } from '../../shared/payment-split/payment-split.component';
+import { type PaymentSplit, PointsService } from '../../services/points.service';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { UiCartService } from '../../services/ui-cart.service';
 
@@ -105,7 +107,7 @@ function stageIndex(status: string): number {
 @Component({
   selector: 'app-orders',
   standalone: true,
-  imports: [IconComponent, TranslatePipe],
+  imports: [IconComponent, PaymentSplitComponent, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './orders.component.html',
   styleUrl: './orders.component.scss',
@@ -115,6 +117,7 @@ export class OrdersComponent implements OnInit {
   private readonly lang = inject(LangService);
   protected readonly cart = inject(UiCartService);
   private readonly router = inject(Router);
+  private readonly points = inject(PointsService);
 
   protected readonly state = signal<LoadState>('loading');
   protected readonly orders = signal<readonly ApiOrder[]>([]);
@@ -133,6 +136,13 @@ export class OrdersComponent implements OnInit {
   protected readonly active = computed(
     () => this.orders().find((order) => ACTIVE_STATUSES.has(order.status?.id ?? '')) ?? null,
   );
+
+  /**
+   * How the active order is being paid when points and money share it (ADR 0046, ADR 0185), or
+   * null when there is nothing to show. Read for the active order only: it is the order whose
+   * tenders are still moving, and the history is a list of finished things.
+   */
+  protected readonly activeSplit = signal<PaymentSplit | null>(null);
 
   protected readonly history = computed(() => {
     const active = this.active();
@@ -156,8 +166,27 @@ export class OrdersComponent implements OnInit {
       this.orders.set(orders);
       this.state.set('ready');
       void this.loadRepeatablePlan();
+      void this.loadActiveSplit();
     } catch {
       this.state.set('error');
+    }
+  }
+
+  /**
+   * Reads how the active order is paid. Like the repeat plan it is a convenience on top of the
+   * list, not awaited by {@link refresh}, and a failure leaves nothing on screen rather than a
+   * message over a list that works.
+   */
+  private async loadActiveSplit(): Promise<void> {
+    this.activeSplit.set(null);
+    const active = this.active();
+    if (!active) {
+      return;
+    }
+    try {
+      this.activeSplit.set(await this.points.paymentSplit(String(active.id)));
+    } catch {
+      this.activeSplit.set(null);
     }
   }
 

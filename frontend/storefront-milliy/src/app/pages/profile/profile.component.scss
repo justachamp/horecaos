@@ -251,3 +251,10 @@
   font: 700 14px/1 var(--font-display);
   cursor: pointer;
 }
+
+/* ADR 0046, ADR 0185: the customer's own points sit in the rate-card's frame, beside the identity. */
+.points__line {
+  margin: 0;
+  font: 600 14px/1.4 var(--font-ui);
+  color: var(--text-primary);
+}

@@ -431,6 +431,17 @@ export const financeRu: AreaMessages<typeof financeEn> = {
   'finance.subscription.statements.total': 'Итого',
   'finance.subscription.statements.status': 'Статус',
   'finance.subscription.statements.download': 'Скачать CSV',
+  'finance.subscription.einvoice.label': 'Электронная счёт-фактура',
+  'finance.subscription.einvoice.state.DRAFT':
+    'подготовлена в {operator}; HorecaOS ещё не отправила её вам',
+  'finance.subscription.einvoice.state.SENT': 'отправлена вам через {operator}; ждёт вашей подписи',
+  'finance.subscription.einvoice.state.SIGNED': 'подписана вами в {operator}',
+  'finance.subscription.einvoice.state.REFUSED': 'отклонена в {operator}',
+  'finance.subscription.einvoice.state.CANCELLED': 'отменена в {operator}',
+  'finance.subscription.einvoice.state.UNKNOWN': '{operator} сообщает: «{status}»',
+  'finance.subscription.einvoice.state.UNCONFIRMED': 'отправлена в {operator}; ждём подтверждения',
+  'finance.subscription.einvoice.checked': 'проверено {time}',
+  'finance.subscription.einvoice.sign': 'Откройте {operator}, чтобы подписать или отклонить.',
   'finance.subscription.statements.empty': 'Выписки ещё не выставлялись.',
   'finance.subscription.statements.status.DRAFT': 'Предпросмотр',
   'finance.subscription.statements.status.ISSUED': 'Выставлена',
@@ -602,6 +613,29 @@ export const financeRu: AreaMessages<typeof financeEn> = {
     'HorecaOS больше не сможет с неё списывать, а сейчас оплата идёт картой — поэтому дальше она будет счётом и банковским переводом. Деньги, которые вы уже добавили, остаются в кошельке.',
   'finance.wallet.card.remove.confirm': 'Удалить карту',
   'finance.wallet.card.remove.cancel': 'Оставить',
+  'finance.wallet.enrol.browser.lead':
+    'Введите номер карты и срок действия ниже. Они уходят напрямую платёжному провайдеру, а не в HorecaOS, и стираются с этой страницы, как только провайдер ответит. Затем провайдер отправит код на ваш телефон.',
+  'finance.wallet.enrol.browser.number': 'Номер карты',
+  'finance.wallet.enrol.browser.expiry': 'Срок действия (ММ/ГГ)',
+  'finance.wallet.enrol.browser.send': 'Отправить код',
+  'finance.wallet.enrol.browser.sent': 'Провайдер отправил код на {phone}.',
+  'finance.wallet.enrol.browser.sentNoPhone':
+    'Провайдер отправил код на телефон, привязанный к этой карте.',
+  'finance.wallet.enrol.browser.unreachable':
+    'Не удалось связаться с платёжным провайдером. В HorecaOS ничего не отправлено. Попробуйте ещё раз.',
+  'finance.wallet.enrol.browser.refused':
+    'Платёжный провайдер не принял эту карту. Проверьте номер и срок действия.',
+  'finance.wallet.enrol.browser.unreadable':
+    'Ответ платёжного провайдера не удалось прочитать. Попробуйте ещё раз.',
+  'finance.wallet.reason.CARD_EXPIRED': 'Срок действия этой карты истёк.',
+  'finance.wallet.reason.CARD_EXPIRY_REQUIRED': 'Укажите срок действия карты: месяц и год.',
+  'finance.wallet.reason.PROVIDER_UNAVAILABLE':
+    'Платёжный провайдер не отвечает. Попробуйте через несколько минут.',
+  'finance.wallet.reason.PROVIDER_NOT_CONNECTED': 'Оплата картой сейчас не подключена.',
+  'finance.wallet.reason.PROVIDER_REFUSED': 'Платёжный провайдер этого не принял.',
+  'finance.wallet.decline.PROVIDER_ERROR': 'отклонено платёжным провайдером',
+  'finance.wallet.decline.PAYMENT_DECLINED': 'отклонено',
+  'finance.wallet.decline.PROVIDER_REJECTED': 'отказ платёжного провайдера',
   'finance.wallet.enrol.title': 'Добавьте карту',
   'finance.wallet.enrol.lead':
     'Введите карту в собственной форме платёжного провайдера, затем укажите здесь код, который выдаст форма, и код из SMS от вашего банка.',

@@ -589,28 +589,12 @@ public class OperationsOrderController {
                     ResourceScope.location(tenantId, brandId, locationId));
         }
         try {
-            var result = operatorOrdering.place(new OperatorOrderingService.PlaceOrderCommand(
+            var result = operatorOrdering.place(body.toCommand(
                     tenantId,
                     brandId,
                     locationId,
-                    body.customerAccountId(),
-                    body.channelCode(),
-                    body.fulfillmentMode(),
-                    body.lines().stream().map(OrderLineRequest::toLine).toList(),
-                    body.destination() == null ? null : body.destination().toDestination(),
-                    body.paymentMethodCode(),
-                    body.promoCode(),
                     idempotencyKey,
-                    currentActor.get().subject(),
-                    null,
-                    body.requestedFor(),
-                    Boolean.TRUE.equals(body.overrideOutOfHours()),
-                    body.proposedLocationId(),
-                    body.overrideReasonCode(),
-                    body.overrideNote(),
-                    body.dineInSessionId(),
-                    body.cashTenderedMinor(),
-                    body.declinedAutoAddRuleIds() == null ? List.of() : body.declinedAutoAddRuleIds()));
+                    currentActor.get().subject()));
 
             if (result.outcome() == CheckoutService.CheckoutResult.Outcome.REJECTED) {
                 String rejectionCode =
@@ -673,29 +657,12 @@ public class OperationsOrderController {
             @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
             @Valid @RequestBody PlaceOrderRequest body) {
         try {
-            var quote = operatorQuotes.quote(new OperatorOrderingService.PlaceOrderCommand(
+            var quote = operatorQuotes.quote(body.toPricingCommand(
                     tenantId,
                     brandId,
                     locationId,
-                    body.customerAccountId(),
-                    body.channelCode(),
-                    body.fulfillmentMode(),
-                    body.lines().stream().map(OrderLineRequest::toLine).toList(),
-                    body.destination() == null ? null : body.destination().toDestination(),
-                    body.paymentMethodCode(),
-                    body.promoCode(),
-                    // Never reaches checkout, so the key names nothing; the command wants one.
                     idempotencyKey,
-                    currentActor.get().subject(),
-                    null,
-                    body.requestedFor(),
-                    Boolean.TRUE.equals(body.overrideOutOfHours()),
-                    body.proposedLocationId(),
-                    body.overrideReasonCode(),
-                    body.overrideNote(),
-                    body.dineInSessionId(),
-                    body.cashTenderedMinor(),
-                    body.declinedAutoAddRuleIds() == null ? List.of() : body.declinedAutoAddRuleIds()));
+                    currentActor.get().subject()));
             return ResponseEntity.ok(OrderQuoteResponse.of(quote));
         } catch (CartService.CartRefusedException refused) {
             throw StorefrontOrderingController.refusal(refused);
@@ -2020,7 +1987,49 @@ public class OperationsOrderController {
             @Nullable @PositiveOrZero Long cashTenderedMinor,
             // ADR 0158: the rules whose lines the operator took off the basket the last quote showed,
             // each by the ruleId that quote named. The cart never evaluates them into this order.
-            @Nullable @Size(max = 50) List<UUID> declinedAutoAddRuleIds) {
+            @Nullable @Size(max = 50) List<UUID> declinedAutoAddRuleIds,
+            // ADR 0185: points the customer agreed, on the call, to pay part of the order with. Boxed -- Jackson 3
+            // refuses a missing primitive -- and optional; zero or absent redeems nothing.
+            @Nullable @PositiveOrZero Long redeemFromBalanceMinor,
+            // The operator's confirmation that the customer agreed. Required when points are to be spent.
+            @Nullable Boolean operatorAttestsCustomerAgreement) {
+
+        /** A request that redeems nothing: every client that predates ADR 0185. */
+        public PlaceOrderRequest(
+                UUID customerAccountId,
+                String channelCode,
+                FulfillmentMode fulfillmentMode,
+                List<OrderLineRequest> lines,
+                @Nullable DestinationRequest destination,
+                String paymentMethodCode,
+                @Nullable String promoCode,
+                @Nullable Instant requestedFor,
+                Boolean overrideOutOfHours,
+                @Nullable UUID proposedLocationId,
+                @Nullable String overrideReasonCode,
+                @Nullable String overrideNote,
+                @Nullable UUID dineInSessionId,
+                @Nullable Long cashTenderedMinor,
+                @Nullable List<UUID> declinedAutoAddRuleIds) {
+            this(
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines,
+                    destination,
+                    paymentMethodCode,
+                    promoCode,
+                    requestedFor,
+                    overrideOutOfHours,
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    cashTenderedMinor,
+                    declinedAutoAddRuleIds,
+                    null,
+                    null);
+        }
 
         /** A request that declines no auto-add rule: every client that predates ADR 0158. */
         public PlaceOrderRequest(
@@ -2054,6 +2063,63 @@ public class OperationsOrderController {
                     dineInSessionId,
                     cashTenderedMinor,
                     null);
+        }
+
+        /**
+         * The command a price is asked for: the basket as entered, without the points. A redemption changes what
+         * is collected, not what the basket costs, so pricing never sees it and a screen that keeps the field filled
+         * while it re-prices is not refused for the attestation it has not asked for yet.
+         */
+        OperatorOrderingService.PlaceOrderCommand toPricingCommand(
+                UUID tenantId, UUID brandId, UUID locationId, String idempotencyKey, String operatorSubject) {
+            return build(tenantId, brandId, locationId, idempotencyKey, operatorSubject, 0L, false);
+        }
+
+        /** The command this request is, with the operator and the key the endpoint knows and the body does not. */
+        OperatorOrderingService.PlaceOrderCommand toCommand(
+                UUID tenantId, UUID brandId, UUID locationId, String idempotencyKey, String operatorSubject) {
+            return build(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    idempotencyKey,
+                    operatorSubject,
+                    redeemFromBalanceMinor == null ? 0L : redeemFromBalanceMinor,
+                    Boolean.TRUE.equals(operatorAttestsCustomerAgreement));
+        }
+
+        private OperatorOrderingService.PlaceOrderCommand build(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                String idempotencyKey,
+                String operatorSubject,
+                long redeemMinor,
+                boolean attested) {
+            return new OperatorOrderingService.PlaceOrderCommand(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines.stream().map(OrderLineRequest::toLine).toList(),
+                    destination == null ? null : destination.toDestination(),
+                    paymentMethodCode,
+                    promoCode,
+                    idempotencyKey,
+                    operatorSubject,
+                    null,
+                    requestedFor,
+                    Boolean.TRUE.equals(overrideOutOfHours),
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    cashTenderedMinor,
+                    declinedAutoAddRuleIds == null ? List.of() : declinedAutoAddRuleIds,
+                    redeemMinor,
+                    attested);
         }
     }
 

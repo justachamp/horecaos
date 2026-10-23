@@ -1616,6 +1616,12 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Акции запланированного заказа проверены повторно, заказ не изменён',
       'uz-Latn': 'Rejalashtirilgan buyurtma aksiyalari qayta tekshirildi, buyurtma oʻzgarmadi',
     },
+    'ordering.order.redemption_attested': {
+      en: 'The operator confirmed the customer agreed to pay part of an order with their points',
+      ru: 'Оператор подтвердил согласие клиента оплатить часть заказа баллами',
+      'uz-Latn':
+        'Operator mijoz buyurtmaning bir qismini ballar bilan toʻlashga rozi ekanini tasdiqladi',
+    },
     'ordering.outcome-reason.archived': {
       en: 'Order outcome reason retired',
       ru: 'Причина исхода заказа выведена из использования',

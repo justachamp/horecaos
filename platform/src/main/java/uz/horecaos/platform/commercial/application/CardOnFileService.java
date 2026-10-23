@@ -17,6 +17,8 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.commercial.api.CardEnrolment;
+import uz.horecaos.platform.commercial.api.CardProviderAdapter;
 import uz.horecaos.platform.commercial.domain.CardOnFile;
 import uz.horecaos.platform.commercial.domain.PaymentMethod;
 import uz.horecaos.platform.commercial.domain.TenantBilling;
@@ -96,9 +98,25 @@ public class CardOnFileService {
             String verificationCode,
             ActorRef actor,
             String correlationId) {
+        return confirmEnrolment(
+                tenantId, sessionReference, providerToken, verificationCode, null, actor, correlationId);
+    }
+
+    /**
+     * @param cardExpiry {@code MMYY} as the cardholder entered it, for a provider whose confirmation does
+     *     not return the expiry; null when the provider's own form already carried it
+     */
+    public CardOnFile confirmEnrolment(
+            UUID tenantId,
+            String sessionReference,
+            String providerToken,
+            String verificationCode,
+            @Nullable String cardExpiry,
+            ActorRef actor,
+            String correlationId) {
         refuseInsideATransaction();
         CardEnrolment.ConfirmOutcome outcome =
-                enrolment.confirm(tenantId, sessionReference, providerToken, verificationCode);
+                enrolment.confirm(tenantId, sessionReference, providerToken, verificationCode, cardExpiry);
         CardEnrolment.ConfirmOutcome.Enrolled enrolled =
                 switch (outcome) {
                     case CardEnrolment.ConfirmOutcome.Enrolled done -> done;

@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.nio.charset.StandardCharsets;
@@ -29,7 +30,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
-import uz.horecaos.platform.commercial.application.CardEnrolment;
+import uz.horecaos.platform.commercial.api.CardEnrolment;
 import uz.horecaos.platform.commercial.application.CardOnFileService;
 import uz.horecaos.platform.commercial.application.CardTopUpService;
 import uz.horecaos.platform.commercial.application.PlatformBillingSettingsService;
@@ -271,6 +272,7 @@ public class CommercialOperationsWalletController {
                 body.sessionReference(),
                 body.providerToken(),
                 body.verificationCode(),
+                body.cardExpiry(),
                 actor(),
                 correlationId());
         return ResponseEntity.ok(CardOnFileView.of(card, clock.instant(), expiryWarning));
@@ -555,7 +557,10 @@ public class CommercialOperationsWalletController {
     public record ConfirmCardRequest(
             @NotBlank @Size(max = 256) String sessionReference,
             @NotBlank @Size(max = 512) String providerToken,
-            @NotBlank @Size(max = 16) String verificationCode) {}
+            @NotBlank @Size(max = 16) String verificationCode,
+
+            @Nullable @Pattern(regexp = "^(0[1-9]|1[0-2])[0-9]{2}$")
+            String cardExpiry) {}
 
     public record ChoosePaymentMethodRequest(
             @NotBlank @Size(max = 16) String paymentMethod) {}

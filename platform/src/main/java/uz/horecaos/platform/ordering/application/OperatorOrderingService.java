@@ -101,6 +101,9 @@ public class OperatorOrderingService {
     /** The payment method code a cash tender is meaningful for. */
     private static final String CASH = "CASH";
 
+    /** The refusal when points are to be spent and the operator has not confirmed the customer agreed (ADR 0185). */
+    public static final String REDEMPTION_NEEDS_CUSTOMER_AGREEMENT = "REDEMPTION_NEEDS_CUSTOMER_AGREEMENT";
+
     /** The notice an order carries when the cash tendered is short of its total (ADR 0039, as on an amendment). */
     static final String CASH_TENDERED_INSUFFICIENT = "CASH_TENDERED_INSUFFICIENT";
 
@@ -233,6 +236,13 @@ public class OperatorOrderingService {
      *                           first read rather than after a second, amending call. A
      *                           later change still goes through the {@code
      *                           SET_CASH_TENDERED} amendment
+     * @param redeemFromBalanceMinor ADR 0185: how much of the total the customer agreed, on the call, to pay from
+     *                           their points, in whole som, or zero. Taken inside the checkout transaction like a
+     *                           customer's own, against the identified customer's own account and no other (ADR
+     *                           0046). Never after the order exists: ADR 0185 declines that
+     * @param operatorAttestsCustomerAgreement ADR 0039's pattern for a decision the customer makes and the operator
+     *                           relays: the operator states the customer agreed to spend the points. Required when
+     *                           {@code redeemFromBalanceMinor} is above zero, and recorded as one audit fact
      */
     public record PlaceOrderCommand(
             UUID tenantId,
@@ -255,10 +265,64 @@ public class OperatorOrderingService {
             @Nullable String overrideNote,
             @Nullable UUID dineInSessionId,
             @Nullable Long cashTenderedMinor,
-            List<UUID> declinedAutoAddRuleIds) {
+            List<UUID> declinedAutoAddRuleIds,
+            long redeemFromBalanceMinor,
+            boolean operatorAttestsCustomerAgreement) {
 
         public PlaceOrderCommand {
             declinedAutoAddRuleIds = List.copyOf(declinedAutoAddRuleIds);
+        }
+
+        /**
+         * An order that redeems nothing: every caller that predates ADR 0185 taking a redemption at order entry.
+         */
+        @SuppressWarnings("checkstyle:ParameterNumber")
+        public PlaceOrderCommand(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                UUID customerAccountId,
+                String channelCode,
+                FulfillmentMode fulfillmentMode,
+                List<OrderLine> lines,
+                @Nullable Destination destination,
+                String paymentMethodCode,
+                @Nullable String promoCode,
+                String idempotencyKey,
+                String operatorSubject,
+                @Nullable String correlationId,
+                @Nullable Instant requestedFor,
+                boolean overrideOutOfHours,
+                @Nullable UUID proposedLocationId,
+                @Nullable String overrideReasonCode,
+                @Nullable String overrideNote,
+                @Nullable UUID dineInSessionId,
+                @Nullable Long cashTenderedMinor,
+                List<UUID> declinedAutoAddRuleIds) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines,
+                    destination,
+                    paymentMethodCode,
+                    promoCode,
+                    idempotencyKey,
+                    operatorSubject,
+                    correlationId,
+                    requestedFor,
+                    overrideOutOfHours,
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    cashTenderedMinor,
+                    declinedAutoAddRuleIds,
+                    0L,
+                    false);
         }
 
         /**
@@ -461,7 +525,7 @@ public class OperatorOrderingService {
                 priced.quote().contextHash(),
                 command.idempotencyKey(),
                 command.paymentMethodCode(),
-                0L,
+                command.redeemFromBalanceMinor(),
                 "USER",
                 command.operatorSubject(),
                 command.correlationId(),
@@ -493,7 +557,8 @@ public class OperatorOrderingService {
                     command.tenantId(),
                     Objects.requireNonNull(result.orderId(), "a created checkout always names an order"),
                     tendered);
-            if (tendered < priced.quote().totalMinor()) {
+            // What the customer still owes in money: the total less the points they agreed to spend (ADR 0185).
+            if (tendered < Math.subtractExact(priced.quote().totalMinor(), command.redeemFromBalanceMinor())) {
                 // As on the amendment: a notice the operator acknowledges, never a refusal. The
                 // customer can hand over more, and the figure is a hint rather than money.
                 List<String> warnings = new ArrayList<>(result.warnings());
@@ -509,6 +574,13 @@ public class OperatorOrderingService {
                         result.unavailableItems(),
                         List.copyOf(warnings));
             }
+        }
+
+        // ADR 0185: the operator attests the customer's agreement to spend their points, once, on the write that
+        // created the order. Not on a rejection (nothing was redeemed) and not on a replay of the same key.
+        if (command.redeemFromBalanceMinor() > 0
+                && result.outcome() == CheckoutService.CheckoutResult.Outcome.CREATED) {
+            recordRedemptionAttestation(command, Objects.requireNonNull(result.orderId()));
         }
 
         // Audited only on the write that actually created the order — never on
@@ -546,6 +618,17 @@ public class OperatorOrderingService {
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED,
                     "A " + command.fulfillmentMode() + " order is not eaten at a table, so it has no bill to go on");
+        }
+        if (command.redeemFromBalanceMinor() < 0) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A redemption settles a positive amount, or none");
+        }
+        if (command.redeemFromBalanceMinor() > 0 && !command.operatorAttestsCustomerAgreement()) {
+            // The customer is on the phone and the operator relays their decision; without the operator saying so
+            // there is no record that the customer asked for their points to be spent.
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "Spending a customer's points needs the operator to confirm the customer agreed",
+                    Map.of("reason", REDEMPTION_NEEDS_CUSTOMER_AGREEMENT));
         }
         Long tendered = command.cashTenderedMinor();
         if (tendered != null) {
@@ -755,6 +838,25 @@ public class OperatorOrderingService {
         return branchResolution
                 .resolve(command.tenantId(), command.brandId(), command.fulfillmentMode(), point, command.channelCode())
                 .proposedLocationId();
+    }
+
+    private void recordRedemptionAttestation(PlaceOrderCommand command, UUID orderId) {
+        // Amounts and ids only, never the customer's name or phone (ADR 0029).
+        audit.record(AuditFact.of("ordering.order.redemption_attested", AuditClass.BUSINESS)
+                .by(ActorRef.user(command.operatorSubject(), null))
+                .at(ResourceScope.location(command.tenantId(), command.brandId(), command.locationId()))
+                .target("Order", orderId)
+                .because("The operator confirmed the customer agreed to pay part of the order with their points")
+                .changed(ChangeDocuments.created(mapOf(
+                        "redeemedMinor",
+                        command.redeemFromBalanceMinor(),
+                        "customerAccountId",
+                        command.customerAccountId().toString(),
+                        "customerAgreementAttested",
+                        true)))
+                .correlatedBy(command.correlationId() == null ? orderId.toString() : command.correlationId())
+                .occurredAt(clock.instant())
+                .build());
     }
 
     private void recordOverrideAudit(

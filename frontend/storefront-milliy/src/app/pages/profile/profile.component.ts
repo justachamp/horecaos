@@ -16,6 +16,8 @@ import { ConsentBoxComponent } from '../../shared/consent-box/consent-box.compon
 import { IconComponent } from '../../shared/icon/icon.component';
 import { LangService } from '../../services/lang.service';
 import { OrdersService } from '../../services/orders.service';
+import { type PointsBalance, PointsService } from '../../services/points.service';
+import { formatMoney } from '../../core/money/money';
 import {
   type FeedbackConfig,
   type OfferedTag,
@@ -96,6 +98,7 @@ export class ProfileComponent implements OnInit {
   private readonly orders = inject(OrdersService);
   private readonly reviews = inject(ReviewsService);
   private readonly router = inject(Router);
+  private readonly pointsService = inject(PointsService);
 
   protected readonly state = signal<LoadState>('loading');
   /** The languages this brand serves that the platform has live and this build can draw (ADR 0149). */
@@ -105,6 +108,34 @@ export class ProfileComponent implements OnInit {
   protected readonly draftFirstName = signal('');
   protected readonly draftLastName = signal('');
   protected readonly savingName = signal(false);
+
+  /** The customer's own points at this brand (ADR 0046, ADR 0185), once read; null while unread or unreadable. */
+  protected readonly points = signal<PointsBalance | null>(null);
+
+  /**
+   * What the customer can spend, and their total when more is held back, as they read them. Null for a customer
+   * with no points to talk about, so the screen is exactly what it was.
+   */
+  protected readonly pointsLines = computed<{ spendable: string; total: string | null } | null>(
+    () => {
+      const points = this.points();
+      if (points === null || points.accountId === null || points.balance === null) {
+        return null;
+      }
+      const spendable = points.spendable ?? points.balance;
+      if (points.balance.amountMinor <= 0 && spendable.amountMinor <= 0) {
+        return null;
+      }
+      const unit = this.translate.get('common.currency');
+      return {
+        spendable: formatMoney(spendable, unit),
+        total:
+          points.balance.amountMinor > spendable.amountMinor
+            ? formatMoney(points.balance, unit)
+            : null,
+      };
+    },
+  );
 
   protected readonly ratableOrder = signal<RatableOrder | null>(null);
   protected readonly feedback = signal<FeedbackConfig | null>(null);
@@ -154,6 +185,16 @@ export class ProfileComponent implements OnInit {
       return;
     }
     void this.loadRatablePrompt();
+    void this.loadPoints();
+  }
+
+  /** A convenience beside the identity: a customer with no points, or a platform that cannot be asked, sees what they always saw. */
+  private async loadPoints(): Promise<void> {
+    try {
+      this.points.set(await this.pointsService.balance());
+    } catch {
+      this.points.set(null);
+    }
   }
 
   /** Best-effort: a failure here hides the prompt, never breaks the screen. */

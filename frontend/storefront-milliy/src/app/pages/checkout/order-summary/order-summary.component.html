@@ -39,6 +39,18 @@
     <span>{{ 'cart.total' | t }}</span>
     <span>{{ total() }}</span>
   </div>
+  @if (pointsSpent(); as spent) {
+    <div class="summary__row summary__row--discount" data-testid="summary-points">
+      <span>{{ 'points.spent' | t }}</span>
+      <span>−{{ spent }}</span>
+    </div>
+  }
+  @if (cashToPay(); as cash) {
+    <div class="summary__row summary__row--cash" data-testid="summary-cash">
+      <span>{{ 'points.cashToPay' | t }}</span>
+      <span class="summary__value">{{ cash }}</span>
+    </div>
+  }
   @if (provisional()) {
     <p class="summary__note" data-testid="summary-provisional-notice">
       {{ 'physical.cartNotice' | t }}

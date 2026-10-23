@@ -873,6 +873,7 @@ export class UiCartService {
     priced: PricedCart;
     paymentMethodCode: string;
     idempotencyKey: string;
+    redeemFromBalanceMinor?: number;
   }): Promise<CheckoutResult> {
     return this.carts.checkout(input);
   }

@@ -55,6 +55,20 @@
       }
     </section>
 
+    @if (pointsLines(); as lines) {
+      <section class="rate-card" data-testid="profile-points">
+        <h2 class="rate-card__title">{{ 'points.profileTitle' | t }}</h2>
+        <p class="points__line" data-testid="profile-points-spendable">
+          {{ 'points.profileSpendable' | t: { amount: lines.spendable } }}
+        </p>
+        @if (lines.total) {
+          <p class="rate-card__sub" data-testid="profile-points-total">
+            {{ 'points.profileTotal' | t: { amount: lines.total } }}
+          </p>
+        }
+      </section>
+    }
+
     <section class="lang-row">
       <app-icon name="flagUz" [size]="24" />
       <span class="lang-row__label">{{ 'profile.languageSwitchLabel' | t }}</span>

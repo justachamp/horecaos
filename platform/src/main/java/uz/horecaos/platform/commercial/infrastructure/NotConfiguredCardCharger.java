@@ -2,7 +2,7 @@ package uz.horecaos.platform.commercial.infrastructure;
 
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
-import uz.horecaos.platform.commercial.application.CardCharger;
+import uz.horecaos.platform.commercial.api.CardCharger;
 
 /**
  * What a charger says when no merchant account is connected (ADR 0095 item 8):

@@ -1,4 +1,4 @@
-package uz.horecaos.platform.commercial.application;
+package uz.horecaos.platform.commercial.api;
 
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -46,6 +46,21 @@ public interface CardProviderAdapter {
 
     CardEnrolment.ConfirmOutcome confirm(
             CardAccount account, UUID tenantId, String sessionReference, String providerToken, String verificationCode);
+
+    /**
+     * {@link #confirm(CardAccount, UUID, String, String, String)} for a provider whose confirmation does
+     * not return the card's expiry: {@code cardExpiry} is {@code MMYY} as the cardholder entered it. A
+     * provider that returns the expiry itself ignores it, which is what this default does.
+     */
+    default CardEnrolment.ConfirmOutcome confirm(
+            CardAccount account,
+            UUID tenantId,
+            String sessionReference,
+            String providerToken,
+            String verificationCode,
+            @Nullable String cardExpiry) {
+        return confirm(account, tenantId, sessionReference, providerToken, verificationCode);
+    }
 
     CardEnrolment.RevokeOutcome revoke(CardAccount account, String providerToken);
 
