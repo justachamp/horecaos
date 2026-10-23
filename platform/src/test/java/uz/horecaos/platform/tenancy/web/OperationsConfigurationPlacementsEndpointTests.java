@@ -273,12 +273,19 @@ class OperationsConfigurationPlacementsEndpointTests {
 
         @Nullable JsonNode assistant = null;
         for (JsonNode key : keys) {
-            if ("assistant.enabled".equals(key.get("code").asString())) {
+            String code = key.get("code").asString();
+            if ("assistant.enabled".equals(code)) {
                 assistant = key;
+            } else if (code.startsWith("assistant.disclosure_text_")) {
+                // The three disclosure wordings are locked with the switch they belong to.
+                assertThat(key.get("entitledBy").asString()).as(code).isEqualTo(ASSISTANT_ENTITLEMENT);
+                assertThat(key.get("lockedByPlan").get("entitlementKey").asString())
+                        .as(code)
+                        .isEqualTo(ASSISTANT_ENTITLEMENT);
             } else {
                 assertThat(key.path("lockedByPlan").isNull()
                                 || key.path("lockedByPlan").isMissingNode())
-                        .as(key.get("code").asString())
+                        .as(code)
                         .isTrue();
             }
         }

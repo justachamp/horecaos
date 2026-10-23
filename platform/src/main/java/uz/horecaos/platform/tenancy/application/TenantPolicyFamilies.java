@@ -34,13 +34,12 @@ public final class TenantPolicyFamilies {
             "fiscal.reporting_deadline",
             "content.publishing",
             "content.editorial",
+            "storefront.layout",
             "reviews.feedback_prompt",
             "reviews.recovery");
 
     /** Policies that are declared and deliberately not offered to a tenant, with the reason. */
     public static final Map<String, String> NOT_FOR_TENANTS = Map.of(
-            "fiscal.synthetic_lines_allowed",
-            "Settable at PLATFORM only: whether the platform lets a receipt carry synthetic lines is not a tenant's call.",
             "loyalty.adjustment_reason_codes",
             "Settable at PLATFORM only: the reason-code vocabulary for balance adjustments is the platform's.");
 

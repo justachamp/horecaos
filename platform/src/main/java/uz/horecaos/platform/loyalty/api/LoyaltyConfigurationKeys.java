@@ -124,7 +124,7 @@ public final class LoyaltyConfigurationKeys {
             .tenantVisible()
             .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
             .describedAs("Whether a customer must have consented before their balance is synced with the point-of-sale "
-                    + "terminal.")
+                    + "till.")
             .build();
 
     private LoyaltyConfigurationKeys() {}

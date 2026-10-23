@@ -146,6 +146,7 @@ export const POLICY_ROUTES = {
   'kitchen.station_productivity': { route: '/kitchen/capacity' },
   'content.publishing': { route: '/marketing/content' },
   'content.editorial': { route: '/marketing/content' },
+  'storefront.layout': { route: '/marketing/content' },
   'reviews.feedback_prompt': { route: '/customers/feedback-settings' },
   'reviews.recovery': { route: '/customers/feedback-settings' },
 } as const satisfies Readonly<Record<string, { readonly route: string }>>;
