@@ -44,7 +44,7 @@ Steps:
 
 3. Tell the platform the reference, and name the provider, in the environment file the stack is
    started with (`/etc/horecaos/production.env` on the pilot VM). `deploy/compose.production.yml`
-   forwards these three variables to `platform-app` (and `ProductionComposeRunbookVariablesTests`
+   forwards the three `HORECAOS_GEO_*` variables to `platform-app` (and `ProductionComposeRunbookVariablesTests`
    fails if one is dropped), so the file is the only place they are set:
 
    ```sh
@@ -190,8 +190,8 @@ says `ACCEPTED` and `NULL`, and no row, audit fact or log line contains the numb
 origin and nothing else changes.
 
 **How to take it back.** Remove the adapter bean (or the installation's `COURIER` purpose): invitations wait
-as `SMS_NOT_CONNECTED` again. A link already texted keeps working until it expires (72 hours) or the manager
-asks again, which voids it.
+as `SMS_NOT_CONNECTED` again. A link already texted keeps working until it expires (72 hours), the manager
+asks again, or the courier's engagement ends or they are archived, each of which voids it.
 
 ## 9. The `deliveries-console` module row (row 3.1b)
 

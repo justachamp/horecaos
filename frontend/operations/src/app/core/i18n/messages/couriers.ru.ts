@@ -136,7 +136,7 @@ export const couriersRu: AreaMessages<typeof couriersEn> = {
   'couriers.access.state.SENT': 'Ссылка отправлена по SMS и пока не использована.',
   'couriers.access.state.EXPIRED': 'Срок ссылки истёк, она не была использована.',
   'couriers.access.state.ACCEPTED': 'Курьер задал пароль.',
-  'couriers.access.state.VOIDED': 'Заменена более новой ссылкой.',
+  'couriers.access.state.VOIDED': 'Заменена более новой ссылкой, либо курьер ушёл, не успев ею воспользоваться.',
   'couriers.access.state.FAILED': 'SMS не удалось отправить.',
   'couriers.access.invite': 'Отправить приглашение',
   'couriers.access.reset': 'Сбросить доступ',

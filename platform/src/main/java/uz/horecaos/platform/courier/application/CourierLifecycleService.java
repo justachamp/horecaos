@@ -18,6 +18,7 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierAccessStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierLedgerStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
@@ -40,6 +41,11 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * archived, because an archived courier drops out of the screens where the balance is settled. Each
  * refusal is {@code 422 UNPROCESSABLE_STATE} with a stable {@code reason}, so the console says what
  * to do first instead of quoting a sentence.
+ *
+ * <p>A courier who leaves takes their sign-in link with them: ending the engagement and archiving both void the
+ * invitation that is still live (queued, or texted and not yet spent) in the same transaction, which is what
+ * V0657 means by «VOIDED: the courier left, before it was spent». Without it a link texted at nine still set a
+ * password, and ended every session of the account, at ten.
  */
 @Service
 public class CourierLifecycleService {
@@ -53,6 +59,7 @@ public class CourierLifecycleService {
     private final JdbcCourierStore couriers;
     private final JdbcCourierShiftStore shifts;
     private final JdbcCourierLedgerStore ledger;
+    private final JdbcCourierAccessStore access;
     private final InternalFleetPort.ActiveAssignments activeAssignments;
     private final AuditRecorder audit;
     private final Clock clock;
@@ -61,12 +68,14 @@ public class CourierLifecycleService {
             JdbcCourierStore couriers,
             JdbcCourierShiftStore shifts,
             JdbcCourierLedgerStore ledger,
+            JdbcCourierAccessStore access,
             InternalFleetPort.ActiveAssignments activeAssignments,
             AuditRecorder audit,
             Clock clock) {
         this.couriers = couriers;
         this.shifts = shifts;
         this.ledger = ledger;
+        this.access = access;
         this.activeAssignments = activeAssignments;
         this.audit = audit;
         this.clock = clock;
@@ -159,6 +168,7 @@ public class CourierLifecycleService {
 
         Instant now = clock.instant();
         couriers.endEngagements(tenantId, courierId, LocalDate.ofInstant(now, ZoneOffset.UTC), now);
+        int invitationsVoided = access.voidLive(tenantId, courierId, now);
         audit.record(AuditFact.of("courier.engagement.ended", AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
@@ -167,7 +177,13 @@ public class CourierLifecycleService {
                 .usingCapability("courier.engagement.manage")
                 .changed(ChangeDocuments.diff(
                         Map.of("status", live.get().status().name()),
-                        Map.of("status", "ENDED", "courierId", courier.id().toString())))
+                        Map.of(
+                                "status",
+                                "ENDED",
+                                "courierId",
+                                courier.id().toString(),
+                                "accessInvitationsVoided",
+                                invitationsVoided)))
                 .correlatedBy(courierId.toString())
                 .occurredAt(now)
                 .build());
@@ -197,6 +213,7 @@ public class CourierLifecycleService {
         if (!couriers.archiveCourier(tenantId, courierId, now)) {
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "This courier is already archived");
         }
+        int invitationsVoided = access.voidLive(tenantId, courierId, now);
         audit.record(AuditFact.of("courier.archived", AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
@@ -204,7 +221,14 @@ public class CourierLifecycleService {
                 .because(reason)
                 .usingCapability("courier.engagement.manage")
                 .changed(ChangeDocuments.diff(
-                        Map.of("status", "ACTIVE"), Map.of("status", "ARCHIVED", "engagementsEnded", ended)))
+                        Map.of("status", "ACTIVE"),
+                        Map.of(
+                                "status",
+                                "ARCHIVED",
+                                "engagementsEnded",
+                                ended,
+                                "accessInvitationsVoided",
+                                invitationsVoided)))
                 .correlatedBy(courierId.toString())
                 .occurredAt(now)
                 .build());
