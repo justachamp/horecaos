@@ -245,6 +245,44 @@ class OrderMilestoneNotificationTests {
         assertThat(transport.bodies()).containsExactly("A-17-buyurtma qabul qilindi. Summa: 12500000 UZS.");
     }
 
+    /**
+     * ADR 0091 against ADR 0184: the migrated schema marks the VAS gateway as moderating, and a moderating
+     * gateway refuses a wording it has not approved. The platform's bundled sentences are not template
+     * versions, so no approval is recorded for them anywhere; sending them anyway meant a provider error
+     * per customer after every retry, where ADR 0091 exists to give a reason. This suite truncates the
+     * environments (see {@code truncate}) so every other case is about what is sent, and so, until this
+     * case, nothing here ever met a gateway that moderates.
+     */
+    @Test
+    @DisplayName("ADR 0091: on a gateway that moderates, the platform's own wording is withheld with the reason named")
+    void aModeratingGatewayWithholdsThePlatformsWording() {
+        insertSmsEnvironment("moderating-gateway", true);
+
+        trigger.onOrderingEvent(confirmed());
+        worker.drain();
+
+        assertThat(transport.bodies())
+                .as("nothing the gateway has not approved reaches it")
+                .isEmpty();
+        UUID id = onlyNotification();
+        assertThat(reasonOf(id))
+                .as("the delivery evidence says the wording awaits the gateway, not that the provider failed")
+                .isEqualTo("TEMPLATE_AWAITING_PROVIDER");
+        assertThat(queries.detail(TENANT, id).orElseThrow().notification().status())
+                .isEqualTo("SUPPRESSED");
+    }
+
+    @Test
+    @DisplayName("a gateway that does not moderate is sent the platform's wording as before")
+    void aGatewayThatDoesNotModerateIsSentThePlatformsWording() {
+        insertSmsEnvironment("quiet-gateway", false);
+
+        trigger.onOrderingEvent(confirmed());
+        worker.drain();
+
+        assertThat(transport.bodies()).containsExactly("Заказ A-17 принят. Сумма: 12500000 UZS.");
+    }
+
     @Test
     @DisplayName("a brand's own template outranks the platform's wording as soon as it is active")
     void aTenantTemplateOutranksThePlatformDefault() {
@@ -608,6 +646,15 @@ class OrderMilestoneNotificationTests {
                 .forEach(name -> schema.put(name, "string"));
         int version = templates.addVersion(TENANT, BRAND, templateId, wordings, schema, showItemPrices);
         templates.activate(TENANT, BRAND, templateId, version, "approver");
+    }
+
+    private void insertSmsEnvironment(String code, boolean moderates) {
+        jdbc.sql("""
+                INSERT INTO integration.provider_environments (
+                    code, provider_category, provider_type, base_url, is_production, egress_allowlist,
+                    moderates_wordings)
+                VALUES (:code, 'NOTIFICATION', 'SMSGW_QUIET', 'http://127.0.0.1:1', false, '127.0.0.1', :moderates)
+                """).param("code", code).param("moderates", moderates).update();
     }
 
     private void setPreferredLocale(String tag) {

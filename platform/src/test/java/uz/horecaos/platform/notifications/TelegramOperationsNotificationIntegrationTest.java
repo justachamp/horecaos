@@ -30,9 +30,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory;
+import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 import uz.horecaos.platform.iam.infrastructure.secrets.EnvironmentSecretResolver;
 import uz.horecaos.platform.integration.camel.notification.CamelNotificationTransport;
@@ -73,6 +75,7 @@ import uz.horecaos.platform.notifications.application.NotificationWorker;
 import uz.horecaos.platform.notifications.application.OperationsAlertFanoutService;
 import uz.horecaos.platform.notifications.application.OrderNotificationTrigger;
 import uz.horecaos.platform.notifications.application.TelegramOperationsEntitlementGate;
+import uz.horecaos.platform.notifications.application.TemplateTestSendService;
 import uz.horecaos.platform.notifications.domain.MessageLocale;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
@@ -85,6 +88,7 @@ import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcConfigurationResolver;
+import uz.horecaos.platform.web.api.ApiException;
 
 /**
  * ADR 0058, stage 1 rollout, end to end: bind a group through the {@code /link}
@@ -128,6 +132,7 @@ class TelegramOperationsNotificationIntegrationTest {
     private TelegramUpdateHandler updateHandler;
     private TelegramBindingStore bindingStore;
     private TelegramWebhookInstallationLookup webhookInstallations;
+    private TemplateTestSendService testSend;
     private BotActionTokenStore actionTokens;
     private UUID installationId;
     private MutableClock clock;
@@ -311,6 +316,14 @@ class TelegramOperationsNotificationIntegrationTest {
                 notifications, fanout, orders, channelRouter, objectMapper, clock, "SMS", Duration.ofHours(6));
 
         activateTelegramTemplate();
+
+        testSend = new TemplateTestSendService(
+                templateStore,
+                transport,
+                audit,
+                () -> new AuthenticatedActor("template-author", java.util.Set.of(), Map.of()),
+                new TelegramOperationsSubscriptionDirectory(bindingStore),
+                clock);
     }
 
     private UUID orderOne;
@@ -491,6 +504,103 @@ class TelegramOperationsNotificationIntegrationTest {
                         .param("bindingId", bindingId)
                         .update())
                 .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    }
+
+    // ------------------------------------------------------------ the template test send (ADR 0184)
+
+    @Test
+    @DisplayName(
+            "a Telegram test send posts every time it is pressed: never deduplicated against, or edited into, the last")
+    void aTelegramTestSendPostsEveryTime() {
+        long chat = -100777L;
+        UUID binding = bindingStore.createBinding(TENANT, installationId, BRAND, null, chat, null, 1L);
+        UUID template = telegramTemplateId();
+
+        TemplateTestSendService.TestSendOutcome first =
+                testSend.testSend(TENANT, BRAND, template, 1, "ru", binding.toString());
+        TemplateTestSendService.TestSendOutcome second =
+                testSend.testSend(TENANT, BRAND, template, 1, "ru", binding.toString());
+
+        assertThat(first.status()).isEqualTo("ACCEPTED");
+        assertThat(second.status()).isEqualTo("ACCEPTED");
+        assertThat(bot.messagesSentTo(chat))
+                .as("the author fixed the bot's rights or deleted the message and pressed the button again")
+                .hasSize(2);
+        assertThat(bot.messagesSentTo(chat)).allMatch(text -> text.contains("A-1042"));
+        assertThat(jdbc.sql("SELECT count(*) FROM integration.telegram_tracked_messages")
+                        .query(Long.class)
+                        .single())
+                .as("a test message is not a live message about any subject, so nothing tracks it for an edit")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("a Telegram test goes only to a chat this brand has bound and not unbound, refused alike for the rest")
+    void aTelegramTestIsRefusedForAnyChatThatIsNotTheBrandsOwn() {
+        UUID otherBrand = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status)
+                VALUES (:id, :tenantId, 'SIBLING', 'telegram-pilot-sibling', 'Sibling brand', 'ACTIVE')
+                """).param("id", otherBrand).param("tenantId", TENANT).update();
+        long foreignChat = -100881L;
+        long retiredChat = -100882L;
+        UUID foreign = bindingStore.createBinding(TENANT, installationId, otherBrand, null, foreignChat, null, 1L);
+        UUID retired = bindingStore.createBinding(TENANT, installationId, BRAND, null, retiredChat, null, 1L);
+        bindingStore.retire(TENANT, retired, "MANUAL", ActorRef.user("operator-1", null), "unbound by the operator");
+        UUID template = telegramTemplateId();
+
+        for (String destination : List.of(
+                foreign.toString(), retired.toString(), UUID.randomUUID().toString(), "not-a-binding-id", "")) {
+            assertThatThrownBy(() -> testSend.testSend(TENANT, BRAND, template, 1, "ru", destination))
+                    .as("destination '%s'", destination)
+                    .isInstanceOf(ApiException.class)
+                    .hasMessageContaining("one of this brand's bound chats");
+        }
+
+        assertThat(bot.messagesSentTo(foreignChat))
+                .as("one brand's author cannot put a message into another brand's group")
+                .isEmpty();
+        assertThat(bot.messagesSentTo(retiredChat)).isEmpty();
+        assertThat(testSentFacts(template))
+                .as("a refused test sends nothing and so records nothing")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a Telegram test leaves one audit fact per send, and the fact does not name the chat")
+    void aTelegramTestLeavesOneFactWithoutItsDestination() {
+        long chat = -100778L;
+        UUID binding = bindingStore.createBinding(TENANT, installationId, BRAND, null, chat, null, 1L);
+        UUID template = telegramTemplateId();
+
+        testSend.testSend(TENANT, BRAND, template, 1, "ru", binding.toString());
+        testSend.testSend(TENANT, BRAND, template, 1, "ru", binding.toString());
+
+        List<String> facts = testSentFacts(template);
+        assertThat(facts).hasSize(2);
+        for (String fact : facts) {
+            assertThat(fact)
+                    .contains("ORDER_CONFIRMED", "TELEGRAM", "ACCEPTED")
+                    .as("the binding, the chat and the text are not in an audit row a support export reads")
+                    .doesNotContain(binding.toString())
+                    .doesNotContain(String.valueOf(chat))
+                    .doesNotContain("A-1042");
+        }
+    }
+
+    private UUID telegramTemplateId() {
+        return jdbc.sql("SELECT id FROM notifications.templates WHERE channel = 'TELEGRAM' AND tenant_id = :tenantId")
+                .param("tenantId", TENANT)
+                .query(UUID.class)
+                .single();
+    }
+
+    /** Every column of every test-send fact for one template, as text, so a leak cannot hide in a column nobody named. */
+    private List<String> testSentFacts(UUID template) {
+        return jdbc.sql("""
+                        SELECT e::text FROM audit.audit_events e
+                         WHERE e.action_code = 'notification.template.test_sent' AND e.target_id = :template
+                        """).param("template", template).query(String.class).list();
     }
 
     // ------------------------------------------------------------------- setup

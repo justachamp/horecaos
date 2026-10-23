@@ -184,10 +184,16 @@ public class StaffPasswordResetController {
         }
     }
 
-    /** A user name or an email address, and the language to write in. */
+    /**
+     * A user name or an email address, and the language to write in.
+     *
+     * <p>The language is the registry's tag, which is what both consoles send ({@code uz-Latn}), or the
+     * bare {@code uz} that older clients still send and that is read as an alias of it and never stored
+     * (ADR 0149, Decisions 1 and 5). The same set {@code OperationsCourierAccessController} accepts.
+     */
     public record PasswordResetRequest(
             @NotBlank @Size(max = 255) String login,
-            @Pattern(regexp = "uz|ru|en") @Nullable String locale) {
+            @Pattern(regexp = "uz-Latn|uz|ru|en") @Nullable String locale) {
 
         /** A record's generated {@code toString} would print the login. */
         @Override

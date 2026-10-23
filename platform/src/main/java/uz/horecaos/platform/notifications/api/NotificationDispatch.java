@@ -61,6 +61,15 @@ public record NotificationDispatch(
         @Nullable EmailEnvelope email,
         @Nullable PushEnvelope push) {
 
+    /**
+     * The {@code subjectType} of the one real message an author sends from a template editor to see it
+     * delivered (ADR 0184). It is about no subject: a channel that tracks live state per subject, to edit
+     * a message in place or to skip one it has already shown, must not track it, or pressing «Test send»
+     * twice would post once and a changed body would edit the earlier test instead of raising a new
+     * message.
+     */
+    public static final String SUBJECT_TEMPLATE_TEST_SEND = "NotificationTemplateTestSend";
+
     /** An order message, a code, a receipt: anything the customer did not opt into receiving. */
     public static final String PURPOSE_TRANSACTIONAL = "TRANSACTIONAL";
 

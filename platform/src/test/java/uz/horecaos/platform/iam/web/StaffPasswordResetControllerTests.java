@@ -112,6 +112,48 @@ class StaffPasswordResetControllerTests {
         verify(resets).request(eq("cashier"), eq(StaffConsole.OPERATIONS), eq("ru"), anyString());
     }
 
+    /**
+     * ADR 0149, Decision 5: both consoles send the registry's tag as the reset language, so the endpoint has
+     * to accept exactly what they send. The request used to validate against {@code uz|ru|en} while the
+     * consoles sent {@code uz-Latn}, so every staff member reading the console in Uzbek was answered 400
+     * and no reset was ever created. Every console spec stubs the API, so no suite saw it.
+     *
+     * <p>Its own address, never reused: eight requests would otherwise spend the budget of MockMvc's
+     * constant {@code 127.0.0.1} that the unauthenticated-path tests above and below count on.
+     */
+    @Test
+    @DisplayName("asking for a reset in each language a console sends is accepted as that language, on both prefixes")
+    void everyTagAConsoleSendsIsAccepted() throws Exception {
+        for (String prefix : new String[] {"control-plane", "operations"}) {
+            StaffConsole console = "operations".equals(prefix) ? StaffConsole.OPERATIONS : StaffConsole.CONTROL_PLANE;
+            for (String tag : new String[] {"ru", "uz-Latn", "en", "uz"}) {
+                MvcResult result = mvc.perform(post("/api/v1/%s/auth/password-resets".formatted(prefix))
+                                .with(from("203.0.113.20"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"login\":\"cashier\",\"locale\":\"%s\"}".formatted(tag)))
+                        .andReturn();
+
+                assertThat(result.getResponse().getStatus())
+                        .as("%s sending %s", prefix, tag)
+                        .isEqualTo(202);
+                verify(resets).request(eq("cashier"), eq(console), eq(tag), anyString());
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("a language no console speaks is still refused, naming nothing about any account")
+    void anUnknownLanguageIsRefused() throws Exception {
+        MvcResult result = mvc.perform(post("/api/v1/operations/auth/password-resets")
+                        .with(from("203.0.113.21"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"login\":\"cashier\",\"locale\":\"fr\"}"))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(400);
+        verify(resets, never()).request(anyString(), any(), anyString(), anyString());
+    }
+
     @Test
     @DisplayName("inspecting a link is reachable with no bearer token, on both prefixes")
     void inspectingALinkIsUnauthenticated() throws Exception {

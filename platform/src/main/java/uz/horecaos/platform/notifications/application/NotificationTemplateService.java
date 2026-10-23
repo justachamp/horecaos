@@ -666,7 +666,10 @@ public class NotificationTemplateService {
      * resolution order, whose last step ADR 0184 builds).
      *
      * <p>The platform default answers only when the tenant has <em>no active template at any scope</em>
-     * for this key and channel. A tenant that wrote a template, and wrote it for the wrong set of
+     * for this key and channel, whatever variant it is pinned to: a template written for delivery orders
+     * only, met by a pickup order, is the tenant's decision about pickup and not an absence, and answers
+     * {@code NO_ACTIVE_TEMPLATE} without the platform's sentence. A tenant that wrote a template, and wrote
+     * it for the wrong set of
      * languages, hears about it through the suppression reason {@code NO_TEMPLATE_FOR_LOCALE}, as before;
      * quietly replacing its wording with the platform's would hide the gap it can fix. It answers only
      * for a customer-addressed message of exactly the class the platform wrote the wording for: a row of
@@ -689,6 +692,13 @@ public class NotificationTemplateService {
 
         Resolution own = resolve(tenantId, brandId, templateKey, channel, locale, fulfillmentMode, channelSource);
         if (own.outcome() != Resolution.Outcome.NO_ACTIVE_TEMPLATE || notificationClass == null) {
+            return own;
+        }
+        // NO_ACTIVE_TEMPLATE says that no template matches this order's variant, which is not the same
+        // as the tenant having written none: a template pinned to delivery only answers a pickup order
+        // with this outcome too, and that silence is the tenant's decision. D20.3 asks the wider
+        // question, whatever the variant.
+        if (templates.hasActiveTemplate(tenantId, brandId, templateKey, channel.name())) {
             return own;
         }
         return platformDefault(tenantId, brandId, templateKey, channel, locale, notificationClass)
@@ -793,7 +803,9 @@ public class NotificationTemplateService {
     /**
      * Whether the SMS gateway this tenant sends through refuses wordings it has not approved (ADR 0091).
      * The question behind the one-time-code card of Tab 1: the sentence is the platform's, and a gateway
-     * that moderates must have approved it (ADR 0184, D19).
+     * that moderates must have approved it (ADR 0184, D19). It is also the question eligibility asks
+     * before it sends the platform's order wording over SMS: those sentences are not template versions,
+     * so nothing else says whether the gateway has approved them.
      */
     @Transactional(readOnly = true)
     public boolean smsGatewayModerates(UUID tenantId) {
