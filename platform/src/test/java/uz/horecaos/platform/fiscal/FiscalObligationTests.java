@@ -272,6 +272,65 @@ class FiscalObligationTests {
     }
 
     @Test
+    @DisplayName(
+            "checkout never links the money tender to its intent, and the document still names the tender it covers")
+    void theTenderIsFoundThroughTheSettlementWhenNothingLinksItToTheIntent() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        UUID order = completedOrder("O-unlinked", "CLICK", "PAID", NOW.minusSeconds(3600));
+        // What production writes: OrderSettlementService.plan inserts the tender with no payment intent, the intent
+        // is created afterwards for the same order, and nothing ever updates the tender to name it.
+        UUID tender = settleWithAMoneyTender(order, false);
+
+        obligations.openObligations(50);
+
+        var kept = jdbc.sql("SELECT tender_id FROM fiscal.fiscal_documents WHERE order_id = :o")
+                .param("o", order)
+                .query()
+                .singleRow();
+        assertThat(kept.get("tender_id"))
+                .as("the settlement has one money tender, so that is the leg the sale covers; a document "
+                        + "that kept NULL here would leave the evidence unable to link a tender to its receipt")
+                .isEqualTo(tender);
+    }
+
+    @Test
+    @DisplayName("two money tenders and no link to tell them apart leave the tender unnamed rather than guessed")
+    void twoMoneyTendersWithNoLinkAreNotGuessedBetween() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        UUID order = completedOrder("O-two-legs", "CLICK", "PAID", NOW.minusSeconds(3600));
+        settleWithAMoneyTender(order, false);
+        UUID settlement = jdbc.sql("SELECT id FROM payments.order_settlements WHERE order_id = :o")
+                .param("o", order)
+                .query(UUID.class)
+                .single();
+        UUID cash = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO payments.payment_methods (id, tenant_id, code, display_name, responsibility)
+                VALUES (:id, :t, 'CASH', 'Cash', 'OPERATOR')
+                """).param("id", cash).param("t", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO payments.tenders (id, tenant_id, settlement_id, sequence, payment_method_id,
+                    settles_from_balance, amount_minor, currency, status, settled_at, idempotency_key, version)
+                VALUES (gen_random_uuid(), :t, :s, 2, :m, false, 1000, 'UZS', 'SETTLED', now(), :key, 1)
+                """)
+                .param("t", TENANT)
+                .param("s", settlement)
+                .param("m", cash)
+                .param("key", "tender-second-" + settlement)
+                .update();
+
+        obligations.openObligations(50);
+
+        var kept = jdbc.sql("SELECT tender_id FROM fiscal.fiscal_documents WHERE order_id = :o")
+                .param("o", order)
+                .query()
+                .singleRow();
+        assertThat(kept.get("tender_id"))
+                .as("which of two legs a single sale document covers is not something the opener can know")
+                .isNull();
+    }
+
+    @Test
     @DisplayName("an order with no tender row opens a document with no tender, and the date is still kept")
     void aDocumentWithNoUnambiguousTenderKeepsNone() {
         assign(firstCompany, LocalDate.of(2026, 1, 1));
@@ -808,8 +867,19 @@ class FiscalObligationTests {
                 .update();
     }
 
-    /** A settlement with one settled money tender naming the order's payment intent, as checkout writes it. */
+    /** A settlement with one settled money tender naming the order's payment intent. */
     private UUID settleWithAMoneyTender(UUID orderId) {
+        return settleWithAMoneyTender(orderId, true);
+    }
+
+    /**
+     * A settlement with one settled money tender.
+     *
+     * @param namingTheIntent whether the tender row carries the payment intent's id. Nothing in production sets
+     *     it ({@code OrderSettlementService.plan} inserts the tender with none and the intent is created after
+     *     it), so the honest fixture is {@code false}; {@code true} is the link a future writer would make.
+     */
+    private UUID settleWithAMoneyTender(UUID orderId, boolean namingTheIntent) {
         UUID method = UUID.randomUUID();
         UUID settlement = UUID.randomUUID();
         UUID tender = UUID.randomUUID();
@@ -845,7 +915,7 @@ class FiscalObligationTests {
                 .param("t", TENANT)
                 .param("s", settlement)
                 .param("m", methodId)
-                .param("intent", intent)
+                .param("intent", namingTheIntent ? intent : null)
                 .param("key", "tender-" + tender)
                 .update();
         return tender;

@@ -39,6 +39,15 @@
   `fiscal.synthetic_lines_allowed`, `SyntheticLineGate` and the 409 `FISCAL_LINES_NOT_BUILT` are gone;
   `fiscal.evidence_retention_years` (seven years, provisional) is declared in `FiscalEvidencePolicies`.
   V0685 snapshots the `tender_id` and `business_date` on the document at opening, and the evidence read returns both (the card draws the day).
+  Correction, 2026-10-23: the tender half of that sentence was not true outside fixtures. The opener derived `tender_id` from
+  `payments.tenders.payment_intent_id`, which no code writes (`OrderSettlementService.plan` inserts the tender with no intent and
+  `PaymentIntentService.createIntent` runs after it), so every real document kept NULL and the V0685 backfill matched no row.
+  `JdbcFiscalLifecycleStore.ordersOwingADocument` now takes the tender that names the intent when one does, and otherwise the
+  order's one money tender; an order with two money legs and no link to tell them apart keeps none
+  (`FiscalObligationTests.theTenderIsFoundThroughTheSettlementWhenNothingLinksItToTheIntent`). Documents opened before the
+  correction keep NULL and no backfill migration was added. The tender-to-intent link is still not written, deliberately:
+  `OrderSettlementService.restateTotal` and `replanMoneyLeg` refuse a money tender that names an intent, so writing it at
+  checkout would refuse every catch-weight restatement and every payment-method change.
   `FiscalNodeFacts.requiresMarkingCapablePayment` is called from `CartPaymentOptions` and
   `CheckoutEligibilityGuard` (while `feature.marked_goods` is on for the tenant), so Payme is neither
   offered nor accepted for a basket holding a marked node, and `OrderAmendmentService` refuses
