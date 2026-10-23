@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -29,6 +30,7 @@ import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.ordering.api.OrderCounts;
 import uz.horecaos.platform.ordering.api.OrderCountsQuery;
+import uz.horecaos.platform.ordering.api.OrderSettlementPort;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
 import uz.horecaos.platform.ordering.domain.DeliveryDestination;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderAmendmentStore;
@@ -89,7 +91,9 @@ public class OrderQueryService implements OrderCountsQuery {
     private final OrderBoardReadModels boardReadModels;
     private final StaffDirectory staffDirectory;
     private final OrderBoardEnrichment boardEnrichment;
+    private final @Nullable OrderSettlementPort settlements;
 
+    /** Without a settlement to ask: an order's cash is then its whole total, as it was before points were spendable. */
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderQueryService(
             JdbcOrderStore orders,
@@ -105,6 +109,41 @@ public class OrderQueryService implements OrderCountsQuery {
             OrderBoardReadModels boardReadModels,
             StaffDirectory staffDirectory,
             OrderBoardEnrichment boardEnrichment) {
+        this(
+                orders,
+                processes,
+                payments,
+                courierAssignments,
+                orderTables,
+                amendments,
+                protection,
+                objectMapper,
+                audit,
+                clock,
+                boardReadModels,
+                staffDirectory,
+                boardEnrichment,
+                null);
+    }
+
+    @Autowired
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public OrderQueryService(
+            JdbcOrderStore orders,
+            JdbcOrderProcessStore processes,
+            PaymentIntentPort payments,
+            ActiveCourierAssignmentsPort courierAssignments,
+            OrderTablesPort orderTables,
+            JdbcOrderAmendmentStore amendments,
+            FieldProtection protection,
+            ObjectMapper objectMapper,
+            AuditRecorder audit,
+            Clock clock,
+            OrderBoardReadModels boardReadModels,
+            StaffDirectory staffDirectory,
+            OrderBoardEnrichment boardEnrichment,
+            @Nullable OrderSettlementPort settlements) {
+        this.settlements = settlements;
         this.staffDirectory = staffDirectory;
         this.boardEnrichment = boardEnrichment;
         this.orders = orders;
@@ -655,6 +694,18 @@ public class OrderQueryService implements OrderCountsQuery {
     @Transactional(readOnly = true)
     public boolean reprintAvailableFor(UUID tenantId, UUID brandId, UUID locationId) {
         return boardEnrichment.reprintAvailable(tenantId, brandId, locationId);
+    }
+
+    /**
+     * The cash the customer still owes for this order: its total less the points they spent (ADR 0185). What
+     * «Сдача» is reckoned against, on the detail pane and on the printed slip alike, so a customer who paid part of
+     * an 80 000 order in points and hands over 100 000 is given back 100 000 less the 70 000 owed, not less 80 000.
+     */
+    @Transactional(readOnly = true)
+    public long cashToCollectFor(UUID tenantId, OrderRow order) {
+        return settlements == null
+                ? order.totalMinor()
+                : settlements.cashToCollectMinor(tenantId, order.orderId(), order.totalMinor());
     }
 
     /**

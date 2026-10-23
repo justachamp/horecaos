@@ -44,6 +44,7 @@ import uz.horecaos.platform.integration.camel.cardbilling.click.fake.FakeClickCa
 import uz.horecaos.platform.integration.camel.cardbilling.click.fake.FakeClickCardHttpProvider.NotHeldAnswer;
 import uz.horecaos.platform.integration.camel.common.ProviderExceptionClassifier;
 import uz.horecaos.platform.integration.camel.common.ProviderHttpClient;
+import uz.horecaos.platform.support.JvmLogCapture;
 
 /**
  * The real Click adapter through the whole real stack on a real socket (adapter, Camel route, circuit
@@ -667,6 +668,60 @@ class ClickCardProviderAdapterTests extends CardProviderContract {
                 .hasSize(5);
     }
 
+    @Test
+    @DisplayName("a revoke that fails on the wire logs the transport failure and never the card token in the path")
+    void aRevokeThatFailsOnTheWireNeverLogsTheCardToken() {
+        String token = enrol(TENANT, Card.APPROVING);
+        CardAccount account = account();
+        provider.stop();
+
+        try (JvmLogCapture logs = JvmLogCapture.start()) {
+            assertThat(adapter.revoke(account, token)).isInstanceOf(CardEnrolment.RevokeOutcome.Failed.class);
+
+            assertThat(logLinesOf(logs))
+                    .as("the failure is still logged, under a label")
+                    .anyMatch(line -> line.contains("card_token.delete"));
+            assertThat(logLinesOf(logs))
+                    .as("a card token is a credential to charge the card (ADR 0028, ADR 0029)")
+                    .noneMatch(line -> line.contains(token));
+        }
+    }
+
+    @Test
+    @DisplayName("a status lookup that fails on the wire logs the transport failure and never the Click payment id")
+    void aStatusLookupThatFailsOnTheWireNeverLogsThePaymentId() {
+        String token = enrol(TENANT, Card.APPROVING);
+        CardCharger.Outcome charged = adapter.charge(account(), TENANT, token, 250_000, "UZS", "key-paid");
+        assertThat(charged).isInstanceOf(CardCharger.Outcome.Succeeded.class);
+        String paymentId = ((CardCharger.Outcome.Succeeded) charged).providerReference();
+        transport.before("payment.status", provider::stop);
+
+        try (JvmLogCapture logs = JvmLogCapture.start()) {
+            assertThat(adapter.status(account(), "key-paid"))
+                    .isInstanceOf(CardCharger.StatusOutcome.NotSucceeded.class);
+
+            assertThat(transport.operations()).contains("payment.status");
+            assertThat(logLinesOf(logs))
+                    .as("the failure is still logged, under a label")
+                    .anyMatch(line -> line.contains("payment.status"));
+            assertThat(logLinesOf(logs))
+                    .as("a payment identifier never reaches a log line (ADR 0029)")
+                    .noneMatch(line -> line.contains(paymentId));
+        }
+    }
+
+    /** Every captured line as one string with its throwable, because a stack trace can carry the path too. */
+    private static List<String> logLinesOf(JvmLogCapture logs) {
+        return logs.snapshot().stream()
+                .map(event -> event.getFormattedMessage()
+                        + (event.getThrowableProxy() == null
+                                ? ""
+                                : " "
+                                        + ch.qos.logback.classic.spi.ThrowableProxyUtil.asString(
+                                                event.getThrowableProxy())))
+                .toList();
+    }
+
     // ------------------------------------------------------------------ helpers
 
     /** Wraps the real transport so a test can make one operation fail the way a sick network would. */
@@ -675,6 +730,7 @@ class ClickCardProviderAdapterTests extends CardProviderContract {
         private final CardBillingApiTransport delegate;
         private final Map<String, ProviderOutcome> failures = new LinkedHashMap<>();
         private final List<String> operations = new ArrayList<>();
+        private final Map<String, Runnable> beforeOperation = new LinkedHashMap<>();
 
         InjectingTransport(CardBillingApiTransport delegate) {
             this.delegate = delegate;
@@ -684,6 +740,11 @@ class ClickCardProviderAdapterTests extends CardProviderContract {
             failures.put(operation, outcome);
         }
 
+        /** Runs {@code action} just before the named operation goes to the real transport, for example to kill the provider. */
+        void before(String operation, Runnable action) {
+            beforeOperation.put(operation, action);
+        }
+
         List<String> operations() {
             return operations;
         }
@@ -691,6 +752,10 @@ class ClickCardProviderAdapterTests extends CardProviderContract {
         @Override
         public ProviderOutcome exchange(CardBillingApiCall call) {
             operations.add(call.operation());
+            Runnable hook = beforeOperation.get(call.operation());
+            if (hook != null) {
+                hook.run();
+            }
             ProviderOutcome injected = failures.get(call.operation());
             return injected != null ? injected : delegate.exchange(call);
         }

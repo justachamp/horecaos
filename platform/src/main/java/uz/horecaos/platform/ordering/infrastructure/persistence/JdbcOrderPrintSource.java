@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.ordering.api.OrderPrintSource;
+import uz.horecaos.platform.ordering.api.OrderSettlementPort;
 import uz.horecaos.platform.tenancy.api.LocalizedLabels;
 
 /**
@@ -33,10 +34,12 @@ class JdbcOrderPrintSource implements OrderPrintSource {
 
     private final JdbcClient jdbc;
     private final FieldProtection protection;
+    private final OrderSettlementPort settlements;
 
-    JdbcOrderPrintSource(JdbcClient jdbc, FieldProtection protection) {
+    JdbcOrderPrintSource(JdbcClient jdbc, FieldProtection protection, OrderSettlementPort settlements) {
         this.jdbc = jdbc;
         this.protection = protection;
+        this.settlements = settlements;
     }
 
     @Override
@@ -97,8 +100,9 @@ class JdbcOrderPrintSource implements OrderPrintSource {
                 found.fee(),
                 found.total(),
                 tendered,
-                // The same arithmetic, in the same place the order detail does it: tendered minus total.
-                tendered == null ? null : tendered - found.total(),
+                // The same arithmetic the order detail does: tendered minus the cash still owed, which is the total
+                // less the points the customer spent (ADR 0185).
+                tendered == null ? null : tendered - settlements.cashToCollectMinor(tenantId, orderId, found.total()),
                 found.kitchenNote(),
                 lines(tenantId, orderId, revealPurpose)));
     }

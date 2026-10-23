@@ -623,8 +623,11 @@ public class OrderAmendmentService {
             deltaTotalMinor = totalMinor - previous.totalMinor();
             fiscalCorrectionRequired = true;
             // ADR 0169, decision 6: the cash a courier is told to collect follows the amended total. This was
-            // missing for an increase as well. A payment-method change brings its own tender (below).
-            if (decoded.paymentMethodCode() == null
+            // missing for an increase as well. A move to a provider brings its own tender (below), which is
+            // planned at the amended total; a batch that names no method, or names CASH (a no-op for the order
+            // already on cash that a method change is accepted for), keeps the cash tender where it is, so it is
+            // restated here. Skipping it for CASH left the settlement, and the courier's figure, at the old total.
+            if (!movesToAProvider(decoded)
                     && "NOT_REQUIRED".equals(order.paymentStatusProjection())
                     && deltaTotalMinor != 0) {
                 removals.restateCashDue(order, totalMinor, actorId);
@@ -692,7 +695,7 @@ public class OrderAmendmentService {
                 .orElseThrow(
                         () -> new AmendmentNotPermittedException("The amendment settled while it was being applied"));
 
-        List<String> warnings = warningsFor(order, patch);
+        List<String> warnings = warningsFor(order, patch, totalMinor);
 
         events.publishEvent(new OrderAmendmentApplied(
                 UUID.randomUUID(),
@@ -1881,6 +1884,12 @@ public class OrderAmendmentService {
         }
     }
 
+    /** Whether the batch moves the order to a method other than cash, which re-plans the money leg itself. */
+    private static boolean movesToAProvider(DecodedAmendment decoded) {
+        String method = decoded.paymentMethodCode();
+        return method != null && !CASH_METHOD_CODE.equalsIgnoreCase(method);
+    }
+
     /**
      * ADR 0039 {@code CHANGE_PAYMENT_METHOD}: {@code CASH} at either end is
      * carried out directly. Anything else on the <em>current</em> side needs
@@ -2333,14 +2342,21 @@ public class OrderAmendmentService {
     /**
      * What the operator should be told but not blocked by.
      *
-     * <p>ADR 0039: change-due short of the total raises
+     * <p>ADR 0039: change-due short of what the customer owes in cash raises
      * {@code CASH_TENDERED_INSUFFICIENT}, which the operator acknowledges rather
      * than being refused — the customer can hand over more, and a hard refusal
      * here would stop an order over a figure that is a hint rather than money.
+     *
+     * <p>What they owe in cash is the amended total less the points they spent
+     * (ADR 0185), the same figure order entry compares the tender with, and not
+     * the total: an 80 000 order paid 10 000 in points is covered by 70 000.
+     *
+     * @param totalMinor the order's total once this amendment has applied
      */
-    private List<String> warningsFor(OrderRow order, OrderFieldPatch patch) {
+    private List<String> warningsFor(OrderRow order, OrderFieldPatch patch, long totalMinor) {
         List<String> warnings = new ArrayList<>();
-        if (patch.cashTenderedExpectedMinor() != null && patch.cashTenderedExpectedMinor() < order.totalMinor()) {
+        if (patch.cashTenderedExpectedMinor() != null
+                && patch.cashTenderedExpectedMinor() < removals.cashToCollectMinor(order, totalMinor)) {
             warnings.add("CASH_TENDERED_INSUFFICIENT");
         }
         return warnings;

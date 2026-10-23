@@ -312,6 +312,14 @@ public class LineRemovalCoordinator {
     }
 
     /**
+     * What the customer owes in money for an order of {@code totalMinor}: the total less the points they spent
+     * (ADR 0185). An order with no settlement answers the total.
+     */
+    public long cashToCollectMinor(OrderRow order, long totalMinor) {
+        return settlement.cashToCollectMinor(order.tenantId(), order.orderId(), totalMinor);
+    }
+
+    /**
      * The money leg of the order's settlement, moved to the method an amendment chose and to the order's new total
      * (ADR 0039 {@code CHANGE_PAYMENT_METHOD}, ADR 0185).
      *

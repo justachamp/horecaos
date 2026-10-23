@@ -48,6 +48,7 @@ import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService;
+import uz.horecaos.platform.ordering.api.OrderPrintSource;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.support.TestDatabase;
@@ -132,6 +133,9 @@ class SplitTenderEndpointsHttpTests {
 
     @Autowired
     private LoyaltyAdjustmentService loyaltyAdjustments;
+
+    @Autowired
+    private OrderPrintSource printSource;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -402,6 +406,68 @@ class SplitTenderEndpointsHttpTests {
     }
 
     @Test
+    @DisplayName("change due, on the order detail and on the printed slip, is what was handed over less the cash "
+            + "still owed after the points, not less the whole total")
+    void changeDueIsReckonedAgainstTheMoneyLegOnTheDetailAndTheSlip() throws Exception {
+        seedBalance(30_000L);
+
+        // 80 000 order, 10 000 of it in points: the customer owes 70 000 and hands over 100 000.
+        MvcResult placed = mvc.perform(post(ordersUrl())
+                        .with(tokenFor(OPERATOR))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "split-place-change")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(orderBody(10_000L, true, 100_000L)))
+                .andReturn();
+        assertThat(placed.getResponse().getStatus())
+                .as(placed.getResponse().getContentAsString())
+                .isEqualTo(201);
+        UUID orderId = UUID.fromString(JSON.readTree(placed.getResponse().getContentAsString())
+                .get("orderId")
+                .asText());
+
+        MvcResult read = mvc.perform(get(ordersUrl() + "/" + orderId).with(tokenFor(OPERATOR)))
+                .andReturn();
+        assertThat(read.getResponse().getStatus()).isEqualTo(200);
+        JsonNode detail = JSON.readTree(read.getResponse().getContentAsString());
+        assertThat(detail.get("summary").get("totalMinor").asLong())
+                .as("the premise: the order total still includes the points leg")
+                .isEqualTo(80_000L);
+        assertThat(detail.get("changeDueMinor").asLong())
+                .as("100 000 handed over for 70 000 owed in cash: 30 000 back, not the 20 000 the whole total gives")
+                .isEqualTo(30_000L);
+
+        assertThat(printSource.find(TENANT, orderId, null).orElseThrow().changeDueMinor())
+                .as("the slip prints the same figure the detail pane shows")
+                .isEqualTo(30_000L);
+    }
+
+    @Test
+    @DisplayName("an order taken for cash alone gives change against its whole total, as before")
+    void changeDueOnACashOnlyOrderIsAgainstTheWholeTotal() throws Exception {
+        MvcResult placed = mvc.perform(post(ordersUrl())
+                        .with(tokenFor(OPERATOR))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "split-place-change-cash")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(orderBody(null, null, 100_000L)))
+                .andReturn();
+        assertThat(placed.getResponse().getStatus())
+                .as(placed.getResponse().getContentAsString())
+                .isEqualTo(201);
+        UUID orderId = UUID.fromString(JSON.readTree(placed.getResponse().getContentAsString())
+                .get("orderId")
+                .asText());
+
+        JsonNode detail =
+                JSON.readTree(mvc.perform(get(ordersUrl() + "/" + orderId).with(tokenFor(OPERATOR)))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString());
+        assertThat(detail.get("changeDueMinor").asLong()).isEqualTo(20_000L);
+        assertThat(printSource.find(TENANT, orderId, null).orElseThrow().changeDueMinor())
+                .isEqualTo(20_000L);
+    }
+
+    @Test
     @DisplayName("an operator who spends points without confirming the customer agreed is refused by name, and the "
             + "customer's points are untouched")
     void anOperatorMustConfirmTheCustomerAgreed() throws Exception {
@@ -474,6 +540,11 @@ class SplitTenderEndpointsHttpTests {
      * absent is a valid body and an omitted primitive would be a 400.
      */
     private String orderBody(@Nullable Long redeemFromBalanceMinor, @Nullable Boolean attests) {
+        return orderBody(redeemFromBalanceMinor, attests, null);
+    }
+
+    private String orderBody(
+            @Nullable Long redeemFromBalanceMinor, @Nullable Boolean attests, @Nullable Long cashTenderedMinor) {
         StringBuilder body = new StringBuilder("{")
                 .append("\"customerAccountId\":\"")
                 .append(CUSTOMER)
@@ -486,6 +557,9 @@ class SplitTenderEndpointsHttpTests {
         }
         if (attests != null) {
             body.append(",\"operatorAttestsCustomerAgreement\":").append(attests);
+        }
+        if (cashTenderedMinor != null) {
+            body.append(",\"cashTenderedMinor\":").append(cashTenderedMinor);
         }
         return body.append('}').toString();
     }

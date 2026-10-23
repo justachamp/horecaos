@@ -130,13 +130,25 @@ public class CardBillingGateway {
                 call.correlationId(),
                 call.timeout() == null ? defaultTimeout : call.timeout());
 
+        // Every call is logged under its operation label, never its path: a card provider names the card token
+        // and the payment in the path (Click: DELETE /card_token/<service>/<token>, GET /payment/status/<service>/
+        // <payment>), and the shared client writes the path on any I/O failure (ADR 0028, ADR 0029).
         Map<String, String> headers = request.headers();
+        String operation = call.operation();
         return switch (call.method()) {
             case "GET" ->
-                http.getAccepting(
-                        providerCall, call.path(), headers, call.acceptedStatuses(), CardBillingGateway::body);
-            case "POST" -> http.post(providerCall, call.path(), headers, request.json(), CardBillingGateway::body);
-            case "DELETE" -> http.delete(providerCall, call.path(), headers, CardBillingGateway::body);
+                http.getAcceptingWithSensitivePath(
+                        providerCall,
+                        call.path(),
+                        operation,
+                        headers,
+                        call.acceptedStatuses(),
+                        CardBillingGateway::body);
+            case "POST" ->
+                http.postWithSensitivePath(
+                        providerCall, call.path(), operation, headers, request.json(), CardBillingGateway::body);
+            case "DELETE" ->
+                http.deleteWithSensitivePath(providerCall, call.path(), operation, headers, CardBillingGateway::body);
             default -> ProviderOutcome.rejected("METHOD_UNSUPPORTED", call.method());
         };
     }

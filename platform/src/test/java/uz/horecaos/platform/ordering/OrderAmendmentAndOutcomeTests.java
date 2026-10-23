@@ -1464,6 +1464,68 @@ class OrderAmendmentAndOutcomeTests {
     }
 
     @Test
+    @DisplayName("an amendment that reprices a cash order and names CASH restates the cash a courier collects, as "
+            + "one that names no method does")
+    void repricingWhileNamingCashRestatesTheCashDue() {
+        UUID orderId = orderIdOf(placeOrder("idem-reprice-name-cash"));
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        var proposed = tx(() -> amendments.propose(
+                TENANT,
+                orderId,
+                new OrderAmendmentService.ProposeCommand(
+                        version,
+                        List.of(oneMoreBurger(), OrderAmendmentService.AmendmentCommand.changePaymentMethod("CASH")),
+                        false,
+                        "k-reprice-name-cash",
+                        "OPERATOR_EDIT",
+                        "USER",
+                        "sharif",
+                        null)));
+        var result = confirmAndApply(orderId, proposed.amendment().id());
+
+        assertThat(result.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().totalMinor()).isEqualTo(150_000L);
+        assertThat(settlementTotal(orderId))
+                .as("the settlement follows the amended total, or the courier is told to collect the old one")
+                .isEqualTo(150_000L);
+        assertThat(tenderRows(orderId))
+                .extracting(row -> row.get("code"), row -> row.get("amount_minor"), row -> row.get("status"))
+                .containsExactly(org.assertj.core.api.Assertions.tuple("CASH", 150_000L, "PLANNED"));
+        assertThat(tenderSum(orderId)).isEqualTo(150_000L);
+    }
+
+    @Test
+    @DisplayName("the same on a points-plus-cash order: the cash leg follows the new total and the points stay")
+    void repricingWhileNamingCashKeepsThePointsAndMovesTheCashLeg() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+        UUID orderId = orderIdOf(placeOrderRedeeming("idem-split-reprice-name-cash", 10_000L));
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        var proposed = tx(() -> amendments.propose(
+                TENANT,
+                orderId,
+                new OrderAmendmentService.ProposeCommand(
+                        version,
+                        List.of(oneMoreBurger(), OrderAmendmentService.AmendmentCommand.changePaymentMethod("CASH")),
+                        false,
+                        "k-split-reprice-name-cash",
+                        "OPERATOR_EDIT",
+                        "USER",
+                        "sharif",
+                        null)));
+        confirmAndApply(orderId, proposed.amendment().id());
+
+        assertThat(settlementTotal(orderId)).isEqualTo(150_000L);
+        assertThat(tenderRows(orderId))
+                .extracting(row -> row.get("code"), row -> row.get("amount_minor"), row -> row.get("status"))
+                .containsExactly(
+                        org.assertj.core.api.Assertions.tuple("LOYALTY_POINTS", 10_000L, "RESERVED"),
+                        org.assertj.core.api.Assertions.tuple("CASH", 140_000L, "PLANNED"));
+    }
+
+    @Test
     @DisplayName("a cash order with no points moved to a provider is asked for the whole total, as it always was")
     void aCashOnlyOrderMovedToAProviderIsAskedForTheWholeTotal() {
         UUID orderId = orderIdOf(placeOrder("idem-cash-click"));
@@ -3107,6 +3169,25 @@ class OrderAmendmentAndOutcomeTests {
         assertThat(result.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
         assertThat(orderStore.find(TENANT, orderId).orElseThrow().cashTenderedExpectedMinor())
                 .isEqualTo(total - 1_000);
+    }
+
+    @Test
+    @DisplayName("an amended cash tender is compared with the cash still owed after the points, not with the total")
+    void anAmendedCashTenderIsComparedWithTheMoneyLeg() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+        UUID orderId = orderIdOf(placeOrderRedeeming("idem-tender-amend", 10_000L));
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().totalMinor())
+                .as("the premise: 100 000 on the order, 10 000 of it points, so 90 000 is owed in cash")
+                .isEqualTo(100_000L);
+
+        var enough = amend("k-tender-enough", OrderAmendmentService.AmendmentCommand.cashTendered(90_000L));
+        var shortOfTheCash = amend("k-tender-short", OrderAmendmentService.AmendmentCommand.cashTendered(89_999L));
+
+        assertThat(enough.warnings())
+                .as("90 000 covers the 90 000 still owed, though it is short of the 100 000 total")
+                .doesNotContain("CASH_TENDERED_INSUFFICIENT");
+        assertThat(shortOfTheCash.warnings()).contains("CASH_TENDERED_INSUFFICIENT");
     }
 
     @Test
