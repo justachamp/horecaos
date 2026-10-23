@@ -11318,6 +11318,154 @@
         },
         "type" : "object"
       },
+      "IdleMediaAttachRequest" : {
+        "properties" : {
+          "assetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "assetId" ],
+        "type" : "object"
+      },
+      "IdleMediaFinalizeResponse" : {
+        "properties" : {
+          "assetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "PENDING_UPLOAD", "UPLOADED", "AVAILABLE", "REJECTED", "DELETION_REQUESTED", "DELETED" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "IdleMediaItem" : {
+        "properties" : {
+          "assetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "position" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "IdleMediaList" : {
+        "properties" : {
+          "channelId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/IdleMediaItem"
+            },
+            "type" : "array"
+          },
+          "maximumBytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "maximumCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "ratio" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "IdleMediaOrderRequest" : {
+        "properties" : {
+          "itemIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 8,
+            "minItems" : 0,
+            "type" : "array"
+          }
+        },
+        "required" : [ "itemIds" ],
+        "type" : "object"
+      },
+      "IdleMediaUploadRequest" : {
+        "properties" : {
+          "contentType" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "filename" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "sizeBytes" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "contentType", "sizeBytes" ],
+        "type" : "object"
+      },
+      "IdleMediaUploadStateResponse" : {
+        "properties" : {
+          "assetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "rejectionCode" : {
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "PENDING_UPLOAD", "UPLOADED", "AVAILABLE", "REJECTED", "DELETION_REQUESTED", "DELETED" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "IdleMediaUploadTicketResponse" : {
+        "properties" : {
+          "assetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "requiredHeaders" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "uploadUrl" : {
+            "format" : "uri",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ImportInvoiceLine" : {
         "properties" : {
           "amountMinor" : {
@@ -11902,6 +12050,16 @@
               "type" : "string"
             },
             "type" : "array"
+          },
+          "idleMedia" : {
+            "items" : {
+              "$ref" : "#/components/schemas/IdleMediaItem"
+            },
+            "type" : "array"
+          },
+          "idleMediaVersion" : {
+            "format" : "int32",
+            "type" : "integer"
           },
           "paymentMethods" : {
             "items" : {
@@ -19338,6 +19496,10 @@
           },
           "syncing" : {
             "type" : "boolean"
+          },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -19401,6 +19563,21 @@
         },
         "type" : "object"
       },
+      "PosSyncModeRequest" : {
+        "properties" : {
+          "mode" : {
+            "enum" : [ "REPORT_ONLY", "PULL", "PULL_AND_PUSH" ],
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "mode", "reason" ],
+        "type" : "object"
+      },
       "PosSyncOverviewResponse" : {
         "properties" : {
           "bindings" : {
@@ -19418,6 +19595,10 @@
           },
           "tillKeepsBalance" : {
             "type" : "boolean"
+          },
+          "tillKeepsBalanceVersion" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -19574,6 +19755,20 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "PosSyncTillKeepsBalanceRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "value" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "reason", "value" ],
         "type" : "object"
       },
       "PreferenceResponse" : {
@@ -39656,6 +39851,61 @@
         "tags" : [ "Loyalty POS sync" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/pos-sync/bindings/{bindingId}/mode" : {
+      "put" : {
+        "description" : "REPORT_ONLY (compare and report, apply nothing), PULL (import what happened at the till) or PULL_AND_PUSH (also send the platform's number to the till): the rollout ADR 0171 stages. A step down is allowed at once; a step up is one stage at a time (422 naming both modes), and anything above REPORT_ONLY needs a binding that can sync. Requires If-Match with the binding's version, and writes an ADR 0027 fact with the reason.",
+        "operationId" : "loyaltyPosSyncSetMode",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "bindingId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PosSyncModeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PosSyncBindingResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Stage a binding's sync mode",
+        "tags" : [ "Loyalty POS sync" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/pos-sync/discrepancies" : {
       "get" : {
         "operationId" : "loyaltyPosSyncDiscrepancies",
@@ -39916,6 +40166,53 @@
           }
         },
         "summary" : "One reconciliation report with the differences it found",
+        "tags" : [ "Loyalty POS sync" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/pos-sync/till-keeps-balance" : {
+      "put" : {
+        "description" : "The statement behind the standing notice (ADR 0171 Decision 8): with no binding that mirrors the till, the loyalty page tells staff that a customer's balance here and at the till can differ. Requires If-Match with tillKeepsBalanceVersion from the overview (0 for a brand that has never said). Answers the overview.",
+        "operationId" : "loyaltyPosSyncSetTillKeepsBalance",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PosSyncTillKeepsBalanceRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PosSyncOverviewResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Say whether this brand's till keeps a bonus balance of its own",
         "tags" : [ "Loyalty POS sync" ]
       }
     },
@@ -57048,6 +57345,429 @@
         },
         "summary" : "The KIOSK channels a kiosk may be paired to at this branch",
         "tags" : [ "Kiosk devices" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kiosk/channels/{channelId}/idle-media" : {
+      "get" : {
+        "description" : "At most eight pictures. The version is the If-Match of the next change; the limits (count, bytes, ratio) are the ones the platform enforces, so a screen never hard-codes them.",
+        "operationId" : "kioskIdleMediaList",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IdleMediaList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A KIOSK channel's idle media, in the order it plays",
+        "tags" : [ "Kiosk idle media" ]
+      },
+      "post" : {
+        "description" : "The picture is checked again here -- an idle-media picture of this tenant, 9:16, at most 1 MB, verified -- and refused with IDLE_MEDIA_REFUSED and a reason otherwise, a ninth included. Writes an ADR 0027 fact naming the branch.",
+        "operationId" : "kioskIdleMediaAttach",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/IdleMediaAttachRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IdleMediaList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Put a verified picture at the end of the idle loop",
+        "tags" : [ "Kiosk idle media" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kiosk/channels/{channelId}/idle-media/order" : {
+      "put" : {
+        "description" : "itemIds must list every picture on the loop exactly once; anything else is refused and nothing moves.",
+        "operationId" : "kioskIdleMediaReorder",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/IdleMediaOrderRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IdleMediaList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Put the idle loop in another order",
+        "tags" : [ "Kiosk idle media" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kiosk/channels/{channelId}/idle-media/upload-requests" : {
+      "post" : {
+        "description" : "A public, tenant-owned still image (JPEG, PNG or WebP) of at most 1 MB, signed for exactly this key, type and size. Upload to it directly, then call finalize. The 9:16 shape is checked when the pipeline has read the file's own header: a wrong one ends REJECTED.",
+        "operationId" : "kioskIdleMediaRequestUpload",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/IdleMediaUploadRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IdleMediaUploadTicketResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Allocate an idle-media picture and return a constrained upload URL",
+        "tags" : [ "Kiosk idle media" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kiosk/channels/{channelId}/idle-media/uploads/{assetId}" : {
+      "get" : {
+        "description" : "UPLOADED while the pipeline has not read the file, then AVAILABLE or REJECTED; a rejected picture carries the code it was refused with (PURPOSE_ASPECT_RATIO for a picture that is not 9:16). A 404 for any asset that is not an idle-media picture of this tenant.",
+        "operationId" : "kioskIdleMediaUploadState",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "assetId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IdleMediaUploadStateResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Where an idle-media upload's verification stands",
+        "tags" : [ "Kiosk idle media" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kiosk/channels/{channelId}/idle-media/uploads/{assetId}/finalize" : {
+      "post" : {
+        "description" : "As the media route, for a picture allocated here. The status is UPLOADED; AVAILABLE or REJECTED follows, and only AVAILABLE can be attached. A 404 for any asset that is not an idle-media picture of this tenant.",
+        "operationId" : "kioskIdleMediaFinalizeUpload",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "assetId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IdleMediaFinalizeResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record that an idle-media upload is complete and queue verification",
+        "tags" : [ "Kiosk idle media" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kiosk/channels/{channelId}/idle-media/{itemId}" : {
+      "delete" : {
+        "description" : "The pictures behind it move up. The asset itself is not deleted: the media pipeline's own retention decides that once nothing refers to it.",
+        "operationId" : "kioskIdleMediaRemove",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "itemId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IdleMediaList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Take a picture off the idle loop",
+        "tags" : [ "Kiosk idle media" ]
       }
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kiosk/configuration" : {
@@ -75116,6 +75836,9 @@
   }, {
     "description" : "A dispatcher's operational SMS blast to couriers (operations 6.4b)",
     "name" : "Courier broadcasts"
+  }, {
+    "description" : "ADR 0187: the pictures a KIOSK channel plays while nobody is ordering",
+    "name" : "Kiosk idle media"
   }, {
     "description" : "A tenant's own versioned distance bands and peak-hour rules (ADR 0037)",
     "name" : "Delivery tariffs"

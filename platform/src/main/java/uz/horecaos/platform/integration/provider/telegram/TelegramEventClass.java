@@ -4,7 +4,7 @@ package uz.horecaos.platform.integration.provider.telegram;
  * Every event class a bound Telegram chat may subscribe to today, restated
  * from {@code integration.telegram_binding_events}'s own {@code
  * ck_telegram_binding_event_class} check (currently last widened by
- * {@code V0544}) — kept beside the schema constraint deliberately rather than
+ * {@code V0696}) — kept beside the schema constraint deliberately rather than
  * generated from it, so the admin routing screen (gap map row {@code 10.9b},
  * wave P36) can offer the set without a schema round trip, and a value here
  * that the check does not also admit fails a test rather than a real insert.
@@ -38,7 +38,16 @@ public enum TelegramEventClass {
     RECOVERY_CASE_OPENED("Service-recovery case opened"),
     RECOVERY_CASE_SLA_BREACHED("Service-recovery case passed a clock"),
     // ADR 0137, row 4.2c: a weighed total the till does not hold. Restated in V0665's CHECK.
-    TILL_REVISION_NEEDED("A weighed total needs the till changed");
+    TILL_REVISION_NEEDED("A weighed total needs the till changed"),
+
+    // ADR 0187 (D25 wave, ADR 0071): a customer's review, told by its rating alone -- 4 or 5 stars, and 1 to 3 -- with
+    // no
+    // customer, comment or tag. Restated in V0696's CHECK.
+    REVIEW_POSITIVE("Positive review (4 or 5 stars)"),
+    REVIEW_NEGATIVE("Negative review (1 to 3 stars)"),
+    // ADR 0171, Decision 6: a point-of-sale balance sync found a difference between the loyalty ledger and a till that
+    // a person has to look at. Restated in V0696's CHECK.
+    LOYALTY_SYNC_DISCREPANCY("Loyalty balance differs from the till");
 
     private final String description;
 

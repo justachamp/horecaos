@@ -42,6 +42,7 @@ class MediaAssetReferenceCatalogTests {
             "catalog.channel_media_overrides.media_asset_id", "catalog",
             "tenant.brand_media.media_asset_id", "tenancy",
             "tenant.channel_presentation.og_image_asset_id", "tenancy",
+            "tenant.kiosk_idle_media.asset_id", "tenancy",
             "support.social_links.media_asset_id", "helpcenter",
             "content.revision_media.media_asset_id", "content",
             "reviews.feedback_tags.icon_asset_id", "reviews");

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { toDeviceProfile } from './device-profile';
+import { toDeviceProfile, toKioskConfiguration } from './device-profile';
 
 const WALL = {
   deviceId: 'dev-1',
@@ -88,5 +88,42 @@ describe('toDeviceProfile', () => {
     });
 
     expect(profile?.kiosk?.channelName).toBe('KIOSK_A');
+  });
+});
+
+describe('toKioskConfiguration (ADR 0187)', () => {
+  it('keeps the pictures in position order with the version', () => {
+    const configuration = toKioskConfiguration({
+      idleMedia: [
+        { id: 'b', assetId: 'ab', position: 1, url: '/api/v1/storefront/tenants/t/media/ab' },
+        { id: 'a', assetId: 'aa', position: 0, url: '/api/v1/storefront/tenants/t/media/aa' },
+      ],
+      idleMediaVersion: 7,
+    });
+
+    expect(configuration?.idleMedia.map((picture) => picture.id)).toEqual(['a', 'b']);
+    expect(configuration?.idleMediaVersion).toBe(7);
+  });
+
+  it('drops a picture whose address is not a path on the API’s own origin, rather than load a stranger’s URL', () => {
+    const configuration = toKioskConfiguration({
+      idleMedia: [
+        { id: 'x', assetId: 'x', position: 0, url: 'https://evil.example/a.jpg' },
+        { id: 'y', assetId: 'y', position: 1, url: '//evil.example/a.jpg' },
+        { id: 'z', assetId: 'z', position: 2, url: 'javascript:alert(1)' },
+        { id: 'ok', assetId: 'ok', position: 3, url: '/api/v1/storefront/tenants/t/media/ok' },
+      ],
+      idleMediaVersion: 1,
+    });
+
+    expect(configuration?.idleMedia.map((picture) => picture.id)).toEqual(['ok']);
+  });
+
+  it('is null for a body that is not a configuration with a list, and ignores entries that are not pictures', () => {
+    expect(toKioskConfiguration(null)).toBeNull();
+    expect(toKioskConfiguration({ idleMediaVersion: 1 })).toBeNull();
+    expect(
+      toKioskConfiguration({ idleMedia: [null, 'x', 4], idleMediaVersion: 1 })?.idleMedia,
+    ).toEqual([]);
   });
 });

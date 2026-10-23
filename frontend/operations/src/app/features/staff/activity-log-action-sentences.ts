@@ -1505,6 +1505,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Клиент кассы сопоставлен со счётом баллов',
       'uz-Latn': 'Kassadagi mijoz ball hisobiga bogʻlandi',
     },
+    'loyalty.pos_sync.mode.changed': {
+      en: 'Till balance sync moved to another stage',
+      ru: 'Синхронизация баланса с кассой переведена на другую стадию',
+      'uz-Latn': 'Kassa balansi sinxronizatsiyasi boshqa bosqichga oʻtkazildi',
+    },
     'loyalty.pos_sync.resolved': {
       en: 'Difference between the till and the loyalty ledger settled',
       ru: 'Расхождение между кассой и счётом баллов урегулировано',
@@ -2031,6 +2036,21 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Kiosk revoked',
       ru: 'Киоск отключён',
       'uz-Latn': 'Kiosk oʻchirildi',
+    },
+    'kiosk.idle_media.attached': {
+      en: 'Picture added to a kiosk channel’s idle screen',
+      ru: 'Картинка добавлена на экран ожидания канала киоска',
+      'uz-Latn': 'Kiosk kanalining kutish ekraniga rasm qoʻshildi',
+    },
+    'kiosk.idle_media.reordered': {
+      en: 'Idle screen pictures of a kiosk channel put in another order',
+      ru: 'Порядок картинок экрана ожидания канала киоска изменён',
+      'uz-Latn': 'Kiosk kanali kutish ekrani rasmlari tartibi oʻzgartirildi',
+    },
+    'kiosk.idle_media.removed': {
+      en: 'Picture removed from a kiosk channel’s idle screen',
+      ru: 'Картинка убрана с экрана ожидания канала киоска',
+      'uz-Latn': 'Kiosk kanalining kutish ekranidan rasm olib tashlandi',
     },
     'terminal.device.configured': {
       en: 'Terminal name or sign-in mode changed',

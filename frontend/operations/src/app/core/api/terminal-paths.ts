@@ -110,9 +110,35 @@ export const terminalPaths = {
   kioskRevoke(scope: LocationScope, deviceId: string): string {
     return `${this.kioskDevice(scope, deviceId)}/revoke`;
   },
-  /** `GET`, by the kiosk itself: its channel, branch, modes and payment methods. */
+  /** `GET`, by the kiosk itself: its channel, branch, modes and payment methods, and its idle pictures (ADR 0187). */
   kioskConfiguration(scope: LocationScope): string {
     return `${branch(scope)}/kiosk/configuration`;
+  },
+
+  // ---- a KIOSK channel's idle media (ADR 0187) ----
+
+  /** `GET` the list (an `ETag` is its version); `POST { assetId }` attaches, with `If-Match`. */
+  kioskIdleMedia(scope: LocationScope, channelId: string): string {
+    return `${branch(scope)}/kiosk/channels/${enc(channelId)}/idle-media`;
+  },
+  /** `POST { contentType, sizeBytes, filename }`: a constrained upload URL for a 9:16 picture of at most 1 MB. */
+  kioskIdleMediaUploadRequest(scope: LocationScope, channelId: string): string {
+    return `${this.kioskIdleMedia(scope, channelId)}/upload-requests`;
+  },
+  /** `GET`: where an upload's verification stands (`UPLOADED`, `AVAILABLE`, `REJECTED` and why). */
+  kioskIdleMediaUpload(scope: LocationScope, channelId: string, assetId: string): string {
+    return `${this.kioskIdleMedia(scope, channelId)}/uploads/${enc(assetId)}`;
+  },
+  kioskIdleMediaFinalize(scope: LocationScope, channelId: string, assetId: string): string {
+    return `${this.kioskIdleMediaUpload(scope, channelId, assetId)}/finalize`;
+  },
+  /** `PUT { itemIds }` with `If-Match`: the whole list in its new order. */
+  kioskIdleMediaOrder(scope: LocationScope, channelId: string): string {
+    return `${this.kioskIdleMedia(scope, channelId)}/order`;
+  },
+  /** `DELETE` with `If-Match`. */
+  kioskIdleMediaItem(scope: LocationScope, channelId: string, itemId: string): string {
+    return `${this.kioskIdleMedia(scope, channelId)}/${enc(itemId)}`;
   },
 } as const;
 

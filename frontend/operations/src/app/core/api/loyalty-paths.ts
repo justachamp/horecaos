@@ -70,4 +70,14 @@ export const loyaltyPolicyPaths = {
   posSyncResolution(scope: BrandScope, discrepancyId: string): string {
     return `${this.posSyncDiscrepancies(scope)}/${encodeURIComponent(discrepancyId)}/resolutions`;
   },
+
+  /** `PUT { mode, reason }` with `If-Match` the binding's version: stages the rollout one step. */
+  posSyncBindingMode(scope: BrandScope, bindingId: string): string {
+    return `${this.posSync(scope)}/bindings/${encodeURIComponent(bindingId)}/mode`;
+  },
+
+  /** `PUT { value, reason }` with `If-Match` the overview's `tillKeepsBalanceVersion` (0 for a brand that never said). */
+  posSyncTillKeepsBalance(scope: BrandScope): string {
+    return `${this.posSync(scope)}/till-keeps-balance`;
+  },
 } as const;

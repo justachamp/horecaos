@@ -200,6 +200,15 @@ public enum ErrorCode {
     KIOSK_CHANNEL_NOT_AVAILABLE(HttpStatus.UNPROCESSABLE_ENTITY, "Kiosk channel not available"),
 
     /**
+     * ADR 0187: a picture cannot go on a kiosk's idle loop. The answer carries {@code reason}: {@code WRONG_ASPECT_RATIO}
+     * (not 9:16), {@code TOO_LARGE} (over 1 MB), {@code NOT_A_RASTER_IMAGE}, {@code NOT_AVAILABLE} (not yet verified),
+     * {@code UNKNOWN_ASSET} (no such picture of this tenant's, or one uploaded for something else: one answer, so an
+     * id is not an oracle) or {@code LIMIT} (a ninth). One code and a reason, because the console branches on the
+     * reason and every one of them is the same kind of refusal: a well-formed request the list will not take.
+     */
+    IDLE_MEDIA_REFUSED(HttpStatus.UNPROCESSABLE_ENTITY, "Idle media refused"),
+
+    /**
      * ADR 0155: a terminal refused an unlock, and says no more than that. A wrong PIN, an unknown member and an
      * ineligible person answer alike; only a lock is distinguished ({@link #TERMINAL_PIN_LOCKED}), because the
      * legitimate person needs to know to wait.

@@ -609,6 +609,23 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
     'Faqat hisobot: solishtiradi, hech narsa qoʻllamaydi va yubormaydi',
   'marketing.loyalty.posSync.mode.PULL': 'Kassada boʻlgan narsani yuklaydi',
   'marketing.loyalty.posSync.mode.PULL_AND_PUSH': 'Yuklaydi va jurnal balansini yuboradi',
+  // ------------------------------------------------------------------- staging the rollout (ADR 0171, row 6.3b)
+  'marketing.loyalty.posSync.stage.label': 'Joriy etish bosqichi',
+  'marketing.loyalty.posSync.stage.hint':
+    'Avval faqat hisobot, keyin yuklash, keyin yuborish. Yuqoriga — bir bosqichdan, pastga — darhol.',
+  'marketing.loyalty.posSync.stage.reason': 'Nega (harakatlar jurnalida saqlanadi)',
+  'marketing.loyalty.posSync.stage.apply': 'Bosqichni qoʻllash',
+  'marketing.loyalty.posSync.stage.saved': 'Endi ulanish quyidagicha ishlaydi: {mode}.',
+  'marketing.loyalty.posSync.stage.stale':
+    'Buni avval kimdir oʻzgartirgan. Sahifa hozirgi holatni koʻrsatmoqda; oʻzgarishingizni qaytadan kiriting.',
+  'marketing.loyalty.posSync.keeps.title': 'Kassangiz oʻz bonus balansini yuritadimi?',
+  'marketing.loyalty.posSync.keeps.body':
+    'Agar yuritsa va bu yerda uni hech narsa aks ettirmasa, xodimlarga mijozning bu yerdagi va kassadagi balansi farq qilishi mumkinligi aytiladi.',
+  'marketing.loyalty.posSync.keeps.label': 'Kassa oʻz bonus balansini yuritadi',
+  'marketing.loyalty.posSync.keeps.save': 'Saqlash',
+  'marketing.loyalty.posSync.keeps.saved': 'Saqlandi.',
+  'marketing.loyalty.posSync.keeps.yes': 'Ha: kassa oʻz bonus balansini yuritadi.',
+  'marketing.loyalty.posSync.keeps.no': 'Yoʻq: kassa yuritmaydi yoki bu haqda aytilmagan.',
   'marketing.loyalty.posSync.reconcile.action': 'Hozir solishtirish',
   'marketing.loyalty.posSync.reconcile.running': 'Solishtirilmoqda…',
   'marketing.loyalty.posSync.runs.title': 'Solishtirish hisobotlari',

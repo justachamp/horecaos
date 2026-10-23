@@ -150,6 +150,21 @@ public class JdbcPosBalanceSyncStore {
                 .list();
     }
 
+    /** Whether any matched pair has moved since the platform last pushed it: the cheap question the push sweep asks every few seconds. */
+    public boolean hasPendingPushes(UUID tenantId, UUID bindingId) {
+        return jdbc.sql("""
+                        SELECT EXISTS (
+                            SELECT 1 FROM loyalty.pos_balance_sync_state s
+                              JOIN loyalty.accounts a ON a.tenant_id = s.tenant_id AND a.id = s.account_id
+                             WHERE s.tenant_id = :tenantId AND s.binding_id = :bindingId AND s.status = 'MATCHED'
+                               AND (s.last_pushed_version IS NULL OR s.last_pushed_version <> a.version))
+                        """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .query(Boolean.class)
+                .single();
+    }
+
     public record PendingPush(
             UUID stateId,
             UUID accountId,
@@ -803,6 +818,21 @@ public class JdbcPosBalanceSyncStore {
                 .list()
                 .forEach(run -> latest.putIfAbsent(run.bindingId(), run));
         return latest;
+    }
+
+    /** The newest finished run of this kind on the binding, if any. */
+    public Optional<RunRow> lastRunOfKind(UUID tenantId, UUID bindingId, String kind) {
+        return jdbc.sql(RUN_SELECT + """
+                 WHERE tenant_id = :tenantId AND binding_id = :bindingId AND kind = :kind
+                   AND status IN ('SUCCEEDED', 'FAILED')
+                 ORDER BY started_at DESC, id
+                 LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .param("kind", kind)
+                .query(JdbcPosBalanceSyncStore::toRun)
+                .optional();
     }
 
     /**

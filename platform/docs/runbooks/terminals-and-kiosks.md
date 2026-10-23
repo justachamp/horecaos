@@ -127,6 +127,25 @@ There is no code to issue from the console: the unit displays its own. Revoke th
 one. To move a working kiosk to another KIOSK channel at the same branch, use **Edit**; a kiosk with no channel (its
 channel was archived or withdrawn) is flagged and cannot sell until it is moved.
 
+### Pictures on the idle screen
+
+A paired kiosk plays the pictures of its **channel** (ADR 0187), not of one unit: every kiosk on the KIOSK channel, at every branch
+where the channel sells, shows the same loop, so a change here is a change on all of them. **Settings → Channel setup →** the KIOSK
+channel **→ Idle screen pictures** (a branch manager reaches the same panel from the *Kiosks* page of her branch, with
+`kiosk.device.manage` and nothing else).
+
+1. **Add a picture.** Choose a file (JPEG, PNG or WebP). The page crops it to 9:16 in your browser, exports it at 720 by 1280 and
+   refuses a file still over **1 MB** before anything is sent; lower the quality or choose a plainer picture. The platform checks the
+   shape again on the file itself, so a picture that is not 9:16 ends *Rejected* with the reason and cannot be added.
+2. **Order and remove.** At most **eight** pictures; move one up or down, or remove it. Several people editing at once is refused
+   with *changed by someone else*: reload and repeat.
+3. **Check on the unit.** Within a minute of a change the kiosk shows the pictures in that order, eight seconds each, with its
+   channel and branch in a corner. With no pictures it shows the status screen it always showed. A picture that fails to load leaves the
+   screen dark for its eight seconds; if the platform cannot be reached the unit keeps the loop it last had.
+
+There is no video and no per-picture duration, and a picture removed here is not deleted from storage at once: the media retention
+decides that when nothing refers to it.
+
 ### Switching the feature on
 
 Kiosk pairing is dark behind `feature.kiosk_devices`. A tenant's console shows *not switched on* until the flag is set

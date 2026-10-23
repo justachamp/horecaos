@@ -197,7 +197,17 @@ public final class NotificationVariableCatalog {
                         // ReviewsOperationsAlertTrigger (ADR 0159): a service-recovery case, by id only.
                         new Variable("caseId", "The service-recovery case's own id."),
                         new Variable("clock", "Which clock a case passed: FIRST_RESPONSE or RESOLUTION."),
-                        new Variable("dueAt", "When the clock was due, ISO-8601.")));
+                        new Variable("dueAt", "When the clock was due, ISO-8601."),
+                        // ReviewsOperationsAlertTrigger (ADR 0187): a submitted review, by id and stars only.
+                        new Variable("reviewId", "The review's own id."),
+                        new Variable("rating", "The stars the customer gave, 1 to 5."),
+                        // LoyaltyOperationsAlertTrigger (ADR 0171): a till-sync difference, by ids and kind only.
+                        new Variable("bindingId", "The point-of-sale binding the difference was found on."),
+                        new Variable("discrepancyId", "The first difference of this kind found today."),
+                        new Variable(
+                                "discrepancyKind",
+                                "Which difference: TILL_HIGHER, TILL_LOWER, SPEND_EXCEEDS_BALANCE, CREDIT_HELD, "
+                                        + "AMBIGUOUS_MATCH, RATIO_MISMATCH, NOT_CONSENTED or UNVERIFIABLE.")));
 
         // ADR 0182, D15: a dispatcher's broadcast to couriers names an approved wording and supplies
         // these. Short operational values typed at send time, not data from an event: the wording is

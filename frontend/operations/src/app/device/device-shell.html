@@ -179,34 +179,42 @@
       </button>
     </section>
   } @else if (isKiosk()) {
-    <section class="device-shell__panel" data-testid="device-kiosk-status">
-      <h1 class="device-shell__title">{{ 'device.kiosk.title' | t }}</h1>
-      @if (kioskChannel(); as channel) {
-        <dl class="device-shell__facts">
-          <div>
-            <dt>{{ 'device.kiosk.channel' | t }}</dt>
-            <dd data-testid="device-kiosk-channel">{{ channel.channelName }}</dd>
-          </div>
-          <div>
-            <dt>{{ 'device.kiosk.branch' | t }}</dt>
-            <dd data-testid="device-kiosk-branch">{{ profile()?.locationName }}</dd>
-          </div>
-        </dl>
-        @if (channel.channelStatus !== 'ACTIVE') {
-          <p class="device-shell__error" data-testid="device-kiosk-channel-down">
-            {{ 'device.kiosk.channelDown' | t }}
-          </p>
+    @if (idlePicture(); as picture) {
+      <app-kiosk-idle-loop
+        [picture]="picture"
+        [channelName]="kioskChannel()?.channelName ?? ''"
+        [branchName]="profile()?.locationName ?? ''"
+      />
+    } @else {
+      <section class="device-shell__panel" data-testid="device-kiosk-status">
+        <h1 class="device-shell__title">{{ 'device.kiosk.title' | t }}</h1>
+        @if (kioskChannel(); as channel) {
+          <dl class="device-shell__facts">
+            <div>
+              <dt>{{ 'device.kiosk.channel' | t }}</dt>
+              <dd data-testid="device-kiosk-channel">{{ channel.channelName }}</dd>
+            </div>
+            <div>
+              <dt>{{ 'device.kiosk.branch' | t }}</dt>
+              <dd data-testid="device-kiosk-branch">{{ profile()?.locationName }}</dd>
+            </div>
+          </dl>
+          @if (channel.channelStatus !== 'ACTIVE') {
+            <p class="device-shell__error" data-testid="device-kiosk-channel-down">
+              {{ 'device.kiosk.channelDown' | t }}
+            </p>
+          } @else {
+            <p class="device-shell__hint" data-testid="device-kiosk-ready">
+              {{ 'device.kiosk.ready' | t }}
+            </p>
+          }
         } @else {
-          <p class="device-shell__hint" data-testid="device-kiosk-ready">
-            {{ 'device.kiosk.ready' | t }}
+          <p class="device-shell__error" data-testid="device-kiosk-unbound">
+            {{ 'device.kiosk.unbound' | t }}
           </p>
         }
-      } @else {
-        <p class="device-shell__error" data-testid="device-kiosk-unbound">
-          {{ 'device.kiosk.unbound' | t }}
-        </p>
-      }
-    </section>
+      </section>
+    }
   } @else if (isWall()) {
     <section class="device-shell__wall" data-testid="device-wall">
       <q-vdu-wall

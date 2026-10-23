@@ -5543,6 +5543,54 @@ export interface IdentifiersResponse {
   terminalId?: string;
 }
 
+export interface IdleMediaAttachRequest {
+  assetId: string;
+}
+
+export interface IdleMediaFinalizeResponse {
+  assetId?: string;
+  status?: "PENDING_UPLOAD" | "UPLOADED" | "AVAILABLE" | "REJECTED" | "DELETION_REQUESTED" | "DELETED";
+}
+
+export interface IdleMediaItem {
+  assetId?: string;
+  id?: string;
+  position?: number;
+  url?: string;
+}
+
+export interface IdleMediaList {
+  channelId?: string;
+  items?: Array<IdleMediaItem>;
+  maximumBytes?: number;
+  maximumCount?: number;
+  ratio?: string;
+  version?: number;
+}
+
+export interface IdleMediaOrderRequest {
+  itemIds: Array<string>;
+}
+
+export interface IdleMediaUploadRequest {
+  contentType: string;
+  filename?: string;
+  sizeBytes: number;
+}
+
+export interface IdleMediaUploadStateResponse {
+  assetId?: string;
+  rejectionCode?: string;
+  status?: "PENDING_UPLOAD" | "UPLOADED" | "AVAILABLE" | "REJECTED" | "DELETION_REQUESTED" | "DELETED";
+}
+
+export interface IdleMediaUploadTicketResponse {
+  assetId?: string;
+  expiresAt?: string;
+  requiredHeaders?: { [key: string]: string };
+  uploadUrl?: string;
+}
+
 export interface ImportInvoiceLine {
   amountMinor?: number;
   chargeType: string;
@@ -5840,6 +5888,8 @@ export interface KioskConfiguration {
   branch?: KioskBranch;
   channel?: KioskChannel;
   fulfillmentModes?: Array<string>;
+  idleMedia?: Array<IdleMediaItem>;
+  idleMediaVersion?: number;
   paymentMethods?: Array<string>;
   priceChannelCode?: string;
   version?: number;
@@ -9368,6 +9418,7 @@ export interface PosSyncBindingResponse {
   openDiscrepancies?: number;
   providerType?: string;
   syncing?: boolean;
+  version?: number;
 }
 
 export interface PosSyncDiscrepancyResponse {
@@ -9388,11 +9439,17 @@ export interface PosSyncDiscrepancyResponse {
   version?: number;
 }
 
+export interface PosSyncModeRequest {
+  mode: "REPORT_ONLY" | "PULL" | "PULL_AND_PUSH";
+  reason: string;
+}
+
 export interface PosSyncOverviewResponse {
   bindings?: Array<PosSyncBindingResponse>;
   openDiscrepancies?: number;
   standingNotice?: boolean;
   tillKeepsBalance?: boolean;
+  tillKeepsBalanceVersion?: number;
 }
 
 export interface PosSyncReconcileRequest {
@@ -9449,6 +9506,11 @@ export interface PosSyncRunSummary {
   runId?: string;
   startedAt?: string;
   status?: string;
+}
+
+export interface PosSyncTillKeepsBalanceRequest {
+  reason: string;
+  value: boolean;
 }
 
 export interface PreferenceResponse {
@@ -15233,11 +15295,13 @@ export interface Operations {
   "activateAccrualRule": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/accrual-rules/{ruleId}/activate"; request: { parameters: { path: { brandId: string; ruleId: string; tenantId: string } } }; responses: { "200": unknown } };
   "retireAccrualRule": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/accrual-rules/{ruleId}/retire"; request: { parameters: { path: { brandId: string; ruleId: string; tenantId: string } } }; responses: { "200": unknown } };
   "loyaltyPosSyncOverview": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/pos-sync"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": PosSyncOverviewResponse } };
+  "loyaltyPosSyncSetMode": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/pos-sync/bindings/{bindingId}/mode"; request: { parameters: { path: { bindingId: string; brandId: string; tenantId: string } }; body: PosSyncModeRequest }; responses: { "200": PosSyncBindingResponse } };
   "loyaltyPosSyncDiscrepancies": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/pos-sync/discrepancies"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { limit?: number; status?: string } } }; responses: { "200": Array<PosSyncDiscrepancyResponse> } };
   "loyaltyPosSyncResolve": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/pos-sync/discrepancies/{discrepancyId}/resolutions"; request: { parameters: { path: { brandId: string; discrepancyId: string; tenantId: string } }; body: PosSyncResolveRequest }; responses: { "200": PosSyncResolutionResponse } };
   "loyaltyPosSyncRuns": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/pos-sync/runs"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { from?: string; limit?: number; to?: string } } }; responses: { "200": Array<PosSyncRunResponse> } };
   "loyaltyPosSyncReconcile": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/pos-sync/runs"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: PosSyncReconcileRequest }; responses: { "200": PosSyncRunResponse } };
   "loyaltyPosSyncRun": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/pos-sync/runs/{runId}"; request: { parameters: { path: { brandId: string; runId: string; tenantId: string } } }; responses: { "200": PosSyncRunReportResponse } };
+  "loyaltyPosSyncSetTillKeepsBalance": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/pos-sync/till-keeps-balance"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: PosSyncTillKeepsBalanceRequest }; responses: { "200": PosSyncOverviewResponse } };
   "redemptionPolicies": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/redemption-policies"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<RedemptionPolicyResponse> } };
   "draftRedemptionPolicy": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/redemption-policies"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: DraftRedemptionPolicyRequest }; responses: { "200": RedemptionPolicyResponse } };
   "activateRedemptionPolicy": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/redemption-policies/{policyId}/activate"; request: { parameters: { path: { brandId: string; policyId: string; tenantId: string } } }; responses: { "200": unknown } };
@@ -15785,6 +15849,13 @@ export interface Operations {
   "setOnHand": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/variants/{variantId}/on-hand"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; variantId: string } }; body: OnHandRequest }; responses: { "200": unknown } };
   "setQuantityDefault": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/variants/{variantId}/quantity-defaults"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; variantId: string } }; body: QuantityDefaultRequest }; responses: { "200": unknown } };
   "channels": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kiosk/channels"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<ChannelChoiceResponse> } };
+  "kioskIdleMediaList": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kiosk/channels/{channelId}/idle-media"; request: { parameters: { path: { brandId: string; channelId: string; locationId: string; tenantId: string } } }; responses: { "200": IdleMediaList } };
+  "kioskIdleMediaAttach": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kiosk/channels/{channelId}/idle-media"; request: { parameters: { path: { brandId: string; channelId: string; locationId: string; tenantId: string } }; body: IdleMediaAttachRequest }; responses: { "200": IdleMediaList } };
+  "kioskIdleMediaReorder": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kiosk/channels/{channelId}/idle-media/order"; request: { parameters: { path: { brandId: string; channelId: string; locationId: string; tenantId: string } }; body: IdleMediaOrderRequest }; responses: { "200": IdleMediaList } };
+  "kioskIdleMediaRequestUpload": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kiosk/channels/{channelId}/idle-media/upload-requests"; request: { parameters: { path: { brandId: string; channelId: string; locationId: string; tenantId: string } }; body: IdleMediaUploadRequest }; responses: { "200": IdleMediaUploadTicketResponse } };
+  "kioskIdleMediaUploadState": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kiosk/channels/{channelId}/idle-media/uploads/{assetId}"; request: { parameters: { path: { assetId: string; brandId: string; channelId: string; locationId: string; tenantId: string } } }; responses: { "200": IdleMediaUploadStateResponse } };
+  "kioskIdleMediaFinalizeUpload": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kiosk/channels/{channelId}/idle-media/uploads/{assetId}/finalize"; request: { parameters: { path: { assetId: string; brandId: string; channelId: string; locationId: string; tenantId: string } } }; responses: { "200": IdleMediaFinalizeResponse } };
+  "kioskIdleMediaRemove": { method: "DELETE"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kiosk/channels/{channelId}/idle-media/{itemId}"; request: { parameters: { path: { brandId: string; channelId: string; itemId: string; locationId: string; tenantId: string } } }; responses: { "200": IdleMediaList } };
   "configuration": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kiosk/configuration"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": KioskConfiguration } };
   "devices": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kiosk/devices"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<KioskResponse> } };
   "rebind": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kiosk/devices/{deviceId}"; request: { parameters: { path: { brandId: string; deviceId: string; locationId: string; tenantId: string } }; body: KioskPairRequest }; responses: { "200": KioskResponse } };

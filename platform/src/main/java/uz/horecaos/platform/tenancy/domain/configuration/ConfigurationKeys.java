@@ -1422,6 +1422,27 @@ public final class ConfigurationKeys {
             .describedAs("Seconds between pulls of the movements that happened at a point-of-sale terminal.")
             .build();
 
+    /** ADR 0171 Decision 3 and the accepted 60-second convergence window: seconds between sends of what moved on the platform. */
+    public static final ConfigurationKey<Integer> LOYALTY_POS_SYNC_PUSH_INTERVAL_SECONDS = ConfigurationKey.of(
+                    "loyalty.pos_sync.push_interval_seconds", Integer.class)
+            .defaultValue(30)
+            .ownedBy("loyalty")
+            .settableAt(ScopeType.PLATFORM)
+            .describedAs(
+                    "Seconds between sends to a point-of-sale terminal of the balances that moved on the platform.")
+            .build();
+
+    /** ADR 0171, open input 4: whether a customer must have consented before their balance is synced with the till. */
+    public static final ConfigurationKey<Boolean> LOYALTY_POS_SYNC_REQUIRE_CONSENT = ConfigurationKey.of(
+                    "loyalty.pos_sync.require_consent", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("loyalty")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("Whether a customer must have consented before their balance is synced with the point-of-sale "
+                    + "terminal.")
+            .build();
+
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             CART_EXPIRY_MINUTES,
             ORDERING_CART_RETENTION_DAYS,
@@ -1457,6 +1478,8 @@ public final class ConfigurationKeys {
             LOYALTY_POS_SYNC_MAX_BINDING_CREDIT_MINOR_PER_DAY,
             LOYALTY_POS_TILL_KEEPS_BALANCE,
             LOYALTY_POS_SYNC_PULL_INTERVAL_SECONDS,
+            LOYALTY_POS_SYNC_PUSH_INTERVAL_SECONDS,
+            LOYALTY_POS_SYNC_REQUIRE_CONSENT,
             CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN,
             CUSTOMERS_OTP_DELIVERY_CHANNEL_ORDER,
             CUSTOMERS_PII_EXPORT_APPROVAL_THRESHOLD_ROWS,

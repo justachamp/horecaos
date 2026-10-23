@@ -42,6 +42,8 @@ export interface PosSyncBindingView {
   readonly providerType: string;
   readonly locationId: string | null;
   readonly bindingStatus: string;
+  /** The `If-Match` of a change to the binding's mode. */
+  readonly version: number;
   readonly capabilityState: PosSyncCapabilityState;
   readonly enabled: boolean;
   readonly syncing: boolean;
@@ -55,6 +57,8 @@ export interface PosSyncBindingView {
 /** Mirrors `LoyaltyPosSyncController.OverviewResponse`. */
 export interface PosSyncOverview {
   readonly tillKeepsBalance: boolean;
+  /** The `If-Match` of the statement above; 0 for a brand that has never made it. */
+  readonly tillKeepsBalanceVersion: number;
   /** The tenant says the till keeps its own balance and no binding mirrors it: the two can differ. */
   readonly standingNotice: boolean;
   readonly openDiscrepancies: number;
@@ -170,6 +174,41 @@ export class PosSyncApi {
       this.api.post<{ readonly bindingId: string }, PosSyncRunView>(
         loyaltyPolicyPaths.posSyncRuns(scope),
         command({ bindingId }),
+      ),
+    );
+  }
+
+  /**
+   * Stages a binding's mode one step (ADR 0171 rollout), against the binding's version. A step up that skips a stage, and any
+   * mode above report-only for a binding that cannot sync, answer 422; a binding that moved on since is `STALE_VERSION`.
+   */
+  async setMode(
+    scope: BrandScope,
+    binding: PosSyncBindingView,
+    mode: PosSyncMode,
+    reason: string,
+  ): Promise<PosSyncBindingView> {
+    return firstValueFrom(
+      this.api.put<{ readonly mode: PosSyncMode; readonly reason: string }, PosSyncBindingView>(
+        loyaltyPolicyPaths.posSyncBindingMode(scope, binding.bindingId),
+        command({ mode, reason }),
+        { expectedVersion: binding.version },
+      ),
+    );
+  }
+
+  /** Says whether this brand's till keeps a bonus balance of its own, against the version of the brand's own row. */
+  async setTillKeepsBalance(
+    scope: BrandScope,
+    value: boolean,
+    expectedVersion: number,
+    reason: string,
+  ): Promise<PosSyncOverview> {
+    return firstValueFrom(
+      this.api.put<{ readonly value: boolean; readonly reason: string }, PosSyncOverview>(
+        loyaltyPolicyPaths.posSyncTillKeepsBalance(scope),
+        command({ value, reason }),
+        { expectedVersion },
       ),
     );
   }

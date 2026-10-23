@@ -20,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -30,10 +31,14 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
+import uz.horecaos.platform.loyalty.api.LoyaltySyncDiscrepancyOpened;
+import uz.horecaos.platform.reviews.api.ReviewSubmitted;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
@@ -50,6 +55,7 @@ class TelegramRoutingControllerEndpointTests {
 
     private static final UUID TENANT = UUID.fromString("018f9b20-7000-7000-8000-0000000000a1");
     private static final UUID BRAND = UUID.fromString("018f9b20-7000-7000-8000-0000000000b1");
+    private static final UUID LOCATION = UUID.fromString("018f9b20-7000-7000-8000-0000000000e1");
     private static final UUID INSTALLATION = UUID.fromString("018f9b20-7000-7000-8000-0000000000c1");
     private static final UUID BINDING = UUID.fromString("018f9b20-7000-7000-8000-0000000000d1");
 
@@ -86,6 +92,12 @@ class TelegramRoutingControllerEndpointTests {
 
     @Autowired
     private RoleRegistrySynchronizer roleRegistry;
+
+    @Autowired
+    private ApplicationEventPublisher events;
+
+    @Autowired
+    private PlatformTransactionManager transactions;
 
     @BeforeEach
     void reset() {
@@ -169,6 +181,164 @@ class TelegramRoutingControllerEndpointTests {
         assertThat(bindingStatus()).isEqualTo("SUSPENDED");
     }
 
+    @Test
+    void theReviewAndTillClassesAreOfferedAndAChatCanSubscribeToThem() throws Exception {
+        MvcResult eventClasses = mvc.perform(get(ROUTING + "/event-classes").with(tokenFor(MANAGER)))
+                .andReturn();
+        String body = eventClasses.getResponse().getContentAsString();
+        for (String eventClass : java.util.List.of("REVIEW_POSITIVE", "REVIEW_NEGATIVE", "LOYALTY_SYNC_DISCREPANCY")) {
+            assertThat(body)
+                    .as(eventClass + " is offered to the routing screen")
+                    .contains(eventClass);
+        }
+
+        for (String eventClass : java.util.List.of("REVIEW_POSITIVE", "REVIEW_NEGATIVE", "LOYALTY_SYNC_DISCREPANCY")) {
+            MvcResult subscribed = mvc.perform(post(ROUTING + "/bindings/" + BINDING + "/subscriptions")
+                            .with(tokenFor(MANAGER))
+                            .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "subscribe-" + eventClass)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"eventClass\":\"" + eventClass + "\",\"enabled\":true}"))
+                    .andReturn();
+            assertThat(subscribed.getResponse().getStatus()).as(eventClass).isEqualTo(204);
+        }
+
+        assertThat(jdbc.sql("""
+                        SELECT event_class FROM integration.telegram_binding_events
+                         WHERE tenant_id = :t AND binding_id = :b AND enabled
+                           AND event_class IN ('REVIEW_POSITIVE', 'REVIEW_NEGATIVE', 'LOYALTY_SYNC_DISCREPANCY')
+                        """)
+                        .param("t", TENANT)
+                        .param("b", BINDING)
+                        .query(String.class)
+                        .list())
+                .as("the database's own check admits all three, and a chat hears only what it subscribed to")
+                .containsExactlyInAnyOrder("REVIEW_POSITIVE", "REVIEW_NEGATIVE", "LOYALTY_SYNC_DISCREPANCY");
+    }
+
+    @Test
+    void aReviewReachesOnlyTheChatSubscribedToItsClassAndOnlyOnceTheReviewIsCommitted() throws Exception {
+        subscribe("REVIEW_NEGATIVE");
+        UUID twoStars = UUID.randomUUID();
+        UUID fiveStars = UUID.randomUUID();
+
+        // A review the database refused is not news: the submission rolled back, and no chat hears of it.
+        UUID rolledBack = UUID.randomUUID();
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            events.publishEvent(reviewSubmitted(rolledBack, 1));
+            status.setRollbackOnly();
+        });
+        assertThat(alertsAbout(rolledBack))
+                .as("a review that rolled back tells nobody")
+                .isEmpty();
+
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            events.publishEvent(reviewSubmitted(twoStars, 2));
+            events.publishEvent(reviewSubmitted(fiveStars, 5));
+        });
+
+        List<Map<String, Object>> negative = alertsAbout(twoStars);
+        assertThat(negative)
+                .as("a two-star review reaches the chat that subscribed to REVIEW_NEGATIVE, and it is durable")
+                .hasSize(1);
+        assertThat(negative.getFirst().get("template_key")).isEqualTo("REVIEW_NEGATIVE");
+        assertThat(String.valueOf(negative.getFirst().get("variables")))
+                .contains(twoStars.toString())
+                .contains("\"rating\"")
+                .as("the alert carries the review's id and its stars and nothing about the customer")
+                .doesNotContain("comment")
+                .doesNotContain("customer");
+        assertThat(alertsAbout(fiveStars))
+                .as("the chat did not subscribe to REVIEW_POSITIVE, so a five-star review is not told to it")
+                .isEmpty();
+
+        subscribe("REVIEW_POSITIVE");
+        UUID fourStars = UUID.randomUUID();
+        new TransactionTemplate(transactions)
+                .executeWithoutResult(status -> events.publishEvent(reviewSubmitted(fourStars, 4)));
+        assertThat(alertsAbout(fourStars)).hasSize(1);
+        assertThat(alertsAbout(fourStars).getFirst().get("template_key")).isEqualTo("REVIEW_POSITIVE");
+    }
+
+    @Test
+    void aTillDifferenceReachesTheChatSubscribedToItOnceTheTransactionThatFoundItCommits() throws Exception {
+        subscribe("LOYALTY_SYNC_DISCREPANCY");
+        UUID loyaltyBinding = UUID.randomUUID();
+        UUID held = UUID.randomUUID();
+        UUID ordinary = UUID.randomUUID();
+
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            events.publishEvent(new LoyaltySyncDiscrepancyOpened(
+                    TENANT, BRAND, loyaltyBinding, held, UUID.randomUUID(), "CREDIT_HELD"));
+            // A customer known only to one side is counted in the report and not announced.
+            events.publishEvent(new LoyaltySyncDiscrepancyOpened(
+                    TENANT, BRAND, UUID.randomUUID(), ordinary, UUID.randomUUID(), "PLATFORM_ONLY"));
+        });
+
+        List<Map<String, Object>> alerts = alertsAbout(loyaltyBinding);
+        assertThat(alerts)
+                .as("a held credit is told to the chat, and it is durable")
+                .hasSize(1);
+        assertThat(alerts.getFirst().get("template_key")).isEqualTo("LOYALTY_SYNC_DISCREPANCY");
+        assertThat(String.valueOf(alerts.getFirst().get("variables")))
+                .contains(held.toString())
+                .contains("CREDIT_HELD")
+                .as("the alert carries ids and a kind, never the customer's account")
+                .doesNotContain("accountId");
+        assertThat(jdbc.sql("SELECT count(*) FROM notifications.notifications WHERE tenant_id = :t")
+                        .param("t", TENANT)
+                        .query(Long.class)
+                        .single())
+                .as("the ordinary kind told nobody")
+                .isEqualTo(1L);
+    }
+
+    private void subscribe(String eventClass) throws Exception {
+        // A key of its own: the idempotency store is not cleared with the tenant, and a key another test already used
+        // with the same body would be replayed as a 204 that writes nothing.
+        MvcResult subscribed = mvc.perform(post(ROUTING + "/bindings/" + BINDING + "/subscriptions")
+                        .with(tokenFor(MANAGER))
+                        .header(
+                                IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER,
+                                "subscribe-" + eventClass + "-" + UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"eventClass\":\"" + eventClass + "\",\"enabled\":true}"))
+                .andReturn();
+        assertThat(subscribed.getResponse().getStatus()).as(eventClass).isEqualTo(204);
+        assertThat(jdbc.sql("""
+                        SELECT count(*) FROM integration.telegram_binding_events
+                         WHERE tenant_id = :t AND binding_id = :b AND event_class = :c AND enabled
+                        """)
+                        .param("t", TENANT)
+                        .param("b", BINDING)
+                        .param("c", eventClass)
+                        .query(Long.class)
+                        .single())
+                .as("the chat is subscribed to " + eventClass)
+                .isEqualTo(1L);
+    }
+
+    private static ReviewSubmitted reviewSubmitted(UUID reviewId, int rating) {
+        return new ReviewSubmitted(
+                UUID.randomUUID(),
+                TENANT,
+                reviewId,
+                UUID.randomUUID(),
+                BRAND,
+                LOCATION,
+                rating,
+                true,
+                2,
+                Instant.now());
+    }
+
+    private List<Map<String, Object>> alertsAbout(UUID reviewId) {
+        return jdbc.sql("""
+                        SELECT template_key, subject_type, variables::text AS variables
+                          FROM notifications.notifications
+                         WHERE tenant_id = :t AND subject_id = :s
+                        """).param("t", TENANT).param("s", reviewId).query().listOfRows();
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private String bindingStatus() {
@@ -190,6 +360,15 @@ class TelegramRoutingControllerEndpointTests {
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
                 VALUES (:id, :tenantId, 'MAIN', 'main', 'Brand', 'ACTIVE', 0)
                 """).param("id", BRAND).param("tenantId", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
+                    timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, 'MAIN', 'main', 'Branch', 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
         jdbc.sql("""
                 INSERT INTO integration.provider_environments (
                     code, provider_category, provider_type, base_url, is_production, egress_allowlist)
