@@ -15,6 +15,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.fulfillment.domain.zone.ZoneRole;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore.GeometryFacts;
+import uz.horecaos.platform.web.api.ApiException;
 
 /**
  * Landing a batch of legacy zone geometry as one review, rather than one
@@ -92,7 +93,9 @@ public class ZoneBatchImportService {
                         status.setRollbackOnly();
                     }
                     return ok;
-                } catch (DataAccessException | IllegalArgumentException failure) {
+                } catch (DataAccessException | IllegalArgumentException | ApiException failure) {
+                    // A row that cannot be registered (no name in the brand's default language, a refused
+                    // name) is that row's outcome, never the whole batch's: the report gives every row one.
                     status.setRollbackOnly();
                     return RowOutcome.rejected(row.externalRef(), describeFailure(failure));
                 }

@@ -278,22 +278,38 @@ class ZoneBatchImportServiceTests {
                 .hasSize(1);
     }
 
+    @Test
+    @DisplayName("a row without the brand's default-language name is rejected on its own, not by aborting the batch")
+    void aRowWithoutTheDefaultLanguageNameIsRejectedPerRow() {
+        // No brand locale set, so the brand's default is the platform's ru. The second row names only English.
+        BatchImportReport report = batchImport.importBatch(
+                TENANT,
+                BRAND,
+                List.of(
+                        row("legacy-ok", "NAMED-1", TASHKENT_TRIANGLE),
+                        rowNamed("legacy-nameless", "NAMED-2", TASHKENT_TRIANGLE, Map.of("en", "Nameless"))),
+                false);
+
+        assertThat(report.accepted()).isEqualTo(1);
+        assertThat(report.rejected()).isEqualTo(1);
+        assertThat(report.rows().get(0).accepted()).isTrue();
+        var refused = report.rows().get(1);
+        assertThat(refused.accepted()).isFalse();
+        assertThat(refused.error()).contains("default language");
+        assertThat(zones.listZones(TENANT, BRAND))
+                .as("the good row committed and the nameless one left nothing behind")
+                .hasSize(1);
+    }
+
     // ------------------------------------------------------------------- fixtures
 
     private ImportRow row(String externalRef, String code, String geoJson) {
+        return rowNamed(externalRef, code, geoJson, LocaleNames.triple(code + " RU", code + " UZ", code + " EN"));
+    }
+
+    private ImportRow rowNamed(String externalRef, String code, String geoJson, Map<String, String> names) {
         return new ImportRow(
-                externalRef,
-                ZoneRole.DELIVERY,
-                code,
-                LocaleNames.triple(code + " RU", code + " UZ", code + " EN"),
-                regionId,
-                0,
-                "UZS",
-                null,
-                null,
-                null,
-                geoJson,
-                ACTOR);
+                externalRef, ZoneRole.DELIVERY, code, names, regionId, 0, "UZS", null, null, null, geoJson, ACTOR);
     }
 
     private void seedTenancy() {
