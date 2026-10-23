@@ -115,7 +115,7 @@
                 }
               }
               @case ('MENU_BUTTON') {
-                @if (view()?.menuButtonLabel; as label) {
+                @if (step.detail !== 'STALE_BUTTON' && view()?.menuButtonLabel; as label) {
                   <p class="q-body-sm" data-testid="mini-app-menu-wanted">
                     {{
                       'marketing.miniApp.menu.wanted'

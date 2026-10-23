@@ -289,6 +289,8 @@ describe('MiniAppSetupCard (ADR 0183, row 6.6a)', () => {
     expect(button.disabled).toBe(false);
     expect(button.textContent?.trim()).toBe('Take the menu button off');
     expect(byId('mini-app-detail-MENU_BUTTON')?.textContent).toContain('Take it off');
+    expect(byId('mini-app-menu-wanted')).toBeNull();
+    expect(byId('mini-app-menu-held')?.textContent).toContain('https://shop.example.uz/');
 
     button.click();
 
