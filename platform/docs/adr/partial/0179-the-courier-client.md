@@ -411,7 +411,7 @@ a call the `courier` OpenAPI group documents.
 - [ADR 0057: OpenAPI per-surface document groups](../built/0057-openapi-per-surface-document-groups.md)
 - [ADR 0062: Staff sign-in happens inside the platform](../built/0062-staff-sign-in-happens-inside-the-platform.md)
 - [ADR 0066: `platform-admin` joins the control-plane OpenAPI surface](../built/0066-platform-admin-joins-the-control-plane-openapi-surface.md)
-- [ADR 0164: A courier service tenant](../not-started/0164-a-courier-service-tenant.md)
+- [ADR 0164: A courier service tenant](../partial/0164-a-courier-service-tenant.md)
 
 ## Status addition (2026-10-23)
 

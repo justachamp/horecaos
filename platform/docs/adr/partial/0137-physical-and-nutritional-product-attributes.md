@@ -44,7 +44,7 @@
   (the add-lines dialog still adds whole units); and the price-book matrix, the
   resolved-prices read and the bulk price change mark the price of a weighed
   variant as per its quantum.
-  Addition, 2026-10-14 ([ADR 0180](0180-stale-marketplace-channels-weighed-baskets-and-the-marketplace-menu-pull.md)): the add-lines dialog adds a splittable dish by its portion
+  Addition, 2026-10-14 ([ADR 0180](../partial/0180-stale-marketplace-channels-weighed-baskets-and-the-marketplace-menu-pull.md)): the add-lines dialog adds a splittable dish by its portion
   (the step is read off the order's channel menu; a typed decimal must be a whole number of
   steps, as the platform already refuses otherwise); a weight that moves the total of an order
   the till already holds opens a revised-total notice (banner on the order and at the pass, one

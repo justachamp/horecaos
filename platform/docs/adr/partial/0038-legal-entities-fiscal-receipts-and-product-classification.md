@@ -95,7 +95,7 @@
   where a manager has routed one (Settings → Printing and receipts; automatic
   printing is off until switched on per route).
   2026-10-23 (batch 21, ADR 0166): the open input «which party is the legal fiscal agent per
-  settlement path» is closed by [ADR 0166](0166-the-fiscal-agent-per-settlement-path-and-the-fiscal-evidence-surface.md)
+  settlement path» is closed by [ADR 0166](../partial/0166-the-fiscal-agent-per-settlement-path-and-the-fiscal-evidence-surface.md)
   (the tenant's own legal entity, on every path), which amends this record without editing it. Rollout stage 4 is now
   driven for both providers end to end against fakes: Click from a document after capture, Payme from lines fixed with the
   checkout; the line builder files every order as the lines it was sold as and the placeholder is deleted. Stage 5 (the
@@ -105,10 +105,10 @@
   (the external-connections runbook for wave `w11-fiscal-evidence` lists each fact).
   Addition, 2026-10-14: the source and refresh cadence of the IKPU/MXIK reference list, the one
   open input of this record that named the list, is closed by
-  [ADR 0173](0173-the-ikpu-mxik-reference-dataset.md) (an uploaded official file, imported
+  [ADR 0173](../partial/0173-the-ikpu-mxik-reference-dataset.md) (an uploaded official file, imported
   as a two-step audited run, with a freshness alert); read that record for the dataset's
   status. The product editor's fiscal tab and the fiscalization backfill editor now share one
-  reference picker ([ADR 0180](0180-stale-marketplace-channels-weighed-baskets-and-the-marketplace-menu-pull.md)).
+  reference picker ([ADR 0180](../partial/0180-stale-marketplace-channels-weighed-baskets-and-the-marketplace-menu-pull.md)).
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-22
 - Deciders: Ayubkhon Abbosov (platform architecture; cash fiscalization, 2026-08-22), finance (VAT registration, tax treatment, evidence retention), legal (fiscal agency per settlement path)

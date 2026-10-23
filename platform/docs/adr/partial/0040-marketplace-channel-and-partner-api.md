@@ -51,7 +51,7 @@
   has not confirmed for longer than its bound. `MarketplaceMenuPublished` and
   `MarketplaceChannelRecovered` stay unpublished and uncatalogued; the menu pull is not built; the
   ADR 0006 failure for a stale channel is not built.
-  Addition, 2026-10-14 ([ADR 0180](0180-stale-marketplace-channels-weighed-baskets-and-the-marketplace-menu-pull.md)): the "ADR 0006 failure an operator must resolve"
+  Addition, 2026-10-14 ([ADR 0180](../partial/0180-stale-marketplace-channels-weighed-baskets-and-the-marketplace-menu-pull.md)): the "ADR 0006 failure an operator must resolve"
   this record's liveness section asks for is decided and not built as written. A stale
   channel is a tenant-queue incident: the ADR 0058 operations alert for
   `MARKETPLACE_CHANNEL_STALE`, once per episode, with the `stale_alerted_at` mark naming the

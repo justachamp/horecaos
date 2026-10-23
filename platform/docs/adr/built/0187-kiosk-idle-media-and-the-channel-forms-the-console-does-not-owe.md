@@ -34,7 +34,7 @@
   [ADR 0071](../built/0071-order-reviews-a-rating-the-tenant-can-see.md),
   [ADR 0082](../built/0082-a-feature-flag-is-a-boolean-configuration-key.md),
   [ADR 0119](../partial/0119-wave-p17-device-shell-auth-and-qr-pairing.md),
-  [ADR 0159](../not-started/0159-service-recovery-and-feedback-settings.md),
+  [ADR 0159](../partial/0159-service-recovery-and-feedback-settings.md),
   [ADR 0162](../partial/0162-kiosk-device-pairing.md),
   [ADR 0171](../partial/0171-who-owns-a-loyalty-balance-when-the-till-also-keeps-one.md)
 - Supersedes / Superseded by: — (amends [ADR 0162](../partial/0162-kiosk-device-pairing.md) without editing its argument: its open

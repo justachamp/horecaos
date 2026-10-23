@@ -65,7 +65,7 @@
   (platform-scoped; nothing publishes it yet), and tenant-language configuration
   beyond the one configured default. Bot topology is decided (bot-per-brand):
   the decision section records it.
-  Addition, 2026-10-14 ([ADR 0180](0180-stale-marketplace-channels-weighed-baskets-and-the-marketplace-menu-pull.md)): the event class `TILL_REVISION_NEEDED` joins the chat
+  Addition, 2026-10-14 ([ADR 0180](../partial/0180-stale-marketplace-channels-weighed-baskets-and-the-marketplace-menu-pull.md)): the event class `TILL_REVISION_NEEDED` joins the chat
   subscription list (V0665 restates the full `ck_telegram_binding_event_class`): a weighed total
   the till does not hold is raised once per notice from `ordering` by an in-process signal that
   `TillRevisionAlertTrigger` turns into an alert, carrying the order number, the total the till

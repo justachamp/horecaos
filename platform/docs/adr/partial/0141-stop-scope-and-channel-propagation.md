@@ -76,7 +76,7 @@
   reported, and alerted, as the new outage it is; and a sweep clears only the marker it read before it
   began (the sync-state row's `xmin`, compared in `recordSweep`), so a stop that commits while a sweep
   is running is swept on the next pass and not left for the resync interval.
-  Addition, 2026-10-14 ([ADR 0180](0180-stale-marketplace-channels-weighed-baskets-and-the-marketplace-menu-pull.md)): "terminal" is struck from the stop-scope
+  Addition, 2026-10-14 ([ADR 0180](../partial/0180-stale-marketplace-channels-weighed-baskets-and-the-marketplace-menu-pull.md)): "terminal" is struck from the stop-scope
   clause of the information architecture (a terminal is a sales channel, so a stop "for the
   kiosk" is a `CHANNEL` stop); the "ADR 0006 failure that a stale channel raises" is decided
   as a tenant-queue incident that closes itself on recovery, with no ADR 0006 record; and the
