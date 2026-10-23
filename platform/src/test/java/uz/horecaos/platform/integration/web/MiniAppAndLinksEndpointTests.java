@@ -417,6 +417,102 @@ class MiniAppAndLinksEndpointTests {
 
     @Test
     @DisplayName(
+            "switching the Mini App off leaves a way back: the step offers to take the button off, and Telegram reverts to its default")
+    void aMenuButtonOfAMiniAppSwitchedOffCanBeTakenOff() throws Exception {
+        readyToApply();
+        applyMenuButton(BRAND);
+        assertThat(bot.defaultMenuButton()).containsEntry("type", "web_app");
+        jdbc.sql("UPDATE tenant.telegram_channel_settings SET mini_app_enabled = false WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .update();
+
+        JsonNode stale = status(BRAND);
+        assertThat(stateOf(stale, "MENU_BUTTON")).isEqualTo("TODO");
+        assertThat(detailOf(stale, "MENU_BUTTON"))
+                .as(
+                        "Telegram still opens the storefront although the Mini App is off: the step says it can be taken off")
+                .isEqualTo("STALE_BUTTON");
+        assertThat(stale.path("menuButtonUrl").asText()).isEqualTo("https://shop.example.uz/");
+
+        MvcResult taken = applyMenuButton(BRAND);
+
+        assertThat(taken.getResponse().getStatus())
+                .as(taken.getResponse().getContentAsString())
+                .isEqualTo(200);
+        JsonNode after = JSON.readTree(taken.getResponse().getContentAsString());
+        assertThat(bot.defaultMenuButton()).isEqualTo(Map.of("type", "default"));
+        assertThat(after.path("menuButtonUrl").isNull()).isTrue();
+        assertThat(detailOf(after, "MENU_BUTTON")).isEqualTo("MINI_APP_OFF");
+        assertThat(auditFacts("integration.telegram_menu_button_reset")).hasSize(1);
+        assertThat(auditFacts("integration.telegram_menu_button_reset").getFirst())
+                .contains("https://shop.example.uz/");
+        assertThat(applyMenuButton(BRAND).getResponse().getStatus())
+                .as("Telegram holds no Mini App button now, so there is nothing more to take off")
+                .isEqualTo(422);
+        assertThat(bot.setChatMenuButtonCallCount()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("a storefront address that stops being verified leaves the same way back")
+    void anAddressThatLapsesCanBeTakenOff() throws Exception {
+        readyToApply();
+        applyMenuButton(BRAND);
+        jdbc.sql("UPDATE tenant.channel_hostnames SET verified = false WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .update();
+
+        assertThat(detailOf(status(BRAND), "MENU_BUTTON")).isEqualTo("STALE_BUTTON");
+
+        assertThat(applyMenuButton(BRAND).getResponse().getStatus()).isEqualTo(200);
+        assertThat(bot.defaultMenuButton()).isEqualTo(Map.of("type", "default"));
+        assertThat(detailOf(status(BRAND), "MENU_BUTTON")).isEqualTo("NOT_READY");
+        assertThat(auditFacts("integration.telegram_menu_button_reset")).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("a button that opens another brand's live Mini App is not this brand's to take off")
+    void anotherBrandsLiveMiniAppIsNotTakenOff() throws Exception {
+        readyToApply();
+        applyMenuButton(BRAND);
+        jdbc.sql("UPDATE tenant.telegram_channel_settings SET brand_id = :other WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .param("other", OTHER_BRAND)
+                .update();
+
+        assertThat(detailOf(status(BRAND), "MENU_BUTTON")).isEqualTo("OTHER_BRAND");
+        assertThat(applyMenuButton(BRAND).getResponse().getStatus()).isEqualTo(422);
+
+        assertThat(bot.defaultMenuButton()).containsEntry("type", "web_app");
+        assertThat(bot.setChatMenuButtonCallCount()).isEqualTo(1);
+        assertThat(auditFacts("integration.telegram_menu_button_reset")).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "a Telegram that refuses to take the button off, or says ok and keeps it, leaves it standing and audits nothing")
+    void takingTheButtonOffIsReadBackToo() throws Exception {
+        readyToApply();
+        applyMenuButton(BRAND);
+        jdbc.sql("UPDATE tenant.telegram_channel_settings SET mini_app_enabled = false WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .update();
+
+        bot.failNextSetChatMenuButton();
+        assertThat(applyMenuButton(BRAND).getResponse().getStatus()).isEqualTo(422);
+
+        bot.ignoreMenuButtonWrites();
+        MvcResult ignored = applyMenuButton(BRAND);
+        assertThat(ignored.getResponse().getStatus()).isEqualTo(200);
+        JsonNode after = JSON.readTree(ignored.getResponse().getContentAsString());
+        assertThat(detailOf(after, "MENU_BUTTON"))
+                .as("Telegram still shows the old button, so the step still offers to take it off")
+                .isEqualTo("STALE_BUTTON");
+        assertThat(bot.defaultMenuButton()).containsEntry("type", "web_app");
+        assertThat(auditFacts("integration.telegram_menu_button_reset")).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
             "nothing is sent to Telegram until the Mini App is on, the address verified, and the channel this brand's")
     void applyNeedsEveryPrecondition() throws Exception {
         seedWebHostname(WEB_CHANNEL, "shop.example.uz", true, LOCATION);

@@ -74,7 +74,8 @@ public class BrandSwitcherController {
     @RequiresCapability(value = Capability.CONTENT_MANAGE, scope = ScopeType.BRAND, mutating = true)
     @Operation(
             summary = "Offer a way to a sibling brand's storefront",
-            description = "The entry names the target brand and one of the tenant's website channels; it links to that "
+            description = "The entry names the target brand and one of the tenant's website channels that sells at the "
+                    + "target brand's branches (the pairs GET /candidates offers; any other pair is a 400); it links to that "
                     + "channel's verified hostname, checked on every read. A brand cannot offer itself, and the same brand "
                     + "and channel twice is a conflict.")
     public ResponseEntity<SwitcherEntryView> addSwitcherEntry(

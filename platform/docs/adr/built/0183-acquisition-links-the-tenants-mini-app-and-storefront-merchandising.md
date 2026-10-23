@@ -8,6 +8,45 @@
   value goes and how to prove it, in `docs/runbooks/external-connections/w8-acquisition-merchandising.md`: the BotFather round
   trip, counsel's answers (per-person attribution stays declined, the page-load count stays off, the 400-day retention stays
   provisional), and a tenant that asks for the marketplace layout.
+  **Correction, 2026-10-23 (fix wave H, the menu button's way back).** The Rollout section's «rollback of any of them is removing
+  the reading call» did not hold for the menu button, and nor did the runbook's first draft («goes back to the bot's default on
+  the next apply»): the button is held at Telegram and nothing reset it, so a Mini App switched off, or a hostname that stopped
+  being verified, left the bot opening the storefront. It does now. While Telegram shows a Mini App button the brand's setup no
+  longer stands behind, the `MENU_BUTTON` step reports `STALE_BUTTON` and `TelegramMiniAppSetupService.applyMenuButton` sets
+  Telegram's default back, reads it back, and writes the audit fact `integration.telegram_menu_button_reset` only when the read-back
+  agrees (`MiniAppAndLinksEndpointTests`: `aMenuButtonOfAMiniAppSwitchedOffCanBeTakenOff`, `anAddressThatLapsesCanBeTakenOff`,
+  `takingTheButtonOffIsReadBackToo`; another brand's live Mini App is left alone, `anotherBrandsLiveMiniAppIsNotTakenOff`).
+  `TelegramCustomerLanding` puts a chat's own Mini App button back to the default at that customer's next `/start`, while the
+  channel still carries the Mini App switch or a short name (a channel with neither is taken for one that never had a Mini App,
+  so a button set by another tool is not touched; `TelegramBotLandingTests.aMiniAppSwitchedOffTakesTheChatsButtonOff`,
+  `aChatWithNoMiniAppButtonIsLeftAlone`). Still outside the platform: a chat that never starts
+  the bot again, and a main Mini App address held in @BotFather; the runbook says where each is corrected.
+  **Correction, 2026-10-23 (fix wave H, the no-point pickup search).** D17 and the endpoint's description said that with no
+  point the public search lists «the brand's branches in the order the brand set». The request named no brand and the query had no
+  tenant or brand predicate (the search is platform-wide by design, with a point as without), so the answer was every brand's
+  branches sorted by one raw `storefront_sort_order`: numbers one brand chose were compared with numbers another chose, and a brand
+  that placed nothing sorted behind every placed branch of every other brand. `brandId` is now an optional field of the request
+  that limits the search to one brand, whose own order then applies exactly as D17 says (a brand's own storefront names itself).
+  Without it, a search with no point orders by each branch's rank inside its own brand's order, then by the brand's name, so every
+  brand's first branch precedes any brand's second; one brand's order is never disturbed by another's numbers
+  (`StorefrontBranchOrderEndpointTests.noPointAcrossBrandsInterleavesEachBrandsOwnOrder`, `aBrandNamedInTheSearchGetsItsOwnOrderAlone`).
+  The customer apps still do not call the search, so the runbook says what a branch chooser built on it must send.
+  **Correction, 2026-10-23 (fix wave H, the branch order's version).** `PUT .../storefront-branch-order` replaces the whole order
+  (a branch left out returns to unset) and carried no version, against ADR 0031's «mutations of versioned aggregates require the
+  expected version»: a console opened before a colleague placed a branch silently unplaced it on save. The order has no row of its
+  own, so its version is derived from what it is (48 bits of a SHA-256 over the placed branches and their positions) and served as
+  the `ETag` of the read and of the write. The write now requires `If-Match` (400 without it, 409 `STALE_VERSION` when the order has
+  moved) and holds the brand's row while it compares and writes. The version moves when a branch is placed, moved or unplaced, not
+  when one is renamed or added unplaced. The console presents the version it read and, on `STALE_VERSION`, shows the order as it now
+  stands, drops its draft and says so (`StorefrontBranchOrderEndpointTests.aStaleConsoleCannotUnplaceAColleaguesBranch`,
+  `twoSavesAgainstOneVersionCannotBothWin`, `theVersionIsTheOrder`; `storefront-branch-order.spec.ts`).
+  **Correction, 2026-10-23 (fix wave H, the switcher's pairs).** `POST .../brand-switcher/entries` accepted any website channel of the
+  tenant with any brand, while `GET .../candidates` offers only a channel that sells at the target brand's own branches, so an entry
+  could show brand B's name and logo and link to brand C's storefront. An entry must now be a pair the candidates list offers
+  (`BrandSwitcherEndpointTests.aChannelThatDoesNotSellAtTheTargetBrandIsNotPairedWithIt`). A brand offered through two of its
+  websites is two tiles, and both storefronts key a tile by brand and address, so the list no longer repeats a key. One claim of the
+  review does not hold and nothing changed for it: a channel has at most one hostname (`tenant.channel_hostnames` is keyed by tenant and
+  channel, V0403), so `verifiedWebHostname` never chooses between two verified hostnames of one website.
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: proposed by Claude (batch 21); Ayubkhon Abbosov (platform owner) decides

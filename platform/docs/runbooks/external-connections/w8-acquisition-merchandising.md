@@ -6,7 +6,17 @@ a signed one. ADR 0183 records why each is a fake and who closes it. Per ADR 002
 draft; run each section once against the real thing and put the date here.
 
 **The way back, before the first step.** Every switch below is a value or a setting and none is a migration. Turn the Mini App
-off in the Telegram card and the menu button goes back to the bot's default on the next apply; set the page-load flag back to
+off in the Telegram card and nothing at Telegram moves by itself, because the bot's menu button is held there. While Telegram
+still shows a button that opens the storefront, the menu button step of **Marketing → Referrals → Telegram Mini App setup**
+reads «Telegram still shows a button that opens the storefront…» and its button says **Take the menu button off**; pressing it
+sets the bot's default back (`setChatMenuButton` to Telegram's default, read back with `getChatMenuButton`, and the audit fact
+`integration.telegram_menu_button_reset` written only when the read-back agrees). The same button appears when the storefront's
+hostname stops being verified. Two things it cannot reach: a chat's own button, set at that customer's earlier `/start`, which
+Telegram offers no call to list or clear and which is put back to the default the next time that customer starts the bot
+(only while the channel still carries the Mini App switch or a short name: a channel with neither is taken for one that never
+had a Mini App, and its chats are not touched); and
+the main Mini App address held in @BotFather, which the default button shows for a bot that has one: correct or remove it from
+`/myapps` in @BotFather. Set the page-load flag back to
 `false` and nothing is counted (the rows already written are swept by the funnel retention job); set the layout back to
 `STANDARD` and the storefront is what it was; remove the switcher entries and the strip disappears. Nothing here deletes a
 customer, an order or a row of anyone's money.
@@ -56,8 +66,10 @@ records the short name BotFather answers with, and reads **recorded**, never **v
 - «The menu button step says UNKNOWN»: Telegram could not be read just now (the bot token is wrong, rotated, or Telegram is
   unreachable). Run **Connection check** on the installation under **Settings → Integrations**, then apply again.
 - «The read-back differs»: Telegram holds a different button than the platform sent. Apply again; if it persists, the bot's
-  menu button is being set by another tool (SendPulse, a script). The platform sets the *default* menu button of the bot and a
-  per-chat one on each greeting; it does not clear what another tool set for a particular chat.
+  menu button is being set by another tool (SendPulse, a script). The platform sets the *default* menu button of the bot and,
+  while the Mini App is live, a per-chat one on each greeting. When the Mini App is off or its address is not verified, a greeting
+  puts a chat that still holds a Mini App button back to the default, provided the channel still carries the Mini App switch or a
+  short name; a chat whose button is not a Mini App button is left alone.
 - «The Mini App address is not available»: the brand has no verified storefront hostname, or two. The setup page names which.
   Fix it under Channel setup for the WEB channel; this flow never edits it.
 - BotFather shows the Mini App on a different address than the setup page: BotFather's copy is the one Telegram opens. Correct it
@@ -152,9 +164,13 @@ with Marketplace the category rail shows five categories and an «All categories
 
 **Two things to know before saying «done» to the tenant.**
 
-- An entry names a *channel*, not an address. Releasing or un-verifying that website's hostname takes the entry off the storefront
-  with no edit; verifying it puts it back.
+- An entry names a *channel*, not an address, and the channel must be one that sells at the target brand's own branches (the
+  picker offers only those; the platform refuses any other pair). Releasing or un-verifying that website's hostname takes the entry
+  off the storefront with no edit; verifying it puts it back.
 - The customer apps do not call the public pickup search yet (they use the location the deployment is configured with), so the
   branch order is served by `POST /api/v1/storefront/pickup-locations` and proved there, and a customer sees it only once a
-  branch chooser is built on that endpoint. The marketplace layout needs a tenant to say what its category navigation should do;
+  branch chooser is built on that endpoint. A brand's own storefront must send its `brandId` in that request to get the brand's own
+  order; without it the search spans every brand and, with no point, lists each brand's first branch, then each brand's second, and
+  so on. Saving the order presents the version it was read at (`If-Match`); a colleague's change in between answers 409 and the
+  screen shows the current order. The marketplace layout needs a tenant to say what its category navigation should do;
   what is built is the smallest honest version (ADR 0183, Consequences).

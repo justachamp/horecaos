@@ -386,6 +386,8 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
     'Telegram показывает не ту кнопку, которую мы собираемся поставить.',
   'marketing.miniApp.detail.MENU_BUTTON.OTHER_BRAND':
     'Mini App канала Telegram открывает витрину другого бренда. Запись короткого имени здесь переносит его на этот бренд.',
+  'marketing.miniApp.detail.MENU_BUTTON.STALE_BUTTON':
+    'Telegram по-прежнему показывает кнопку, открывающую витрину, хотя Mini App выключен или адрес больше не подтверждён. Снимите её, чтобы клиентов не отправляло туда.',
   'marketing.miniApp.detail.TEST_LINK.NOT_READY':
     'Ссылка появится, когда станут известны бот и короткое имя.',
   'marketing.miniApp.botFather.step1': 'Откройте @BotFather в Telegram и отправьте /newapp.',
@@ -407,6 +409,7 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.miniApp.menu.wanted': 'Мы поставим подпись «{label}», открывающую {url}.',
   'marketing.miniApp.menu.held': 'Сейчас Telegram показывает кнопку, открывающую {url}.',
   'marketing.miniApp.menu.apply': 'Поставить кнопку меню',
+  'marketing.miniApp.menu.takeOff': 'Снять кнопку меню',
   'marketing.miniApp.menu.notShown':
     'Telegram принял вызов, но по-прежнему показывает другую кнопку. Повторите или проверьте бота в BotFather.',
 
@@ -1661,4 +1664,6 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.storefront.branches.save': 'Сохранить порядок',
   'marketing.storefront.branches.reset': 'Отменить изменения',
   'marketing.storefront.branches.saved': 'Порядок сохранён.',
+  'marketing.storefront.branches.stale':
+    'Пока вы редактировали, кто-то изменил порядок филиалов. Ниже порядок в его нынешнем виде; внесите своё изменение заново.',
 };

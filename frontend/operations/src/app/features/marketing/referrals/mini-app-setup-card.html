@@ -115,7 +115,7 @@
                 }
               }
               @case ('MENU_BUTTON') {
-                @if (view()?.menuButtonLabel; as label) {
+                @if (step.detail !== 'STALE_BUTTON' && view()?.menuButtonLabel; as label) {
                   <p class="q-body-sm" data-testid="mini-app-menu-wanted">
                     {{
                       'marketing.miniApp.menu.wanted'
@@ -136,7 +136,12 @@
                   "
                   (click)="applyMenuButton()"
                 >
-                  {{ 'marketing.miniApp.menu.apply' | t }}
+                  {{
+                    (step.detail === 'STALE_BUTTON'
+                      ? 'marketing.miniApp.menu.takeOff'
+                      : 'marketing.miniApp.menu.apply'
+                    ) | t
+                  }}
                 </button>
                 @if (appliedButNotShown()) {
                   <p class="q-body-sm setup__error" role="alert" data-testid="mini-app-not-shown">

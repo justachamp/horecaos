@@ -87,16 +87,17 @@ describe('StorefrontMerchandisingApi (row 6.8: If-Match on a change, Idempotency
     await order;
   });
 
-  it('reads the branches and saves the whole order as one list of ids', async () => {
+  it('reads the branches with the version of the order, and saves the whole order as one list of ids against it', async () => {
     const read = api.branches(SCOPE);
-    expectOne('GET', BRANCHES).flush([]);
-    expect(await read).toEqual([]);
+    expectOne('GET', BRANCHES).flush([], { headers: { ETag: 'W/"731"' } });
+    expect(await read).toEqual({ branches: [], version: 731 });
 
-    const save = api.setBranchOrder(SCOPE, ['l2', 'l1']);
+    const save = api.setBranchOrder(SCOPE, ['l2', 'l1'], 731);
     const request = expectOne('PUT', BRANCHES);
     expect(request.request.body).toEqual({ locationIds: ['l2', 'l1'] });
     expect(request.request.headers.get('Idempotency-Key')).toBeTruthy();
-    request.flush([]);
-    await save;
+    expect(request.request.headers.get('If-Match')).toBe('W/"731"');
+    request.flush([], { headers: { ETag: 'W/"732"' } });
+    expect(await save).toEqual({ branches: [], version: 732 });
   });
 });

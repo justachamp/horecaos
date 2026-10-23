@@ -1360,6 +1360,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Кнопка меню бота Telegram установлена',
       'uz-Latn': 'Telegram botining menyu tugmasi oʻrnatildi',
     },
+    'integration.telegram_menu_button_reset': {
+      en: 'Telegram menu button taken off the bot',
+      ru: 'Кнопка меню бота Telegram снята',
+      'uz-Latn': 'Telegram botining menyu tugmasi olib tashlandi',
+    },
     'integration.telegram_staff_link_code_issued': {
       en: 'Integration telegram staff link code issued',
       ru: 'Интеграция Telegram сотрудник ссылка код выдано',

@@ -68,6 +68,8 @@ class StorefrontBranchOrderEndpointTests {
     private static final UUID DUP_ONE = UUID.fromString("018f9a30-4000-7000-8000-0000000000d5");
     private static final UUID DUP_TWO = UUID.fromString("018f9a30-4000-7000-8000-0000000000d6");
     private static final UUID FOREIGN_LOCATION = UUID.fromString("018f9a30-4000-7000-8000-0000000000d7");
+    private static final UUID YAK = UUID.fromString("018f9a30-4000-7000-8000-0000000000d8");
+    private static final UUID ZED = UUID.fromString("018f9a30-4000-7000-8000-0000000000d9");
 
     private static final String OWNER = "branch-order-owner";
     private static final String READER = "branch-order-reader";
@@ -148,8 +150,14 @@ class StorefrontBranchOrderEndpointTests {
         return setOrderAs(OWNER, TENANT, BRAND, key, ids);
     }
 
+    /** A save made the way the console makes it: against the version of the order the subject reads just before. */
     private MvcResult setOrderAs(String subject, UUID tenantId, UUID brandId, String key, UUID... ids)
             throws Exception {
+        return setOrderAgainst(subject, tenantId, brandId, key, currentVersion(subject, tenantId, brandId), ids);
+    }
+
+    private MvcResult setOrderAgainst(
+            String subject, UUID tenantId, UUID brandId, String key, String ifMatch, UUID... ids) throws Exception {
         List<String> quoted = new ArrayList<>();
         for (UUID id : ids) {
             quoted.add("\"" + id + "\"");
@@ -157,9 +165,18 @@ class StorefrontBranchOrderEndpointTests {
         return mvc.perform(put(path(tenantId, brandId))
                         .with(tokenFor(subject))
                         .header(IDEMPOTENCY_HEADER, key)
+                        .header("If-Match", ifMatch)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"locationIds\":[" + String.join(",", quoted) + "]}"))
                 .andReturn();
+    }
+
+    /** The ETag of the order as the subject reads it now; {@code W/"0"} for a subject who cannot read one. */
+    private String currentVersion(String subject, UUID tenantId, UUID brandId) throws Exception {
+        MvcResult result = mvc.perform(get(path(tenantId, brandId)).with(tokenFor(subject)))
+                .andReturn();
+        String etag = result.getResponse().getHeader("ETag");
+        return etag == null ? "W/\"0\"" : etag;
     }
 
     private JsonNode read() throws Exception {
@@ -241,6 +258,46 @@ class StorefrontBranchOrderEndpointTests {
     }
 
     @Test
+    @DisplayName(
+            "with no point and no brand, every brand's own order is kept and the brands are interleaved by rank, not blended by their numbers")
+    void noPointAcrossBrandsInterleavesEachBrandsOwnOrder() throws Exception {
+        openSecondStorefront();
+        grant(OWNER, PlatformRole.TENANT_OWNER, OTHER_TENANT);
+        setOrder("order-main", CHARLIE, ALPHA);
+        setOrderAs(OWNER, OTHER_TENANT, OTHER_TENANTS_BRAND, "order-theirs", YAK);
+
+        // MAIN placed Charlie at 10 and Alpha at 20; THEIRS placed Yak at 10 and left Zed unset. Sorting by the raw
+        // numbers
+        // would put THEIRS' unplaced Zed behind every one of MAIN's branches, placed or not; ranking inside each brand
+        // puts
+        // each brand's second branch (Alpha, Zed) ahead of any brand's third.
+        assertThat(search("{\"limit\": 4}")).containsExactly("Charlie", "Yak", "Alpha", "Zed");
+        assertThat(search("{\"limit\": 20}"))
+                .containsExactly("Charlie", "Yak", "Alpha", "Zed", "Bravo", "Delta", "Dup 1", "Dup 2");
+    }
+
+    @Test
+    @DisplayName("naming a brand lists that brand's branches alone, in the order that brand set")
+    void aBrandNamedInTheSearchGetsItsOwnOrderAlone() throws Exception {
+        openSecondStorefront();
+        grant(OWNER, PlatformRole.TENANT_OWNER, OTHER_TENANT);
+        setOrder("order-main", DELTA, CHARLIE);
+        setOrderAs(OWNER, OTHER_TENANT, OTHER_TENANTS_BRAND, "order-theirs", ZED, YAK);
+
+        assertThat(search("{\"brandId\": \"" + BRAND + "\", \"limit\": 20}"))
+                .containsExactly("Delta", "Charlie", "Alpha", "Bravo", "Dup 1", "Dup 2");
+        assertThat(search("{\"brandId\": \"" + OTHER_TENANTS_BRAND + "\", \"limit\": 20}"))
+                .containsExactly("Zed", "Yak");
+        assertThat(search("{\"brandId\": \"" + OTHER_TENANTS_BRAND + "\", \"point\": {\"latitude\": 41.3110, "
+                        + "\"longitude\": 69.2400}}"))
+                .as("a point narrows nothing beyond the brand: the other brand's branches stay out")
+                .containsExactlyInAnyOrder("Yak", "Zed");
+        assertThat(search("{\"brandId\": \"" + UUID.randomUUID() + "\"}"))
+                .as("a brand with no published storefront has nothing to list")
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("with a point, nearest comes first whatever the order says, and the order breaks a tie in distance")
     void aPointStillWinsAndTheOrderBreaksTies() throws Exception {
         // Dup 1 and Dup 2 stand at the same coordinate; without an order the id decides.
@@ -268,6 +325,106 @@ class StorefrontBranchOrderEndpointTests {
     void aBranchWithoutACoordinateOnlyAppearsWithoutAPoint() throws Exception {
         assertThat(search("{\"limit\": 20}")).contains("Delta");
         assertThat(search(AT_ALPHA)).doesNotContain("Delta");
+    }
+
+    @Test
+    @DisplayName("a save with no version is refused: a replacement cannot be sent blind")
+    void aSaveWithoutAVersionIsRefused() throws Exception {
+        MvcResult blind = mvc.perform(put(path(TENANT, BRAND))
+                        .with(tokenFor(OWNER))
+                        .header(IDEMPOTENCY_HEADER, "blind")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"locationIds\":[\"" + ALPHA + "\"]}"))
+                .andReturn();
+
+        assertThat(blind.getResponse().getStatus()).isEqualTo(400);
+        read().forEach(branch -> assertThat(branch.get("storefrontSortOrder").isNull())
+                .as(branch.get("displayName").asString())
+                .isTrue());
+    }
+
+    @Test
+    @DisplayName("a console that read the order before a colleague changed it cannot unplace the colleague's branch")
+    void aStaleConsoleCannotUnplaceAColleaguesBranch() throws Exception {
+        setOrder("order-0", ALPHA, BRAVO);
+        String openedByA = currentVersion(OWNER, TENANT, BRAND);
+
+        // B opens the screen, places Charlie and saves.
+        assertThat(setOrder("order-b", ALPHA, BRAVO, CHARLIE).getResponse().getStatus())
+                .isEqualTo(200);
+
+        // A's screen still shows Alpha and Bravo only. A reverses them: the list does not name Charlie, so an unguarded
+        // replace-all would quietly return Charlie to unset.
+        MvcResult stale = setOrderAgainst(OWNER, TENANT, BRAND, "order-a", openedByA, BRAVO, ALPHA);
+
+        assertThat(stale.getResponse().getStatus())
+                .as(stale.getResponse().getContentAsString())
+                .isEqualTo(409);
+        assertThat(stale.getResponse().getContentAsString()).contains("STALE_VERSION");
+        JsonNode now = read();
+        assertThat(now.findValuesAsString("displayName"))
+                .containsExactly("Alpha", "Bravo", "Charlie", "Delta", "Dup 1", "Dup 2");
+        assertThat(now.get(2).get("storefrontSortOrder").asInt())
+                .as("Charlie keeps the place B gave it")
+                .isEqualTo(30);
+
+        // A reads again, sees Charlie, and the same change is saved.
+        assertThat(setOrder("order-a2", BRAVO, ALPHA, CHARLIE).getResponse().getStatus())
+                .isEqualTo(200);
+        assertThat(read().findValuesAsString("displayName"))
+                .containsExactly("Bravo", "Alpha", "Charlie", "Delta", "Dup 1", "Dup 2");
+    }
+
+    @Test
+    @DisplayName("two saves against one version cannot both win")
+    void twoSavesAgainstOneVersionCannotBothWin() throws Exception {
+        setOrder("order-0", ALPHA, BRAVO);
+        String shared = currentVersion(OWNER, TENANT, BRAND);
+        java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.Future<Integer> first = pool.submit(() -> {
+                go.await();
+                return setOrderAgainst(OWNER, TENANT, BRAND, "race-1", shared, BRAVO, ALPHA)
+                        .getResponse()
+                        .getStatus();
+            });
+            java.util.concurrent.Future<Integer> second = pool.submit(() -> {
+                go.await();
+                return setOrderAgainst(OWNER, TENANT, BRAND, "race-2", shared, ALPHA, BRAVO, CHARLIE)
+                        .getResponse()
+                        .getStatus();
+            });
+            go.countDown();
+
+            assertThat(List.of(first.get(), second.get())).containsExactlyInAnyOrder(200, 409);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName(
+            "the version is the order: a save answers with the version a read then reports, and a rename leaves it alone")
+    void theVersionIsTheOrder() throws Exception {
+        String empty = currentVersion(OWNER, TENANT, BRAND);
+
+        MvcResult saved = setOrder("order-1", CHARLIE, ALPHA);
+        String returned = saved.getResponse().getHeader("ETag");
+
+        assertThat(returned).isNotNull().isNotEqualTo(empty).isEqualTo(currentVersion(OWNER, TENANT, BRAND));
+
+        jdbc.sql("UPDATE tenant.locations SET display_name = 'Bravo II' WHERE id = :id")
+                .param("id", BRAVO)
+                .update();
+        assertThat(currentVersion(OWNER, TENANT, BRAND))
+                .as("renaming a branch nobody placed does not change the order")
+                .isEqualTo(returned);
+
+        setOrder("order-2", ALPHA, CHARLIE);
+        assertThat(currentVersion(OWNER, TENANT, BRAND))
+                .as("moving a branch does")
+                .isNotEqualTo(returned);
     }
 
     @Test
@@ -420,6 +577,43 @@ class StorefrontBranchOrderEndpointTests {
                     .param("locationId", locationId)
                     .update();
         }
+    }
+
+    /** A second tenant whose brand also has a published storefront menu and two branches that take pickup. */
+    private void openSecondStorefront() {
+        UUID channel = UUID.fromString("018f9a30-4000-7000-8000-0000000000b2");
+        jdbc.sql("""
+                INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name, status, version)
+                VALUES (:id, :tenantId, 'STOREFRONT', 'WEB', 'Storefront', 'ACTIVE', 1)
+                """).param("id", channel).param("tenantId", OTHER_TENANT).update();
+        jdbc.sql("""
+                INSERT INTO tenant.channel_fulfillment_modes (tenant_id, channel_id, fulfillment_mode, enabled)
+                VALUES (:tenantId, :channelId, 'PICKUP', true)
+                """)
+                .param("tenantId", OTHER_TENANT)
+                .param("channelId", channel)
+                .update();
+        insertLocation(OTHER_TENANT, OTHER_TENANTS_BRAND, YAK, "Yak", 41.0, 69.0, channel);
+        insertLocation(OTHER_TENANT, OTHER_TENANTS_BRAND, ZED, "Zed", 41.0001, 69.0001, channel);
+        UUID catalog = UUID.fromString("018f9a30-4000-7000-8000-0000000000e3");
+        jdbc.sql("""
+                INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
+                VALUES (:id, :tenantId, :brandId, 'MENU', 'Menu', 'ACTIVE')
+                """)
+                .param("id", catalog)
+                .param("tenantId", OTHER_TENANT)
+                .param("brandId", OTHER_TENANTS_BRAND)
+                .update();
+        jdbc.sql("""
+                INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel, status, content_hash,
+                    activated_at)
+                VALUES (:id, :tenantId, :brandId, :catalogId, 'STOREFRONT', 'PUBLISHED', 'hash', now())
+                """)
+                .param("id", UUID.fromString("018f9a30-4000-7000-8000-0000000000e4"))
+                .param("tenantId", OTHER_TENANT)
+                .param("brandId", OTHER_TENANTS_BRAND)
+                .param("catalogId", catalog)
+                .update();
     }
 
     private void publishMenu() {

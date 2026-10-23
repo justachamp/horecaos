@@ -51,6 +51,12 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * <p>Applying the menu button is an external call and so runs in no transaction (the same rule as
  * {@code TelegramWebhookRegistrationService}); the audit fact is written afterwards, in its own, and only when the read-back
  * agrees.
+ *
+ * <p><strong>The way back is the same button.</strong> The bot's default button is held at Telegram, not here, so switching the
+ * Mini App off or losing the verified address changes nothing there by itself. While Telegram still shows a Mini App button
+ * that this brand's setup no longer stands behind, the step reads {@code STALE_BUTTON} and applying takes the button off
+ * ({@link TelegramMenuButton.Default}), read back and audited like the set. A button that opens another brand's live Mini App
+ * is not this brand's to take off.
  */
 @Service
 public class TelegramMiniAppSetupService {
@@ -134,6 +140,10 @@ public class TelegramMiniAppSetupService {
      */
     public Status applyMenuButton(UUID tenantId, UUID brandId, ActorRef actor) {
         Derivation facts = new Derivation(tenantId, brandId);
+        facts.derive();
+        if (facts.holdsAButtonNothingStandsBehind()) {
+            return takeMenuButtonOff(facts, tenantId, brandId, actor);
+        }
         facts.requireReadyToApply();
 
         TelegramMenuButton.WebApp wanted = facts.wantedButton();
@@ -153,6 +163,52 @@ public class TelegramMiniAppSetupService {
             log.warn("Telegram accepted a menu button for tenant {} and then did not show it", tenantId);
         }
         return after;
+    }
+
+    /**
+     * Puts the bot's default button back to Telegram's own, for a Mini App button the brand's setup no longer stands behind
+     * (the Mini App switched off, or the storefront address no longer verified). Like the set, it is believed only when
+     * Telegram reads back something that is not a Mini App button.
+     *
+     * <p>Telegram has no call that lists or clears the per-chat buttons set at earlier {@code /start}s; each is put back the
+     * next time that customer starts the bot ({@code TelegramCustomerLanding}). And a bot with a main Mini App in
+     * {@code @BotFather} shows that Mini App's own address on its default button: the platform can neither read nor
+     * change that.
+     */
+    private Status takeMenuButtonOff(Derivation facts, UUID tenantId, UUID brandId, ActorRef actor) {
+        String previousUrl = facts.previousButtonUrl();
+        TelegramCallResult reset = bots.setChatMenuButton(facts.call(), null, new TelegramMenuButton.Default());
+        if (!(reset instanceof TelegramCallResult.Success)) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "Telegram did not accept taking the menu button off (" + describe(reset)
+                            + "); nothing was changed here");
+        }
+        Status after = facts.derive();
+        if (facts.showsNoMiniAppButton()) {
+            recordTakenOff(tenantId, brandId, actor, previousUrl);
+        } else {
+            log.warn("Telegram accepted taking a menu button off for tenant {} and then still showed one", tenantId);
+        }
+        return after;
+    }
+
+    private void recordTakenOff(UUID tenantId, UUID brandId, ActorRef actor, @Nullable String previousUrl) {
+        Map<String, Object> before = new LinkedHashMap<>();
+        before.put("menuButtonUrl", previousUrl);
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("menuButtonUrl", null);
+        unitOfWork.executeWithoutResult(
+                ignored -> audit.record(AuditFact.of("integration.telegram_menu_button_reset", AuditClass.BUSINESS)
+                        .by(actor)
+                        .at(ResourceScope.brand(tenantId, brandId))
+                        .target("Integration", brandId)
+                        .because("Telegram menu button taken off the storefront it no longer opens")
+                        .changed(ChangeDocuments.diff(before, after))
+                        .usingCapability(Capability.INTEGRATION_INSTALLATION_MANAGE.code())
+                        .correlatedBy(brandId.toString())
+                        .occurredAt(clock.instant())
+                        .build()));
     }
 
     private void recordApplied(
@@ -284,6 +340,9 @@ public class TelegramMiniAppSetupService {
         }
 
         private Step menuButtonStep() {
+            if (holdsAButtonNothingStandsBehind()) {
+                return new Step("MENU_BUTTON", State.TODO, "STALE_BUTTON");
+            }
             if (installation == null || channel == null || !channel.miniAppEnabled() || expectedUrl() == null) {
                 return new Step(
                         "MENU_BUTTON",
@@ -320,6 +379,29 @@ public class TelegramMiniAppSetupService {
             } catch (RuntimeException failure) {
                 heldButtonUnreadable = true;
             }
+        }
+
+        /**
+         * Whether Telegram shows a Mini App button that this brand's setup no longer stands behind: the bot is reachable and
+         * its default button is read and is a Mini App, while the Telegram channel is gone, its Mini App is off, or (for this
+         * brand's own Mini App) the storefront has no verified address. Another brand's live Mini App is not this one's.
+         */
+        boolean holdsAButtonNothingStandsBehind() {
+            if (installation == null || usernameUnreachable || heldButtonUnreadable) {
+                return false;
+            }
+            if (!(heldButton instanceof TelegramMenuButton.WebApp)) {
+                return false;
+            }
+            if (channel == null || !channel.miniAppEnabled()) {
+                return true;
+            }
+            return brandId.equals(channel.brandId()) && expectedUrl() == null;
+        }
+
+        /** Whether Telegram, asked just now, shows no Mini App button as the bot's default. */
+        boolean showsNoMiniAppButton() {
+            return !heldButtonUnreadable && !(heldButton instanceof TelegramMenuButton.WebApp);
         }
 
         @Nullable
@@ -363,9 +445,8 @@ public class TelegramMiniAppSetupService {
                     Duration.ofSeconds(15));
         }
 
-        /** Refuses with the first missing precondition named, in the order the console lists the steps. */
+        /** Refuses with the first missing precondition named, in the order the console lists the steps. Needs {@link #derive()} first. */
         void requireReadyToApply() {
-            derive();
             if (installation == null) {
                 throw refusal("The brand has no connected Telegram bot");
             }

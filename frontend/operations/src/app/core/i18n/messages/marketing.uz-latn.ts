@@ -389,6 +389,8 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
     'Telegram biz oʻrnatmoqchi boʻlgan tugmadan boshqasini koʻrsatyapti.',
   'marketing.miniApp.detail.MENU_BUTTON.OTHER_BRAND':
     'Telegram kanalining Mini App i boshqa brend vitrinasini ochadi. Qisqa nomni shu yerda yozib qoʻysangiz, u shu brendga oʻtadi.',
+  'marketing.miniApp.detail.MENU_BUTTON.STALE_BUTTON':
+    'Telegram hamon vitrinani ochadigan tugmani koʻrsatyapti, vaholanki Mini App oʻchirilgan yoki manzil endi tasdiqlanmagan. Mijozlar u yerga yuborilmasligi uchun tugmani oling.',
   'marketing.miniApp.detail.TEST_LINK.NOT_READY':
     'Bot va qisqa nom maʻlum boʻlgach, havola paydo boʻladi.',
   'marketing.miniApp.botFather.step1': 'Telegramda @BotFather ni oching va /newapp yuboring.',
@@ -410,6 +412,7 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.miniApp.menu.wanted': '«{label}» yozuvini oʻrnatamiz, u {url} ni ochadi.',
   'marketing.miniApp.menu.held': 'Telegram hozir {url} ni ochadigan tugmani koʻrsatyapti.',
   'marketing.miniApp.menu.apply': 'Menyu tugmasini oʻrnatish',
+  'marketing.miniApp.menu.takeOff': 'Menyu tugmasini olib tashlash',
   'marketing.miniApp.menu.notShown':
     'Telegram chaqiruvni qabul qildi, lekin hamon boshqa tugmani koʻrsatyapti. Qayta urinib koʻring yoki botni BotFather da tekshiring.',
 
@@ -1686,4 +1689,6 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.storefront.branches.save': 'Tartibni saqlash',
   'marketing.storefront.branches.reset': 'Oʻzgarishlarni bekor qilish',
   'marketing.storefront.branches.saved': 'Tartib saqlandi.',
+  'marketing.storefront.branches.stale':
+    'Siz tahrirlayotganingizda kimdir filiallar tartibini oʻzgartirdi. Quyida hozirgi tartib; oʻzgartirishingizni qaytadan kiriting.',
 };

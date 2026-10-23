@@ -29209,6 +29209,10 @@
       },
       "PickupLocationSearchRequest" : {
         "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "limit" : {
             "format" : "int32",
             "type" : "integer"
@@ -76373,7 +76377,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/storefront-branch-order" : {
       "get" : {
-        "description" : "storefrontSortOrder is null for a branch nobody has placed; those sort last, by name.",
+        "description" : "storefrontSortOrder is null for a branch nobody has placed; those sort last, by name. The ETag is the version of the order, which a replacement presents in If-Match.",
         "operationId" : "readStorefrontBranchOrder",
         "parameters" : [ {
           "in" : "path",
@@ -76411,7 +76415,7 @@
         "tags" : [ "Storefront branch order" ]
       },
       "put" : {
-        "description" : "Names the branches first to last. A branch of the brand that is left out goes back to unset and sorts last. 400 for a branch that is not this brand's or is named twice.",
+        "description" : "Names the branches first to last. A branch of the brand that is left out goes back to unset and sorts last, so If-Match must carry the version (ETag) of the order last read: 409 STALE_VERSION when a colleague changed it since, 400 without it. 400 for a branch that is not this brand's or is named twice. The response carries the new ETag.",
         "operationId" : "replaceStorefrontBranchOrder",
         "parameters" : [ {
           "in" : "path",
@@ -76498,7 +76502,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/telegram/mini-app-setup/menu-button" : {
       "post" : {
-        "description" : "Calls Telegram's setChatMenuButton with the label from the Telegram channel's settings and the brand's verified storefront address, then getChatMenuButton. 422 naming what is missing when the bot, the Telegram channel, the Mini App switch or the address is not there, or when Telegram refuses. A Telegram that accepts and then shows something else leaves MENU_BUTTON TODO.",
+        "description" : "Calls Telegram's setChatMenuButton with the label from the Telegram channel's settings and the brand's verified storefront address, then getChatMenuButton. 422 naming what is missing when the bot, the Telegram channel, the Mini App switch or the address is not there, or when Telegram refuses. A Telegram that accepts and then shows something else leaves MENU_BUTTON TODO. While Telegram still shows a Mini App button the setup no longer stands behind (the Mini App is off, or the address is not verified; MENU_BUTTON reads STALE_BUTTON) the same call sets Telegram's default button back instead, read back the same way.",
         "operationId" : "applyMenuButton",
         "parameters" : [ {
           "in" : "path",
@@ -88800,7 +88804,7 @@
     },
     "/api/v1/storefront/pickup-locations" : {
       "post" : {
-        "description" : "Returns at most twenty active pickup branches, nearest first; with no point, in the brand's own storefront order (distanceKnown is then false on every branch). Each result carries the same current serviceability answer the checkout path will later re-resolve authoritatively. POST so the caller's coordinate travels in the body rather than the query string; nothing is written and no resource is created.",
+        "description" : "Returns at most twenty active pickup branches, nearest first; with no point, in the order the brand set for its storefront (distanceKnown is then false on every branch). Name brandId to search one brand, as a brand's own storefront does; without it the search spans every brand and, with no point, lists each brand's own order interleaved by rank. Each result carries the same current serviceability answer the checkout path will later re-resolve authoritatively. POST so the caller's coordinate travels in the body rather than the query string; nothing is written and no resource is created.",
         "operationId" : "nearbyPickupLocations",
         "requestBody" : {
           "content" : {
@@ -93696,7 +93700,7 @@
         "tags" : [ "Brand switcher" ]
       },
       "post" : {
-        "description" : "The entry names the target brand and one of the tenant's website channels; it links to that channel's verified hostname, checked on every read. A brand cannot offer itself, and the same brand and channel twice is a conflict.",
+        "description" : "The entry names the target brand and one of the tenant's website channels that sells at the target brand's branches (the pairs GET /candidates offers; any other pair is a 400); it links to that channel's verified hostname, checked on every read. A brand cannot offer itself, and the same brand and channel twice is a conflict.",
         "operationId" : "addSwitcherEntry",
         "parameters" : [ {
           "in" : "path",

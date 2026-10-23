@@ -3,6 +3,7 @@ package uz.horecaos.platform.tenancy.web;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -44,7 +45,9 @@ public class StorefrontPickupLocationController {
     @Operation(
             summary = "Find the nearest pickup locations with a published storefront menu",
             description = "Returns at most twenty active pickup branches, nearest first; with no point, in the "
-                    + "brand's own storefront order (distanceKnown is then false on every branch). Each "
+                    + "order the brand set for its storefront (distanceKnown is then false on every branch). Name "
+                    + "brandId to search one brand, as a brand's own storefront does; without it the search spans every "
+                    + "brand and, with no point, lists each brand's own order interleaved by rank. Each "
                     + "result carries the same current serviceability answer the checkout path "
                     + "will later re-resolve authoritatively. POST so the caller's coordinate "
                     + "travels in the body rather than the query string; nothing is written and "
@@ -53,7 +56,7 @@ public class StorefrontPickupLocationController {
             @Valid @RequestBody PickupLocationSearchRequest body) {
 
         int limit = body.limit() == null ? 10 : body.limit();
-        return ResponseEntity.ok(locations.nearby(body.point(), limit));
+        return ResponseEntity.ok(locations.nearby(body.point(), body.brandId(), limit));
     }
 
     /**
@@ -61,9 +64,14 @@ public class StorefrontPickupLocationController {
      *              then come in the order the brand set for its storefront (ADR 0183 D17)
      * @param limit at most this many branches; defaults to 10 and is capped by
      *              {@link StorefrontPickupLocationQuery#MAXIMUM_LIMIT}
+     * @param brandId the one brand to search; absent for a search across every brand with a published storefront menu.
+     *                A position is only meaningful inside the brand that set it, so the brand's own order is the one a
+     *                storefront gets by naming itself
      */
     public record PickupLocationSearchRequest(
-            @Nullable @Valid GeoPoint point, @Nullable Integer limit) {}
+            @Nullable @Valid GeoPoint point,
+            @Nullable Integer limit,
+            @Nullable UUID brandId) {}
 
     // A branch's public name and address by id (2026-09-21 audit follow-up
     // (d), for a pickup order's own detail) is served by the dedicated

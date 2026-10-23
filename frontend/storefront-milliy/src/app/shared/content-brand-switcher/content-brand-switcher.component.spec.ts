@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { vi } from 'vitest';
 
 import { TranslateService } from '../../services/translate.service';
 import type { ContentBrandSwitcherEntry } from '../../types/content.types';
@@ -89,5 +90,25 @@ describe('ContentBrandSwitcherComponent (ADR 0183 D17)', () => {
       'B',
     );
     expect(links()).toHaveLength(1);
+  });
+
+  it('keeps one tile per address when a brand is offered through two of its websites, with no duplicate list keys', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const second = 'https://brand1-second.example.uz/';
+      const { fixture, links } = render([entry(1), entry(1, { url: second })]);
+
+      // Angular looks for repeated keys when a list it already drew is given again, so the same two tiles are set once more.
+      fixture.componentRef.setInput('entries', [entry(1), entry(1, { url: second })]);
+      fixture.detectChanges();
+
+      expect(links().map((link) => link.getAttribute('href'))).toEqual([
+        'https://brand1.example.uz/',
+        second,
+      ]);
+      expect(warn.mock.calls.flat().join(' ')).not.toContain('NG0955');
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
