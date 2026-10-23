@@ -254,6 +254,37 @@ whether it carries platform wording (`PROVISIONAL`) or text a platform administr
 subject is entitled to the tenant's internal notes about her is withheld pending legal, not decided. Key rotation,
 re-encryption and masked projections are not part of this addition.
 
+## Status addition, 2026-10-23 (batch 21, review fixes for wave w10-privacy)
+
+A second dated addition, not a change to what the record decided. A review of the integrated wave found four places where the
+erasure described above was weaker than its text, and the code now says what the text says.
+
+- **The POS export keeps no copy of her number.** `integration.pos_order_exports.customer_phone_hash` (V0036) holds an unsalted
+  SHA-256 of the digits of the order's telephone number (`LineFingerprint.phoneHash`). A Uzbek mobile number is one of about
+  10^9 candidates, so the digest is reversible in seconds. No participant declared the table, and the inventory guard did not see
+  it, because the table keys to the customer through `order_id` and the column name matched none of the guard's key patterns.
+  `PosErasureParticipant` (module `pos`, declared as `pos`) now overwrites the column with a fresh random value on every export of
+  the account's orders, through the order's `customer_account_id` (the keyed lookup hashes an erasure is handed cannot match an
+  unkeyed digest), and `ErasureInventoryTests` treats any `*phone*hash` column as a customer key. The recovery read does not
+  depend on the stored column: `PosOrderExportService` builds its probe from the live order's number and `CloposAdapter` hashes
+  both sides in memory, and an erased order has no number left to compare. Not done: replacing the digest of customers who were
+  not erased with the keyed lookup hash.
+- **A saved address keeps no pin.** `JdbcCustomerStore.eraseAddress` overwrote the label and the two ciphertexts and left
+  `latitude` and `longitude` in the clear on every active and archived address, while the ordering participant already zeroes the
+  cart's destination. It now clears both and sets `coordinate_source` to `LANDMARK_ONLY`, the one terminal source V0021 allows
+  beside a null point that is not on the geocoding backfill's work list (`NOT_GEOCODED` is, so a tombstone would have been offered
+  to a geocoder).
+- **A hold and an erasure do not interleave.** `CustomerErasureService.execute` looked for a hold with a plain read and nothing
+  locked the account or the hold, so a hold committed between that read and the erasure's commit was ignored, which is the
+  destruction of evidence a hold exists to prevent. `execute` and `LegalHoldService.place` now take the same transaction-scoped
+  advisory lock, keyed by tenant and account (`JdbcLegalHoldStore.lockHoldDecision`), before they read or write; whichever comes
+  second waits for the first to commit and then sees its result. The statement above that a hold «refuses the erasure while it
+  stands» is true under concurrent use only from this change.
+- **Unsubscribe tokens are not kept for ever.** `notifications.unsubscribe_tokens` (V0671) gained a deletion by account in
+  `NotificationsErasureParticipant` (now declared there, and no longer an exemption), an index for it (V0697), and an
+  `EmailUnsubscribeTokenSweeper` that removes tokens past their 400 days. The residual risk the exemption used to record, that no job
+  purged an expired token, is closed.
+
 ## Provisional retention
 
 Legal has not yet set retention periods or lawful basis per purpose. Rather than

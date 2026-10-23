@@ -75,8 +75,27 @@ public class JdbcUnsubscribeTokenStore {
     }
 
     /**
-     * Removes up to {@code limit} tokens past their expiry: after it a token is the same answer as an
-     * unknown one, and the row names a customer account and a notification for nothing.
+     * Removes every token minted for one customer: the erasure of her account (ADR 0029).
+     *
+     * <p>A token names her account and the message it was sent with, and is a working capability until it expires,
+     * four hundred days on. The account is gone and a withdrawal from it withdraws nothing, so the link would answer
+     * as an unknown one does; deleting the row makes that true of the database too, and leaves no (account,
+     * notification) pair here beyond the delivery log's own.
+     */
+    public int deleteForCustomer(UUID tenantId, UUID customerAccountId) {
+        return jdbc.sql("""
+                DELETE FROM notifications.unsubscribe_tokens
+                 WHERE tenant_id = :tenantId AND customer_account_id = :accountId
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", customerAccountId)
+                .update();
+    }
+
+    /**
+     * Removes up to {@code limit} tokens past their expiry: {@link #find} answers an expired token as it answers an
+     * unknown one, so the row does nothing but hold an (account, notification) pair. Served by {@code
+     * ix_unsubscribe_token_expiry} (V0671).
      */
     public int deleteExpired(Instant now, int limit) {
         return jdbc.sql("""

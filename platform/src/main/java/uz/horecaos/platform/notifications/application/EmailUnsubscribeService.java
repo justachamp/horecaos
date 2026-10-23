@@ -158,6 +158,8 @@ public class EmailUnsubscribeService {
     /**
      * Housekeeping for the sweeper: tokens past their expiry answer like unknown ones and hold a row
      * that names a customer account for nothing.
+     *
+     * @return how many rows this call removed, at most {@code limit}
      */
     @Transactional
     public int purgeExpired(int limit) {

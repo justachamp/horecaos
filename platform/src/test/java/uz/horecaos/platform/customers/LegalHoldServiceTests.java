@@ -9,6 +9,12 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -24,17 +30,28 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.ApprovalService.Decision;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
+import uz.horecaos.platform.customers.application.CustomerErasureService;
 import uz.horecaos.platform.customers.application.CustomerErasureService.AccountNotFoundException;
+import uz.horecaos.platform.customers.application.CustomerErasureService.ErasureBlockedException;
+import uz.horecaos.platform.customers.application.CustomerErasureService.RequestedVia;
 import uz.horecaos.platform.customers.application.LegalHoldService;
 import uz.horecaos.platform.customers.application.LegalHoldService.NoSuchHoldException;
 import uz.horecaos.platform.customers.application.LegalHoldService.Reason;
 import uz.horecaos.platform.customers.application.LegalHoldService.Result;
+import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerErasureStore;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
+import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore.ErasureRequestRow;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcLegalHoldStore;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcLegalHoldStore.HoldRow;
+import uz.horecaos.platform.customers.spi.CustomerErasureParticipant;
+import uz.horecaos.platform.customers.spi.ErasesCustomerData;
+import uz.horecaos.platform.customers.spi.ErasureCounts;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.support.TestProtection;
 import uz.horecaos.platform.web.api.ApiException;
 
 /**
@@ -103,6 +120,10 @@ class LegalHoldServiceTests {
         jdbc.sql("DELETE FROM audit.approval_requests").update();
         jdbc.sql("TRUNCATE TABLE audit.audit_events").update();
         jdbc.sql("DELETE FROM customer.legal_holds").update();
+        jdbc.sql("DELETE FROM customer.erasure_requests WHERE tenant_id IN (:a, :b)")
+                .param("a", TENANT)
+                .param("b", OTHER_TENANT)
+                .update();
         jdbc.sql("DELETE FROM customer.customer_accounts WHERE tenant_id IN (:a, :b)")
                 .param("a", TENANT)
                 .param("b", OTHER_TENANT)
@@ -124,8 +145,8 @@ class LegalHoldServiceTests {
                 """).param("id", ACCOUNT).param("t", TENANT).update();
 
         // After V0682's policies take effect (2026-10-14).
-        Clock clock = Clock.fixed(Instant.parse("2026-10-14T12:00:00Z"), ZoneOffset.UTC);
-        JsonMapper mapper = JsonMapper.builder().build();
+        clock = Clock.fixed(Instant.parse("2026-10-14T12:00:00Z"), ZoneOffset.UTC);
+        mapper = JsonMapper.builder().build();
         JdbcAuditRecorder audit = new JdbcAuditRecorder(jdbc, mapper);
         approvals = new JdbcApprovalService(jdbc, audit, clock, new SimpleMeterRegistry(), mapper);
         holdService = new LegalHoldService(
@@ -133,6 +154,9 @@ class LegalHoldServiceTests {
         tx = new TransactionTemplate(new DataSourceTransactionManager(db.dataSource()));
         holds = new Holds();
     }
+
+    private Clock clock;
+    private JsonMapper mapper;
 
     private UUID pendingRequestOf(Result result) {
         assertThat(result).isInstanceOf(Result.Awaiting.class);
@@ -333,5 +357,173 @@ class LegalHoldServiceTests {
                 .param("t", TENANT)
                 .query(Long.class)
                 .single();
+    }
+
+    // ------------------------------------------------------- a hold and an erasure never interleave
+
+    @Test
+    @DisplayName("an erasure that starts while a hold is being placed waits for the hold, sees it, and refuses")
+    void anErasureCannotPassWhileAHoldIsBeingPlaced() throws Exception {
+        UUID approved = pendingRequestOf(holds.place(TENANT, ACCOUNT, Reason.LITIGATION, "Claim 2026/118", MAKER));
+        approvals.decide(approved, Decision.APPROVE, CHECKER, "Seen the claim");
+        PausingAudit pausing = new PausingAudit(new JdbcAuditRecorder(jdbc, mapper));
+        LegalHoldService placing = new LegalHoldService(
+                new JdbcLegalHoldStore(jdbc), new JdbcCustomerStore(jdbc), approvals, pausing, clock);
+        CustomerErasureService erasure = erasureService(List.of());
+        ErasureRequestRow request = erasure.request(TENANT, ACCOUNT, RequestedVia.OPERATIONS, MAKER);
+
+        ExecutorService threads = Executors.newFixedThreadPool(2);
+        try {
+            Future<Result> placement = threads.submit(() ->
+                    tx.execute(status -> placing.place(TENANT, ACCOUNT, Reason.LITIGATION, "Claim 2026/118", MAKER)));
+            assertThat(pausing.written.await(20, TimeUnit.SECONDS))
+                    .as("the hold is written and its transaction is still open")
+                    .isTrue();
+            assertThat(activeHolds()).as("and nobody else can see it yet").isZero();
+
+            Future<ErasureRequestRow> execution =
+                    threads.submit(() -> tx.execute(status -> erasure.execute(TENANT, ACCOUNT, request.id(), MAKER)));
+            awaitSettled(execution);
+
+            assertThat(execution.isDone())
+                    .as("the erasure ran to the end while a hold on the same account was written and not yet"
+                            + " committed: it checked for a hold, found none it could see, and anonymised the account"
+                            + " under a hold that committed a moment later")
+                    .isFalse();
+            assertThat(sessionsWaitingForAnAdvisoryLock())
+                    .as("it is waiting for the hold, not merely slow")
+                    .isPositive();
+
+            pausing.release.countDown();
+            assertThat(placement.get(20, TimeUnit.SECONDS)).isInstanceOf(Result.Done.class);
+            assertThatThrownBy(() -> execution.get(20, TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class)
+                    .hasCauseInstanceOf(ErasureBlockedException.class);
+            assertThat(accountStatus()).as("nothing of hers was erased").isEqualTo("ACTIVE");
+            assertThat(activeHolds()).isEqualTo(1);
+        } finally {
+            pausing.release.countDown();
+            threads.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName("a hold placed while an erasure is executing waits for it: the two are one after the other")
+    void aHoldCannotCommitInTheMiddleOfAnErasure() throws Exception {
+        UUID approved = pendingRequestOf(holds.place(TENANT, ACCOUNT, Reason.LITIGATION, "Claim 2026/118", MAKER));
+        approvals.decide(approved, Decision.APPROVE, CHECKER, "Seen the claim");
+        PausingParticipant inside = new PausingParticipant();
+        CustomerErasureService erasure = erasureService(List.of(inside));
+        ErasureRequestRow request = erasure.request(TENANT, ACCOUNT, RequestedVia.OPERATIONS, MAKER);
+
+        ExecutorService threads = Executors.newFixedThreadPool(2);
+        try {
+            Future<ErasureRequestRow> execution =
+                    threads.submit(() -> tx.execute(status -> erasure.execute(TENANT, ACCOUNT, request.id(), MAKER)));
+            assertThat(inside.reached.await(20, TimeUnit.SECONDS))
+                    .as("the erasure has passed its hold check and is part-way through")
+                    .isTrue();
+
+            Future<Result> placement = threads.submit(() -> tx.execute(
+                    status -> holdService.place(TENANT, ACCOUNT, Reason.LITIGATION, "Claim 2026/118", MAKER)));
+            awaitSettled(placement);
+
+            assertThat(placement.isDone())
+                    .as("a hold committed in the middle of an erasure that had already looked for one")
+                    .isFalse();
+            assertThat(sessionsWaitingForAnAdvisoryLock()).isPositive();
+
+            inside.release.countDown();
+            assertThat(execution.get(20, TimeUnit.SECONDS).status()).isEqualTo("COMPLETED");
+            assertThat(placement.get(20, TimeUnit.SECONDS)).isInstanceOf(Result.Done.class);
+        } finally {
+            inside.release.countDown();
+            threads.shutdownNow();
+        }
+    }
+
+    private CustomerErasureService erasureService(List<CustomerErasureParticipant> participants) {
+        return new CustomerErasureService(
+                new JdbcCustomerStore(jdbc),
+                new JdbcCustomerErasureStore(jdbc),
+                new JdbcLegalHoldStore(jdbc),
+                TestProtection.envelope(),
+                clock,
+                new JdbcAuditRecorder(jdbc, mapper),
+                mapper,
+                participants,
+                List.of());
+    }
+
+    private String accountStatus() {
+        return jdbc.sql("SELECT status FROM customer.customer_accounts WHERE id = :id")
+                .param("id", ACCOUNT)
+                .query(String.class)
+                .single();
+    }
+
+    /** Sessions of this database queued behind an advisory lock: a statement that is waiting, not one that is slow. */
+    private long sessionsWaitingForAnAdvisoryLock() {
+        return jdbc.sql("""
+                        SELECT count(*) FROM pg_locks l JOIN pg_database d ON d.oid = l.database
+                         WHERE l.locktype = 'advisory' AND NOT l.granted AND d.datname = current_database()
+                        """).query(Long.class).single();
+    }
+
+    /** Returns when the work has finished or a session has queued on an advisory lock, whichever comes first. */
+    private void awaitSettled(Future<?> work) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+        while (!work.isDone() && sessionsWaitingForAnAdvisoryLock() == 0 && System.nanoTime() < deadline) {
+            Thread.sleep(25);
+        }
+    }
+
+    /** The real recorder, except that it stops after a hold's fact is written until the test says go on. */
+    private static final class PausingAudit implements AuditRecorder {
+
+        final CountDownLatch written = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+        private final AuditRecorder real;
+
+        PausingAudit(AuditRecorder real) {
+            this.real = real;
+        }
+
+        @Override
+        public void record(AuditFact fact) {
+            real.record(fact);
+            if ("customer.legal-hold.placed".equals(fact.actionCode())) {
+                written.countDown();
+                await(release);
+            }
+        }
+    }
+
+    /** A participant that stops inside the erasure's transaction until the test says go on. */
+    @ErasesCustomerData(
+            name = "pausing",
+            tables = {})
+    private static final class PausingParticipant implements CustomerErasureParticipant {
+
+        final CountDownLatch reached = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+
+        @Override
+        public ErasureCounts erase(UUID tenantId, UUID customerAccountId, ErasedContacts held) {
+            reached.countDown();
+            await(release);
+            return ErasureCounts.none();
+        }
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(30, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("the test never said go on");
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(interrupted);
+        }
     }
 }

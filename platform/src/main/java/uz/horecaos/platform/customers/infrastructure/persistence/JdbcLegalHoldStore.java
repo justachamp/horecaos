@@ -61,6 +61,30 @@ public class JdbcLegalHoldStore {
                 == 1;
     }
 
+    /**
+     * Makes placing a hold on an account and erasing that account run one after the other, for the length of the
+     * surrounding transaction ({@code pg_advisory_xact_lock}: released at commit or rollback).
+     *
+     * <p>An erasure looks for a hold with a plain read and then anonymises; a placement inserts a row. Neither blocks
+     * the other: the hold's foreign key takes {@code FOR KEY SHARE} on the account, which the erasure's non-key
+     * {@code UPDATE} does not conflict with, and under READ COMMITTED the erasure cannot see an insert that has not
+     * committed. A hold signed while an erasure was already past its check therefore committed first and the account
+     * was anonymised under it, which is the loss of evidence a hold exists to prevent. Under this lock the second to
+     * arrive waits for the first to commit and reads what it left: an erasure finds the hold and refuses, a hold finds
+     * an erased account.
+     *
+     * <p>Taken first by both callers, before any row of the account is read or written, so the order is the same for
+     * everyone and the pair cannot wait on each other. Taken per account, so it serialises nothing else.
+     */
+    public void lockHoldDecision(UUID tenantId, UUID accountId) {
+        String lockKey = "customer.hold-vs-erasure|%s|%s".formatted(tenantId, accountId);
+        // The row mapper never reads the void column; consuming the one row is what waits for the lock.
+        jdbc.sql("SELECT pg_advisory_xact_lock(hashtextextended(:lockKey, 0))")
+                .param("lockKey", lockKey)
+                .query((row, number) -> Boolean.TRUE)
+                .list();
+    }
+
     public Optional<HoldRow> active(UUID tenantId, UUID accountId) {
         return jdbc.sql("SELECT " + COLUMNS + """
                   FROM customer.legal_holds

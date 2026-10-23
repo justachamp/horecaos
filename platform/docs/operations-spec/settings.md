@@ -1278,7 +1278,7 @@ worklist, each on the customer's record.
   executed erasure reaches **every module's copy** of the customer through
   `customers.spi.CustomerErasureParticipant` (ordering snapshots and recipients, loyalty, marketing,
   referral, pricing grants, notifications, conversations, assistant transcripts, voice, reviews,
-  dine-in, Telegram bindings) and stores the **per-module row counts as its proof**
+  dine-in, Telegram bindings, the digest of her number on the POS export of each order) and stores the **per-module row counts as its proof**
   (`GET .../erasure-requests/{id}/proof`, V0681), which the pane shows. A build test
   (`ErasureInventoryTests`) requires every table carrying a customer key or a PERSONAL column to
   have a participant or a named exemption, so the next module that stores a phone number cannot

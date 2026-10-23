@@ -177,14 +177,6 @@ final class ErasureInventoryExemptions {
                         + " template, frozen variables from non-personal event payloads and hashes. It is evidence that a"
                         + " message was sent.");
         REASONS.put(
-                "notifications.unsubscribe_tokens",
-                "The SHA-256 of an opaque token in a campaign email's way-out link, and what it withdraws: a consent"
-                        + " purpose, the channel and a locale. It holds no address, no name and no token, and names the customer"
-                        + " only by the id of an anonymised account once she is erased. V0671 gives it no foreign key to the"
-                        + " account on purpose, so an erasure is never blocked by a row whose only job is to withdraw a"
-                        + " consent. A token is valid for 400 days by default and EmailUnsubscribeTokenSweeper then removes"
-                        + " the row, so what remains of an erased customer is an anonymised id for at most that long.");
-        REASONS.put(
                 "ordering.orders",
                 "The commercial record of the order: totals, tax, status, tender. ADR 0019 and ADR 0029: an order never stops"
                         + " having happened. Its copies of the customer's identity are blanked by the ordering participant.");

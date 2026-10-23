@@ -53,6 +53,9 @@ class ErasureInventoryTests {
             + "|(^|_)customer_subject_hash$"
             + "|^guest_reference_hash$"
             + "|phone_lookup_hash$"
+            // Any other hash of a phone number: an unsalted digest of a number is reversible in seconds, so a column
+            // that holds one is a customer key whatever else it is called (integration.pos_order_exports).
+            + "|(^|_)phone_([a-z]+_)*hash$"
             + "|(^|_)chat_id$");
 
     /** A column that holds a PERSONAL-class value under the envelope (ADR 0029), by the schema's own naming. */

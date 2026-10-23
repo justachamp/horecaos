@@ -66,10 +66,14 @@ import uz.horecaos.platform.notifications.application.NotificationsErasurePartic
 import uz.horecaos.platform.notifications.application.PushSubscriptionErasureParticipant;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcPushSubscriptionStore;
+import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcUnsubscribeTokenStore;
 import uz.horecaos.platform.ordering.OrderBoardFixtures;
 import uz.horecaos.platform.ordering.application.OrderingErasureGuard;
 import uz.horecaos.platform.ordering.application.OrderingErasureParticipant;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderErasureStore;
+import uz.horecaos.platform.pos.application.PosErasureParticipant;
+import uz.horecaos.platform.pos.domain.LineFingerprint;
+import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosExportStore;
 import uz.horecaos.platform.pricing.application.PricingErasureParticipant;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcBenefitGrantStore;
 import uz.horecaos.platform.referral.application.ReferralErasureParticipant;
@@ -201,6 +205,7 @@ class CustomerErasureParticipantsTests {
                         "notifications.notification_preferences",
                         "notifications.recipient_endpoints",
                         "notifications.push_subscriptions",
+                        "notifications.unsubscribe_tokens",
                         "ordering.order_customer_snapshots",
                         "ordering.order_lines",
                         "ordering.order_outcomes",
@@ -215,6 +220,7 @@ class CustomerErasureParticipantsTests {
                         "conversations.flow_runs",
                         "voice.call_events",
                         "assistant.turns",
+                        "integration.pos_order_exports",
                         "integration.telegram_pending_links",
                         "integration.sendpulse_import_runs",
                         "integration.sendpulse_import_run_rows",
@@ -262,7 +268,8 @@ class CustomerErasureParticipantsTests {
                 new LoyaltyErasureParticipant(new JdbcLoyaltyStore(app), new JdbcPosBalanceSyncStore(app), clock),
                 new ReferralErasureParticipant(new JdbcReferralStore(app), clock),
                 new PricingErasureParticipant(new JdbcBenefitGrantStore(app), clock),
-                new NotificationsErasureParticipant(new JdbcNotificationStore(app), clock),
+                new NotificationsErasureParticipant(
+                        new JdbcNotificationStore(app), new JdbcUnsubscribeTokenStore(app), clock),
                 new PushSubscriptionErasureParticipant(
                         new JdbcPushSubscriptionStore(app), new JdbcNotificationStore(app), clock),
                 new OrderingErasureParticipant(new JdbcOrderErasureStore(app), protection, clock),
@@ -271,7 +278,8 @@ class CustomerErasureParticipantsTests {
                 new ConversationsErasureParticipant(app),
                 new VoiceErasureParticipant(new JdbcVoiceStore(app, objectMapper), protection),
                 new AssistantErasureParticipant(app, protection),
-                new TelegramErasureParticipant(app));
+                new TelegramErasureParticipant(app),
+                new PosErasureParticipant(new JdbcPosExportStore(app)));
     }
 
     // ------------------------------------------------------------------------------------------ the tests
@@ -362,6 +370,9 @@ class CustomerErasureParticipantsTests {
                         customer))
                 .as("an endpoint that kept the old hash would still answer a search for her number")
                 .isNotEqualTo(hers.phoneHash);
+        assertThat(count("notifications.unsubscribe_tokens", "customer_account_id", customer))
+                .as("a campaign email's way out names her account and is a working capability for 400 days")
+                .isZero();
         // notifications-push (ADR 0182): the subscription ends and keeps no secret
         assertThat(text(
                         "SELECT status FROM notifications.push_subscriptions WHERE customer_account_id = :id",
@@ -427,6 +438,17 @@ class CustomerErasureParticipantsTests {
                         .single())
                 .as("a clear coordinate would still point at the building")
                 .isZero();
+        // pos: the digest of her number on each export of her orders (ADR 0029)
+        assertThat(text("SELECT customer_phone_hash FROM integration.pos_order_exports WHERE id = :id", hers.posExport))
+                .as("an unsalted SHA-256 of a Uzbek mobile number is recovered by trying them all: it is her number")
+                .isNotEqualTo(hers.posPhoneHash)
+                .matches("[0-9a-f]{64}");
+        assertThat(owner.sql("SELECT state FROM integration.pos_order_exports WHERE id = :id")
+                        .param("id", hers.posExport)
+                        .query(String.class)
+                        .single())
+                .as("the export is the record that a ticket was sent; only the copy of her number goes")
+                .isEqualTo("PENDING");
         // dinein: the booking she made with her account, and the one a host typed for her number
         assertThat(reveal("dinein.reservations", "guest_name_encrypted", hers.reservationByAccount))
                 .isEqualTo("ERASED");
@@ -605,7 +627,9 @@ class CustomerErasureParticipantsTests {
             UUID turn,
             UUID importRow,
             String bundleKey,
-            UUID correction) {}
+            UUID correction,
+            UUID posExport,
+            String posPhoneHash) {}
 
     Footprint seedFootprint(UUID account, String tag) {
         String phoneHash = "phone-hash-" + tag;
@@ -852,6 +876,26 @@ class CustomerErasureParticipantsTests {
                 (tag.equals("a") ? "e" : "f").repeat(64),
                 "status",
                 "ACTIVE");
+
+        // notifications-email: the way out a campaign email carried (V0671), valid for 400 days
+        insert(
+                "notifications.unsubscribe_tokens",
+                "token_hash",
+                (tag.equals("a") ? "c" : "d").repeat(64),
+                "tenant_id",
+                TENANT,
+                "brand_id",
+                BRAND,
+                "customer_account_id",
+                account,
+                "notification_id",
+                UUID.randomUUID(),
+                "consent_purpose",
+                "MARKETING_PROMOTIONS",
+                "created_at",
+                NOW,
+                "expires_at",
+                NOW.plusSeconds(400L * 86_400));
 
         // ordering: a delivered order with its copies, an amendment, the cart it came from, and a cart left open
         UUID order = fixtures.insertOrder(OrderBoardFixtures.order("ORD-" + tag)
@@ -1264,6 +1308,32 @@ class CustomerErasureParticipantsTests {
                 "corrected_at",
                 NOW.minusSeconds(120));
 
+        // pos: what production writes when the order is exported, the unsalted digest of the order's number
+        UUID posExport = UUID.randomUUID();
+        String posPhoneHash = LineFingerprint.phoneHash("+998901112233");
+        insert(
+                "integration.pos_order_exports",
+                "id",
+                posExport,
+                "tenant_id",
+                TENANT,
+                "order_id",
+                order,
+                "binding_id",
+                UUID.randomUUID(),
+                "installation_id",
+                UUID.randomUUID(),
+                "state",
+                "PENDING",
+                "line_fingerprint",
+                "fingerprint-" + tag,
+                "customer_phone_hash",
+                posPhoneHash,
+                "external_venue_reference",
+                "venue-" + tag,
+                "requested_at",
+                NOW.minusSeconds(300));
+
         return new Footprint(
                 account,
                 tag,
@@ -1281,7 +1351,9 @@ class CustomerErasureParticipantsTests {
                 turn,
                 importRow,
                 bundleKey,
-                correction);
+                correction,
+                posExport,
+                posPhoneHash);
     }
 
     private void insertReservation(UUID id, @Nullable UUID account, String phoneHash, String guestName) {
@@ -1379,6 +1451,10 @@ class CustomerErasureParticipantsTests {
                 "SELECT status || normalized_hash FROM notifications.recipient_endpoints WHERE customer_account_id = :a"
             },
             {
+                "unsubscribeTokens",
+                "SELECT count(*)::text FROM notifications.unsubscribe_tokens WHERE customer_account_id = :a"
+            },
+            {
                 "push",
                 "SELECT status || coalesce(secret_ciphertext, 'NULL') FROM notifications.push_subscriptions "
                         + "WHERE customer_account_id = :a"
@@ -1420,6 +1496,11 @@ class CustomerErasureParticipantsTests {
                 "reservations",
                 "SELECT string_agg(guest_name_encrypted || guest_phone_lookup_hash || coalesce(customer_account_id::text, '-'), "
                         + "'|' ORDER BY id) FROM dinein.reservations WHERE customer_account_id = :a OR guest_phone_lookup_hash = :h"
+            },
+            {
+                "posExports",
+                "SELECT string_agg(e.state || e.customer_phone_hash, '|' ORDER BY e.id) FROM integration.pos_order_exports e "
+                        + "JOIN ordering.orders o ON o.id = e.order_id WHERE o.customer_account_id = :a"
             },
             {"conversations", "SELECT count(*)::text FROM conversations.conversations WHERE customer_account_id = :a"},
             {

@@ -226,6 +226,54 @@ class CustomerErasureTests {
     }
 
     @Test
+    @DisplayName(
+            "execution takes the pin off every saved address, active or archived, and keeps the erased row out of the geocoding queue")
+    void executionRemovesTheCoordinatesOfEverySavedAddress() {
+        UUID accountId = newAccount(TENANT, "Dilnoza Karimova");
+        UUID activeId = insertPinnedAddress(accountId, "Home", "line 1, home", true, 41.2995, 69.2401);
+        UUID archivedId = insertPinnedAddress(accountId, "Old flat", "line 1, old flat", false, 41.3111, 69.2797);
+        UUID landmarkId = insertAddress(accountId, "By the mosque", "next to the mosque", true);
+        assertThat(coordinatesOf(activeId))
+                .as("fixture setup: the pin is stored in the clear, as V0017 says")
+                .isEqualTo("41.2995,69.2401,CUSTOMER_PIN");
+
+        ErasureRequestRow request = erasure.request(TENANT, accountId, RequestedVia.OPERATIONS, STAFF_ACTOR);
+        erasure.execute(TENANT, accountId, request.id(), STAFF_ACTOR);
+
+        assertThat(coordinatesOf(activeId))
+                .as(
+                        "a pin is the building she lives in; the ciphertext beside it is tombstoned, so the pin must go too")
+                .isEqualTo("null,null,LANDMARK_ONLY");
+        assertThat(coordinatesOf(archivedId))
+                .as("an archived address is not exempt")
+                .isEqualTo("null,null,LANDMARK_ONLY");
+        assertThat(coordinatesOf(landmarkId))
+                .as("an address that never had a pin is where it was")
+                .isEqualTo("null,null,LANDMARK_ONLY");
+        assertThat(jdbc.sql("""
+                        SELECT count(*) FROM customer.addresses
+                         WHERE customer_account_id = :id AND status = 'ACTIVE' AND coordinate_source = 'NOT_GEOCODED'
+                        """).param("id", accountId).query(Long.class).single())
+                .as("NOT_GEOCODED is the backfill's work list (ix_addresses_awaiting_geocoding): an erased"
+                        + " tombstone must never be offered to a geocoder")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("erasing one subject leaves a second subject's pinned address where it was")
+    void erasureLeavesAnotherSubjectsPinAlone() {
+        UUID erased = newAccount(TENANT, "Erased Pin");
+        insertPinnedAddress(erased, "Home", "erased street", true, 41.2995, 69.2401);
+        UUID other = newAccount(TENANT, "Other Pin");
+        UUID otherAddressId = insertPinnedAddress(other, "Home", "untouched street", true, 41.3111, 69.2797);
+
+        ErasureRequestRow request = erasure.request(TENANT, erased, RequestedVia.OPERATIONS, STAFF_ACTOR);
+        erasure.execute(TENANT, erased, request.id(), STAFF_ACTOR);
+
+        assertThat(coordinatesOf(otherAddressId)).isEqualTo("41.3111,69.2797,CUSTOMER_PIN");
+    }
+
+    @Test
     @DisplayName("erasing one subject leaves a second subject's contact and address data untouched")
     void erasureLeavesAnotherSubjectUntouched() {
         UUID erased = newAccount(TENANT, "Erased Person");
@@ -487,6 +535,27 @@ class CustomerErasureTests {
             store.archiveAddress(TENANT, accountId, addressId, 1, NOW);
         }
         return addressId;
+    }
+
+    private UUID insertPinnedAddress(
+            UUID accountId, String label, String line, boolean active, double latitude, double longitude) {
+        UUID addressId = UUID.randomUUID();
+        String encryptedFields = protect("customer.addresses", addressId, "encrypted_fields", line);
+        store.insertAddress(
+                addressId, TENANT, accountId, label, encryptedFields, null, latitude, longitude, "CUSTOMER_PIN", NOW);
+        if (!active) {
+            store.archiveAddress(TENANT, accountId, addressId, 1, NOW);
+        }
+        return addressId;
+    }
+
+    /** {@code latitude,longitude,coordinate_source} as stored, with SQL NULL spelled {@code null}. */
+    private String coordinatesOf(UUID addressId) {
+        return jdbc.sql("""
+                        SELECT coalesce(latitude::text, 'null') || ',' || coalesce(longitude::text, 'null') || ','
+                               || coordinate_source
+                          FROM customer.addresses WHERE id = :id
+                        """).param("id", addressId).query(String.class).single();
     }
 
     private UUID insertPrincipalLink(UUID accountId, String subject) {
