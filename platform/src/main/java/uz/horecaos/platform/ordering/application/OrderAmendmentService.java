@@ -623,8 +623,11 @@ public class OrderAmendmentService {
             deltaTotalMinor = totalMinor - previous.totalMinor();
             fiscalCorrectionRequired = true;
             // ADR 0169, decision 6: the cash a courier is told to collect follows the amended total. This was
-            // missing for an increase as well. A payment-method change brings its own tender (below).
-            if (decoded.paymentMethodCode() == null
+            // missing for an increase as well. A move to a provider brings its own tender (below), which is
+            // planned at the amended total; a batch that names no method, or names CASH (a no-op for the order
+            // already on cash that a method change is accepted for), keeps the cash tender where it is, so it is
+            // restated here. Skipping it for CASH left the settlement, and the courier's figure, at the old total.
+            if (!movesToAProvider(decoded)
                     && "NOT_REQUIRED".equals(order.paymentStatusProjection())
                     && deltaTotalMinor != 0) {
                 removals.restateCashDue(order, totalMinor, actorId);
@@ -1879,6 +1882,12 @@ public class OrderAmendmentService {
             throw new AmendmentRefusedException(
                     "INVENTORY_UNAVAILABLE", "The reservation for this amendment settled before it could be committed");
         }
+    }
+
+    /** Whether the batch moves the order to a method other than cash, which re-plans the money leg itself. */
+    private static boolean movesToAProvider(DecodedAmendment decoded) {
+        String method = decoded.paymentMethodCode();
+        return method != null && !CASH_METHOD_CODE.equalsIgnoreCase(method);
     }
 
     /**

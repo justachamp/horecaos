@@ -1464,6 +1464,68 @@ class OrderAmendmentAndOutcomeTests {
     }
 
     @Test
+    @DisplayName("an amendment that reprices a cash order and names CASH restates the cash a courier collects, as "
+            + "one that names no method does")
+    void repricingWhileNamingCashRestatesTheCashDue() {
+        UUID orderId = orderIdOf(placeOrder("idem-reprice-name-cash"));
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        var proposed = tx(() -> amendments.propose(
+                TENANT,
+                orderId,
+                new OrderAmendmentService.ProposeCommand(
+                        version,
+                        List.of(oneMoreBurger(), OrderAmendmentService.AmendmentCommand.changePaymentMethod("CASH")),
+                        false,
+                        "k-reprice-name-cash",
+                        "OPERATOR_EDIT",
+                        "USER",
+                        "sharif",
+                        null)));
+        var result = confirmAndApply(orderId, proposed.amendment().id());
+
+        assertThat(result.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().totalMinor()).isEqualTo(150_000L);
+        assertThat(settlementTotal(orderId))
+                .as("the settlement follows the amended total, or the courier is told to collect the old one")
+                .isEqualTo(150_000L);
+        assertThat(tenderRows(orderId))
+                .extracting(row -> row.get("code"), row -> row.get("amount_minor"), row -> row.get("status"))
+                .containsExactly(org.assertj.core.api.Assertions.tuple("CASH", 150_000L, "PLANNED"));
+        assertThat(tenderSum(orderId)).isEqualTo(150_000L);
+    }
+
+    @Test
+    @DisplayName("the same on a points-plus-cash order: the cash leg follows the new total and the points stay")
+    void repricingWhileNamingCashKeepsThePointsAndMovesTheCashLeg() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+        UUID orderId = orderIdOf(placeOrderRedeeming("idem-split-reprice-name-cash", 10_000L));
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        var proposed = tx(() -> amendments.propose(
+                TENANT,
+                orderId,
+                new OrderAmendmentService.ProposeCommand(
+                        version,
+                        List.of(oneMoreBurger(), OrderAmendmentService.AmendmentCommand.changePaymentMethod("CASH")),
+                        false,
+                        "k-split-reprice-name-cash",
+                        "OPERATOR_EDIT",
+                        "USER",
+                        "sharif",
+                        null)));
+        confirmAndApply(orderId, proposed.amendment().id());
+
+        assertThat(settlementTotal(orderId)).isEqualTo(150_000L);
+        assertThat(tenderRows(orderId))
+                .extracting(row -> row.get("code"), row -> row.get("amount_minor"), row -> row.get("status"))
+                .containsExactly(
+                        org.assertj.core.api.Assertions.tuple("LOYALTY_POINTS", 10_000L, "RESERVED"),
+                        org.assertj.core.api.Assertions.tuple("CASH", 140_000L, "PLANNED"));
+    }
+
+    @Test
     @DisplayName("a cash order with no points moved to a provider is asked for the whole total, as it always was")
     void aCashOnlyOrderMovedToAProviderIsAskedForTheWholeTotal() {
         UUID orderId = orderIdOf(placeOrder("idem-cash-click"));
