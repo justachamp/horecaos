@@ -56,7 +56,9 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * settings.md 10.9 asks for: who sent a real message from which version, in which language, to which
  * channel, and what the route answered. The destination is not in it, and not stored anywhere: a phone
  * number in an audit row is a number in a table a support export reads. No row is written in
- * {@code notifications.notifications}, and every generated id below is a transient correlation value
+ * {@code notifications.notifications}, a Telegram channel does not track the message for an edit or a
+ * skip ({@link NotificationDispatch#SUBJECT_TEMPLATE_TEST_SEND}: pressing the button twice posts twice),
+ * and every generated id below is a transient correlation value
  * for exactly one outbound call, the same status a lease token holds (ADR 0076) rather than a row's
  * own identity.
  */
@@ -194,7 +196,7 @@ public class TemplateTestSendService {
                 body,
                 "test-send:" + correlationId,
                 correlationId.toString(),
-                "NotificationTemplateTestSend",
+                NotificationDispatch.SUBJECT_TEMPLATE_TEST_SEND,
                 templateId,
                 template.templateKey());
 
