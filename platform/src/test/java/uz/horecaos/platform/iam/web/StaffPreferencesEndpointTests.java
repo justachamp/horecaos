@@ -205,7 +205,7 @@ class StaffPreferencesEndpointTests {
         assertThat(saved.getResponse().getHeader("ETag")).isEqualTo("W/\"1\"");
         JsonNode body = json(saved);
         assertThat(body.get("version").asInt()).isEqualTo(1);
-        assertThat(body.get("documentSchema").asInt()).isEqualTo(1);
+        assertThat(body.get("documentSchema").asInt()).isEqualTo(2);
         assertThat(body.get("document").get("columns").get("show").get(0).asString())
                 .isEqualTo("acceptedBy");
         assertThat(body.get("document").get("columns").get("hide").get(0).asString())
@@ -248,7 +248,8 @@ class StaffPreferencesEndpointTests {
         assertThat(((Number) java.util.Objects.requireNonNull(row.get("version"))).intValue())
                 .isEqualTo(1);
         assertThat(((Number) java.util.Objects.requireNonNull(row.get("document_schema"))).intValue())
-                .isEqualTo(1);
+                .as("a document written after batch 21 is stamped with the order board's schema 2")
+                .isEqualTo(2);
         assertThat(row.values().stream().map(String::valueOf).collect(Collectors.joining(" | ")))
                 .as("neither the typed label nor a key of the vocabulary is readable anywhere in the row")
                 .doesNotContain("Jasur", "Karimov", "acceptedBy", "courier", "savedViews", "attention", VIEW_ID);
@@ -470,8 +471,10 @@ class StaffPreferencesEndpointTests {
                 "document.theme",
                 "{\"document\":{\"columns\":{\"hide\":[\"number\"]}}}",
                 "document.columns.hide",
-                "{\"document\":{\"columns\":{\"show\":[\"courierEta\"]}}}",
+                "{\"document\":{\"columns\":{\"show\":[\"courier_eta\"]}}}",
                 "document.columns.show",
+                "{\"document\":{\"columns\":{\"hide\":[\"courierEta\"]}}}",
+                "document.columns.hide",
                 "{\"document\":{\"savedViews\":[{\"id\":\"" + VIEW_ID
                         + "\",\"label\":\"+998 90 123 45 67\",\"tab\":\"all\",\"filters\":{}}]}}",
                 "document.savedViews[0].label",

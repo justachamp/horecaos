@@ -317,6 +317,43 @@ public final class OrderActionsPolicy {
     }
 
     /**
+     * {@link #availableFor(OrderStatus, FulfillmentMode, Set, boolean, boolean, boolean)}, with {@code REPRINT}
+     * added where the order's branch can print (orders.md §2.12's {@code p}, ADR 0154).
+     *
+     * <p>A seventh-argument overload for the reason the fourth, fifth and sixth are: the sweeps in {@code
+     * OrderActionsPolicyTests} exercise the shorter forms and have no opinion about a printer. The gate is the
+     * endpoint's own, {@code POST .../orders/{orderId}/print-jobs} under {@code PRINT_REPRINT} at the branch,
+     * plus the one fact the capability cannot say: that the branch has printing switched on and a printer to
+     * send to ({@code OrderReprintPort}), so a tenant that has not been given printing (the flag is dark by
+     * default) is never offered a button that can only be refused. Offered at every status: the document an
+     * operator reprints most is the receipt of an order that has already ended.
+     *
+     * @param printAvailable {@code OrderReprintPort}'s answer for this order's branch
+     */
+    public static List<OrderAction> availableFor(
+            OrderStatus status,
+            FulfillmentMode mode,
+            Set<Capability> grantedCapabilities,
+            boolean courierUnassigned,
+            boolean amendmentAwaitingOperator,
+            boolean awaitingOnlinePayment,
+            boolean printAvailable) {
+        List<OrderAction> actions = new ArrayList<>(availableFor(
+                status,
+                mode,
+                grantedCapabilities,
+                courierUnassigned,
+                amendmentAwaitingOperator,
+                awaitingOnlinePayment));
+
+        if (printAvailable && grantedCapabilities.contains(Capability.PRINT_REPRINT)) {
+            actions.add(new OrderAction(OrderActionCode.REPRINT, null));
+        }
+
+        return List.copyOf(actions);
+    }
+
+    /**
      * Whether an online payment is still owed <em>and</em> an operator can hand
      * the customer a checkout surface for it — the one fact {@code ISSUE_INVOICE}
      * is gated on.

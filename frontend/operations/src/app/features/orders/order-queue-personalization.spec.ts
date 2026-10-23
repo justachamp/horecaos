@@ -88,6 +88,18 @@ const FULL_ROW = order({
   acceptedByActorType: 'USER',
   acceptedByActorId: 'subject-raw-accepted-by-4c1d',
   acceptedByDisplayName: 'Madina Yusupova',
+  // Gap map row 1.1 (batch 21): the facts the board read now carries.
+  origin: 'MARKETPLACE',
+  courierEtaAt: '2026-10-14T07:40:00Z',
+  channelSystemType: 'AGGREGATOR',
+  channelIcon: null,
+  channelDisplayName: 'Yandex Eda',
+  paymentMethodCode: 'CASH',
+  itemCount: 4,
+  firstItemName: 'Lagman with a very long name that the cell must cut',
+  fiscalStatus: 'ISSUED',
+  distanceMeters: 3800,
+  externalNumber: 'YE-2291',
 });
 
 /** The same order with nothing to draw: no courier, no discount, actors the tenant has no name for. */
@@ -102,6 +114,17 @@ const BARE_ROW = order({
   acceptedByActorType: 'USER',
   acceptedByActorId: 'subject-raw-unnamed-1e8c',
   acceptedByDisplayName: null,
+  origin: 'HORECAOS',
+  courierEtaAt: null,
+  channelSystemType: null,
+  channelIcon: null,
+  channelDisplayName: null,
+  paymentMethodCode: null,
+  itemCount: null,
+  firstItemName: null,
+  fiscalStatus: null,
+  distanceMeters: null,
+  externalNumber: null,
 });
 
 function page(items: readonly OrderSummaryResponse[]): Observable<unknown> {
@@ -240,7 +263,7 @@ afterEach(() => {
 });
 
 describe('OrderQueue: the columns a person chose (ADR 0160, gap map row 1.1)', () => {
-  it('draws the board as it always was for a person who has chosen nothing', async () => {
+  it('draws the default board for a person who has chosen nothing: the old columns, and Items now that the read carries it', async () => {
     configure({ rows: [FULL_ROW] });
     const host = await open();
 
@@ -249,6 +272,7 @@ describe('OrderQueue: the columns a person chose (ADR 0160, gap map row 1.1)', (
       '#',
       'Time',
       'Type / channel',
+      'Items',
       'Total',
       'Delivery fee',
       'Payment',
@@ -379,6 +403,11 @@ describe('OrderQueue: the columns a person chose (ADR 0160, gap map row 1.1)', (
       acceptedBy: 'order-row-accepted-by',
       courierType: 'order-row-courier-type',
       discount: 'order-row-discount',
+      courierEta: 'order-row-courier-eta',
+      source: 'order-row-source',
+      fiscal: 'order-row-fiscal',
+      distance: 'order-row-distance',
+      externalNumber: 'order-row-external-number',
     };
 
     for (const key of optional) {
@@ -396,13 +425,175 @@ describe('OrderQueue: the columns a person chose (ADR 0160, gap map row 1.1)', (
   });
 });
 
+describe('OrderQueue: the board’s own facts (gap map row 1.1, batch 21)', () => {
+  it('draws the payment method’s mark beside the status, named for a keyboard and a screen reader', async () => {
+    configure({ rows: [FULL_ROW, BARE_ROW] });
+    const host = await open();
+
+    const rows = [...host.querySelectorAll('tbody tr[data-order-id]')];
+    const full = rows.find((row) => row.getAttribute('data-order-id') === 'order-full')!;
+    const bare = rows.find((row) => row.getAttribute('data-order-id') === 'order-bare')!;
+    const mark = full.querySelector('[data-testid="order-row-payment-method"] svg')!;
+    expect(mark.getAttribute('role')).toBe('img');
+    expect(mark.getAttribute('aria-label')).toBe('Paid by: Cash');
+    expect(mark.querySelector('title')?.textContent).toBe('Paid by: Cash');
+    expect(bare.querySelector('[data-testid="order-row-payment-method"]')).toBeNull();
+  });
+
+  it('draws «Позиции» as the count and the first position, cut in the cell and whole in the title', async () => {
+    configure({ rows: [FULL_ROW, BARE_ROW] });
+    const host = await open();
+
+    const rows = [...host.querySelectorAll('tbody tr[data-order-id]')];
+    const full = rows.find((row) => row.getAttribute('data-order-id') === 'order-full')!;
+    const bare = rows.find((row) => row.getAttribute('data-order-id') === 'order-bare')!;
+    expect(full.querySelector('[data-testid="order-row-items"]')!.textContent!.trim()).toBe(
+      '4 pos · Lagman with a very long name that the cell must cut',
+    );
+    expect(
+      full.querySelector('[data-testid="order-row-items"] [title]')!.getAttribute('title'),
+    ).toBe('Lagman with a very long name that the cell must cut');
+    expect(bare.querySelector('[data-testid="order-row-items"]')!.textContent!.trim()).toBe('—');
+  });
+
+  it('asks the board for the facts of the optional columns that are on, and for none when none is', async () => {
+    const plain = configure({ rows: [FULL_ROW] });
+    await open();
+    expect(plain.boardCalls.length).toBeGreaterThan(0);
+    for (const call of plain.boardCalls) {
+      expect(call.params['include'], 'no optional column is on').toBeUndefined();
+    }
+
+    TestBed.resetTestingModule();
+    const asked = configure({
+      rows: [FULL_ROW],
+      document: { columns: { show: ['courierEta', 'source', 'discount'] } },
+    });
+    await open();
+    expect(asked.boardCalls.at(-1)!.params['include']).toEqual(['courierEta', 'source']);
+  });
+
+  it('reads the board again, with the new fact, when a column that needs one is turned on', async () => {
+    const { boardCalls } = configure({ rows: [FULL_ROW] });
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await settle();
+    const host = harness.routeNativeElement as HTMLElement;
+    const before = boardCalls.length;
+
+    pick(host, 'column-picker-toggle');
+    await settle();
+    pick(host, 'column-picker-item-courierEta');
+    await settle();
+    harness.detectChanges();
+
+    expect(boardCalls.length, 'turning the column on reads the board once more').toBe(before + 1);
+    expect(boardCalls.at(-1)!.params['include']).toEqual(['courierEta']);
+    expect(cell(host, 'order-row-courier-eta')).toMatch(/^\d{2}:\d{2}$/);
+  });
+
+  it('turning on a column that needs no further fact does not read the board again', async () => {
+    const { boardCalls } = configure({ rows: [FULL_ROW] });
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await settle();
+    const host = harness.routeNativeElement as HTMLElement;
+    const before = boardCalls.length;
+
+    pick(host, 'column-picker-toggle');
+    await settle();
+    pick(host, 'column-picker-item-discount');
+    await settle();
+    harness.detectChanges();
+
+    expect(boardCalls.length).toBe(before);
+  });
+
+  it('draws the courier ETA as a time of day and a dash for an order no partner quoted', async () => {
+    configure({
+      rows: [FULL_ROW, BARE_ROW],
+      document: { columns: { show: ['courierEta'] } },
+    });
+    const host = await open();
+
+    const rows = [...host.querySelectorAll('tbody tr[data-order-id]')];
+    const full = rows.find((row) => row.getAttribute('data-order-id') === 'order-full')!;
+    const bare = rows.find((row) => row.getAttribute('data-order-id') === 'order-bare')!;
+    expect(full.querySelector('[data-testid="order-row-courier-eta"]')!.textContent!.trim()).toBe(
+      '12:40',
+    );
+    expect(
+      full.querySelector('[data-testid="order-row-courier-eta"]')!.getAttribute('title'),
+    ).toContain('not a live feed');
+    expect(bare.querySelector('[data-testid="order-row-courier-eta"]')!.textContent!.trim()).toBe(
+      '—',
+    );
+  });
+
+  it('draws the source as one icon with the channel’s name and kind as its title, and a dash for no channel', async () => {
+    configure({ rows: [FULL_ROW, BARE_ROW], document: { columns: { show: ['source'] } } });
+    const host = await open();
+
+    const rows = [...host.querySelectorAll('tbody tr[data-order-id]')];
+    const full = rows.find((row) => row.getAttribute('data-order-id') === 'order-full')!;
+    const bare = rows.find((row) => row.getAttribute('data-order-id') === 'order-bare')!;
+    const mark = full.querySelector('[data-testid="order-row-source"] svg')!;
+    expect(mark.getAttribute('aria-label')).toBe('Yandex Eda · Aggregator');
+    expect(mark.querySelector('title')?.textContent).toBe('Yandex Eda · Aggregator');
+    expect(full.querySelectorAll('[data-testid="order-row-source"] svg').length).toBe(1);
+    expect(bare.querySelector('[data-testid="order-row-source"]')!.textContent!.trim()).toBe('—');
+    expect(bare.querySelector('[data-testid="order-row-source"] svg')).toBeNull();
+  });
+
+  it('draws the fiscal chip with the receipt’s state in its name, and a dash where there is no document', async () => {
+    configure({ rows: [FULL_ROW, BARE_ROW], document: { columns: { show: ['fiscal'] } } });
+    const host = await open();
+
+    const rows = [...host.querySelectorAll('tbody tr[data-order-id]')];
+    const full = rows.find((row) => row.getAttribute('data-order-id') === 'order-full')!;
+    const bare = rows.find((row) => row.getAttribute('data-order-id') === 'order-bare')!;
+    const chip = full.querySelector('[data-testid="order-row-fiscal"] [role="img"]')!;
+    expect(chip.textContent!.trim()).toBe('Ф');
+    expect(chip.getAttribute('aria-label')).toBe('Fiscal receipt: Receipt issued');
+    expect(bare.querySelector('[data-testid="order-row-fiscal"]')!.textContent!.trim()).toBe('—');
+  });
+
+  it('draws the distance in kilometres from a kilometre up, metres below it, and the external number as sent', async () => {
+    const near = order({
+      orderId: 'order-near',
+      publicOrderNumber: '0044',
+      distanceMeters: 900,
+      externalNumber: null,
+    });
+    configure({
+      rows: [FULL_ROW, near],
+      document: { columns: { show: ['distance', 'externalNumber'] } },
+    });
+    const host = await open();
+
+    const rows = [...host.querySelectorAll('tbody tr[data-order-id]')];
+    const full = rows.find((row) => row.getAttribute('data-order-id') === 'order-full')!;
+    const close = rows.find((row) => row.getAttribute('data-order-id') === 'order-near')!;
+    expect(full.querySelector('[data-testid="order-row-distance"]')!.textContent!.trim()).toBe(
+      '3.8 km',
+    );
+    expect(close.querySelector('[data-testid="order-row-distance"]')!.textContent!.trim()).toBe(
+      '900 m',
+    );
+    expect(
+      full.querySelector('[data-testid="order-row-external-number"]')!.textContent!.trim(),
+    ).toBe('YE-2291');
+    expect(
+      close.querySelector('[data-testid="order-row-external-number"]')!.textContent!.trim(),
+    ).toBe('—');
+  });
+});
+
 describe('OrderQueue: the column picker (ADR 0160)', () => {
   async function openPicker(host: HTMLElement): Promise<void> {
     pick(host, 'column-picker-toggle');
     await settle();
   }
 
-  it('lists the columns that have something to draw here, and not «Позиции»', async () => {
+  it('lists the columns that have something to draw here, «Позиции» among them', async () => {
     configure({ rows: [FULL_ROW] });
     const host = await open();
     await openPicker(host);
@@ -412,14 +603,19 @@ describe('OrderQueue: the column picker (ADR 0160)', () => {
     expect(labels).toEqual([
       'Channel',
       'Customer',
+      'Items',
       'Payment',
       'Courier',
       'Created by',
       'Accepted by',
       'Courier type',
       'Discount',
+      'Courier ETA',
+      'Source',
+      'Receipt',
+      'Distance',
+      'External no.',
     ]);
-    expect(labels).not.toContain('Items');
     expect(
       (host.querySelector('[data-testid="column-picker-item-courier"]') as HTMLInputElement)
         .checked,

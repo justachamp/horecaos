@@ -1,7 +1,32 @@
-<div class="field">
+<div class="field" [class.field--locked]="state() === 'LOCKED_BY_PLAN'">
   <span class="field__label q-body-sm">{{ label() }}</span>
 
   @switch (state()) {
+    @case ('LOCKED_BY_PLAN') {
+      @if (lock(); as locked) {
+        <span class="field__value field__value--muted q-body-sm" data-testid="field-locked-value">{{
+          displayValue() ?? '—'
+        }}</span>
+        <span class="field__chip field__chip--disabled q-caption" data-testid="field-locked-chip">{{
+          lockedChip()
+        }}</span>
+        <div class="field__locked" data-testid="field-locked">
+          <q-locked-state [module]="locked.entitlementKey">
+            <a
+              class="field__more q-body-sm"
+              [href]="subscriptionPath"
+              [attr.aria-label]="lockedMoreAria()"
+              (click)="openSubscription($event)"
+              data-testid="field-locked-more"
+              >{{ lockedMore() }}</a
+            >
+          </q-locked-state>
+          <p class="field__lockedWhat q-caption" data-testid="field-locked-what">
+            {{ locked.description }}
+          </p>
+        </div>
+      }
+    }
     @case ('LOADING') {
       <span class="field__value field__value--muted q-body-sm">{{
         'inheritedField.state.loading' | t

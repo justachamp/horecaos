@@ -8,6 +8,9 @@
             <div class="sheet__row">
               <dt class="sheet__caps">
                 @for (cap of shortcut.caps; track $index) {
+                  @if (shortcut.sequence && !$first) {
+                    <span class="sheet__then q-caption">{{ text('keys.then') }}</span>
+                  }
                   <kbd class="sheet__cap q-mono q-caption">{{ cap }}</kbd>
                 }
               </dt>

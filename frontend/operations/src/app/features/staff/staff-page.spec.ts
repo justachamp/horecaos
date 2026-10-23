@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Auth } from '../../core/auth/auth';
@@ -11,6 +11,7 @@ import { StaffApi } from './staff-api';
 import { StaffMember } from '../../core/api/staff-member';
 import { StaffMembersApi } from './staff-members-api';
 import { staffMember } from './staff-member.testing';
+import { ShortcutRegistry } from '../../shared/keyboard/shortcut-registry';
 import { StaffPage } from './staff-page';
 
 function grant(overrides: Partial<GrantView>): GrantView {
@@ -589,5 +590,108 @@ describe('StaffPage: the tenant’s record of each person (ADR 0139)', () => {
 
     expect(textOf(fixture)).toContain('subject-1');
     expect(fixture.nativeElement.querySelector('[data-testid="staff-row-suspend"]')).not.toBeNull();
+  });
+});
+
+describe('StaffPage: the keys (staff-and-access.md §2, gap map row X.1)', () => {
+  function key(value: string, target?: HTMLElement): boolean {
+    const event = new KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'target', {
+      value: target ?? document.activeElement ?? document.body,
+    });
+    return TestBed.inject(ShortcutRegistry).dispatch(event);
+  }
+
+  const two = [
+    grant({ principalSubject: 'staff-1', roleCode: 'location-staff' }),
+    grant({ id: 'g2', principalSubject: 'staff-2', roleCode: 'location-staff' }),
+  ];
+
+  const rows = (fixture: ComponentFixture<StaffPage>): HTMLElement[] => [
+    ...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('tbody tr.row'),
+  ];
+
+  it('is on the cheat-sheet while the list is, and binds nothing that suspends, restores or removes a person', async () => {
+    const { fixture } = await setUp(two);
+    const scope = TestBed.inject(ShortcutRegistry)
+      .scopes()
+      .find((candidate) => candidate.id === 'staff-list')!;
+
+    expect(scope.title()).toBe('Люди');
+    expect(scope.shortcuts.flatMap((shortcut) => shortcut.caps)).toEqual([
+      '/',
+      'j',
+      '↓',
+      'k',
+      '↑',
+      'Enter',
+      'Esc',
+    ]);
+    fixture.destroy();
+    expect(
+      TestBed.inject(ShortcutRegistry)
+        .scopes()
+        .some((candidate) => candidate.id === 'staff-list'),
+    ).toBe(false);
+  });
+
+  it('/ goes to the search box, and j, k and the arrows move along the rows', async () => {
+    const { fixture } = await setUp(two);
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(key('/', document.body)).toBe(true);
+    expect(document.activeElement).toBe(host.querySelector('[data-testid="staff-search"]'));
+    (document.activeElement as HTMLElement).blur();
+
+    key('j');
+    expect(document.activeElement).toBe(rows(fixture)[0]);
+    key('j');
+    expect(document.activeElement).toBe(rows(fixture)[1]);
+    key('k');
+    expect(document.activeElement).toBe(rows(fixture)[0]);
+  });
+
+  it('Enter opens the person the cursor is on', async () => {
+    const { fixture } = await setUp(two);
+    vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const opened = vi.fn();
+    rows(fixture)[1].addEventListener('click', opened);
+    key('j');
+    key('j');
+
+    expect(key('Enter')).toBe(true);
+
+    expect(opened).toHaveBeenCalledOnce();
+  });
+
+  it('Esc in the search box empties it, and a second Esc lets go of it', async () => {
+    const { fixture } = await setUp(two);
+    const search = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      '[data-testid="staff-search"]',
+    )!;
+    search.focus();
+    search.value = 'staff-2';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    fixture.detectChanges();
+    expect(rows(fixture)).toHaveLength(1);
+
+    expect(key('Escape', search)).toBe(true);
+    fixture.detectChanges();
+    expect(search.value).toBe('');
+    expect(rows(fixture)).toHaveLength(2);
+    expect(document.activeElement).toBe(search);
+
+    key('Escape', search);
+    expect(document.activeElement).not.toBe(search);
+  });
+
+  it('leaves a letter typed in the search box to the box', async () => {
+    const { fixture } = await setUp(two);
+    const search = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      '[data-testid="staff-search"]',
+    )!;
+    search.focus();
+
+    expect(key('j', search)).toBe(false);
   });
 });

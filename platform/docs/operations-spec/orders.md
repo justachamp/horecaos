@@ -368,7 +368,7 @@ the rest; `Филиал` auto-hides for a single-location tenant.
 | 7 | **Клиент** | text + masked phone | `order_customer_snapshots.display_name_encrypted`, `contact_encrypted` | §1.5. Guest orders (`guest_reference_hash` set) show **Гость** |
 | 8 | **Позиции** | count + first line | `count(order_lines)`, `order_lines.product_name_snapshot` of line 1 | `4 поз · Лагман…` — enough to recognise an order on the phone |
 | 9 | **Сумма** | mono money | `total_minor`, `currency` | right-aligned |
-| 10 | **Оплата** | badge + method | `paymentStatusProjection` on the row (ADR 0102); the method is filterable but not yet on the row — **not built — ADR 0013** | `NOT_REQUIRED` renders as **Наличными** once ADR 0013 lands, and as `—` before |
+| 10 | **Оплата** | badge + method | `paymentStatusProjection` on the row (ADR 0102), and the method from the order's live payment intent, one statement for the page (`PaymentIntentPort#paymentMethodsByOrders`, batch 21) | `NOT_REQUIRED` renders as **Наличными**; an order with no intent has no method icon |
 | 11 | **Статус** | badge | `status` | §1.1 vocabulary; `AWAITING_APPROVAL` additionally shows the countdown to `approval_deadline_at` |
 | 12 | **Курьер** | name + shift dot | **built, not read by ordering — ADR 0014 / 0042** (`fulfillment.shipments.courier_id`, `fulfillment.couriers`, both built) | `—` when unassigned; a hollow dot when the courier is off shift (§2.9) |
 | 13 | ⋯ | overflow menu | — | §2.9 |
@@ -377,6 +377,19 @@ Behind the picker: **Создал** (`created_by_actor_id`, ADR 0039), **При�
 (`accepted_by_actor_id`, ADR 0039), **Ф** (fiscal chip, ADR 0038), **Доставка**
 (`customer_delivery_fee_minor`, ADR 0014), **Скидка** (`discount_minor`),
 **Дистанция** (ADR 0014), **Внешний №** (ADR 0040).
+
+**Since then (ADR 0160 and ADR 0144, batch 21, `w1-board-shell`):** the picker offers
+fifteen columns and the board draws them. **Позиции** (count and first line), **Курьер: ETA**
+(`courierEtaAt`, the ETA captured with the live delivery plan, ADR 0014), **Источник** (a
+server-resolved icon: the order's channel and the nine system types of ADR 0036), **Ф**, **Дистанция**
+and **Внешний №** are asked for only when the column is on, with `include=` on the board read,
+and each is one batched statement per page — never one per row, and nothing at all for a person who
+has not switched the column on (the board polls every ten seconds). A fact that does not exist for an
+order is an empty cell, not an estimate. The choice is stored as a change from the default, so a
+column added later is shown by its own default; the stored document went from schema 1 to 2 with an
+identity upgrade for the six added columns. The fiscal chip carries the status word only; the sign, the
+receipt link and the marking code are protected evidence (ADR 0029) and are read through the fiscal
+evidence surface.
 
 The legacy dashboard rendered each order as a **card** carrying its own line
 items, both money breakdowns and a courier block — roughly 220 px per order,
@@ -719,7 +732,7 @@ Enter opens.
 | `a` | approve the focused order (only on `AWAITING_APPROVAL`) |
 | `x` | open the cancel dialog |
 | `c` | open assign-courier |
-| `p` | print to POS |
+| `p` | print to POS — **built (batch 21):** the key presses the row's own «Печать» (`REPRINT`, ADR 0154), and the server emits that action only for a caller with `print.reprint` at the branch, while `feature.printing` is on and the branch has an active printer; otherwise there is no action and so no key |
 | `n` | new order |
 | `r` | refresh |
 | `?` | shortcut sheet |
@@ -1454,6 +1467,12 @@ back.
 search field — so an operator can type four dishes without touching the mouse.
 `Ctrl+Enter` creates. `Esc` in a pane returns focus to that pane's first field;
 `Esc` twice prompts to discard.
+
+**Since then (batch 21):** all four are built (`new-order-keys.ts`). `Ctrl+Enter` (`⌘+Enter` on a Mac)
+presses the same «Создать» button the mouse does, so it can create nothing the button would
+refuse. `Esc` from a field goes to the first field of its pane; `Esc` again leaves the screen at
+once when nothing has been entered and asks «Отбросить заказ?» when anything has (a customer, a number,
+a line). A single key press throws nothing away. Enter in the item search is the search's own.
 
 ---
 

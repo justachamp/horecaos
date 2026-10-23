@@ -36,6 +36,7 @@ import {
 } from './catalog-domain';
 import { CreateCategoryDialog, CreateCategorySubmission } from './create-category-dialog';
 import { MediaApi } from './media-api';
+import { registerCategoriesKeys } from './categories-keys';
 
 /** One locale row of the content editor's per-locale grid (row 10.12). */
 interface LocaleContentDraft {
@@ -109,6 +110,8 @@ interface LocaleContentDraft {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CategoriesPage implements OnInit {
+  /** The tree's keys are the shared tree's own; this lists them on the cheat-sheet (catalog.md §4.3). */
+  private readonly keys = registerCategoriesKeys();
   private readonly api = inject(CatalogApi);
   private readonly mediaApi = inject(MediaApi);
   private readonly brand = inject(CurrentBrand);

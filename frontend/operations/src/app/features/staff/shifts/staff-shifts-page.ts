@@ -38,6 +38,7 @@ import {
   TodayStatus,
   ShiftStatus,
 } from './staff-shifts-api';
+import { registerStaffShiftsKeys } from './staff-shifts-keys';
 
 type LoadState = 'loading' | 'off' | 'denied' | 'error' | 'ready';
 type Tab = 'week' | 'today' | 'timesheet';
@@ -101,6 +102,8 @@ const TODAY_POLL_MS = 30_000;
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class StaffShiftsPage {
+  /** staff-and-access.md §9.2: the shifts view's keys. */
+  private readonly keys = registerStaffShiftsKeys();
   private readonly api = inject(StaffShiftsApi);
   private readonly status = inject(AttendanceStatus);
   private readonly tenant = inject(CurrentTenant);

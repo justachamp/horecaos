@@ -20,6 +20,7 @@ const boardMessages = localMessages({
     approve: 'Подтвердить заказ (только если он ждёт подтверждения)',
     cancel: 'Отменить заказ — сначала откроется окно подтверждения',
     courier: 'Назначить курьера на заказ',
+    print: 'Печать документа заказа — откроет раздел «Печать» заказа',
     newOrder: 'Новый заказ',
     refresh: 'Обновить доску',
     leaveSelection: 'Выйти из режима выбора',
@@ -36,6 +37,7 @@ const boardMessages = localMessages({
     approve: 'Buyurtmani tasdiqlash (faqat tasdiq kutayotgan boʻlsa)',
     cancel: 'Buyurtmani bekor qilish — avval tasdiqlash oynasi ochiladi',
     courier: 'Buyurtmaga kuryer tayinlash',
+    print: 'Buyurtma hujjatini chop etish — buyurtmaning «Chop etish» boʻlimi ochiladi',
     newOrder: 'Yangi buyurtma',
     refresh: 'Taxtani yangilash',
     leaveSelection: 'Tanlash rejimidan chiqish',
@@ -52,6 +54,7 @@ const boardMessages = localMessages({
     approve: 'Approve the focused order (only when it awaits approval)',
     cancel: 'Cancel the focused order — a dialog asks first',
     courier: 'Assign a courier to the focused order',
+    print: "Print the focused order's document — opens the order's Print section",
     newOrder: 'New order',
     refresh: 'Refresh the board',
     leaveSelection: 'Leave selection mode',
@@ -59,7 +62,7 @@ const boardMessages = localMessages({
 });
 
 /** The order actions a key can start. They are the server's own `actions[]` codes. */
-export type BoardKeyAction = 'APPROVE' | 'CANCEL' | 'ASSIGN_COURIER';
+export type BoardKeyAction = 'APPROVE' | 'CANCEL' | 'ASSIGN_COURIER' | 'REPRINT';
 
 /**
  * What the board offers its keys. The keys decide nothing about orders: whether an action is
@@ -91,9 +94,11 @@ export interface OrderBoardKeys {
 }
 
 /**
- * The documented keys of the order board, as a registrable scope. `p` («print to POS») is not here:
- * the board's rows carry no print action (`OrderActionCode` has none; the POS push lives in the
- * order detail's panel), and a sheet that lists a key nothing handles is worse than no key.
+ * The documented keys of the order board, as a registrable scope. `p` is orders.md §2.12's «print»: the
+ * server puts `REPRINT` in a row's `actions[]` only where the branch has printing switched on and a printer
+ * (ADR 0154) and the person may reprint, so while printing is dark `p` has nothing to act on and falls
+ * through, as `a` does for an order that is not awaiting approval. It opens the order at its print section;
+ * it never prints by itself, because a reprint asks which document and why.
  */
 export function orderBoardScope(board: OrderBoardKeys): ShortcutScope {
   const text = (key: Parameters<typeof boardMessages.text>[1]): string =>
@@ -178,6 +183,13 @@ export function orderBoardScope(board: OrderBoardKeys): ShortcutScope {
         label: () => text('courier'),
         enabled: () => !board.menuOpen() && board.canAct('ASSIGN_COURIER'),
         run: (event) => board.act('ASSIGN_COURIER', event),
+      },
+      {
+        keys: ['p'],
+        caps: ['p'],
+        label: () => text('print'),
+        enabled: () => !board.menuOpen() && board.canAct('REPRINT'),
+        run: (event) => board.act('REPRINT', event),
       },
       {
         keys: ['n'],

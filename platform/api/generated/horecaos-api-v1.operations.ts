@@ -4039,6 +4039,11 @@ export interface LocationView {
   virtualTourUrl?: string;
 }
 
+export interface LockedByPlan {
+  description?: string;
+  entitlementKey?: string;
+}
+
 export interface LoyaltyOperationsControllerAdjustmentRequest {
   actorSubject: string;
   amountMinor?: number;
@@ -4526,14 +4531,40 @@ export interface OpenShiftRequest {
   point?: string;
 }
 
+export interface OperationsConfigurationKeyPlacements {
+  keyCode?: string;
+  placements?: Array<OperationsConfigurationPlacement>;
+}
+
 export interface OperationsConfigurationKeyResponse {
   code?: string;
   defaultValue?: unknown;
   description?: string;
+  entitledBy?: string;
   explicitNullTerminates?: boolean;
+  lockedByPlan?: LockedByPlan;
   owningModule?: string;
   settableScopes?: Array<"PLATFORM" | "TENANT" | "BRAND" | "LOCATION">;
   valueType?: string;
+}
+
+export interface OperationsConfigurationPlacement {
+  brandId?: string;
+  brandName?: string;
+  changedAt?: string;
+  changedByName?: string;
+  displayTruncated?: boolean;
+  displayValue?: string;
+  explicitNull?: boolean;
+  locationId?: string;
+  locationName?: string;
+  scopeType?: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION";
+  version?: number;
+}
+
+export interface OperationsConfigurationPlacementsResponse {
+  keys?: Array<OperationsConfigurationKeyPlacements>;
+  policies?: Array<OperationsPolicyPlacements>;
 }
 
 export interface OperationsConfigurationResolutionResponse {
@@ -4542,6 +4573,7 @@ export interface OperationsConfigurationResolutionResponse {
   describe?: string;
   inspectedLevels?: Array<OperationsTraceLevel>;
   keyCode?: string;
+  lockedByPlan?: LockedByPlan;
   source?: string;
   value?: unknown;
   winningScope?: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION";
@@ -4752,6 +4784,10 @@ export interface OperationsOrderControllerOrderSummaryResponse {
   actions?: Array<OrderActionResponse>;
   approvalDeadlineAt?: string;
   channelCode?: string;
+  channelDisplayName?: string;
+  channelIcon?: string;
+  channelSystemType?: string;
+  courierEtaAt?: string;
   courierId?: string;
   createdAt?: string;
   createdByActorId?: string;
@@ -4760,11 +4796,18 @@ export interface OperationsOrderControllerOrderSummaryResponse {
   currency?: string;
   customerAccountId?: string;
   discountMinor?: number;
+  distanceMeters?: number;
+  externalNumber?: string;
   feeMinor?: number;
+  firstItemName?: string;
+  fiscalStatus?: string;
   fulfillmentMode?: string;
   guestReferenceHash?: string;
+  itemCount?: number;
   locationId?: string;
   orderId?: string;
+  origin?: string;
+  paymentMethodCode?: string;
   paymentStatusProjection?: string;
   processAttention?: string;
   promiseBasis?: string;
@@ -4793,6 +4836,22 @@ export interface OperationsPaymentControllerPaymentSessionResponse {
   provider?: string;
   qrPayload?: string;
   rePresented?: boolean;
+}
+
+export interface OperationsPolicyPlacement {
+  brandId?: string;
+  brandName?: string;
+  changedByName?: string;
+  effectiveFrom?: string;
+  locationId?: string;
+  locationName?: string;
+  scopeType?: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION";
+  version?: number;
+}
+
+export interface OperationsPolicyPlacements {
+  placements?: Array<OperationsPolicyPlacement>;
+  policyCode?: string;
 }
 
 export interface OperationsRegionControllerLocaleSetResponse {
@@ -4944,8 +5003,8 @@ export interface OrderActionResponse {
 }
 
 export interface OrderBoardColumnsChange {
-  hide?: Array<"branch" | "channel" | "customer" | "items" | "payment" | "courier" | "createdBy" | "acceptedBy" | "courierType" | "discount">;
-  show?: Array<"branch" | "channel" | "customer" | "items" | "payment" | "courier" | "createdBy" | "acceptedBy" | "courierType" | "discount">;
+  hide?: Array<"branch" | "channel" | "customer" | "items" | "payment" | "courier" | "createdBy" | "acceptedBy" | "courierType" | "discount" | "courierEta" | "source" | "fiscal" | "distance" | "externalNumber">;
+  show?: Array<"branch" | "channel" | "customer" | "items" | "payment" | "courier" | "createdBy" | "acceptedBy" | "courierType" | "discount" | "courierEta" | "source" | "fiscal" | "distance" | "externalNumber">;
 }
 
 export interface OrderBoardPreferencesDocument {
@@ -9685,7 +9744,7 @@ export interface Operations {
   "activateRedemptionPolicy": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/redemption-policies/{policyId}/activate"; request: { parameters: { path: { brandId: string; policyId: string; tenantId: string } } }; responses: { "200": unknown } };
   "retireRedemptionPolicy": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/redemption-policies/{policyId}/retire"; request: { parameters: { path: { brandId: string; policyId: string; tenantId: string } } }; responses: { "200": unknown } };
   "mapConfig": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/map-config"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": MapConfigResponse } };
-  "board_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/orders/board"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { callbackRequested?: boolean; channelCode?: string; courierId?: string; createdByActorId?: string; cursor?: string; fiscalStatus?: Array<string>; from?: string; fulfillmentMode?: string; late?: boolean; limit?: number; locationId?: Array<string>; marketplaceBindingId?: string; origin?: string; paymentMethodCode?: string; paymentStatus?: string; problem?: boolean; reference?: string; status?: Array<string>; to?: string } } }; responses: { "200": PageOperationsOrderControllerOrderSummaryResponse } };
+  "board_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/orders/board"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { callbackRequested?: boolean; channelCode?: string; courierId?: string; createdByActorId?: string; cursor?: string; fiscalStatus?: Array<string>; from?: string; fulfillmentMode?: string; include?: Array<string>; late?: boolean; limit?: number; locationId?: Array<string>; marketplaceBindingId?: string; origin?: string; paymentMethodCode?: string; paymentStatus?: string; problem?: boolean; reference?: string; status?: Array<string>; to?: string } } }; responses: { "200": PageOperationsOrderControllerOrderSummaryResponse } };
   "counts_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/orders/counts"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { period?: "ALL_TIME" | "BUSINESS_DAY" } } }; responses: { "200": BrandOrderCountsResponse } };
   "marketplaceBindings_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/orders/marketplace-bindings"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { locationId?: Array<string> } } }; responses: { "200": MarketplaceBindingsResponse } };
   "forBrand": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/orders/operators/today"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": OperatorTodayLeaderboardResponse } };
@@ -9746,9 +9805,10 @@ export interface Operations {
   "get_7": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/terms-documents/{version}"; request: { parameters: { path: { brandId: string; tenantId: string; version: number } } }; responses: { "200": TermsVersionView } };
   "cashHandovers": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/cash-handovers"; request: { parameters: { path: { tenantId: string }; query: { limit?: number; locationId?: string; status?: string } } }; responses: { "200": Array<CashHandoverResponse> } };
   "confirmCash": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/cash-handovers/{handoverId}/confirm"; request: { parameters: { path: { handoverId: string; tenantId: string } }; body: ConfirmCashRequest }; responses: { "200": unknown } };
-  "keys": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/configuration/keys"; request: { parameters: Record<string, never> }; responses: { "200": Array<OperationsConfigurationKeyResponse> } };
+  "keys": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/configuration/keys"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<OperationsConfigurationKeyResponse> } };
   "resolution": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/configuration/keys/{code}/resolution"; request: { parameters: { path: { code: string; tenantId: string }; query: { brandId?: string; locationId?: string; scopeType: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION" } } }; responses: { "200": OperationsConfigurationResolutionResponse } };
   "setValue": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/configuration/keys/{code}/values"; request: { parameters: { path: { code: string; tenantId: string } }; body: OperationsSetConfigurationValueRequest }; responses: { "200": OperationsConfigurationValueResponse } };
+  "placements": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/configuration/placements"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OperationsConfigurationPlacementsResponse } };
   "suspend_3": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-engagements/{engagementId}/suspend"; request: { parameters: { path: { engagementId: string; tenantId: string } }; body: SuspendRequest }; responses: { "200": unknown } };
   "verify_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-engagements/{engagementId}/verify"; request: { parameters: { path: { engagementId: string; tenantId: string } }; body: VerifyRequest }; responses: { "200": EngagementResponse } };
   "courierGroups": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/courier-groups"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<CourierGroupResponse> } };
@@ -10075,7 +10135,7 @@ export interface Operations {
   "list_9": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { limit?: number; status?: Array<string> } } }; responses: { "200": Array<OperationsOrderControllerOrderSummaryResponse> } };
   "place": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; locationId: string; tenantId: string } }; body: PlaceOrderRequest }; responses: { "200": PlaceOrderResponse } };
   "aggregatorEntry": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/aggregator-entries"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; locationId: string; tenantId: string } }; body: AggregatorOrderRequest }; responses: { "200": PlaceOrderResponse } };
-  "board": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/board"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { callbackRequested?: boolean; channelCode?: string; courierId?: string; createdByActorId?: string; cursor?: string; fiscalStatus?: Array<string>; from?: string; fulfillmentMode?: string; late?: boolean; limit?: number; marketplaceBindingId?: string; origin?: string; paymentMethodCode?: string; paymentStatus?: string; problem?: boolean; reference?: string; status?: Array<string>; to?: string } } }; responses: { "200": PageOperationsOrderControllerOrderSummaryResponse } };
+  "board": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/board"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { callbackRequested?: boolean; channelCode?: string; courierId?: string; createdByActorId?: string; cursor?: string; fiscalStatus?: Array<string>; from?: string; fulfillmentMode?: string; include?: Array<string>; late?: boolean; limit?: number; marketplaceBindingId?: string; origin?: string; paymentMethodCode?: string; paymentStatus?: string; problem?: boolean; reference?: string; status?: Array<string>; to?: string } } }; responses: { "200": PageOperationsOrderControllerOrderSummaryResponse } };
   "branchOverrideReasons": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/branch-override-reasons"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<BranchOverrideReasonResponse> } };
   "resolveBranches": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/branch-resolution"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BranchResolutionRequest }; responses: { "200": BranchResolutionResponse } };
   "bulkAction": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/bulk-actions"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BulkActionRequest }; responses: { "200": BulkActionResponse } };

@@ -134,5 +134,18 @@ public enum OrderActionCode {
      * ORDER_STATE_OVERRIDE} and offers it exactly where {@code
      * OrderStateMachine.compensatingTransitionsFrom} names an edge.
      */
-    OVERRIDE
+    OVERRIDE,
+
+    /**
+     * Put one of the order's documents on paper again (orders.md §2.12's {@code p}, ADR 0154):
+     * {@code POST .../orders/{orderId}/print-jobs}, under {@code PRINT_REPRINT} at the order's branch.
+     *
+     * <p>Server-emitted like every other code, so a board row carries it only where the call can work as far as
+     * the order's branch can tell: the person holds the capability <em>and</em> printing is switched on for the
+     * tenant there ({@code feature.printing}, dark by default) <em>and</em> the branch has a printer to send to
+     * ({@link uz.horecaos.platform.ordering.api.OrderReprintPort}). While the flag is off the code is simply
+     * absent, and the console's {@code p} has nothing to act on. It targets the order's print panel; it never
+     * prints by itself, because a reprint asks which document and why (ADR 0154, decision 6).
+     */
+    REPRINT
 }

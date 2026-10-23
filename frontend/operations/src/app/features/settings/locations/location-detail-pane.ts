@@ -37,6 +37,7 @@ import {
   ScheduleSummaryView,
   ServiceSummaryResponse,
 } from './locations-api';
+import { registerLocationDetailKeys } from './location-detail-keys';
 
 type LocationTab =
   'basics' | 'hours' | 'load' | 'fiscal' | 'channels' | 'notifications' | 'floorplan';
@@ -112,6 +113,8 @@ const FULFILLMENT_MODES = ['DELIVERY', 'PICKUP', 'DINE_IN'] as const;
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LocationDetailPane {
+  /** brands-and-locations.md §4.7: the branch record's keys. */
+  private readonly keys = registerLocationDetailKeys();
   private readonly api = inject(LocationsApi);
   private readonly baseLocation = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);

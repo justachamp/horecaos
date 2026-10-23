@@ -1,3 +1,4 @@
+import { brandListPath } from './brand-list-path';
 import { LocationScope } from './operations-paths';
 
 /**
@@ -60,7 +61,8 @@ export const settingsPaths = {
 
   /** `OperationsBrandController.list` — the scope bar's brand picker and 10.1's index. */
   brands(scope: LocationScope): string {
-    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/brands`;
+    // Held in a module of its own so the eager `CurrentBrand` need not import this whole table.
+    return brandListPath(scope);
   },
 
   /** `OperationsBrandController.get`. */
@@ -839,6 +841,14 @@ export const settingsPaths = {
   /** `OperationsConfigurationController.resolution` — one key, one scope, and why. */
   configurationResolution(tenantId: string, code: string): string {
     return `${this.configurationKeys(tenantId)}/${enc(code)}/resolution`;
+  },
+
+  /**
+   * `OperationsConfigurationController.placements` -- where every tenant-visible key and every listed policy is
+   * set, in one read (settings.md §10.0 «Find a setting»).
+   */
+  configurationPlacements(tenantId: string): string {
+    return `${OPERATIONS}/tenants/${enc(tenantId)}/configuration/placements`;
   },
 
   /** `OperationsConfigurationController.setValue`. */

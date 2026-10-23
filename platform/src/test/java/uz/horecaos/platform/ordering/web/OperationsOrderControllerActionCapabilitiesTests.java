@@ -132,6 +132,19 @@ class OperationsOrderControllerActionCapabilitiesTests {
         assertThat(granted).containsExactly(Capability.DELIVERY_MANUAL_ASSIGN);
     }
 
+    /** ADR 0154: the seventh policy capability, read exactly like the other six -- at the order's own branch. */
+    @Test
+    void grantingOnlyPrintReprintYieldsExactlyThatOneCapability() {
+        AuthorizationService authorization = mock(AuthorizationService.class);
+        when(authorization.has(any(), any(), any())).thenReturn(false);
+        when(authorization.has(SUBJECT, Capability.PRINT_REPRINT, ResourceScope.location(TENANT, BRAND, LOCATION)))
+                .thenReturn(true);
+
+        Set<Capability> granted = controllerFor(authorization).grantedOrderActionCapabilities(TENANT, BRAND, LOCATION);
+
+        assertThat(granted).containsExactly(Capability.PRINT_REPRINT);
+    }
+
     @Test
     void grantingEveryPolicyCapabilityYieldsAllOfThem() {
         AuthorizationService authorization = mock(AuthorizationService.class);
@@ -148,7 +161,9 @@ class OperationsOrderControllerActionCapabilitiesTests {
                         // ADR 0019 amendment (ADR 0110), wave P41.
                         Capability.ORDER_STATE_OVERRIDE,
                         // Gap map row 1.1e.
-                        Capability.DELIVERY_MANUAL_ASSIGN);
+                        Capability.DELIVERY_MANUAL_ASSIGN,
+                        // ADR 0154: REPRINT.
+                        Capability.PRINT_REPRINT);
     }
 
     /**
@@ -182,6 +197,8 @@ class OperationsOrderControllerActionCapabilitiesTests {
                         eq(SUBJECT),
                         eq(Capability.DELIVERY_MANUAL_ASSIGN),
                         eq(ResourceScope.location(TENANT, BRAND, LOCATION)));
+        verify(authorization)
+                .has(eq(SUBJECT), eq(Capability.PRINT_REPRINT), eq(ResourceScope.location(TENANT, BRAND, LOCATION)));
     }
 
     /**
@@ -235,6 +252,7 @@ class OperationsOrderControllerActionCapabilitiesTests {
                         Capability.ORDER_AMEND,
                         Capability.ORDER_STATE_OVERRIDE,
                         Capability.DELIVERY_MANUAL_ASSIGN,
+                        Capability.PRINT_REPRINT,
                         Capability.PAYMENT_INITIATE);
     }
 }

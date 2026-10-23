@@ -1,0 +1,61 @@
+/* Chrome (backdrop, panel, Escape, focus trap) is `q-modal`; this styles what is projected into it. */
+
+.palette {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-inline-size: min(40rem, 100%);
+}
+
+.palette__input {
+  padding: 10px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+}
+
+.palette__list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-block-size: 50vh;
+  overflow-y: auto;
+}
+
+.palette__item {
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1.2fr) minmax(0, 1.5fr);
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}
+
+.palette__item--active {
+  background: var(--q-info-tint);
+}
+
+.palette__group {
+  color: var(--q-ink-subtle);
+}
+
+.palette__hint {
+  color: var(--q-ink-muted);
+}
+
+.palette__empty {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+@media (max-width: 40rem) {
+  .palette__item {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}

@@ -80,6 +80,7 @@ export const coreUzLatn: AreaMessages<typeof coreEn> = {
   'orders.action.amend': 'Oʻzgartirish',
   'orders.action.assignCourier': 'Kuryer tayinlash',
   'orders.action.issueInvoice': 'Hisob-faktura chiqarish',
+  'orders.action.reprint': 'Chop etish',
   'orders.action.advance.PREPARING': 'Oshxonaga',
   'orders.action.advance.READY': 'Tayyor',
   'orders.action.advance.FULFILLING': 'Yetkazishga',

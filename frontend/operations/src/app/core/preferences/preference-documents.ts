@@ -33,6 +33,12 @@ export const ORDER_BOARD_COLUMN_KEYS = [
   'acceptedBy',
   'courierType',
   'discount',
+  // Schema 2 (batch 21): the board read now carries the field each of these draws.
+  'courierEta',
+  'source',
+  'fiscal',
+  'distance',
+  'externalNumber',
 ] as const;
 export type OrderBoardColumnKey = (typeof ORDER_BOARD_COLUMN_KEYS)[number];
 

@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   computed,
   effect,
   inject,
@@ -74,6 +75,7 @@ export class OrderPrintPanel {
   private readonly api = inject(PrintingApi);
   private readonly flags = inject(FeatureFlags);
   private readonly browser = inject(BrowserPrinter);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly i18n = inject(I18n);
 
   readonly scope = input.required<LocationScope>();
@@ -120,6 +122,20 @@ export class OrderPrintPanel {
         untracked(() => void this.loadPrinters(scope));
       }
     });
+  }
+
+  /**
+   * Brings the panel into view and puts the cursor on its first control -- what the row's «Печать» (orders.md
+   * §2.12's `p`) and the pane's header action both ask for. Does nothing while the panel is hidden (printing
+   * off): the action that calls this is absent then, and a stale click must not scroll to nothing.
+   */
+  reveal(): void {
+    if (!this.visible()) {
+      return;
+    }
+    const host = this.host.nativeElement;
+    host.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    host.querySelector<HTMLElement>('[data-testid="order-print-document"]')?.focus();
   }
 
   protected async print(): Promise<void> {

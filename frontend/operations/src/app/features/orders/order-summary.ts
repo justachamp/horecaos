@@ -138,4 +138,38 @@ export interface OrderSummaryResponse {
    * header and the kitchen ticket.
    */
   readonly table?: OrderTableView | null;
+
+  // ----- the board's own facts (gap map row `1.1`, ADR 0160 «Board columns») -----------------------
+  // Each is read on the platform in one batch per page, through the module that owns it. `include` on
+  // the board request names the optional ones (`courierEta`, `source`, `fiscal`, `distance`,
+  // `externalNumber`); the payment method and the item summary are always on a board row. Every one is
+  // null when nothing was asked or the owning module has nothing to say, and a cell draws «—» for that --
+  // never a guess.
+
+  /** `ordering.orders.origin`: `HORECAOS` for the tenant's own channels, `MARKETPLACE` for an aggregator's. */
+  readonly origin?: string | null;
+  /**
+   * The ETA the winning partner quote named for the order's delivery plan (a snapshot, not a live feed).
+   * RFC 3339, UTC. Null for an order a house courier carries: nothing computes an ETA for those, and the
+   * cell says so with a dash instead of drawing a made-up time.
+   */
+  readonly courierEtaAt?: string | null;
+  /** The channel's `SalesChannelSystemType` name (`WEB`, `TELEGRAM`, `AGGREGATOR`, ...), resolved on the server. */
+  readonly channelSystemType?: string | null;
+  /** The channel's own free-text icon; an unknown value draws the generic one. */
+  readonly channelIcon?: string | null;
+  /** The tenant's name for the channel: the source icon's title. */
+  readonly channelDisplayName?: string | null;
+  /** The platform's `PaymentMethod` code of the order's payment intent (`CASH`, `CLICK`, `PAYME`, ...). */
+  readonly paymentMethodCode?: string | null;
+  /** How many positions the order holds now (a combo is one position). */
+  readonly itemCount?: number | null;
+  /** The name of the first position, as it was sold. */
+  readonly firstItemName?: string | null;
+  /** `fiscal.fiscal_documents.status` of the sale document. */
+  readonly fiscalStatus?: string | null;
+  /** The delivery plan's route distance. */
+  readonly distanceMeters?: number | null;
+  /** The number the partner or the POS knows the order by. */
+  readonly externalNumber?: string | null;
 }

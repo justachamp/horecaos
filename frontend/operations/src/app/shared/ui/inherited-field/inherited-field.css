@@ -110,3 +110,22 @@
   color: var(--q-ink-subtle);
   word-break: break-word;
 }
+
+/* Locked by plan (settings.md §1.2): the field is greyed, and nothing in it acts. */
+.field--locked .field__label,
+.field--locked .field__value {
+  opacity: 0.6;
+}
+
+.field__locked {
+  flex-basis: 100%;
+}
+
+.field__lockedWhat {
+  margin: 4px 0 0;
+  color: var(--q-ink-subtle);
+}
+
+.field__more {
+  color: var(--q-primary);
+}

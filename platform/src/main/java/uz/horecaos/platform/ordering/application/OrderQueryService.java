@@ -88,6 +88,7 @@ public class OrderQueryService implements OrderCountsQuery {
     private final Clock clock;
     private final OrderBoardReadModels boardReadModels;
     private final StaffDirectory staffDirectory;
+    private final OrderBoardEnrichment boardEnrichment;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderQueryService(
@@ -102,8 +103,10 @@ public class OrderQueryService implements OrderCountsQuery {
             AuditRecorder audit,
             Clock clock,
             OrderBoardReadModels boardReadModels,
-            StaffDirectory staffDirectory) {
+            StaffDirectory staffDirectory,
+            OrderBoardEnrichment boardEnrichment) {
         this.staffDirectory = staffDirectory;
+        this.boardEnrichment = boardEnrichment;
         this.orders = orders;
         this.processes = processes;
         this.payments = payments;
@@ -436,6 +439,21 @@ public class OrderQueryService implements OrderCountsQuery {
     @Transactional(readOnly = true)
     public List<JdbcOrderStore.OrderBoardRow> forLocation(
             JdbcOrderStore.OrderListQuery query, @Nullable UUID cursorOrderId, int limit) {
+        return forLocation(query, cursorOrderId, limit, Set.of());
+    }
+
+    /**
+     * {@link #forLocation(JdbcOrderStore.OrderListQuery, UUID, int)} with the optional board facts the
+     * caller asked for (gap map row {@code 1.1}): the courier ETA, the source channel's presentation, the
+     * fiscal status, the delivery distance and the external number are each read, in one batch per page,
+     * only when named in {@code include}. The payment method and the item summary are always read.
+     */
+    @Transactional(readOnly = true)
+    public List<JdbcOrderStore.OrderBoardRow> forLocation(
+            JdbcOrderStore.OrderListQuery query,
+            @Nullable UUID cursorOrderId,
+            int limit,
+            Set<OrderBoardEnrichment.Fact> include) {
 
         @Nullable Instant before = null;
         if (cursorOrderId != null) {
@@ -444,14 +462,17 @@ public class OrderQueryService implements OrderCountsQuery {
         }
         JdbcOrderStore.OrderListQuery resolved = boardReadModels.withLatenessResolved(query);
         List<JdbcOrderStore.OrderBoardRow> rows = orders.listForLocation(resolved, before, cursorOrderId, limit);
-        return withActorNames(
+        return boardEnrichment.enrich(
                 query.tenantId(),
-                withTables(
+                withActorNames(
                         query.tenantId(),
-                        withPresentablePayments(
+                        withTables(
                                 query.tenantId(),
-                                withAmendmentAwaitingOperator(
-                                        query.tenantId(), withCourierAssignments(query.tenantId(), rows)))));
+                                withPresentablePayments(
+                                        query.tenantId(),
+                                        withAmendmentAwaitingOperator(
+                                                query.tenantId(), withCourierAssignments(query.tenantId(), rows))))),
+                include);
     }
 
     /**
@@ -617,6 +638,16 @@ public class OrderQueryService implements OrderCountsQuery {
 
     private static boolean couldOfferInvoice(OrderRow order) {
         return !order.status().terminal() && OrderActionsPolicy.paymentMayBeOwed(order.paymentStatusProjection());
+    }
+
+    /**
+     * Whether this order's branch can print its documents -- the detail-screen counterpart to the board's
+     * batched {@link JdbcOrderStore.OrderBoardFacts#reprintAvailable()}, so the two screens never disagree
+     * about whether {@code REPRINT} is offered.
+     */
+    @Transactional(readOnly = true)
+    public boolean reprintAvailableFor(UUID tenantId, UUID brandId, UUID locationId) {
+        return boardEnrichment.reprintAvailable(tenantId, brandId, locationId);
     }
 
     /**

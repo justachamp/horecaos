@@ -17,6 +17,7 @@ import { CourierPositionsApi } from './courier-positions-api';
 import { DispatchApi, ExceptionResponse, PlanQueueResponse } from './dispatch-api';
 import { DispatchBoardPage } from './dispatch-board-page';
 import { MapRegionService } from './map-region';
+import { ShortcutRegistry } from '../../shared/keyboard/shortcut-registry';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 
@@ -895,5 +896,213 @@ describe('DispatchBoardPage', () => {
     await settle();
 
     expect(positions.fleet.mock.calls.length).toBe(reads);
+  });
+
+  // ---------------------------------------------------------------- the keys (couriers.md §3)
+
+  describe('the keys (couriers.md §3, gap map row X.1)', () => {
+    function key(value: string, init: KeyboardEventInit = {}, target?: HTMLElement): boolean {
+      const event = new KeyboardEvent('keydown', {
+        key: value,
+        bubbles: true,
+        cancelable: true,
+        ...init,
+      });
+      Object.defineProperty(event, 'target', {
+        value: target ?? document.activeElement ?? document.body,
+      });
+      return TestBed.inject(ShortcutRegistry).dispatch(event);
+    }
+
+    const cards = (): HTMLElement[] => [
+      ...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+        '[data-testid="dispatch-card"]',
+      ),
+    ];
+
+    const selected = (): boolean[] =>
+      cards().map(
+        (card) =>
+          card.querySelector<HTMLInputElement>('[data-testid="dispatch-card-select"]')?.checked ??
+          false,
+      );
+
+    /** Puts the cursor on card `index` the way an operator does: j from the top. */
+    function cursorOn(index: number): HTMLElement {
+      (document.activeElement as HTMLElement | null)?.blur();
+      for (let step = 0; step <= index; step++) {
+        key('j');
+      }
+      return cards()[index];
+    }
+
+    async function settleScreen(): Promise<void> {
+      await flushMicrotasks();
+      fixture.detectChanges();
+    }
+
+    afterEach(() => {
+      document.body.querySelectorAll('q-confirm-dialog').forEach((node) => node.remove());
+    });
+
+    it('is registered while the board is on screen and lists only the keys the board has controls for', async () => {
+      await render([UNASSIGNED_PLAN, CARRIED_PLAN]);
+      const scope = TestBed.inject(ShortcutRegistry)
+        .scopes()
+        .find((candidate) => candidate.id === 'dispatch-board')!;
+      const caps = scope.shortcuts.flatMap((shortcut) => shortcut.caps);
+
+      expect(scope.title()).toBe('Dispatch board');
+      expect(caps).toEqual(
+        expect.arrayContaining(['j', 'k', 'x', 'Shift+X', 'a', 'r', 'e', 'u', 'm', 'Esc']),
+      );
+      expect(caps, 'no search box, status tabs or fleet rail to bind them to').not.toContain('/');
+
+      fixture.destroy();
+      expect(
+        TestBed.inject(ShortcutRegistry)
+          .scopes()
+          .some((candidate) => candidate.id === 'dispatch-board'),
+      ).toBe(false);
+    });
+
+    it('j and k move focus between the cards, and stop at the ends', async () => {
+      await render([UNASSIGNED_PLAN, CARRIED_PLAN, MANUAL_ACTION_PLAN]);
+      const all = cards();
+
+      expect(key('j', {}, document.body)).toBe(true);
+      expect(document.activeElement).toBe(all[0]);
+      key('j');
+      expect(document.activeElement).toBe(all[1]);
+      key('j');
+      key('j');
+      expect(document.activeElement, 'stops at the last card').toBe(all[2]);
+      key('k');
+      expect(document.activeElement).toBe(all[1]);
+    });
+
+    it('x selects the focused card and x again deselects it; a card that cannot be selected has no key to press', async () => {
+      await render([UNASSIGNED_PLAN, { ...CARRIED_PLAN, status: 'DELIVERED' }]);
+      cursorOn(0);
+
+      expect(key('x')).toBe(true);
+      await settleScreen();
+      expect(selected()).toEqual([true, false]);
+      key('x');
+      await settleScreen();
+      expect(selected()).toEqual([false, false]);
+
+      cursorOn(1);
+      expect(key('x'), 'a finished plan is not bulk-selectable: it draws no checkbox').toBe(false);
+    });
+
+    it('Shift+X selects every card from the last one selected to the focused one', async () => {
+      await render([
+        UNASSIGNED_PLAN,
+        { ...UNASSIGNED_PLAN, planId: 'plan-b', orderId: 'order-b' },
+        { ...UNASSIGNED_PLAN, planId: 'plan-c', orderId: 'order-c' },
+      ]);
+      const all = cards();
+      cursorOn(0);
+      key('x');
+      await settleScreen();
+      cursorOn(2);
+
+      expect(key('X', { shiftKey: true })).toBe(true);
+      await settleScreen();
+
+      expect(selected()).toEqual([true, true, true]);
+    });
+
+    it('a selects the card and takes the cursor to the courier picker, which the selection reveals', async () => {
+      await render();
+      cursorOn(0);
+
+      expect(key('a')).toBe(true);
+      await new Promise<void>((resolve) => setTimeout(resolve, 80));
+      fixture.detectChanges();
+      await new Promise<void>((resolve) => setTimeout(resolve, 80));
+
+      expect(selected()).toEqual([true]);
+      expect(document.activeElement).toBe(
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="dispatch-bulk-courier-select"]',
+        ),
+      );
+    });
+
+    it('Esc clears the selection and does nothing when there is none', async () => {
+      await render();
+      const all = cards();
+      cursorOn(0);
+      expect(key('Escape'), 'nothing selected: nothing to clear').toBe(false);
+      key('x');
+      await settleScreen();
+      expect(selected()).toEqual([true]);
+
+      expect(key('Escape')).toBe(true);
+      await settleScreen();
+
+      expect(selected()).toEqual([false]);
+    });
+
+    it('e opens the external-courier dialog for an unassigned card and not for a carried one', async () => {
+      await render([UNASSIGNED_PLAN, CARRIED_PLAN]);
+      const all = cards();
+      cursorOn(1);
+      expect(key('e'), 'a carried plan draws no external-courier control').toBe(false);
+
+      cursorOn(0);
+      expect(key('e')).toBe(true);
+      await settleScreen();
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('q-external-courier-dialog'),
+      ).not.toBeNull();
+    });
+
+    it('u asks before it unassigns, and unassigns only on yes', async () => {
+      await render([UNASSIGNED_PLAN, CARRIED_PLAN]);
+      dispatchApi.unassign.mockResolvedValue({ applied: true });
+      const all = cards();
+      cursorOn(0);
+      expect(key('u'), 'an unassigned card has no courier to take off').toBe(false);
+
+      cursorOn(1);
+      expect(key('u')).toBe(true);
+      await flushMicrotasks();
+      const dialog = document.body.querySelector('q-confirm-dialog')!;
+      expect(dialog.textContent).toContain('Take the courier off this order?');
+      expect(dispatchApi.unassign).not.toHaveBeenCalled();
+      [...dialog.querySelectorAll<HTMLButtonElement>('button')]
+        .find((button) => button.textContent!.trim() === 'Keep')!
+        .click();
+      await flushMicrotasks();
+      expect(dispatchApi.unassign).not.toHaveBeenCalled();
+
+      cursorOn(1);
+      key('u');
+      await flushMicrotasks();
+      [...document.body.querySelectorAll<HTMLButtonElement>('q-confirm-dialog button')]
+        .find((button) => button.textContent!.trim() === 'Unassign')!
+        .click();
+      await flushMicrotasks();
+
+      expect(dispatchApi.unassign).toHaveBeenCalledOnce();
+    });
+
+    it('m shows and hides the map', async () => {
+      await render();
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[data-testid="dispatch-map"]')).toBeNull();
+
+      expect(key('m', {}, document.body)).toBe(true);
+      await settleScreen();
+      expect(host.querySelector('[data-testid="dispatch-map"]')).not.toBeNull();
+
+      key('m', {}, document.body);
+      await settleScreen();
+      expect(host.querySelector('[data-testid="dispatch-map"]')).toBeNull();
+    });
   });
 });

@@ -77,6 +77,7 @@ import {
   computeBasketTotal,
   lineUnitAmountMinor,
 } from './new-order-total';
+import { registerNewOrderKeys } from './new-order-keys';
 
 /**
  * The tenant's operator/call-centre channel is `tenant.sales_channels` data
@@ -260,6 +261,8 @@ interface PendingComboSelection {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class NewOrderPage implements OnInit {
+  /** orders.md §5.8: Ctrl+Enter creates, Esc returns to the pane's first field and, twice, leaves. */
+  private readonly keys = registerNewOrderKeys();
   private readonly api = inject(NewOrderApi);
   private readonly customersApi = inject(CustomersApi);
   private readonly channelsApi = inject(SalesChannelsApi);

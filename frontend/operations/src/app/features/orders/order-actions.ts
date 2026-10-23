@@ -58,6 +58,12 @@ import { MessageKey } from '../../core/i18n/messages.en';
  * link live in the order detail's payment panel (`q-order-payment-panel`), so
  * `order-queue.ts`'s handler opens the order and `order-detail-pane.ts`'s opens
  * that form — again one implementation of the idempotent call, not two.
+ *
+ * `REPRINT` (orders.md §2.12's `p`, ADR 0154) is emitted by the server only where the order's branch has
+ * `feature.printing` on and a printer to send to, and the person holds `print.reprint` there; while printing
+ * is dark it is simply absent from `actions[]`. The reprint asks which document and why, so it never prints
+ * by itself: `order-queue.ts`'s handler opens the order at its print section, and `order-detail-pane.ts`'s
+ * brings `q-order-print-panel` into view — again one implementation, the panel's.
  */
 export const ORDER_ACTION_CODES = [
   'APPROVE',
@@ -70,6 +76,7 @@ export const ORDER_ACTION_CODES = [
   'ASSIGN_COURIER',
   'RESOLVE',
   'ISSUE_INVOICE',
+  'REPRINT',
 ] as const;
 export type OrderActionCode = (typeof ORDER_ACTION_CODES)[number];
 
@@ -160,6 +167,8 @@ export function actionLabel(
       return translate('orders.action.assignCourier');
     case 'ISSUE_INVOICE':
       return translate('orders.action.issueInvoice');
+    case 'REPRINT':
+      return translate('orders.action.reprint');
     case 'RESOLVE':
       // Reuses the amendment history table's own word for the identical
       // action (`order-detail-pane.html`'s RESOLVE row, wave 10) — see this

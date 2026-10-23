@@ -186,6 +186,39 @@ test('code that runs before any route may only need core', async () => {
   assert.match(problems[0], /src\/main\.ts -> src\/app\/app\.routes\.ts -> src\/app\/toast\.ts/);
 });
 
+test('a file that loads its areas itself covers what it imports, and only those areas', async () => {
+  const dir = tree(
+    `export const routes = [\n  { path: 'shell', loadComponent: () => import('./shell').then((m) => m.Shell) },\n];\n`,
+    {
+      'src/app/shell.ts': `import { Palette } from './palette';\nexport const Shell = Palette;\n`,
+      'src/app/palette.ts': `import { names } from './names';\nexport const Palette = (i18n) => { void i18n.require(['orders']); return names(i18n); };\n`,
+      'src/app/names.ts': `export const names = (i18n) => [i18n.t('orders.title'), i18n.t('kitchen.title')];\n`,
+    },
+  );
+
+  const problems = problemsOf(await analyseRoutes(dir));
+
+  assert.equal(problems.length, 1, problems.join('\n'));
+  assert.match(problems[0], /route 'shell' needs the 'kitchen' messages/);
+  assert.match(problems[0], /shell\.ts -> src\/app\/palette\.ts -> src\/app\/names\.ts/);
+});
+
+test('a file reached another way than through the one that loads still needs the route to declare', async () => {
+  const dir = tree(
+    `export const routes = [\n  { path: 'shell', loadComponent: () => import('./shell').then((m) => m.Shell) },\n];\n`,
+    {
+      'src/app/shell.ts': `import { Palette } from './palette';\nimport { names } from './names';\nexport const Shell = [Palette, names];\n`,
+      'src/app/palette.ts': `import { names } from './names';\nexport const Palette = (i18n) => { void i18n.require(['orders']); return names(i18n); };\n`,
+      'src/app/names.ts': `export const names = (i18n) => i18n.t('orders.title');\n`,
+    },
+  );
+
+  const problems = problemsOf(await analyseRoutes(dir));
+
+  assert.equal(problems.length, 1, problems.join('\n'));
+  assert.match(problems[0], /route 'shell' needs the 'orders' messages \(e\.g\. 'orders\.title', reached via src\/app\/shell\.ts -> src\/app\/names\.ts\)/);
+});
+
 test('declaring an area that does not exist is reported', async () => {
   const dir = tree(
     GUARD_IMPORT +

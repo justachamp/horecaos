@@ -558,6 +558,7 @@ class OrderActionsPolicyTests {
             case ASSIGN_COURIER -> true; // DispatchController .../dispatch/plans/{id}/assign (gap map 1.1e)
             case RESOLVE -> true; // POST .../amendments/{id}/confirmation (gap map 1.1e)
             case ISSUE_INVOICE -> true; // POST /operations/.../orders/{id}/payment/re-presentations (gap map 1.1e)
+            case REPRINT -> true; // POST .../orders/{orderId}/print-jobs (ADR 0154, orders.md 2.12's p)
         };
     }
 
@@ -574,7 +575,8 @@ class OrderActionsPolicyTests {
                         OrderActionCode.COMPLETE,
                         OrderActionCode.ASSIGN_COURIER,
                         OrderActionCode.RESOLVE,
-                        OrderActionCode.ISSUE_INVOICE);
+                        OrderActionCode.ISSUE_INVOICE,
+                        OrderActionCode.REPRINT);
     }
 
     /**
@@ -598,8 +600,8 @@ class OrderActionsPolicyTests {
                 // actions for a capability present, so anything offered with less
                 // than the full grant is offered with the full grant too. Sweeping
                 // the maximum is exhaustive for "is this code ever emitted at all".
-                for (OrderAction action :
-                        OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS_WITH_INVOICE, true, true, true)) {
+                for (OrderAction action : OrderActionsPolicy.availableFor(
+                        status, mode, ALL_ACTION_CAPS_WITH_INVOICE, true, true, true, true)) {
                     assertThat(hasRealRouteToday(action.code()))
                             .as("%s offered at %s/%s must have a real route", action.code(), status, mode)
                             .isTrue();
@@ -798,6 +800,90 @@ class OrderActionsPolicyTests {
                 }
             }
         }
+    }
+
+    // -------------------------------------------------------- reprint (ADR 0154, orders.md 2.12's p)
+
+    /** Every capability the seven-argument overload reads: the six-argument form's, and the one REPRINT gates on. */
+    private static final Set<Capability> ALL_ACTION_CAPS_WITH_REPRINT;
+
+    static {
+        EnumSet<Capability> withReprint = EnumSet.copyOf(ALL_ACTION_CAPS_WITH_INVOICE);
+        withReprint.add(Capability.PRINT_REPRINT);
+        ALL_ACTION_CAPS_WITH_REPRINT = withReprint;
+    }
+
+    @Test
+    void theSevenArgumentOverloadAddsOnlyReprintOnTopOfTheSixArgumentForm() {
+        for (OrderStatus status : OrderStatus.values()) {
+            for (FulfillmentMode mode : FulfillmentMode.values()) {
+                for (boolean printAvailable : new boolean[] {true, false}) {
+                    List<OrderAction> base = OrderActionsPolicy.availableFor(
+                            status, mode, ALL_ACTION_CAPS_WITH_REPRINT, true, true, true);
+                    List<OrderAction> withReprint = OrderActionsPolicy.availableFor(
+                            status, mode, ALL_ACTION_CAPS_WITH_REPRINT, true, true, true, printAvailable);
+
+                    assertThat(withReprint.stream()
+                                    .filter(a -> a.code() != OrderActionCode.REPRINT)
+                                    .toList())
+                            .as("%s/%s printAvailable=%s, minus REPRINT", status, mode, printAvailable)
+                            .isEqualTo(base);
+                }
+            }
+        }
+    }
+
+    /**
+     * {@code REPRINT} is offered exactly when the order's branch can print and the caller holds {@code
+     * PRINT_REPRINT} -- at every status, because the receipt of an order that has ended is the document an
+     * operator reprints most, and in every fulfilment mode.
+     */
+    @Test
+    void reprintAppearsExactlyWhereTheBranchCanPrintAndThePersonMayReprint() {
+        for (OrderStatus status : OrderStatus.values()) {
+            for (FulfillmentMode mode : FulfillmentMode.values()) {
+                boolean both =
+                        OrderActionsPolicy.availableFor(
+                                        status, mode, ALL_ACTION_CAPS_WITH_REPRINT, true, false, false, true)
+                                .stream()
+                                .anyMatch(a -> a.code() == OrderActionCode.REPRINT);
+                boolean noPrinter =
+                        OrderActionsPolicy.availableFor(
+                                        status, mode, ALL_ACTION_CAPS_WITH_REPRINT, true, false, false, false)
+                                .stream()
+                                .anyMatch(a -> a.code() == OrderActionCode.REPRINT);
+                boolean noGrant =
+                        OrderActionsPolicy.availableFor(
+                                        status, mode, ALL_ACTION_CAPS_WITH_INVOICE, true, false, false, true)
+                                .stream()
+                                .anyMatch(a -> a.code() == OrderActionCode.REPRINT);
+
+                assertThat(both)
+                        .as("%s/%s with printer and grant", status, mode)
+                        .isTrue();
+                assertThat(noPrinter)
+                        .as("%s/%s printing dark or no printer", status, mode)
+                        .isFalse();
+                assertThat(noGrant)
+                        .as("%s/%s without print.reprint", status, mode)
+                        .isFalse();
+            }
+        }
+    }
+
+    @Test
+    void reprintIsTheLastActionSoTheOrderedArrayOfTheOthersIsUnchanged() {
+        List<OrderAction> actions = OrderActionsPolicy.availableFor(
+                OrderStatus.CONFIRMED,
+                FulfillmentMode.DELIVERY,
+                ALL_ACTION_CAPS_WITH_REPRINT,
+                true,
+                false,
+                false,
+                true);
+
+        assertThat(actions.getLast().code()).isEqualTo(OrderActionCode.REPRINT);
+        assertThat(actions.getLast().targetStatus()).isNull();
     }
 
     /**

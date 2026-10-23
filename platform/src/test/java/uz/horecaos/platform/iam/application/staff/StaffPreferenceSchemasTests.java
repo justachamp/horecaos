@@ -64,6 +64,11 @@ class StaffPreferenceSchemasTests {
                         StaffPreferenceSurface.ORDER_BOARD,
                         "{\"columns\":{\"show\":[\"courierType\",\"discount\"]}}",
                         "{\"columns\":{\"show\":[\"courierType\",\"discount\"]}}"),
+                // Schema 2 (batch 21): the five columns the board read now carries a field for.
+                Arguments.of(
+                        StaffPreferenceSurface.ORDER_BOARD,
+                        "{\"columns\":{\"show\":[\"courierEta\",\"source\",\"fiscal\",\"distance\",\"externalNumber\"]}}",
+                        "{\"columns\":{\"show\":[\"courierEta\",\"source\",\"fiscal\",\"distance\",\"externalNumber\"]}}"),
                 Arguments.of(
                         StaffPreferenceSurface.ORDER_BOARD,
                         "{\"columns\":{\"hide\":[\"branch\",\"channel\",\"customer\",\"items\",\"payment\",\"courier\"]}}",
@@ -164,8 +169,12 @@ class StaffPreferenceSchemasTests {
                 filter("\"channelCode\":\"\"", "channelCode"),
                 filter("\"paymentMethodCode\":\"cash on delivery\"", "paymentMethodCode"),
                 // --- columns
-                board("{\"columns\":{\"show\":[\"courierEta\"]}}", "document.columns.show"),
-                board("{\"columns\":{\"show\":[\"source\"]}}", "document.columns.show"),
+                board("{\"columns\":{\"show\":[\"courierEta\",\"courierEta\"]}}", "document.columns.show"),
+                board("{\"columns\":{\"hide\":[\"source\"]}}", "document.columns.hide"),
+                board("{\"columns\":{\"hide\":[\"fiscal\"]}}", "document.columns.hide"),
+                board("{\"columns\":{\"show\":[\"distance\"],\"hide\":[\"distance\"]}}", "document.columns.hide"),
+                board("{\"columns\":{\"show\":[\"external_number\"]}}", "document.columns.show"),
+                board("{\"columns\":{\"show\":[\"eta\"]}}", "document.columns.show"),
                 board("{\"columns\":{\"show\":[\"Created By\"]}}", "document.columns.show"),
                 board("{\"columns\":{\"show\":[7]}}", "document.columns.show"),
                 board("{\"columns\":{\"hide\":\"courier\"}}", "document.columns.hide"),
@@ -345,8 +354,12 @@ class StaffPreferenceSchemasTests {
     @Test
     @DisplayName("every surface the code knows has a schema, and a surface the code does not know is not a surface")
     void everySurfaceHasASchemaAndAnUnknownNameIsNone() {
+        assertThat(schemas.currentSchema(StaffPreferenceSurface.SHELL)).isEqualTo(1);
+        assertThat(schemas.currentSchema(StaffPreferenceSurface.ORDER_BOARD))
+                .as("batch 21 added five columns in one bump")
+                .isEqualTo(2);
         for (StaffPreferenceSurface surface : StaffPreferenceSurface.values()) {
-            assertThat(schemas.currentSchema(surface)).isEqualTo(1);
+            assertThat(schemas.currentSchema(surface)).isBetween(1, 2);
         }
         assertThat(StaffPreferenceSurface.ofName("ORDER_BOARD")).isPresent();
         assertThat(StaffPreferenceSurface.ofName("order_board"))
@@ -401,6 +414,24 @@ class StaffPreferenceSchemasTests {
     }
 
     @Test
+    @DisplayName("a schema-1 order board document means the same under schema 2: the one upgrade step is the identity")
+    void aSchemaOneBoardDocumentUpgradesUnchanged() {
+        String stored = "{\"columns\":{\"show\":[\"createdBy\"],\"hide\":[\"courier\"]},"
+                + "\"savedViews\":[{\"id\":\"" + VIEW_ID + "\",\"label\":\"Late\",\"tab\":\"attention\","
+                + "\"filters\":{\"lateOnly\":true}}]}";
+
+        JsonNode upgraded = schemas.upgrade(StaffPreferenceSurface.ORDER_BOARD, json(stored), 1);
+
+        assertThat(schemas.serialize(upgraded)).isEqualTo(stored);
+        assertThat(schemas.serialize(schemas.upgrade(StaffPreferenceSurface.ORDER_BOARD, json(stored), 2)))
+                .as("a document already at the current schema is not touched either")
+                .isEqualTo(stored);
+        assertThat(schemas.serialize(schemas.validate(StaffPreferenceSurface.ORDER_BOARD, upgraded)))
+                .as("and the upgraded document is valid under the schema it was upgraded to")
+                .isEqualTo(stored);
+    }
+
+    @Test
     @DisplayName("a surface definition whose steps do not lead from 1 to its schema is a programming error")
     void aDefinitionMustHaveEveryStep() {
         assertThatThrownBy(() -> new SurfaceDefinition(2, document -> (ObjectNode) document, List.of()))
@@ -409,7 +440,7 @@ class StaffPreferenceSchemasTests {
 
     @Test
     @DisplayName(
-            "the column vocabulary is the ten of the record, five columns are never in it, and the deferred two are not yet")
+            "the column vocabulary is the fifteen of schema 2, five columns are never in it, and the five new ones are off by default")
     void theColumnVocabulary() {
         assertThat(java.util.Arrays.stream(OrderBoardColumn.values()).map(OrderBoardColumn::key))
                 .containsExactly(
@@ -422,11 +453,28 @@ class StaffPreferenceSchemasTests {
                         "createdBy",
                         "acceptedBy",
                         "courierType",
-                        "discount");
+                        "discount",
+                        "courierEta",
+                        "source",
+                        "fiscal",
+                        "distance",
+                        "externalNumber");
         assertThat(OrderBoardColumn.ALWAYS_SHOWN)
                 .containsExactlyInAnyOrder("number", "time", "total", "status", "actions");
-        assertThat(OrderBoardColumn.ofKey("courierEta")).isEmpty();
-        assertThat(OrderBoardColumn.ofKey("source")).isEmpty();
+        assertThat(java.util.Arrays.stream(OrderBoardColumn.values())
+                        .filter(column -> !column.shownByDefault())
+                        .map(OrderBoardColumn::key))
+                .as("a bump adds to the addable set, so nobody's default board changes")
+                .containsExactly(
+                        "createdBy",
+                        "acceptedBy",
+                        "courierType",
+                        "discount",
+                        "courierEta",
+                        "source",
+                        "fiscal",
+                        "distance",
+                        "externalNumber");
         assertThat(java.util.Arrays.stream(OrderBoardColumn.values())
                         .filter(OrderBoardColumn::shownByDefault)
                         .map(OrderBoardColumn::key))

@@ -41,6 +41,7 @@ import {
 import { CreateProductDialog, CreateProductSubmission } from './create-product-dialog';
 import { FiscalWorkbenchPanel } from './fiscal-workbench-panel';
 import { describeApiError } from '../orders/order-errors';
+import { registerProductsKeys } from './products-keys';
 
 type StatusTab = 'ALL' | 'ACTIVE' | 'DRAFT' | 'ARCHIVED' | 'NO_MXIK';
 
@@ -107,6 +108,8 @@ interface ProductFilters {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ProductsPage implements OnInit {
+  /** The list's keys (catalog.md §4.1): they press the controls the table already draws. */
+  private readonly keys = registerProductsKeys();
   private readonly api = inject(CatalogApi);
   private readonly brand = inject(CurrentBrand);
   private readonly localeSet = inject(LocaleSet);

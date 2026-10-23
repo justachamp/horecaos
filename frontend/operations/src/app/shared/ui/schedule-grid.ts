@@ -92,6 +92,42 @@ export class ScheduleGrid {
     );
   }
 
+  /**
+   * Alt+Down on a day's row copies that day's windows onto the next day, replacing what it had
+   * (brands-and-locations.md §4.7: «the single fastest way to build a week»). A day with no windows copies
+   * «closed», which is a copy too. The week does not wrap: Sunday has no next day. Handled on the row, and
+   * the event's default is prevented, so the console's shortcut registry (which stands down for a handled
+   * key) never sees it; the cheat-sheet lists it from the locations keys file.
+   */
+  protected onRowKeydown(event: KeyboardEvent, day: number): void {
+    if (
+      event.key !== 'ArrowDown' ||
+      !event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      day >= DAYS[DAYS.length - 1]
+    ) {
+      return;
+    }
+    event.preventDefault();
+    this.copyDayToNext(day);
+  }
+
+  /** The rules with `day`'s windows copied over the next day's, the copies sitting right after `day`'s own. */
+  copyDayToNext(day: number): void {
+    const next = day + 1;
+    const kept = this.rules().filter((rule) => rule.dayOfWeek !== next);
+    const copies = this.rulesFor(day).map((rule) => ({ ...rule, dayOfWeek: next }));
+    let insertAt = 0;
+    kept.forEach((rule, index) => {
+      if (rule.dayOfWeek <= day) {
+        insertAt = index + 1;
+      }
+    });
+    this.rulesChange.emit([...kept.slice(0, insertAt), ...copies, ...kept.slice(insertAt)]);
+  }
+
   protected addException(date: string): void {
     if (!date || this.exceptions().some((exception) => exception.date === date)) {
       return;

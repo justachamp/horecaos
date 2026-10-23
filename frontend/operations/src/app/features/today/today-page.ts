@@ -22,6 +22,7 @@ import { StaleIndicator } from '../../shared/ui/stale-indicator';
 import { describeApiError, errorReference } from '../orders/order-errors';
 import { BranchLoad, LiveBoard, LiveBoardSnapshot, MixSlice } from './live-board';
 import { LiveOperatorRow, LiveOperators, LiveOperatorsBand } from './live-operators';
+import { ClosedBranchStrip } from '../../shell/branch-state/closed-branch-strip';
 
 /**
  * §1.6's polling fallback, at the order board's interval — the unconditional
@@ -77,7 +78,7 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  */
 @Component({
   selector: 'q-today-page',
-  imports: [TPipe, RouterLink, BarChart, ConnectionStateBanner, StaleIndicator],
+  imports: [TPipe, RouterLink, BarChart, ConnectionStateBanner, StaleIndicator, ClosedBranchStrip],
   templateUrl: './today-page.html',
   styleUrl: './today-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

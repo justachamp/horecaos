@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -126,6 +127,13 @@ public class PaymentIntentService implements PaymentIntentPort {
     @Transactional(readOnly = true)
     public Set<UUID> ordersWithPresentablePayment(UUID tenantId, Collection<UUID> orderIds) {
         return intents.ordersWithPresentablePayment(tenantId, orderIds);
+    }
+
+    /** The method each order is paid by, for the board's payment icon. See {@link JdbcPaymentIntentStore#paymentMethodsByOrders}. */
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, String> paymentMethodsByOrders(UUID tenantId, Collection<UUID> orderIds) {
+        return intents.paymentMethodsByOrders(tenantId, orderIds);
     }
 
     /**

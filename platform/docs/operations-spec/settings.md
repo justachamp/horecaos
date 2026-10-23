@@ -114,6 +114,16 @@ Every scalar setting renders through one control with five visual states, driven
 | **Not settable at this level** | Value muted, chip disabled: `Задаётся на уровне бренда`. | Link that switches the scope bar to that level |
 | **Locked by plan** | Field greyed, `LockedState` inline with the module name and a `Подробнее` link to Finance 8.6. | none |
 
+**Since then (batch 21, `w1-board-shell`, ADR 0021):** the fifth state is built. A `ConfigurationKey` can
+declare `entitledBy(<entitlement key>)` — a plain code, because `tenancy` cannot import `commercial` —
+and the key list and the resolution answer `lockedByPlan {entitlementKey, description}` through the
+platform's `EntitlementGate`, which is enforcement-aware: **under the default meter-only mode nothing is
+locked and no key shows the state.** A write to a locked key is refused with `ENTITLEMENT_REQUIRED` (not
+`INSUFFICIENT_CAPABILITY`) and stores nothing. `q-inherited-field` greys, names the feature, and links
+«Подробнее» to the console's own Finance → Subscription screen; the platform's upgrade path is an API path
+and is never shown. One family is annotated today: `assistant.enabled` and the three disclosure texts against
+`assistant.answering.enabled`; the rest were audited against the entitlement catalogue on 2026-10-23 and none names a feature the platform itself reads to apply the setting (the six tenant-visible `feature.*` flags are not plan features; the POS loyalty-sync keys sit beside `pos.integrations.enabled`, which nothing reads, so locking them would claim a refusal the platform does not make). A key joins the family by one `entitledBy(...)` line, and `ConfigurationKeyEntitlementTests` lists the family so that a change to it is deliberate.
+
 Clicking any chip opens the **resolution trace popover** — the four levels as a ladder, most
 specific at the top, each row carrying the value or `не задано` / `снято явно`, who set it
 (`tenant.configuration_values.set_by`), when (`.updated_at`) and why (`.reason`). The winning row
@@ -172,7 +182,7 @@ muscle memory beats freshness at 20:30 on a Friday.
 | Key | Action |
 |---|---|
 | `/` | Find a setting (§10.0) from anywhere in Settings |
-| `⌘K` | Global console command palette |
+| `⌘K` | Global console command palette — **built (batch 21):** `Ctrl+K` / `⌘K` opens one box over the sections the operator may open, the Settings screens, «Find a setting» (§10.0) and the order board's number search (`?tab=all&q=`); it fires from inside a text field, not over a dialog, and lists only places the rail and Settings would list |
 | `⌘S` | Save draft |
 | `⌘⏎` | Activate policy / submit the primary action of the open dialog |
 | `Esc` | Close dialog or popover, discarding an unsaved draft only after a confirm |
@@ -238,6 +248,21 @@ Results read:
 Enter navigates to the screen with the scope bar already set to the level the value was found at.
 This one control does more for findability than any amount of navigation redesign, and it is only
 possible because ADR 0030 made the key registry code-owned and enumerable.
+
+**Since then (batch 21, `w1-board-shell`):** built as written. `GET .../tenants/{t}/configuration/placements`
+answers, for every tenant-visible key and every listed policy, the tenant, brand and branch rows that hold
+it (names, a display value cut at 80 characters, version, and who and when by the name the tenant knows
+them by — never a subject). A result has three columns: the setting's own name in the operator's language,
+the Group → Screen it lives on, and where it is set («задано: бренд «Rayhon» (15 мин)»); several holders
+resolve to the one nearest the operator's own branch and say how many more; a key set nowhere says «не
+задано», its default, and the levels that may set it («только бренд и выше»). Enter opens the screen with
+`?brand=&location=&level=tenant` at the level the value was found at; the screens outside Settings
+(courier policy, staff, shifts, feedback, dispatch rules, buffer, capacity, content) do not read the bar,
+so they open without it and the result line is what says the level. Policies are a source of their own
+(`POLICY_ROUTES`, held to `TenantPolicyFamilies` by a platform test), with their version and publisher.
+**The coverage guard:** every tenant-visible key either has a screen (`SETTING_ENTRIES`) or is on
+`NO_CONSOLE_SCREEN` naming the gap-map row that owes it one — 17 keys today, settable through the API
+alone — and `ConfigurationKeyConsoleCoverageTests` fails the build for a key that is neither.
 
 **Actions:** none destructive. **States:** the readiness panel's empty state is the good one —
 *«Всё настроено для приёма заказов»* — and should be visibly a success, not a blank.

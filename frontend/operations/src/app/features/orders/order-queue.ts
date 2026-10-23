@@ -9,6 +9,7 @@ import {
   effect,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Observable, firstValueFrom } from 'rxjs';
@@ -73,9 +74,18 @@ import { BoardKeyAction, OrderBoardKeys, orderBoardScope } from './order-board-s
 import {
   ORDER_BOARD_COLUMNS,
   OrderBoardColumnContext,
+  boardFactParams,
   columnVisibility,
   offeredColumns,
+  requestedBoardFacts,
 } from './order-board-columns';
+import {
+  FISCAL_STATUS_LABEL_KEYS,
+  PAYMENT_METHOD_LABEL_KEYS,
+  paymentMethodGlyph,
+  sourceGlyph,
+} from './order-glyphs';
+import { Glyph } from '../../shared/ui/glyph/glyph';
 import { OrderQueueBulkBar } from './order-queue-bulk-bar';
 import { OrderQueueBulkResult } from './order-queue-bulk-result';
 import { OrderQueueToolbar } from './order-queue-toolbar';
@@ -302,6 +312,7 @@ interface RowDialogState {
     OrderRowActions,
     OrderSavedViews,
     ColumnPicker,
+    Glyph,
   ],
   templateUrl: './order-queue.html',
   styleUrl: './order-queue.css',
@@ -432,6 +443,28 @@ export class OrderQueue implements OnInit {
       label: this.i18n.t(ORDER_BOARD_COLUMNS[key].labelKey),
       shown: visibility[key],
     }));
+  });
+
+  /**
+   * The optional facts the board is asked for, as a key: it changes when a person turns on or off a column
+   * that needs a read of its own (courier ETA, source, receipt, distance, external number).
+   */
+  private readonly requestedFactsKey = computed(() => requestedBoardFacts(this.cols()).join(','));
+  private lastRequestedFactsKey: string | null = null;
+
+  /**
+   * A column turned on after the page was read has nothing to draw until the board is read again, so the
+   * change of what is asked for is a refresh. The first value is the baseline, not a change; the account's
+   * document arriving after the first page is a change, and is read once.
+   */
+  private readonly requestedFactsWatch = effect(() => {
+    const key = this.requestedFactsKey();
+    untracked(() => {
+      if (this.lastRequestedFactsKey !== null && this.lastRequestedFactsKey !== key) {
+        void this.refresh();
+      }
+      this.lastRequestedFactsKey = key;
+    });
   });
 
   protected readonly canResetColumns = computed(() => {
@@ -886,7 +919,11 @@ export class OrderQueue implements OnInit {
     state: CursorState,
   ): Promise<Page<OrderSummaryResponse>> {
     const allBranches = this.allBranchesActive();
-    const params = boardQueryParams({ ...this.filters(), allBranches }, this.tenant.subject());
+    const params = {
+      ...boardQueryParams({ ...this.filters(), allBranches }, this.tenant.subject()),
+      // Only the optional facts of the columns this person has on (ADR 0160): a column turned off costs no query.
+      ...boardFactParams(this.cols()),
+    };
     const path = allBranches
       ? operationsPaths.brandOrderBoard(scope)
       : operationsPaths.orderBoard(scope);
@@ -1124,7 +1161,7 @@ export class OrderQueue implements OnInit {
    * the shell's picker makes), and only then navigates. Without it the pane
    * would ask the wrong branch for the order and answer "not found".
    */
-  protected openOrder(orderId: string, locationId?: string | null): void {
+  protected openOrder(orderId: string, locationId?: string | null, fragment?: string): void {
     const current = this.location.scope();
     if (locationId && current && locationId !== current.locationId) {
       this.location.selectLocation(locationId);
@@ -1132,6 +1169,7 @@ export class OrderQueue implements OnInit {
     void this.router.navigate([orderId], {
       relativeTo: this.route,
       queryParamsHandling: 'preserve',
+      fragment,
     });
   }
 
@@ -1218,6 +1256,94 @@ export class OrderQueue implements OnInit {
   /** §2.5 column 10 (Оплата). */
   protected paymentStatusLabel(order: OrderSummaryResponse): string {
     return paymentStatusProjectionLabel(order.paymentStatusProjection, (key) => this.i18n.t(key));
+  }
+
+  /** The mark beside the payment status: the method the order is paid by, from the code-owned set. Null when the order has no intent. */
+  protected paymentGlyph(order: OrderSummaryResponse) {
+    return paymentMethodGlyph(order.paymentMethodCode);
+  }
+
+  /** «Paid by: Cash» -- the payment mark's title and accessible name. A code this client has not met is printed as the platform sent it. */
+  protected paymentMethodTitle(order: OrderSummaryResponse): string {
+    const code = order.paymentMethodCode ?? '';
+    const key = PAYMENT_METHOD_LABEL_KEYS[code];
+    return this.i18n.t('orders.payment.byMethod', { method: key ? this.i18n.t(key) : code });
+  }
+
+  /** «Источник»: one mark for the order's channel, null when the platform named none (the cell is then a dash). */
+  protected sourceMark(order: OrderSummaryResponse) {
+    return sourceGlyph(order);
+  }
+
+  /** The source mark's title: the tenant's name for the channel and its kind -- «Yandex Eda · Агрегатор». */
+  protected sourceTitle(order: OrderSummaryResponse): string {
+    const mark = sourceGlyph(order);
+    const type = mark?.typeLabelKey ? this.i18n.t(mark.typeLabelKey) : '';
+    const channel = order.channelDisplayName || order.channelCode || '';
+    if (channel && type) {
+      return this.i18n.t('orders.source.title', { channel, type });
+    }
+    return channel || type;
+  }
+
+  /** «Позиции»: «4 поз · Лагман…» -- the count and the first position, or a dash for an order the read has no lines for. */
+  protected itemsLabel(order: OrderSummaryResponse): string {
+    if (order.itemCount === null || order.itemCount === undefined) {
+      return '—';
+    }
+    return order.firstItemName
+      ? this.i18n.t('orders.row.items', { count: order.itemCount, first: order.firstItemName })
+      : this.i18n.t('orders.row.itemsCount', { count: order.itemCount });
+  }
+
+  /** «Курьер ETA»: the partner's quoted time of day, or a dash. Never computed here: a house-courier order has none. */
+  protected courierEtaLabel(order: OrderSummaryResponse): string {
+    return order.courierEtaAt
+      ? formatTime(new Date(order.courierEtaAt), PLACEHOLDER_TIME_ZONE)
+      : '—';
+  }
+
+  /** The «Ф» chip's word for the sale document's status; the raw value for one this client has not met. */
+  protected fiscalChipStatus(order: OrderSummaryResponse): string {
+    const status = order.fiscalStatus ?? '';
+    const key = FISCAL_STATUS_LABEL_KEYS[status];
+    return key ? this.i18n.t(key) : status;
+  }
+
+  protected fiscalChipLabel(order: OrderSummaryResponse): string {
+    return this.i18n.t('orders.fiscalChip.label', { status: this.fiscalChipStatus(order) });
+  }
+
+  /** The chip's tone: a receipt that exists is calm, one that failed or is blocked is not. */
+  protected fiscalTone(order: OrderSummaryResponse): 'ok' | 'attention' | 'pending' | 'none' {
+    switch (order.fiscalStatus) {
+      case 'ISSUED':
+      case 'CORRECTED':
+        return 'ok';
+      case 'FAILED':
+      case 'BLOCKED':
+        return 'attention';
+      case 'NOT_APPLICABLE':
+      case 'VOIDED':
+        return 'none';
+      default:
+        return 'pending';
+    }
+  }
+
+  /** «Дистанция»: kilometres to one decimal from a kilometre up, metres below it; a dash when the plan was not measured. */
+  protected distanceLabel(order: OrderSummaryResponse): string {
+    const meters = order.distanceMeters;
+    if (meters === null || meters === undefined) {
+      return '—';
+    }
+    if (meters < 1000) {
+      return this.i18n.t('orders.row.distance.m', { value: meters });
+    }
+    const km = new Intl.NumberFormat(this.i18n.locale(), { maximumFractionDigits: 1 }).format(
+      meters / 1000,
+    );
+    return this.i18n.t('orders.row.distance.km', { value: km });
   }
 
   /**
@@ -2417,6 +2543,12 @@ export class OrderQueue implements OnInit {
         // amendment history and opens it, so this row action's job is
         // exactly the same as those two: get the operator to the order.
         this.openOrder(order.orderId, order.locationId);
+        return;
+      case 'REPRINT':
+        // orders.md §2.12's `p`, ADR 0154: a reprint asks which document and why, and writes the fact that a
+        // person did it. That form is the order detail's print panel, so this takes the operator to the order
+        // at its print section (`#print`) rather than carrying a second form on the row.
+        this.openOrder(order.orderId, order.locationId, 'print');
         return;
       case 'ISSUE_INVOICE':
         // Gap map row 1.1e, «Выставить счёт» (orders.md §4.9): the re-issue

@@ -519,6 +519,55 @@ class PrintConsoleHttpTests extends PrintingSpringTest {
     }
 
     @Test
+    @DisplayName(
+            "the order board and the order detail carry REPRINT only where printing is on, the branch has a printer and the person may reprint")
+    void reprintIsOfferedOnlyWhereItCanWork() throws Exception {
+        SeededOrder order = anOrder();
+        String board = "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION + "/orders/board";
+        String detail = "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION + "/orders/"
+                + order.orderId();
+
+        // Printing is on and the branch has no printer yet: a button that could only be refused is not offered.
+        assertThat(reprintOnBoard(board, MANAGER, order)).as("on, no printer").isFalse();
+        assertThat(reprintOnDetail(detail, MANAGER)).isFalse();
+
+        browserPrinter("Front desk", 80);
+        assertThat(reprintOnBoard(board, MANAGER, order))
+                .as("on, with a printer")
+                .isTrue();
+        assertThat(reprintOnDetail(detail, MANAGER)).isTrue();
+        assertThat(reprintOnBoard(board, CASHIER, order))
+                .as("location staff hold print.reprint at their branch")
+                .isTrue();
+
+        // The flag is dark by default and turned off by hand again: the action leaves the contract with it.
+        printingOff();
+        assertThat(reprintOnBoard(board, MANAGER, order))
+                .as("printing switched off")
+                .isFalse();
+        assertThat(reprintOnDetail(detail, MANAGER)).isFalse();
+    }
+
+    private boolean reprintOnBoard(String board, String subject, SeededOrder order) throws Exception {
+        for (JsonNode row : ok(getAs(board, subject)).get("items")) {
+            if (order.orderId().toString().equals(row.get("orderId").asString())) {
+                return actionsOf(row).contains("REPRINT");
+            }
+        }
+        throw new AssertionError("the order is not on the board");
+    }
+
+    private boolean reprintOnDetail(String detail, String subject) throws Exception {
+        return actionsOf(ok(getAs(detail, subject)).get("summary")).contains("REPRINT");
+    }
+
+    private static List<String> actionsOf(JsonNode row) {
+        List<String> codes = new ArrayList<>();
+        row.get("actions").forEach(action -> codes.add(action.get("action").asString()));
+        return codes;
+    }
+
+    @Test
     @DisplayName("a document with no route prints nowhere, and the order action is told so")
     void noRouteNoPaper() throws Exception {
         SeededOrder order = anOrder();

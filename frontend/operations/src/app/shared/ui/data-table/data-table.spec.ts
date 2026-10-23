@@ -92,6 +92,12 @@ describe('DataTable', () => {
     expect(rows[0].textContent).toContain('Плов');
   });
 
+  it('names each row by its id, so a key can come back to the same row after the table redraws', () => {
+    const rows = [...fixture.nativeElement.querySelectorAll('[data-testid="dt-row"]')];
+
+    expect(rows.map((row) => (row as HTMLElement).dataset['rowId'])).toEqual(['r1', 'r2', 'r3']);
+  });
+
   // ------------------------------------------------------------ selection
 
   it('selects a row, shows the bulk-action bar, and reports the selection on a bulk action', async () => {

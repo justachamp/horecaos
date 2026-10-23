@@ -62,6 +62,11 @@ export const ADDABLE_COLUMNS: readonly OrderBoardColumnKey[] = [
   'acceptedBy',
   'courierType',
   'discount',
+  'courierEta',
+  'source',
+  'fiscal',
+  'distance',
+  'externalNumber',
 ];
 
 // ---------------------------------------------------------------------------------------------

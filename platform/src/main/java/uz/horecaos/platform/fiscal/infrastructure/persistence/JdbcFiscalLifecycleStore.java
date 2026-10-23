@@ -59,6 +59,35 @@ public class JdbcFiscalLifecycleStore {
     }
 
     /**
+     * The status of each order's fiscal document, one statement for a board page (gap map row {@code 1.1}'s
+     * optional «Ф» chip).
+     *
+     * <p>An order may carry a sale document, a refund and corrections; the chip answers «did the sale get
+     * its receipt», so the sale document wins and the newest document stands in for an order that has none
+     * (a refund-only record). The tenant is a predicate of the statement, and an order with no document is
+     * simply absent.
+     */
+    public java.util.Map<UUID, String> statusByOrders(UUID tenantId, java.util.Collection<UUID> orderIds) {
+        if (orderIds.isEmpty()) {
+            return java.util.Map.of();
+        }
+        java.util.Map<UUID, String> byOrder = new java.util.HashMap<>();
+        jdbc.sql("""
+                        SELECT DISTINCT ON (d.order_id) d.order_id, d.status
+                        FROM fiscal.fiscal_documents d
+                        WHERE d.tenant_id = :tenantId AND d.order_id IN (:orderIds)
+                        ORDER BY d.order_id, (d.document_type = 'SALE') DESC, d.created_at DESC, d.id DESC
+                        """)
+                .param("tenantId", tenantId)
+                .param("orderIds", orderIds)
+                .query((row, number) ->
+                        java.util.Map.entry(row.getObject("order_id", UUID.class), row.getString("status")))
+                .list()
+                .forEach(entry -> byOrder.put(entry.getKey(), entry.getValue()));
+        return byOrder;
+    }
+
+    /**
      * Claims a batch of documents that have been waiting on a provider.
      *
      * <p>{@code FOR UPDATE OF d SKIP LOCKED}, so several nodes share the sweep

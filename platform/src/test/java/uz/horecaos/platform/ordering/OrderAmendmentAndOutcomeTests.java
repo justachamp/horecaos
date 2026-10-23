@@ -383,7 +383,15 @@ class OrderAmendmentAndOutcomeTests {
                         org.mockito.Mockito.mock(OrderLatenessPolicyService.class),
                         org.mockito.Mockito.mock(uz.horecaos.platform.ordering.api.MarketplaceBindingLookup.class),
                         clock),
-                org.mockito.Mockito.mock(uz.horecaos.platform.iam.api.staff.StaffDirectory.class));
+                org.mockito.Mockito.mock(uz.horecaos.platform.iam.api.staff.StaffDirectory.class),
+                new uz.horecaos.platform.ordering.application.OrderBoardEnrichment(
+                        orderStore,
+                        UNWIRED_PAYMENTS,
+                        org.mockito.Mockito.mock(uz.horecaos.platform.fulfillment.api.CourierEtaPort.class),
+                        org.mockito.Mockito.mock(uz.horecaos.platform.tenancy.api.SalesChannelLookup.class),
+                        org.mockito.Mockito.mock(uz.horecaos.platform.ordering.api.OrderFiscalStatusPort.class),
+                        org.mockito.Mockito.mock(uz.horecaos.platform.fulfillment.api.DeliveryDistancePort.class),
+                        org.mockito.Mockito.mock(uz.horecaos.platform.ordering.api.OrderReprintPort.class)));
         reasons = new OrderOutcomeReasonService(reasonStore, auditRecorder, clock);
         rejectReasons = new RejectReasonQueryService(new JdbcRejectReasonStore(jdbc));
         outcomes = new OrderOutcomeService(orderState, reasons, rejectReasons, orderStore, protection, objectMapper);

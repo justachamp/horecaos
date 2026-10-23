@@ -269,6 +269,30 @@ describe('AssistantSettingsPage: the month and the ceiling', () => {
     expect(host.querySelector('[data-testid="assistant-not-entitled"]')).not.toBeNull();
   });
 
+  it('locks the switch and the wording where the key list says the plan lacks the feature, with no way to edit them', async () => {
+    const lock = {
+      entitlementKey: 'assistant.answering.enabled',
+      description: 'Whether the grounded assistant answers customers',
+    };
+    const locked = (code: string): ConfigurationResolutionView =>
+      resolution(code, DEFAULTS[code], { lockedByPlan: lock });
+    const { host } = await render({
+      usageResult: usage({ entitled: false }),
+      resolutions: {
+        'assistant.enabled': locked('assistant.enabled'),
+        'assistant.disclosure_text_ru': locked('assistant.disclosure_text_ru'),
+        'assistant.disclosure_text_uz': locked('assistant.disclosure_text_uz'),
+        'assistant.disclosure_text_en': locked('assistant.disclosure_text_en'),
+      },
+    });
+
+    expect(host.querySelectorAll('[data-testid="field-locked"]')).toHaveLength(4);
+    expect(host.querySelectorAll('.field__action')).toHaveLength(0);
+    expect(host.querySelector('[data-testid="field-locked-more"]')?.getAttribute('href')).toBe(
+      '/finance/subscription',
+    );
+  });
+
   it('shows neither notice when the provider is connected and the plan includes it', async () => {
     const { host } = await render();
 

@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import {
   ConfigurationKeyView,
+  ConfigurationPlacementsView,
   ConfigurationResolutionView,
   ConfigurationScopeType,
   SetConfigurationValueInput,
@@ -14,6 +15,10 @@ import { settingsPaths } from '../../core/api/settings-paths';
 
 export type {
   ConfigurationKeyView,
+  ConfigurationPlacementView,
+  ConfigurationPlacementsView,
+  LockedByPlanView,
+  PolicyPlacementView,
   ConfigurationResolutionView,
   ConfigurationScopeType,
   ConfigurationValueView,
@@ -42,6 +47,17 @@ export class ConfigurationApi {
       this.api.get<readonly ConfigurationKeyView[]>(settingsPaths.configurationKeys(tenantId)),
     );
     return result.value ?? [];
+  }
+
+  /**
+   * Where every tenant-visible key and every listed policy is set -- the tenant, each brand and each branch
+   * that holds a value -- in one read. «Find a setting» prints it beside each result (settings.md §10.0).
+   */
+  async placements(tenantId: string): Promise<ConfigurationPlacementsView> {
+    const result = await firstValueFrom(
+      this.api.get<ConfigurationPlacementsView>(settingsPaths.configurationPlacements(tenantId)),
+    );
+    return result.value;
   }
 
   /** One key, at one scope, with the trace `q-inherited-field`'s popover renders. */

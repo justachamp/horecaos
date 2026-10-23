@@ -10,6 +10,7 @@ import { I18n } from '../../../core/i18n/i18n';
 import { ConfigurationApi } from '../../settings/configuration-api';
 import { AttendanceStatus } from './attendance-status';
 import { RosterEntry, RosterWeek, StaffShift, StaffShiftsApi, TodayList } from './staff-shifts-api';
+import { ShortcutRegistry } from '../../../shared/keyboard/shortcut-registry';
 import { StaffShiftsPage } from './staff-shifts-page';
 
 const TENANT = '018fb100-6000-7000-8000-0000000000a1';
@@ -429,5 +430,54 @@ describe('StaffShiftsPage (ADR 0156)', () => {
 
     expect(q('shifts-denied')).not.toBeNull();
     expect(q('roster-week-grid')).toBeNull();
+  });
+
+  // ------------------------------------------------------- the keys (staff-and-access.md §9.2)
+
+  describe('the keys', () => {
+    function key(value: string): boolean {
+      const event = new KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'target', { value: document.body });
+      return TestBed.inject(ShortcutRegistry).dispatch(event);
+    }
+
+    it('is on the cheat-sheet with the three views and t', async () => {
+      await setUp({});
+      const scope = TestBed.inject(ShortcutRegistry)
+        .scopes()
+        .find((candidate) => candidate.id === 'staff-shifts')!;
+
+      expect(scope.title()).toBe('Staff shifts');
+      expect(scope.shortcuts.flatMap((shortcut) => shortcut.caps)).toEqual(['1', '2', '3', 't']);
+    });
+
+    it('1, 2 and 3 switch the view, and t jumps to today', async () => {
+      await setUp({});
+      expect(q('shifts-today')).toBeNull();
+
+      expect(key('2')).toBe(true);
+      await settle();
+      expect(q('shifts-today')).not.toBeNull();
+
+      key('3');
+      await settle();
+      expect(q('shifts-timesheet')).not.toBeNull();
+      expect(q('shifts-today')).toBeNull();
+
+      key('1');
+      await settle();
+      expect(q('roster-week-grid')).not.toBeNull();
+
+      key('t');
+      await settle();
+      expect(q('shifts-today')).not.toBeNull();
+    });
+
+    it('binds nothing while attendance is off: there are no views to switch', async () => {
+      await setUp({ on: false, capabilities: ['STAFF_SHIFT_READ'] });
+
+      expect(key('2')).toBe(false);
+      expect(key('t')).toBe(false);
+    });
   });
 });

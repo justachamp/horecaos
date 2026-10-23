@@ -23,6 +23,7 @@ import {
 } from '../settings/payment-methods/payment-methods-api';
 import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import { Granularity, PeriodPreset, ReportsFilterState } from './reports-filter-state';
+import { registerReportsKeys } from './reports-keys';
 
 /**
  * The Reports section's frame (IA §7). `ReportsFilterState` is provided here,
@@ -83,6 +84,8 @@ import { Granularity, PeriodPreset, ReportsFilterState } from './reports-filter-
 })
 export class ReportsShell implements OnInit {
   protected readonly state = inject(ReportsFilterState);
+  /** statistics.md §1.4: the section's keys, on every tab; they press what the frame draws. */
+  private readonly keys = registerReportsKeys();
   private readonly location = inject(CurrentLocation);
   private readonly locationsApi = inject(LocationsApi);
   private readonly channelsApi = inject(SalesChannelsApi);

@@ -1,7 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { Router } from '@angular/router';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ConfigurationResolutionView } from '../../../core/api/configuration';
+import { ConfigurationResolutionView, LockedByPlanView } from '../../../core/api/configuration';
 import { I18n } from '../../../core/i18n/i18n';
 import { InheritedField } from './inherited-field';
 
@@ -206,5 +207,127 @@ describe('InheritedField', () => {
   it('renders a loading placeholder before the resolution arrives', async () => {
     const fixture = await render(null);
     expect(fixture.nativeElement.querySelector('.field__chip')).toBeFalsy();
+  });
+
+  describe('Locked by plan (settings.md §1.2, the fifth state)', () => {
+    const LOCK: LockedByPlanView = {
+      entitlementKey: 'assistant.answering.enabled',
+      description: 'Whether the grounded assistant answers customers',
+    };
+    const LOCKED: ConfigurationResolutionView = { ...INHERITED_FROM_TENANT, lockedByPlan: LOCK };
+
+    const lockedBlock = (fixture: ComponentFixture<InheritedField>): HTMLElement | null =>
+      fixture.nativeElement.querySelector('[data-testid="field-locked"]');
+
+    it('greys the field and names the module inline, in place of any control', async () => {
+      const fixture = await render(LOCKED, 'BRAND');
+
+      expect(fixture.nativeElement.querySelector('.field--locked')).toBeTruthy();
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="field-locked-chip"]').textContent,
+      ).toContain('Locked by plan');
+      expect(lockedBlock(fixture)?.querySelector('[data-testid="q-locked-state"]')).toBeTruthy();
+      expect(
+        lockedBlock(fixture)?.querySelector('[data-testid="q-locked-state-module"]')?.textContent,
+      ).toBe('assistant.answering.enabled');
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="field-locked-what"]').textContent,
+      ).toContain('grounded assistant');
+    });
+
+    it('offers nothing to do with the value: no edit, override, revert, or trace', async () => {
+      const fixture = await render(LOCKED, 'BRAND');
+
+      expect(fixture.nativeElement.querySelectorAll('.field__action')).toHaveLength(0);
+      const buttons = [...fixture.nativeElement.querySelectorAll('button')];
+      expect(buttons).toHaveLength(0);
+    });
+
+    it('links «Подробнее» to the console’s own subscription screen, and a plain click navigates there', async () => {
+      const fixture = await render(LOCKED, 'BRAND');
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      const link: HTMLAnchorElement = fixture.nativeElement.querySelector(
+        '[data-testid="field-locked-more"]',
+      );
+
+      expect(link.getAttribute('href')).toBe('/finance/subscription');
+      const click = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+      link.dispatchEvent(click);
+
+      expect(navigate).toHaveBeenCalledWith('/finance/subscription');
+      expect(click.defaultPrevented).toBe(true);
+    });
+
+    it('leaves a modified click to the browser, so it opens in a new tab', async () => {
+      const fixture = await render(LOCKED, 'BRAND');
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      const link: HTMLAnchorElement = fixture.nativeElement.querySelector(
+        '[data-testid="field-locked-more"]',
+      );
+
+      const click = new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true });
+      link.dispatchEvent(click);
+
+      expect(navigate).not.toHaveBeenCalled();
+      expect(click.defaultPrevented).toBe(false);
+    });
+
+    it('never links to the platform’s own plan path: that is an API path, not a screen', async () => {
+      const fixture = await render(
+        { ...LOCKED, lockedByPlan: { ...LOCK, description: 'See /api/v1/control-plane/plans' } },
+        'BRAND',
+      );
+
+      const link: HTMLAnchorElement = fixture.nativeElement.querySelector(
+        '[data-testid="field-locked-more"]',
+      );
+      expect(link.getAttribute('href')).toBe('/finance/subscription');
+      expect(fixture.nativeElement.querySelectorAll('a')).toHaveLength(1);
+    });
+
+    it('locks from the row’s own input before any resolution has arrived', async () => {
+      await TestBed.configureTestingModule({ imports: [InheritedField] }).compileComponents();
+      TestBed.inject(I18n).setLocale('en');
+      const fixture = TestBed.createComponent(InheritedField);
+      fixture.componentRef.setInput('label', 'Assistant');
+      fixture.componentRef.setInput('currentScopeType', 'BRAND');
+      fixture.componentRef.setInput('loading', true);
+      fixture.componentRef.setInput('lockedByPlan', LOCK);
+      fixture.detectChanges();
+
+      expect(lockedBlock(fixture)).toBeTruthy();
+      expect(fixture.nativeElement.textContent).not.toContain('Loading');
+    });
+
+    it('is the lock that decides when the level is also one this key cannot be set at', async () => {
+      const fixture = await render(LOCKED, 'LOCATION', ['TENANT', 'BRAND']);
+
+      expect(lockedBlock(fixture)).toBeTruthy();
+      expect(fixture.nativeElement.textContent).not.toContain('Set at brand level');
+    });
+
+    it('goes back to the ordinary state when the plan gains the feature', async () => {
+      const fixture = await render(LOCKED, 'BRAND');
+
+      fixture.componentRef.setInput('resolution', INHERITED_FROM_TENANT);
+      fixture.detectChanges();
+
+      expect(lockedBlock(fixture)).toBeNull();
+      expect(fixture.nativeElement.querySelector('.field--locked')).toBeNull();
+      expect(fixture.nativeElement.textContent).toContain('Override here');
+    });
+
+    it('says it in the operator’s language', async () => {
+      const fixture = await render(LOCKED, 'BRAND');
+      TestBed.inject(I18n).setLocale('ru');
+      fixture.detectChanges();
+
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="field-locked-chip"]').textContent,
+      ).toContain('Закрыто тарифом');
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="field-locked-more"]').textContent,
+      ).toContain('Подробнее');
+    });
   });
 });

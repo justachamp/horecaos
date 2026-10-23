@@ -48,6 +48,7 @@ import {
 } from './dispatch-api';
 import { FALLBACK_MAP_CENTRE, MapRegionService } from './map-region';
 import { OrderPointsMap } from './order-points-map';
+import { registerDispatchBoardKeys } from './dispatch-board-keys';
 
 /**
  * `ShipmentStatus`'s own six values (gap map rows 1.2e/1.2f/1.2g/2.1c) —
@@ -190,6 +191,8 @@ const OPEN_STATUSES: ReadonlySet<string> = new Set([
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DispatchBoardPage implements OnInit {
+  /** couriers.md §3: the dispatch board's keys. */
+  private readonly keys = registerDispatchBoardKeys();
   private readonly api = inject(ApiClient);
   private readonly dispatch = inject(DispatchApi);
   private readonly couriersApi = inject(CouriersApi);

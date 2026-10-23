@@ -346,6 +346,12 @@
             }
             <th>{{ 'orders.column.time' | t }}</th>
             <th>{{ 'orders.column.type' | t }}</th>
+            @if (cols().source) {
+              <th data-testid="order-queue-source-column">{{ 'orders.column.source' | t }}</th>
+            }
+            @if (cols().items) {
+              <th data-testid="order-queue-items-column">{{ 'orders.column.items' | t }}</th>
+            }
             <th class="order-queue__num-col">{{ 'orders.column.total' | t }}</th>
             <th class="order-queue__num-col">{{ 'orders.column.fee' | t }}</th>
             @if (cols().payment) {
@@ -375,6 +381,24 @@
             @if (cols().acceptedBy) {
               <th data-testid="order-queue-accepted-by-column">
                 {{ 'orders.column.acceptedBy' | t }}
+              </th>
+            }
+            @if (cols().courierEta) {
+              <th data-testid="order-queue-courier-eta-column">
+                {{ 'orders.column.courierEta' | t }}
+              </th>
+            }
+            @if (cols().distance) {
+              <th class="order-queue__num-col" data-testid="order-queue-distance-column">
+                {{ 'orders.column.distance' | t }}
+              </th>
+            }
+            @if (cols().fiscal) {
+              <th data-testid="order-queue-fiscal-column">{{ 'orders.column.fiscal' | t }}</th>
+            }
+            @if (cols().externalNumber) {
+              <th data-testid="order-queue-external-number-column">
+                {{ 'orders.column.externalNumber' | t }}
               </th>
             }
             <th>{{ 'orders.column.status' | t }}</th>
@@ -437,12 +461,38 @@
                 {{ typeLabel(row.order) }}
                 <q-order-table-chip [table]="row.order.table" />
               </td>
+              @if (cols().source) {
+                <td data-testid="order-row-source">
+                  @if (sourceMark(row.order); as mark) {
+                    <q-glyph [name]="mark.glyph" [label]="sourceTitle(row.order)" />
+                  } @else {
+                    <span aria-label="—">—</span>
+                  }
+                </td>
+              }
+              @if (cols().items) {
+                <td class="order-row__items" data-testid="order-row-items">
+                  <span [attr.title]="row.order.firstItemName ?? null">{{
+                    itemsLabel(row.order)
+                  }}</span>
+                </td>
+              }
               <td class="order-queue__num-col q-mono q-tnum">{{ formatTotal(row.order) }}</td>
               <td class="order-queue__num-col q-mono q-tnum" data-testid="order-row-fee">
                 {{ formatFee(row.order) }}
               </td>
               @if (cols().payment) {
-                <td data-testid="order-row-payment-status">{{ paymentStatusLabel(row.order) }}</td>
+                <td data-testid="order-row-payment-status">
+                  @if (paymentGlyph(row.order); as glyph) {
+                    <q-glyph
+                      class="order-row__payment-mark"
+                      [name]="glyph"
+                      [label]="paymentMethodTitle(row.order)"
+                      data-testid="order-row-payment-method"
+                    />
+                  }
+                  <span class="order-row__payment-label">{{ paymentStatusLabel(row.order) }}</span>
+                </td>
               }
               @if (cols().customer) {
                 <td data-testid="order-row-customer">{{ customerLabel(row.order) }}</td>
@@ -463,6 +513,47 @@
               }
               @if (cols().acceptedBy) {
                 <td data-testid="order-row-accepted-by">{{ acceptedByLabel(row.order) }}</td>
+              }
+              @if (cols().courierEta) {
+                <td
+                  class="q-tnum"
+                  data-testid="order-row-courier-eta"
+                  [attr.title]="
+                    row.order.courierEtaAt ? ('orders.row.courierEta.snapshot' | t) : null
+                  "
+                >
+                  {{ courierEtaLabel(row.order) }}
+                </td>
+              }
+              @if (cols().distance) {
+                <td class="order-queue__num-col q-tnum" data-testid="order-row-distance">
+                  {{ distanceLabel(row.order) }}
+                </td>
+              }
+              @if (cols().fiscal) {
+                <td data-testid="order-row-fiscal">
+                  @if (row.order.fiscalStatus) {
+                    <span
+                      class="order-row__fiscal-chip"
+                      [class.order-row__fiscal-chip--ok]="fiscalTone(row.order) === 'ok'"
+                      [class.order-row__fiscal-chip--attention]="
+                        fiscalTone(row.order) === 'attention'
+                      "
+                      [class.order-row__fiscal-chip--none]="fiscalTone(row.order) === 'none'"
+                      [attr.title]="fiscalChipStatus(row.order)"
+                      role="img"
+                      [attr.aria-label]="fiscalChipLabel(row.order)"
+                      >Ф</span
+                    >
+                  } @else {
+                    —
+                  }
+                </td>
+              }
+              @if (cols().externalNumber) {
+                <td class="q-mono" data-testid="order-row-external-number">
+                  {{ row.order.externalNumber || '—' }}
+                </td>
               }
               <td>
                 <!-- Status and lateness in one object rather than two visual

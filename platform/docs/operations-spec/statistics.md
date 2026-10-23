@@ -152,6 +152,13 @@ Applies to every view.
 | `?` | Shortcut sheet |
 | `Esc` | Close panel/modal; second `Esc` clears the slice axis |
 
+**Since then (batch 21):** built in the section's frame (`reports-keys.ts`), so they hold on every tab:
+`d` `w` `m`, `[` `]`, `g` then `o s b c p m`, `/` where a view has a search box, and `Esc`, which clears the
+secondary filters (the slice) — a dialog closes itself and no key here runs while one is open. They press the
+pills, tabs and links the frame draws, so the period keys are not offered on the demand and geography tabs,
+which hide the bar. **`e` goes to the export centre** from the view that links it (orders); there is no
+export dialog on a view, because an export is asynchronous and made on the centre (ADR 0043).
+
 ### 1.5 Export — one mechanism, ten call sites
 
 Export is **asynchronous, capability-gated, quota-bounded, audited, and

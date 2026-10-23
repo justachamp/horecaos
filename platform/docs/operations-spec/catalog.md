@@ -204,6 +204,12 @@ with a tooltip nobody reads (Togora §2n). The selection bar states why:
 current location · `c` copies the id · `Esc` clears selection then closes the
 drawer. Row cursor is a real focusable element with `aria-selected`.
 
+**Since then (batch 21):** built on the list as drawn (`products-keys.ts`): `/`, `j`/`k`, `Space`, `c`
+(through the row's menu, so only what the menu offers), `Esc` (empties the search, then leaves it; otherwise
+clears the selection), and `Enter` or `e`, which both open the editor — the list has no drawer. **`s` is not
+here:** stopping a dish belongs to the stop list (§4.6), where it is one tap and can be undone; the list's
+«stop in all branches» is a menu item that asks first.
+
 ---
 
 ## 4.2 Product editor
@@ -480,6 +486,10 @@ the screen.
 Arrow keys navigate the tree, `←`/`→` collapse/expand, `Alt+↑`/`Alt+↓` reorder
 within the parent, `Alt+←` promotes a level, `Enter` edits the name inline.
 
+**Since then (batch 21):** all of it is the shared tree's own (`q-tree-view`, proven by its unit spec and
+by the page moving a category on `Alt+↓`); the screen registers the keys so the sheet lists them, and
+consumes none of them.
+
 ---
 
 ## 4.4 Modifier groups
@@ -664,6 +674,14 @@ across a row. `f` fills the row from the current cell (the DataGrid fill-down th
 parity plan already requires). This screen is where keyboard speed earns the most
 in an afternoon of authoring.
 
+**Since then (batch 21):** the screen is a list of dishes with a branch status cell and, with a channel
+picked, a channel cell — not a grid of cells — so the keys move a row cursor and press those cells
+(`menus-keys.ts`): `Space` flips the branch cell; `1` puts the dish on the menu and `2` on stop (each
+only if it is not so already); `3` hides it from the picked channel (not offered without one);
+`Shift+↓`/`Shift+↑` tick the row and the one beyond it; `f` applies the row's status to every ticked row
+through the bulk bar's own button, which still asks before it writes. There are three states in the spec
+and two on the cell: «hidden» is the channel cell, which is what `3` presses.
+
 ---
 
 ## 4.6 Availability and the stop list
@@ -786,6 +804,11 @@ if such a row exists, render it read-only with *"Количественный у
 `/` search · `j`/`k` · `Enter` or `s` toggles stop · `u` undoes the last stop ·
 `Tab` switches tabs. The whole screen is operable without a pointer, which
 matters on a kitchen terminal with a membrane keyboard.
+
+**Since then (batch 21):** built (`stop-list-keys.ts`) except `Tab`, which is the browser's own and is left
+alone. `Enter` and `s` press the row's one-tap button, so they are as audited as a tap; `u` presses the same
+button on the row the last key stopped, found again by the row's id after the table redraws, and undoes one
+step, not a history.
 
 ### Not built, named
 

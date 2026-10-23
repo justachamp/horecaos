@@ -25,6 +25,7 @@ import {
   QuotedAutoAddLine,
   StorefrontMenu,
 } from './new-order-api';
+import { ShortcutRegistry, modifierCap } from '../../../shared/keyboard/shortcut-registry';
 import { NewOrderPage } from './new-order-page';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
@@ -3137,6 +3138,165 @@ describe('NewOrderPage', () => {
         quote.mock.calls[2][1].declinedAutoAddRuleIds,
         'putting it back stops declining it',
       ).toBeUndefined();
+    });
+  });
+
+  // ------------------------------------------------------------------ the keys (orders.md §5.8)
+
+  describe('the keys (orders.md §5.8, gap map rows X.1 and 1.3)', () => {
+    function press(key: string, init: KeyboardEventInit, target: HTMLElement): boolean {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
+      Object.defineProperty(event, 'target', { value: target });
+      return TestBed.inject(ShortcutRegistry).dispatch(event);
+    }
+
+    function el<T extends HTMLElement>(testId: string): T {
+      return (fixture.nativeElement as HTMLElement).querySelector<T>(
+        `[data-testid="${testId}"]`,
+      ) as T;
+    }
+
+    async function withASubmittableBasket(): Promise<void> {
+      await render();
+      fixture.componentInstance['selectCandidate'](candidate());
+      fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+    }
+
+    afterEach(() => {
+      document.body.querySelectorAll('q-confirm-dialog').forEach((node) => node.remove());
+    });
+
+    it('is registered while the screen is on, with Ctrl+Enter and Esc on the cheat-sheet, and gone with it', async () => {
+      await render();
+      const registry = TestBed.inject(ShortcutRegistry);
+      const scope = registry.scopes().find((candidate) => candidate.id === 'new-order')!;
+
+      expect(scope.title()).toBe('New order');
+      expect(scope.shortcuts.flatMap((shortcut) => shortcut.caps)).toEqual([
+        `${modifierCap()}+Enter`,
+        'Esc',
+      ]);
+
+      fixture.destroy();
+      expect(registry.scopes().some((candidate) => candidate.id === 'new-order')).toBe(false);
+    });
+
+    it('Ctrl+Enter creates the order from inside a field, by pressing the same button the mouse does', async () => {
+      await withASubmittableBasket();
+      vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      const placeOrder = newOrderApi.placeOrder.mockResolvedValue({ orderId: 'o-1' });
+      const search = el('new-order-item-search').querySelector('input') as HTMLInputElement;
+      search.focus();
+
+      expect(press('Enter', { ctrlKey: true }, search)).toBe(true);
+      await flushMicrotasks();
+
+      expect(el<HTMLButtonElement>('new-order-submit').disabled).toBe(false);
+      expect(placeOrder).toHaveBeenCalledOnce();
+    });
+
+    it('Cmd+Enter does the same on a Mac', async () => {
+      await withASubmittableBasket();
+      vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      const placeOrder = newOrderApi.placeOrder.mockResolvedValue({ orderId: 'o-1' });
+      const search = el('new-order-item-search').querySelector('input') as HTMLInputElement;
+
+      expect(press('Enter', { metaKey: true }, search)).toBe(true);
+      await flushMicrotasks();
+
+      expect(placeOrder).toHaveBeenCalledOnce();
+    });
+
+    it('Ctrl+Enter does nothing while the order cannot be created: a disabled button is not pressed', async () => {
+      await render();
+      const search = el('new-order-item-search').querySelector('input') as HTMLInputElement;
+
+      expect(el<HTMLButtonElement>('new-order-submit').disabled).toBe(true);
+      expect(press('Enter', { ctrlKey: true }, search)).toBe(false);
+      expect(newOrderApi.placeOrder).not.toHaveBeenCalled();
+    });
+
+    it('a plain Enter is not a create: the key needs the modifier', async () => {
+      await withASubmittableBasket();
+      const search = el('new-order-item-search').querySelector('input') as HTMLInputElement;
+
+      expect(press('Enter', {}, search)).toBe(false);
+      expect(newOrderApi.placeOrder).not.toHaveBeenCalled();
+    });
+
+    it('Esc from a field goes to the first field of the pane the cursor is in', async () => {
+      await withASubmittableBasket();
+      const menuPane = el('new-order-item-search').closest('section.new-order__pane')!;
+      const first = menuPane.querySelector<HTMLElement>('input, select, button')!;
+      const later = [...menuPane.querySelectorAll<HTMLElement>('input, select, button')].at(-1)!;
+      expect(later).not.toBe(first);
+      later.focus();
+
+      expect(press('Escape', {}, later)).toBe(true);
+
+      expect(document.activeElement).toBe(first);
+      expect(router.url).not.toBe('/orders');
+    });
+
+    it('Esc again, with something entered, asks before leaving, and leaves only when told to', async () => {
+      await withASubmittableBasket();
+      const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      const menuPane = el('new-order-item-search').closest('section.new-order__pane')!;
+      const first = menuPane.querySelector<HTMLElement>('input, select, button')!;
+      first.focus();
+
+      expect(press('Escape', {}, first)).toBe(true);
+      await flushMicrotasks();
+
+      const dialog = document.body.querySelector('q-confirm-dialog')!;
+      expect(dialog.textContent).toContain('Discard this order?');
+      expect(navigate).not.toHaveBeenCalled();
+      const buttons = [...dialog.querySelectorAll<HTMLButtonElement>('button')];
+      buttons.find((button) => button.textContent!.trim() === 'Keep working')!.click();
+      await flushMicrotasks();
+      expect(navigate).not.toHaveBeenCalled();
+
+      // The dialog gave focus back to the item search, whose list opens on focus; its own Esc closes the list
+      // first (the keys stand down for it), and the Esc after that is the operator's.
+      first.setAttribute('aria-expanded', 'false');
+      press('Escape', {}, first);
+      await flushMicrotasks();
+      const again = document.body.querySelector('q-confirm-dialog')!;
+      [...again.querySelectorAll<HTMLButtonElement>('button')]
+        .find((button) => button.textContent!.trim() === 'Discard')!
+        .click();
+      await flushMicrotasks();
+
+      expect(navigate).toHaveBeenCalledWith(['/orders']);
+    });
+
+    it('Esc again with nothing entered just leaves: there is nothing to discard', async () => {
+      await render();
+      const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      const pane = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        'section.new-order__pane',
+      )!;
+      const first = pane.querySelector<HTMLElement>('input, select, button')!;
+      first.focus();
+
+      expect(press('Escape', {}, first)).toBe(true);
+      await flushMicrotasks();
+
+      expect(document.body.querySelector('q-confirm-dialog')).toBeNull();
+      expect(navigate).toHaveBeenCalledWith(['/orders']);
+    });
+
+    it('Esc leaves an open item list to the combobox, which closes it first', async () => {
+      await render();
+      const host = fixture.nativeElement as HTMLElement;
+      const input = el('new-order-item-search').querySelector('input') as HTMLInputElement;
+      input.setAttribute('aria-expanded', 'true');
+
+      expect(press('Escape', {}, input)).toBe(false);
+      expect(host.querySelector('q-confirm-dialog')).toBeNull();
     });
   });
 });

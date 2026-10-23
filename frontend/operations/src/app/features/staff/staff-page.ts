@@ -43,6 +43,7 @@ import {
   sortByAttention,
   statusOf,
 } from './staff-row';
+import { registerStaffListKeys } from './staff-keys';
 
 type StatusFilter = 'all' | 'active' | 'suspended';
 type ViewMode = 'flat' | 'byBranch';
@@ -86,6 +87,8 @@ interface GroupRow {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class StaffPage {
+  /** staff-and-access.md §2: the people list's keys. */
+  private readonly keys = registerStaffListKeys();
   private readonly api = inject(StaffApi);
   private readonly membersApi = inject(StaffMembersApi);
   private readonly reach = inject(StaffReach);

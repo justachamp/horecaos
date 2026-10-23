@@ -20,9 +20,11 @@ import java.util.stream.Collectors;
  * this vocabulary because no document can name them, which is also how the validator tells «that column
  * cannot be hidden» from «there is no such column».
  *
- * <p>{@code courierEta} and {@code source} are deliberately absent: the board read carries neither of
- * their fields yet, and each joins by a {@code document_schema} bump when it does (ADR 0160, «Board
- * columns»). A column is offered only when the read gives its cell something to draw.
+ * <p>{@code courierEta}, {@code source}, {@code fiscal}, {@code distance} and {@code externalNumber} joined in
+ * one {@code document_schema} bump (1 to 2, ADR 0160 «Board columns», batch 21): the board read now carries
+ * the field each of them draws. All five are off by default, so the bump changes nobody's board; a document
+ * written before it names none of them and upgrades by the identity step. A column is offered only when the
+ * read gives its cell something to draw.
  */
 public enum OrderBoardColumn {
     BRANCH("branch", true),
@@ -34,7 +36,12 @@ public enum OrderBoardColumn {
     CREATED_BY("createdBy", false),
     ACCEPTED_BY("acceptedBy", false),
     COURIER_TYPE("courierType", false),
-    DISCOUNT("discount", false);
+    DISCOUNT("discount", false),
+    COURIER_ETA("courierEta", false),
+    SOURCE("source", false),
+    FISCAL("fiscal", false),
+    DISTANCE("distance", false),
+    EXTERNAL_NUMBER("externalNumber", false);
 
     /** The columns of the table that are never hideable: not part of the vocabulary, only named in refusals. */
     public static final Set<String> ALWAYS_SHOWN = Set.of("number", "time", "total", "status", "actions");

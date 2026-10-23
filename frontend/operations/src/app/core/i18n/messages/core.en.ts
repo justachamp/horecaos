@@ -78,6 +78,7 @@ export const coreEn = {
   'orders.action.amend': 'Amend',
   'orders.action.assignCourier': 'Assign courier',
   'orders.action.issueInvoice': 'Issue invoice',
+  'orders.action.reprint': 'Print',
   'orders.action.advance.PREPARING': 'Send to kitchen',
   'orders.action.advance.READY': 'Ready',
   'orders.action.advance.FULFILLING': 'Send out for delivery',
