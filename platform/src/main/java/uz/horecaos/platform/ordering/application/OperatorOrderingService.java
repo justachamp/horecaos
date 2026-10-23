@@ -364,6 +364,111 @@ public class OperatorOrderingService {
                     false);
         }
 
+        /** An order that raises no callback flag at creation: every caller that predates ADR 0177. */
+        @SuppressWarnings("checkstyle:ParameterNumber")
+        public PlaceOrderCommand(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                UUID customerAccountId,
+                String channelCode,
+                FulfillmentMode fulfillmentMode,
+                List<OrderLine> lines,
+                @Nullable Destination destination,
+                String paymentMethodCode,
+                @Nullable String promoCode,
+                String idempotencyKey,
+                String operatorSubject,
+                @Nullable String correlationId,
+                @Nullable Instant requestedFor,
+                boolean overrideOutOfHours,
+                @Nullable UUID proposedLocationId,
+                @Nullable String overrideReasonCode,
+                @Nullable String overrideNote,
+                @Nullable UUID dineInSessionId,
+                @Nullable Long cashTenderedMinor,
+                List<UUID> declinedAutoAddRuleIds,
+                long redeemFromBalanceMinor,
+                boolean operatorAttestsCustomerAgreement) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines,
+                    destination,
+                    paymentMethodCode,
+                    promoCode,
+                    idempotencyKey,
+                    operatorSubject,
+                    correlationId,
+                    requestedFor,
+                    overrideOutOfHours,
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    cashTenderedMinor,
+                    declinedAutoAddRuleIds,
+                    redeemFromBalanceMinor,
+                    operatorAttestsCustomerAgreement,
+                    false);
+        }
+
+        /** An order that redeems nothing but may raise the callback flag: every caller that predates ADR 0185. */
+        @SuppressWarnings("checkstyle:ParameterNumber")
+        public PlaceOrderCommand(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                UUID customerAccountId,
+                String channelCode,
+                FulfillmentMode fulfillmentMode,
+                List<OrderLine> lines,
+                @Nullable Destination destination,
+                String paymentMethodCode,
+                @Nullable String promoCode,
+                String idempotencyKey,
+                String operatorSubject,
+                @Nullable String correlationId,
+                @Nullable Instant requestedFor,
+                boolean overrideOutOfHours,
+                @Nullable UUID proposedLocationId,
+                @Nullable String overrideReasonCode,
+                @Nullable String overrideNote,
+                @Nullable UUID dineInSessionId,
+                @Nullable Long cashTenderedMinor,
+                List<UUID> declinedAutoAddRuleIds,
+                boolean callbackRequested) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines,
+                    destination,
+                    paymentMethodCode,
+                    promoCode,
+                    idempotencyKey,
+                    operatorSubject,
+                    correlationId,
+                    requestedFor,
+                    overrideOutOfHours,
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    cashTenderedMinor,
+                    declinedAutoAddRuleIds,
+                    0L,
+                    false,
+                    callbackRequested);
+        }
+
         /**
          * An order that declines no auto-add rule (ADR 0158): every caller that predates the composer
          * showing a rule's line and letting the operator take it off.

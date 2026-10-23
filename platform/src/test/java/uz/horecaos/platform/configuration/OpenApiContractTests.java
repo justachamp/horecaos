@@ -407,7 +407,6 @@ class OpenApiContractTests {
                         .collect(java.util.stream.Collectors.toSet()))
                 .as("schema for %s cannot make a published required field optional", context)
                 .isSubsetOf(newRequired);
-        Set<String> mayBeRemoved = AcceptedContractWidenings.mayBeRemoved(context);
         oldResolved.path("properties").fieldNames().forEachRemaining(property -> {
             if (mayBeRemoved.contains(property)
                     && newResolved.path("properties").path(property).isMissingNode()) {

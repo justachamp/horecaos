@@ -846,8 +846,7 @@ public class NotificationDispatchService {
         // without one), so its rendering is asserted non-null even though
         // TemplateRenderer.render's return type is nullable for the subject case.
         String body = Objects.requireNonNull(TemplateRenderer.render(bodyTemplate, variables));
-        return new Rendered(
-                TemplateRenderer.render(subjectTemplate, variables), body, coverAssetId, targetPath);
+        return new Rendered(TemplateRenderer.render(subjectTemplate, variables), body, coverAssetId, targetPath);
     }
 
     /**

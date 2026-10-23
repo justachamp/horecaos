@@ -250,13 +250,17 @@ public class PushSubscriptionService {
         subscriptions.touchAccepted(tenantId, subscriptionId, clock.instant());
     }
 
-    /** Ends every subscription of an erased customer. */
+    /**
+     * Ends every subscription of an erased customer.
+     *
+     * @return how many subscriptions were ended, for the erasure proof (a count, never an identifier)
+     */
     @Transactional
-    public void erase(UUID tenantId, UUID customerAccountId) {
+    public int erase(UUID tenantId, UUID customerAccountId) {
         Instant now = clock.instant();
-        subscriptions
-                .endAllOf(tenantId, customerAccountId, JdbcPushSubscriptionStore.ENDED_ERASED, now)
-                .forEach(ended -> notifications.retirePushEndpoint(tenantId, ended, now));
+        var ended = subscriptions.endAllOf(tenantId, customerAccountId, JdbcPushSubscriptionStore.ENDED_ERASED, now);
+        ended.forEach(subscriptionId -> notifications.retirePushEndpoint(tenantId, subscriptionId, now));
+        return ended.size();
     }
 
     private boolean consentGranted(UUID tenantId, UUID brandId, UUID customerAccountId) {

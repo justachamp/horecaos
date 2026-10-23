@@ -157,7 +157,9 @@ public final class NotificationVariableCatalog {
         catalog.put(
                 NotificationClass.TRANSACTIONAL_OPTIONAL,
                 concat(
-                        concat(concat(ORDER_MONEY_VARIABLES, ORDER_DETAIL_VARIABLES.toArray(Variable[]::new)), CUSTOMER_NAME),
+                        concat(
+                                concat(ORDER_MONEY_VARIABLES, ORDER_DETAIL_VARIABLES.toArray(Variable[]::new)),
+                                CUSTOMER_NAME),
                         LOYALTY_EXPIRY_VARIABLES));
 
         // No fixed contract: a marketing message's variables are whatever the
@@ -260,7 +262,8 @@ public final class NotificationVariableCatalog {
     public static boolean isCustomerAddressed(NotificationClass notificationClass) {
         return switch (notificationClass) {
             case TRANSACTIONAL_REQUIRED, TRANSACTIONAL_OPTIONAL, MARKETING, SECURITY -> true;
-            case OPERATIONS_ALERT -> false;
+            // A dispatcher's message to a courier (ADR 0182, D15) is not addressed to a customer.
+            case OPERATIONS_ALERT, COURIER_DISPATCH -> false;
         };
     }
 

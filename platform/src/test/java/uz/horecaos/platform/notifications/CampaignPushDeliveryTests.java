@@ -782,9 +782,14 @@ class CampaignPushDeliveryTests {
     void erasureEndsTheSubscription() {
         subscribe(accountId, browser, "/wpush/a");
 
-        new uz.horecaos.platform.notifications.application.PushSubscriptionErasureParticipant(subscriptions)
-                .erase(TENANT, accountId);
+        var counts = new uz.horecaos.platform.notifications.application.PushSubscriptionErasureParticipant(
+                        subscriptions)
+                .erase(
+                        TENANT,
+                        accountId,
+                        uz.horecaos.platform.customers.spi.CustomerErasureParticipant.ErasedContacts.none());
 
+        assertThat(counts.rowsByTable()).containsEntry("notifications.push_subscriptions", 1);
         assertThat(subscriptionStatus()).isEqualTo("REVOKED");
         assertThat(endedReasonOf(accountId)).isEqualTo("CUSTOMER_ERASED");
         assertThat(subscriptionSecret()).isNull();

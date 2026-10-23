@@ -4,6 +4,8 @@ import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.customers.spi.CustomerErasureParticipant;
+import uz.horecaos.platform.customers.spi.ErasesCustomerData;
+import uz.horecaos.platform.customers.spi.ErasureCounts;
 
 /**
  * Ends an erased customer's Web Push subscriptions (ADR 0029, ADR 0182).
@@ -14,6 +16,9 @@ import uz.horecaos.platform.customers.spi.CustomerErasureParticipant;
  * nothing live.
  */
 @Component
+@ErasesCustomerData(
+        name = "notifications-push",
+        tables = {"notifications.push_subscriptions"})
 public class PushSubscriptionErasureParticipant implements CustomerErasureParticipant {
 
     private final PushSubscriptionService subscriptions;
@@ -24,7 +29,7 @@ public class PushSubscriptionErasureParticipant implements CustomerErasurePartic
 
     @Override
     @Transactional
-    public void erase(UUID tenantId, UUID customerAccountId) {
-        subscriptions.erase(tenantId, customerAccountId);
+    public ErasureCounts erase(UUID tenantId, UUID customerAccountId, ErasedContacts held) {
+        return ErasureCounts.of("notifications.push_subscriptions", subscriptions.erase(tenantId, customerAccountId));
     }
 }

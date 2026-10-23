@@ -93,7 +93,8 @@ final class AcceptedContractWidenings {
      * The properties of the schema at {@code context} that the released contract carried and that may be gone
      * now. Empty everywhere but the preset comment surfaces (ADR 0149, V0678: the control-plane endpoints
      * under {@code /comment-presets} and every {@code commentPresets[]} array a response carries) and the
-     * region and zone surfaces (V0679: the regions, service zones and the dispatch editor's zone options).
+     * region and zone surfaces (V0679: the regions, service zones and the dispatch editor's zone options), and ADR 0182's
+     * courier broadcast draft, where the free text gave way to an approved wording.
      */
     static Set<String> mayBeRemoved(String context) {
         if (context.contains("/comment-presets") || context.endsWith("commentPresets[]")) {
@@ -101,6 +102,10 @@ final class AcceptedContractWidenings {
         }
         if (ADR_0149_NAME_SURFACES.stream().anyMatch(context::contains)) {
             return ADR_0149_NAME_LEGACY_FIELDS;
+        }
+        if (ADR_0182_DRAFT_REQUEST.equals(context)) {
+            // ADR 0182: the courier broadcast draft's free text, which the gateway could never have approved.
+            return Set.of("message");
         }
         return Set.of();
     }
@@ -132,15 +137,6 @@ final class AcceptedContractWidenings {
      */
     static Set<String> mayBecomeRequired(String context) {
         return ADR_0182_DRAFT_REQUEST.equals(context) ? Set.of("templateKey") : Set.of();
-    }
-
-    /**
-     * The properties of the schema at {@code context} that were published and may be gone now. Empty
-     * everywhere but ADR 0182's courier broadcast draft, where it is the free text the gateway could
-     * never have approved.
-     */
-    static Set<String> mayBeRemoved(String context) {
-        return ADR_0182_DRAFT_REQUEST.equals(context) ? Set.of("message") : Set.of();
     }
 
     /**

@@ -2035,6 +2035,85 @@ public class OperationsOrderController {
                     null);
         }
 
+        /** A request that raises no callback flag: every client that predates ADR 0177. */
+        public PlaceOrderRequest(
+                UUID customerAccountId,
+                String channelCode,
+                FulfillmentMode fulfillmentMode,
+                List<OrderLineRequest> lines,
+                @Nullable DestinationRequest destination,
+                String paymentMethodCode,
+                @Nullable String promoCode,
+                @Nullable Instant requestedFor,
+                Boolean overrideOutOfHours,
+                @Nullable UUID proposedLocationId,
+                @Nullable String overrideReasonCode,
+                @Nullable String overrideNote,
+                @Nullable UUID dineInSessionId,
+                @Nullable Long cashTenderedMinor,
+                @Nullable List<UUID> declinedAutoAddRuleIds,
+                @Nullable Long redeemFromBalanceMinor,
+                @Nullable Boolean operatorAttestsCustomerAgreement) {
+            this(
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines,
+                    destination,
+                    paymentMethodCode,
+                    promoCode,
+                    requestedFor,
+                    overrideOutOfHours,
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    cashTenderedMinor,
+                    declinedAutoAddRuleIds,
+                    redeemFromBalanceMinor,
+                    operatorAttestsCustomerAgreement,
+                    null);
+        }
+
+        /** A request that redeems nothing but may raise the callback flag: every client that predates ADR 0185. */
+        public PlaceOrderRequest(
+                UUID customerAccountId,
+                String channelCode,
+                FulfillmentMode fulfillmentMode,
+                List<OrderLineRequest> lines,
+                @Nullable DestinationRequest destination,
+                String paymentMethodCode,
+                @Nullable String promoCode,
+                @Nullable Instant requestedFor,
+                Boolean overrideOutOfHours,
+                @Nullable UUID proposedLocationId,
+                @Nullable String overrideReasonCode,
+                @Nullable String overrideNote,
+                @Nullable UUID dineInSessionId,
+                @Nullable Long cashTenderedMinor,
+                @Nullable List<UUID> declinedAutoAddRuleIds,
+                @Nullable Boolean callbackRequested) {
+            this(
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines,
+                    destination,
+                    paymentMethodCode,
+                    promoCode,
+                    requestedFor,
+                    overrideOutOfHours,
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    cashTenderedMinor,
+                    declinedAutoAddRuleIds,
+                    null,
+                    null,
+                    callbackRequested);
+        }
+
         /** A request that declines no auto-add rule: every client that predates ADR 0158. */
         public PlaceOrderRequest(
                 UUID customerAccountId,
