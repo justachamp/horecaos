@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/ordering.events/OrderPreparing.v1.schema.json",
+  "title": "OrderPreparing v1 payload",
+  "description": "The kitchen started on the order (ADR 0019 PREPARING, entered from CONFIRMED). The fact ADR 0045's «being prepared» milestone and ADR 0184's customer message wait on. Forward edge only: restoring PREPARING from READY is a compensating correction (ADR 0110) and publishes nothing. Carries no customer; who ordered is resolved through an authorized call, because ADR 0029 keeps personal data out of every payload.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "orderId",
+    "fulfillmentMode",
+    "preparingAt",
+    "status",
+    "orderVersion"
+  ],
+  "properties": {
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "brandId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "locationId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "fulfillmentMode": {
+      "type": "string",
+      "enum": [
+        "DELIVERY",
+        "PICKUP",
+        "DINE_IN"
+      ]
+    },
+    "preparingAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "PREPARING"
+      ]
+    },
+    "orderVersion": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

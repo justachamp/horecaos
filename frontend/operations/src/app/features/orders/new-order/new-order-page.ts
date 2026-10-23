@@ -22,11 +22,13 @@ import { formatMoney } from '../../../core/format/money';
 import { I18n } from '../../../core/i18n/i18n';
 import { presetLabelFor } from '../../../core/i18n/locale-labels';
 import { MessageKey } from '../../../core/i18n/messages.en';
+import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { Combobox, ComboboxOption } from '../../../shared/ui/combobox';
 import { DeniedState } from '../../../shared/ui/denied-state';
 import { MoneyInput } from '../../../shared/ui/money-input';
 import { MapPin } from '../../../shared/ui/map/map-pin';
+import { LatLng } from '../../../shared/ui/map/map-provider';
 import { Toasts } from '../../../shared/ui/toast';
 import {
   CustomerAddressDraft,
@@ -41,10 +43,10 @@ import {
   CustomerOrderSummary,
   CustomersApi,
   ReorderPlan,
-  RevealedCustomerAddress,
 } from '../../customers/customers-api';
 import { ChannelView, SalesChannelsApi } from '../../settings/sales-channels/sales-channels-api';
 import { accessRefusal, describeApiError } from '../order-errors';
+import { AddressPinEditor } from './address-pin-editor';
 import { ComboDialogConfirmation, ComboPickerDialog } from './combo-picker-dialog';
 import { resolvePicks } from './combo-selection';
 import { DineInTablePicker, TablePick } from './dine-in-table-picker';
@@ -56,6 +58,8 @@ import {
   CommentPresetOption,
   CustomerLookupCandidate,
   DeliveryFeeQuote,
+  EntryPolicy,
+  MaskedCustomerAddress,
   MenuComboGroup,
   MenuModifierGroup,
   MenuProduct,
@@ -70,6 +74,7 @@ import {
 import { BasketLineView, NewOrderBasket } from './new-order-basket';
 import { NewOrderHeader } from './new-order-header';
 import { NewOrderMenuGrid } from './new-order-menu-grid';
+import { NO_REDEMPTION, NewOrderPoints, PointsAsk, RedemptionSelection } from './new-order-points';
 import {
   BasketLine,
   basketFactsFor,
@@ -77,6 +82,7 @@ import {
   computeBasketTotal,
   lineUnitAmountMinor,
 } from './new-order-total';
+import { registerNewOrderKeys } from './new-order-keys';
 
 /**
  * The tenant's operator/call-centre channel is `tenant.sales_channels` data
@@ -92,6 +98,13 @@ import {
  * widening a role bundle this wave was not asked to touch.
  */
 const FALLBACK_OPERATOR_CHANNEL_CODE = 'call-centre';
+
+/** What the screen offers until a branch's policy has been read, and when it cannot be (ADR 0177). */
+const EVERYTHING_ALLOWED: EntryPolicy = {
+  promoCodeAllowed: true,
+  callbackFlagAllowed: true,
+  changeDueAllowed: true,
+};
 
 let lineKeySequence = 0;
 function nextLineKey(): string {
@@ -125,22 +138,22 @@ interface PendingComboSelection {
 /**
  * New order — orders.md §5, the call-centre order-entry screen (wave P13).
  *
- * **Built this wave.** The three-pane composer: phone lookup and
+ * **Built in wave P13 (the paragraphs are by wave; the ones on the address pane and on what is not
+ * built, further down, say what is current).** The three-pane composer: phone lookup and
  * create-on-miss (§5.3, reusing `CreateCustomerDialog`/`CustomersApi` from
  * the Customers section rather than a second create-customer form), item
  * search over the published menu plus the category grid fallback (§5.5),
  * modifier selection (`q-item-modifier-dialog`), a running total, and
  * `Создать` — `POST .../orders` with an `Idempotency-Key`, routing straight
- * to the created order (§5.6). Fulfilment is `PICKUP` only: `DELIVERY` needs
- * the address pane wave `P14` owns, and offering it here would mean
- * inventing an address flow this wave's brief explicitly says not to build.
+ * to the created order (§5.6). That wave offered `PICKUP` only: `DELIVERY` waited for the
+ * address pane wave `P14` built (below), and is offered now.
  *
  * **Wave P14 adds** the address pane's structured half (§5.4, row `1.3b`):
- * saved addresses through the already-wired `CUSTOMER_PII_REVEAL` reveal, an
- * inline «+ новый адрес» reusing `customer-detail-pane.html`'s own
+ * the customer's saved addresses, an inline «+ новый адрес» with the
  * дом/квартира/подъезд/этаж/ориентир fields, saved `NOT_GEOCODED` or
- * `LANDMARK_ONLY` — the pin, the suggest and the geocoder stay deferred
- * behind `X.4`. Payment now reads the operator channel's own matrix instead
+ * `LANDMARK_ONLY` when the operator places no pin (the pin and the suggest
+ * arrived with ADR 0145, below; the saved addresses are masked since ADR 0177,
+ * below). Payment now reads the operator channel's own matrix instead
  * of a hard-coded CASH (row `1.3e`; see `OperatorOrderingService`'s own
  * doc), promo code is threaded to `CartService.applyPromoCode` (ADR 0072).
  * The total beside «Создать» is the server's own price (row `1.3e`): the same
@@ -183,26 +196,32 @@ interface PendingComboSelection {
  * 1.3b's pin is placed from this screen since ADR 0145), so an address with no
  * point still reads "—" rather than a guessed number.
  *
- * <p>**The address pane has a map and a search (row 1.3b, ADR 0145).** The «+ новый адрес» form is
- * the shared `q-customer-address-editor`: type-ahead from the platform's own geocoder, a pin the
- * operator looks at and confirms (or moves, or types the coordinates of), and the structured
- * дом/подъезд/этаж/квартира/ориентир fields a courier needs. A saved address shows where it is,
- * and one with no pin (or the wrong one) can be edited in place: placing the pin is what lets the
- * delivery be priced and routed. A geocoder's answer is a suggestion; only a pin a person confirmed
+ * <p>**The address pane has a map and a search (row 1.3b, ADR 0145), and the persona it is for can
+ * use it (ADR 0177).** The «+ новый адрес» form is the shared `q-customer-address-editor`:
+ * type-ahead from the platform's own geocoder, a pin the operator looks at and confirms (or moves,
+ * or types the coordinates of), and the structured дом/подъезд/этаж/квартира/ориентир fields a
+ * courier needs. It saves through `NewOrderApi.captureAddress`, the location-scoped route that
+ * `LOCATION_STAFF` and `LOCATION_MANAGER` hold (`customer.address.capture`): the tenant-scoped
+ * address routes behind `customer.manage` and `customer.pii.reveal` are `TENANT`-scoped, which a
+ * `LOCATION` grant never covers, and stay for the Customers screen. The saved addresses it lists
+ * are **masked** (`NewOrderApi.capturedAddresses`): the label, the street without its house number
+ * or flat, the district, the point and its source. A saved address shows where it is, and one with
+ * no pin (or the wrong one) gets its pin placed or moved in `q-address-pin-editor`, which writes
+ * the point and `OPERATOR_PIN` and nothing else: the operator cannot read the address text, so
+ * there is no editor over it. A geocoder's answer is a suggestion; only a pin a person confirmed
  * is saved, as `OPERATOR_PIN`, and an address saved with no pin says so honestly
  * (`NOT_GEOCODED`/`LANDMARK_ONLY`) and is refused for delivery until it has one.
  *
- * <p>**Still not built, honestly.** No out-of-brand branch resolution (this screen stays scoped to
- * `CurrentLocation`; "Филиал" shows the current branch with a static «по
- * зоне» caption on a delivery order rather than a real cross-branch
- * resolver). No lead-time limit, repricing checkpoint or payment-authorization
- * timing for a long-lead pre-order — ADR 0019 leaves that policy open, and
- * `requestedFor` only ever asks "is the branch open then", never holds a
- * price or a slot for the wait. The header's draft timer and quote-expiry
- * states (§5.7) still do not apply to this backend shape at all:
- * `OperatorOrderingService.place` opens the cart, prices it and checks out
- * in one atomic call, so there is no server-side draft cart that can expire
- * out from under the operator the way a storefront cart can.
+ * <p>**Not built, and why (the old "still not built" list was wrong in two places).** «Филиал» is
+ * not a static caption: batch 13's `BranchResolutionQueryService` ranks the brand's branches and
+ * batch 18's `OperatorOrderQuoteService` prices the basket, both read above. No lead-time limit,
+ * repricing checkpoint or payment-authorization timing for a long-lead pre-order — ADR 0019 leaves
+ * that policy open, and `requestedFor` only ever asks "is the branch open then", never holds a
+ * price or a slot for the wait. The header's draft timer and quote-expiry states (`orders.md`
+ * §5.7) do not apply to this backend shape at all, and the spec says so:
+ * `OperatorOrderingService.place` opens the cart, prices it and checks out in one atomic call, and
+ * the quote endpoint prices a basket and undoes it without holding one, so there is no server-side
+ * draft cart that can expire out from under the operator the way a storefront cart can.
  *
  * <p><b>Wave 10 (rows 1.3f/1.3a).</b> «Повторить» used to call
  * `CustomerOrderHistoryController.reorderPlan` (`ORDER_READ` at `BRAND`
@@ -252,7 +271,9 @@ interface PendingComboSelection {
     NewOrderBasket,
     NewOrderHeader,
     NewOrderMenuGrid,
+    NewOrderPoints,
     CustomerAddressEditor,
+    AddressPinEditor,
     MapPin,
   ],
   templateUrl: './new-order-page.html',
@@ -260,6 +281,8 @@ interface PendingComboSelection {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class NewOrderPage implements OnInit {
+  /** orders.md §5.8: Ctrl+Enter creates, Esc returns to the pane's first field and, twice, leaves. */
+  private readonly keys = registerNewOrderKeys();
   private readonly api = inject(NewOrderApi);
   private readonly customersApi = inject(CustomersApi);
   private readonly channelsApi = inject(SalesChannelsApi);
@@ -269,6 +292,7 @@ export class NewOrderPage implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly toasts = inject(Toasts);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   private readonly phoneInput = viewChild<ElementRef<HTMLInputElement>>('phoneInput');
   private readonly tablePicker = viewChild(DineInTablePicker);
@@ -396,10 +420,9 @@ export class NewOrderPage implements OnInit {
   }
 
   private menuLocale(): string {
-    // The menu endpoint's locale is `ru`/`uz`/`en`; the console's own
-    // `uz-Latn` locale maps to the menu's `uz`, same mapping `stop-list-page.ts`
-    // already applies for the identical reason.
-    return this.i18n.locale() === 'uz-Latn' ? 'uz' : this.i18n.locale();
+    // The menu endpoint speaks the catalog's code for a language, which the registry
+    // names (`uz` for the console's `uz-Latn`; ADR 0149, Decision 5).
+    return this.registry.catalogCode(this.i18n.locale());
   }
 
   private readonly variantIndex = computed(() => {
@@ -784,7 +807,7 @@ export class NewOrderPage implements OnInit {
 
   protected readonly fulfillmentMode = signal<'PICKUP' | 'DELIVERY' | 'DINE_IN'>('PICKUP');
 
-  protected readonly addresses = signal<readonly RevealedCustomerAddress[]>([]);
+  protected readonly addresses = signal<readonly MaskedCustomerAddress[]>([]);
   protected readonly addressesLoading = signal(false);
   protected readonly addressesError = signal<string | null>(null);
   protected readonly addressesDenied = signal(false);
@@ -798,8 +821,10 @@ export class NewOrderPage implements OnInit {
   protected readonly addressError = signal<string | null>(null);
   /** What the address editor holds (map, suggest, structured fields); `null` until it has said anything. */
   protected readonly addressDraft = signal<CustomerAddressDraft | null>(null);
-  /** The saved address being corrected in place (placing or moving its pin), or `null`. */
+  /** The saved address whose pin is being placed or moved, or `null`. */
   protected readonly editingAddressId = signal<string | null>(null);
+  /** Where the pin is now in the pin editor; `null` while none is placed. */
+  protected readonly pinDraft = signal<LatLng | null>(null);
 
   /** The branch's scope as a signal, for the address editor: it selects the lookup path the operator's grant covers. */
   protected readonly editorScope = computed(() => this.location.scope());
@@ -897,22 +922,18 @@ export class NewOrderPage implements OnInit {
     this.addressesLoading.set(true);
     this.addressesError.set(null);
     try {
-      const list = await this.customersApi.revealAddresses(
-        scope,
-        selected.accountId,
-        'Operations console: New order screen delivery address (row 1.3b)',
-      );
+      // ADR 0177: the masked list this screen's persona is granted (`customer.address.capture`,
+      // `LOCATION` scope), not the tenant-scoped reveal behind `customer.pii.reveal`.
+      const list = await this.api.capturedAddresses(scope, selected.accountId);
       this.addresses.set(list);
       if (list.length > 0 && this.selectedAddressId() === null) {
         this.selectedAddressId.set(list[0].id);
       }
     } catch (error) {
       if (error instanceof ApiError && accessRefusal(error)?.kind === 'denied') {
-        // LOCATION_STAFF does not hold CUSTOMER_PII_REVEAL (see PlatformRole's
-        // own comment) — an open capability-model gap this wave flags rather
-        // than silently patches by widening a role bundle it was not asked
-        // to touch, the identical posture this file's own channel-list
-        // fallback already takes.
+        // A role that holds neither `customer.address.capture` nor a wider customer grant
+        // (ADR 0177). LOCATION_STAFF and LOCATION_MANAGER hold it, so for the persona this screen
+        // is built for this is not the ordinary path any more.
         this.addressesDenied.set(true);
       } else {
         this.addressesError.set(
@@ -939,7 +960,7 @@ export class NewOrderPage implements OnInit {
     this.addressError.set(null);
   }
 
-  /** Opens the selected saved address in the editor, to place its pin or move it (row 1.3b / 5.2c). */
+  /** Opens the selected saved address in the pin editor, to place its pin or move it (row 1.3b, ADR 0177). */
   protected startEditingSelectedAddress(): void {
     if (this.selectedAddressId() === null) {
       return;
@@ -947,6 +968,7 @@ export class NewOrderPage implements OnInit {
     this.addingAddress.set(false);
     this.addressDraft.set(null);
     this.addressError.set(null);
+    this.pinDraft.set(this.selectedAddressPoint());
     this.editingAddressId.set(this.selectedAddressId());
   }
 
@@ -961,6 +983,21 @@ export class NewOrderPage implements OnInit {
 
   protected canSaveAddress(): boolean {
     return !this.addressSaving() && (this.addressDraft()?.valid ?? false);
+  }
+
+  protected onPinDraft(point: LatLng | null): void {
+    this.pinDraft.set(point);
+  }
+
+  /** A pin is placed, and it is not already where the address has it. */
+  protected canSavePin(): boolean {
+    const pin = this.pinDraft();
+    const saved = this.selectedAddressPoint();
+    return (
+      !this.addressSaving() &&
+      pin !== null &&
+      (saved === null || saved.latitude !== pin.latitude || saved.longitude !== pin.longitude)
+    );
   }
 
   /**
@@ -979,7 +1016,9 @@ export class NewOrderPage implements OnInit {
     this.addressSaving.set(true);
     this.addressError.set(null);
     try {
-      const { id } = await this.customersApi.addAddress(scope, selected.accountId, {
+      // ADR 0177: `OperationsCustomerController`'s location-scoped add, which the persona is
+      // granted; the server refuses any source an operator cannot honestly claim.
+      const id = await this.api.captureAddress(scope, selected.accountId, {
         label: draft.label,
         fields: draft.fields,
         latitude: draft.latitude,
@@ -997,32 +1036,25 @@ export class NewOrderPage implements OnInit {
   }
 
   /**
-   * Saves the corrected address at the version it was read at (ADR 0031): another operator's edit in
-   * between is a refusal to read, not an overwrite. Keeps the delivery instructions the address already
-   * had, which this editor does not show.
+   * Saves the pin at the version the masked list returned (ADR 0031): another operator's pin in
+   * between is a refusal to read, not an overwrite. Writes the point and `OPERATOR_PIN` and
+   * nothing else about the address (ADR 0177) -- its text is not this screen's to change.
    */
-  protected async saveEditedAddress(original: RevealedCustomerAddress): Promise<void> {
+  protected async savePin(original: MaskedCustomerAddress): Promise<void> {
     const selected = this.selectedCustomer();
     const scope = this.location.scope();
-    const draft = this.addressDraft();
-    if (!selected || !scope || !draft || !this.canSaveAddress()) {
+    const pin = this.pinDraft();
+    if (!selected || !scope || pin === null || !this.canSavePin()) {
       return;
     }
     this.addressSaving.set(true);
     this.addressError.set(null);
     try {
-      await this.customersApi.updateAddress(
+      await this.api.placeAddressPin(
         scope,
         selected.accountId,
         original.id,
-        {
-          label: draft.label,
-          fields: draft.fields,
-          deliveryInstructions: original.deliveryInstructions,
-          latitude: draft.latitude,
-          longitude: draft.longitude,
-          coordinateSource: draft.coordinateSource,
-        },
+        { latitude: pin.latitude, longitude: pin.longitude },
         original.version,
       );
       await this.loadAddresses();
@@ -1270,6 +1302,20 @@ export class NewOrderPage implements OnInit {
   protected readonly serverQuote = signal<OrderQuote | null>(null);
 
   /**
+   * X.1 (ADR 0185): the request the current server price answered, and where it was sent -- what the points
+   * control asks about. Null while there is no current price, so the control waits for it rather than offering
+   * points against a figure that has since moved.
+   */
+  protected readonly pointsAsk = signal<PointsAsk | null>(null);
+
+  /** What the points control says is being spent. Nothing, until the operator and the server agree on an amount. */
+  protected readonly redemption = signal<RedemptionSelection>(NO_REDEMPTION);
+
+  protected onRedemptionChanged(selection: RedemptionSelection): void {
+    this.redemption.set(selection);
+  }
+
+  /**
    * ADR 0158: the rules whose lines the operator took off. Each is remembered with what the quote said about
    * it, so a declined line can be shown and put back after the next quote no longer carries it.
    */
@@ -1299,7 +1345,9 @@ export class NewOrderPage implements OnInit {
   /** The rule's wording for the operator's language, else its code. */
   protected autoAddLabel(line: QuotedAutoAddLine): string {
     const locale = this.i18n.locale();
-    const keys = locale === 'uz-Latn' ? ['uz-Latn', 'uz'] : [locale];
+    // The rule's text is keyed by the tag it was authored under or by the catalog's code for it
+    // (`uz` for `uz-Latn`); the registry says which, so no language is special-cased here.
+    const keys = new Set([locale, this.registry.catalogCode(locale)]);
     for (const key of keys) {
       const text = line.customerText[key];
       if (text && text.trim().length > 0) {
@@ -1320,7 +1368,11 @@ export class NewOrderPage implements OnInit {
 
   /** What the order would cost the customer, for «Сдача»: the server's figure, the menu sum until it arrives. */
   private readonly changeBaseMinor = computed(
-    () => this.serverQuote()?.totalMinor ?? this.total().subtotalMinor,
+    () =>
+      // Points the server has accepted are not cash: the customer hands over what is left (ADR 0185).
+      this.redemption().cashToCollectMinor ??
+      this.serverQuote()?.totalMinor ??
+      this.total().subtotalMinor,
   );
 
   /** The zone will not price this delivery at all (outside every zone, no tariff, past its reach). */
@@ -1373,6 +1425,51 @@ export class NewOrderPage implements OnInit {
   protected readonly promoCode = signal('');
   /** Whole som — UZS carries no minor unit (`q-money-input`'s own doc). */
   protected readonly cashTenderedMinor = signal(0);
+
+  /**
+   * ADR 0177: what the branch an order is placed at lets an operator do while keying it in (Settings >
+   * Order policy, card 5). The server enforces the three at `command.locationId()` -- the branch `place` and
+   * `quote` go to, which is the resolver's proposal or the operator's override and not necessarily the one
+   * she is signed in at -- so this follows that branch (see {@link loadEntryPolicy}). All three default to
+   * allowed -- what the screen always did -- until the read says otherwise, and a failed read leaves them
+   * allowed: the server refuses what the branch has turned off, so this only decides what the screen shows.
+   */
+  protected readonly entryPolicy = signal<EntryPolicy>(EVERYTHING_ALLOWED);
+  /** «Перезвонить клиенту», raised while the order is keyed in. */
+  protected readonly callbackRequested = signal(false);
+
+  /** The branch whose policy was last asked for, so a signal that settles on the same branch asks nothing. */
+  private entryPolicyLocationId: string | null = null;
+  /** Retires an answer for a branch the order has since left: reads can come back in any order. */
+  private entryPolicySequence = 0;
+
+  private async loadEntryPolicy(scope: LocationScope): Promise<void> {
+    this.entryPolicyLocationId = scope.locationId;
+    this.entryPolicySequence += 1;
+    const sequence = this.entryPolicySequence;
+    let policy: EntryPolicy;
+    try {
+      policy = await this.api.entryPolicy(scope);
+    } catch {
+      // A convenience, not a precondition: the screen shows everything -- not the previous branch's
+      // answer, which is no evidence about this one -- and the server refuses what the branch has
+      // turned off.
+      policy = EVERYTHING_ALLOWED;
+    }
+    if (sequence !== this.entryPolicySequence) {
+      return;
+    }
+    this.entryPolicy.set(policy);
+    if (!policy.promoCodeAllowed) {
+      this.promoCode.set('');
+    }
+    if (!policy.callbackFlagAllowed) {
+      this.callbackRequested.set(false);
+    }
+    if (!policy.changeDueAllowed) {
+      this.cashTenderedMinor.set(0);
+    }
+  }
 
   private async loadPaymentMethods(
     scope: LocationScope,
@@ -1456,6 +1553,22 @@ export class NewOrderPage implements OnInit {
   private deliveryFeeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
+    // ADR 0177: the Card 5 toggles of the branch the order is placed at. The operator's own branch is asked
+    // first (`ngOnInit` settles `selectedLocationId` there) and the branch resolver, an override or a table
+    // moves the question wherever the order is going: a brand-level call-centre operator on one branch
+    // keys an order the server places, prices and enforces at another.
+    effect(() => {
+      const scope = this.location.scope();
+      if (!scope) {
+        return;
+      }
+      const placeAtLocationId = this.placeAtLocationId(scope);
+      if (placeAtLocationId === this.entryPolicyLocationId) {
+        return;
+      }
+      untracked(() => void this.loadEntryPolicy({ ...scope, locationId: placeAtLocationId }));
+    });
+
     // Re-quotes on every fulfilment-mode, address or basket-subtotal change
     // while a delivery destination with a real coordinate is selected;
     // debounced the same way `onPhoneInput` already is, so a quantity
@@ -1512,6 +1625,7 @@ export class NewOrderPage implements OnInit {
       const sequence = this.quoteSequence;
       untracked(() => {
         this.serverQuote.set(null);
+        this.pointsAsk.set(null);
         this.quoteRefusal.set(null);
       });
       if (this.quoteTimer !== null) {
@@ -1555,8 +1669,12 @@ export class NewOrderPage implements OnInit {
       const mode = this.fulfillmentMode();
       const address = mode === 'DELIVERY' ? this.selectedAddress() : null;
       const channelCode = this.channelCode();
+      // ADR 0177: a pre-order is resolved at the time it is promised for -- a branch closed now and open
+      // then is a candidate, and when none is open then the brand's pre-order rule ranks them -- so the
+      // «Позже» time is part of the context, not a detail applied at «Создать».
+      const requestedFor = this.requestedForIso();
 
-      // A changed resolution context (mode, address or channel) retires
+      // A changed resolution context (mode, address, channel or promised time) retires
       // whatever the operator picked for the previous one — a manual choice
       // for one address should not silently carry over to a different one.
       this.branchManuallyOverridden = false;
@@ -1592,7 +1710,7 @@ export class NewOrderPage implements OnInit {
         mode === 'DELIVERY' && address
           ? { lat: address.latitude as number, lon: address.longitude as number }
           : null;
-      void this.refreshBranchResolution(mode, point, channelCode);
+      void this.refreshBranchResolution(mode, point, channelCode, requestedFor);
     });
   }
 
@@ -1634,6 +1752,7 @@ export class NewOrderPage implements OnInit {
       const quote = await this.api.quote(placeAtScope, request);
       if (sequence === this.quoteSequence) {
         this.serverQuote.set(quote);
+        this.pointsAsk.set({ scope: placeAtScope, request });
       }
     } catch (error) {
       if (sequence !== this.quoteSequence) {
@@ -1753,6 +1872,7 @@ export class NewOrderPage implements OnInit {
     mode: 'PICKUP' | 'DELIVERY',
     point: { lat: number; lon: number } | null,
     channelCode: string,
+    requestedFor: string | null,
   ): Promise<void> {
     const scope = this.location.scope();
     if (!scope) {
@@ -1761,7 +1881,13 @@ export class NewOrderPage implements OnInit {
     this.branchResolutionLoading.set(true);
     this.branchResolutionError.set(false);
     try {
-      const resolution = await this.api.resolveBranches(scope, mode, point, channelCode);
+      const resolution = await this.api.resolveBranches(
+        scope,
+        mode,
+        point,
+        channelCode,
+        requestedFor,
+      );
       this.branchCandidates.set(resolution.candidates);
       this.proposedLocationId.set(resolution.proposedLocationId);
       if (!this.branchManuallyOverridden) {
@@ -1862,6 +1988,16 @@ export class NewOrderPage implements OnInit {
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
 
+  /**
+   * The promised time as an instant the resolver can be asked about, or `null` for an order for now (the
+   * toggle is off, the input is empty or unparseable, or the time is not in the future -- «Создать» refuses
+   * that one itself). Driven by the input's signals, so it re-evaluates when the operator types a time.
+   */
+  protected readonly requestedForIso = computed<string | null>(() => {
+    const date = this.requestedForDate();
+    return date !== null && date.getTime() > Date.now() ? date.toISOString() : null;
+  });
+
   protected outOfHoursConfirmMessage(): string | null {
     return this.outOfHoursConfirmReason() === null
       ? null
@@ -1900,6 +2036,9 @@ export class NewOrderPage implements OnInit {
       (!this.isBranchOverride() ||
         (this.overrideReasonCode() !== null &&
           (!this.overrideReasonRequiresNote() || this.overrideNote().trim() !== ''))) &&
+      // X.1: points are sent only once the server has accepted this amount against this price and the
+      // operator has said the customer agreed (see `RedemptionSelection.ready`).
+      this.redemption().ready &&
       !this.submitting(),
   );
 
@@ -1977,6 +2116,8 @@ export class NewOrderPage implements OnInit {
     const override = place && this.isBranchOverride();
     const requestedForDate = place ? this.requestedForDate() : null;
     const tendered = this.cashTenderedMinor();
+    const redemption = this.redemption();
+    const spendsPoints = place && redemption.requestedMinor > 0 && redemption.ready;
     return {
       customerAccountId: customer.accountId,
       channelCode: this.channelCode(),
@@ -1984,7 +2125,7 @@ export class NewOrderPage implements OnInit {
       lines,
       destination,
       paymentMethodCode: this.paymentMethodCode(),
-      promoCode: this.promoCode().trim() || null,
+      promoCode: this.entryPolicy().promoCodeAllowed ? this.promoCode().trim() || null : null,
       requestedFor: requestedForDate ? requestedForDate.toISOString() : null,
       overrideOutOfHours: place && confirmingOutOfHours,
       proposedLocationId: this.proposedLocationId(),
@@ -1995,11 +2136,25 @@ export class NewOrderPage implements OnInit {
       // Row 1.3e: what the customer says they will hand over, written to the order in the
       // transaction that creates it. Only a cash order has one, and only an entered figure.
       cashTenderedMinor:
-        place && this.paymentMethodCode() === 'CASH' && tendered > 0 ? tendered : null,
+        place &&
+        this.entryPolicy().changeDueAllowed &&
+        this.paymentMethodCode() === 'CASH' &&
+        tendered > 0
+          ? tendered
+          : null,
+      // ADR 0177: raised on the order as it is written, only where the branch lets an operator.
+      ...(place && this.entryPolicy().callbackFlagAllowed && this.callbackRequested()
+        ? { callbackRequested: true }
+        : {}),
       // ADR 0158: what the operator declined, on the quote and on the order alike.
       ...(this.declinedAutoAdd().size > 0
         ? { declinedAutoAddRuleIds: [...this.declinedAutoAdd().keys()] }
         : {}),
+      // X.1 (ADR 0046, ADR 0185): the points the customer pays part of the order with. A price does not
+      // depend on them, so a quote carries none; the order carries them with the operator's attestation,
+      // and the platform debits them inside the transaction that creates the order.
+      redeemFromBalanceMinor: spendsPoints ? redemption.requestedMinor : null,
+      operatorAttestsCustomerAgreement: spendsPoints ? true : null,
     };
   }
 

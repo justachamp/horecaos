@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -332,6 +333,27 @@ public class JdbcOrderStore {
                   AND cash_tendered_expected_minor IS NULL
                 """)
                         .param("amount", amountMinor)
+                        .param("tenantId", tenantId)
+                        .param("orderId", orderId)
+                        .update()
+                == 1;
+    }
+
+    /**
+     * Raises «Требуется звонок» on an order in the transaction that creates it (ADR 0177: the operator who
+     * keys an order in flags it for a call back, where before the flag existed only as the {@code
+     * SET_CALLBACK_REQUESTED} amendment after the order was there). Like {@link
+     * #recordCashTenderedAtCreation} it takes no version and writes no revision of its own, because it
+     * is part of the order as first written.
+     *
+     * @return false when the order already carries the flag or is not this tenant's
+     */
+    public boolean recordCallbackRequestedAtCreation(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                UPDATE ordering.orders
+                SET callback_requested = true, callback_resolved_at = NULL, callback_resolved_by = NULL
+                WHERE tenant_id = :tenantId AND id = :orderId AND NOT callback_requested
+                """)
                         .param("tenantId", tenantId)
                         .param("orderId", orderId)
                         .update()
@@ -1063,41 +1085,30 @@ public class JdbcOrderStore {
      * option's own name.
      *
      * @param labels every wording the preset has at this moment, keyed by locale (row 10.12,
-     *               V0433). The three columns stay the source for the platform triple, so only
-     *               a locale beyond it is written to the label table -- a triple locale in
-     *               {@code labels} is ignored rather than stored twice.
+     *               V0433; the only home of the snapshot's wording since V0678), each written once
+     *               under its canonical tag
      */
     public void insertLineCommentPreset(
             UUID tenantId,
             UUID orderLineId,
             UUID sourcePresetId,
             String code,
-            String labelRu,
-            String labelUz,
-            String labelEn,
             Map<String, String> labels,
             int sortOrder) {
         UUID snapshotId = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO ordering.order_line_comment_presets (
-                    id, tenant_id, order_line_id, source_preset_id,
-                    code_snapshot, label_ru_snapshot, label_uz_snapshot, label_en_snapshot, sort_order)
-                VALUES (:id, :tenantId, :lineId, :presetId, :code, :labelRu, :labelUz, :labelEn, :sortOrder)
+                    id, tenant_id, order_line_id, source_preset_id, code_snapshot, sort_order)
+                VALUES (:id, :tenantId, :lineId, :presetId, :code, :sortOrder)
                 """)
                 .param("id", snapshotId)
                 .param("tenantId", tenantId)
                 .param("lineId", orderLineId)
                 .param("presetId", sourcePresetId)
                 .param("code", code)
-                .param("labelRu", labelRu)
-                .param("labelUz", labelUz)
-                .param("labelEn", labelEn)
                 .param("sortOrder", sortOrder)
                 .update();
-        labels.forEach((locale, label) -> {
-            if (LocalizedLabels.PLATFORM_TRIPLE.contains(LocalizedLabels.canonical(locale)) || label.isBlank()) {
-                return;
-            }
+        LocalizedLabels.merge(labels).forEach((locale, label) -> {
             jdbc.sql("""
                     INSERT INTO ordering.order_line_comment_preset_labels (
                         tenant_id, order_line_comment_preset_id, locale, label)
@@ -1457,6 +1468,27 @@ public class JdbcOrderStore {
                 .param("liveTo", to == null ? null : utc(to))
                 .query((row, number) -> new LocationCountsRow(row.getObject("location_id", UUID.class), mapCounts(row)))
                 .list();
+    }
+
+    /**
+     * How many orders of one customer account in one brand ended {@code COMPLETED} (ADR 0177): the
+     * "prior successful orders" the {@code ordering.auto_accept_min_prior_orders} gate counts.
+     * Rejected, expired, cancelled and payment-failed orders are not successes, and an order still in
+     * flight has not succeeded yet. The account and the brand are both predicates, so another brand's
+     * history (the account is shared across a tenant's brands under {@code TENANT_SHARED}) does not
+     * lend a new customer trust here.
+     */
+    public long countCompletedForCustomer(UUID tenantId, UUID brandId, UUID customerAccountId) {
+        return jdbc.sql("""
+                        SELECT count(*) FROM ordering.orders
+                        WHERE tenant_id = :tenantId AND brand_id = :brandId
+                          AND customer_account_id = :accountId AND status = 'COMPLETED'
+                        """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("accountId", customerAccountId)
+                .query(Long.class)
+                .single();
     }
 
     /**
@@ -1892,7 +1924,8 @@ public class JdbcOrderStore {
                                   FROM ordering.order_process_states p
                                  WHERE p.tenant_id = orders.tenant_id AND p.order_id = orders.id
                                    AND p.status IN ('MANUAL_ACTION_REQUIRED', 'FAILED_RETRYABLE'))
-                               AS process_attention
+                               AS process_attention,
+                               origin AS board_origin
                         FROM ordering.orders
                         WHERE tenant_id = :tenantId AND brand_id = :brandId
                           AND (:allLocations OR location_id = ANY(CAST(:locationIds AS uuid[])))
@@ -2025,7 +2058,8 @@ public class JdbcOrderStore {
                 .param("beforeCreatedAt", utcOrNull(beforeCreatedAt))
                 .param("beforeId", beforeId == null ? null : beforeId.toString())
                 .param("limit", limit)
-                .query((row, number) -> new OrderBoardRow(mapOrder(row, number), row.getString("process_attention")))
+                .query((row, number) -> new OrderBoardRow(
+                        mapOrder(row, number), row.getString("process_attention"), row.getString("board_origin")))
                 .list();
     }
 
@@ -2426,6 +2460,82 @@ public class JdbcOrderStore {
                 .list());
     }
 
+    /**
+     * How many positions each of {@code orderIds} holds now, and the name of the first, one statement for a
+     * board page (gap map row {@code 1.1}'s «Позиции» column, orders.md §2.5 column 8: {@code 4 поз · Лагман…}).
+     *
+     * <p>Reads the <em>live</em> lines ({@code revision_to IS NULL}), so an amended order shows what it holds
+     * now and not what it held at checkout -- ADR 0039 names counting without that predicate as the trap. A
+     * combo is one position however many component lines it was written as ({@code combo_selection_id}), and
+     * its first position is named by the combo and not by one of its parts. The name is the snapshot taken
+     * when the line was sold, so a renamed product does not rewrite a past order.
+     */
+    public Map<UUID, OrderItemSummary> itemSummariesByOrders(UUID tenantId, Collection<UUID> orderIds) {
+        if (orderIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, OrderItemSummary> byOrder = new HashMap<>();
+        jdbc.sql("""
+                        SELECT order_id,
+                               count(DISTINCT COALESCE(combo_selection_id, id)) AS item_count,
+                               (array_agg(COALESCE(combo_name_snapshot, product_name_snapshot)
+                                          ORDER BY line_number))[1] AS first_item
+                        FROM ordering.order_lines
+                        WHERE tenant_id = :tenantId AND order_id IN (:orderIds) AND revision_to IS NULL
+                        GROUP BY order_id
+                        """)
+                .param("tenantId", tenantId)
+                .param("orderIds", orderIds)
+                .query((row, number) -> Map.entry(
+                        row.getObject("order_id", UUID.class),
+                        new OrderItemSummary(row.getInt("item_count"), row.getString("first_item"))))
+                .list()
+                .forEach(entry -> byOrder.put(entry.getKey(), entry.getValue()));
+        return byOrder;
+    }
+
+    /**
+     * The number each of {@code orderIds} is known by outside HorecaOS, one statement for a board page (gap
+     * map row {@code 1.1}'s optional «Внешний №» column, ADR 0040): the one the aggregator's courier and
+     * the customer quote, as the order's number is the one the branch quotes.
+     *
+     * <p>An order may carry several references (a partner order id, a short display code, a venue number, a
+     * delivery claim, a POS id). The column draws the one a person would read aloud: the display code, then
+     * the venue-facing number, then the partner's own id, then the POS id, and never the delivery claim,
+     * which is a courier's and not the order's. Within a kind the oldest wins, so the number does not change
+     * under a reader. The value is what the partner sent ({@code reference_value}), not the normalised search
+     * form.
+     */
+    public Map<UUID, String> externalNumbersByOrders(UUID tenantId, Collection<UUID> orderIds) {
+        if (orderIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> byOrder = new HashMap<>();
+        jdbc.sql("""
+                        SELECT DISTINCT ON (r.order_id) r.order_id, r.reference_value
+                        FROM ordering.order_external_references r
+                        WHERE r.tenant_id = :tenantId AND r.order_id IN (:orderIds)
+                          AND r.reference_type IN ('PARTNER_DISPLAY_CODE', 'PARTNER_VENUE_ORDER_NO',
+                                                   'PARTNER_ORDER_ID', 'POS_ORDER_ID')
+                        ORDER BY r.order_id,
+                                 CASE r.reference_type
+                                     WHEN 'PARTNER_DISPLAY_CODE' THEN 1
+                                     WHEN 'PARTNER_VENUE_ORDER_NO' THEN 2
+                                     WHEN 'PARTNER_ORDER_ID' THEN 3
+                                     ELSE 4
+                                 END,
+                                 r.first_seen_at,
+                                 r.id
+                        """)
+                .param("tenantId", tenantId)
+                .param("orderIds", orderIds)
+                .query((row, number) ->
+                        Map.entry(row.getObject("order_id", UUID.class), row.getString("reference_value")))
+                .list()
+                .forEach(entry -> byOrder.put(entry.getKey(), entry.getValue()));
+        return byOrder;
+    }
+
     /** The lines as they stand now: those no revision has closed. */
     public List<OrderLineRow> lines(UUID tenantId, UUID orderId) {
         return lines(tenantId, orderId, null);
@@ -2497,6 +2607,43 @@ public class JdbcOrderStore {
                 .list();
     }
 
+    /**
+     * The lines of an order that arrived flagged (ADR 0040, ADR 0141): {@code UNMAPPED} -- the catalogue
+     * does not carry the item -- or {@code STOPPED} -- it could not be sold on this channel at this branch
+     * when the order came in. Keyed by line id; a line that was never flagged has no entry, so a native
+     * order costs one query that returns nothing. Always the live set: a flag describes the order as it
+     * arrived, and an amendment that closes the line takes the flag with it.
+     */
+    public Map<UUID, LineIntakeFlag> intakeFlags(UUID tenantId, UUID orderId) {
+        Map<UUID, LineIntakeFlag> flags = new HashMap<>();
+        jdbc.sql("""
+                SELECT id, external_mapping_status, external_item_reference
+                FROM ordering.order_lines
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                  AND revision_to IS NULL
+                  AND external_mapping_status <> 'MAPPED'
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, number) -> new LineIntakeFlag(
+                        row.getObject("id", UUID.class),
+                        row.getString("external_mapping_status"),
+                        row.getString("external_item_reference")))
+                .list()
+                .forEach(flag -> flags.put(flag.lineId(), flag));
+        return flags;
+    }
+
+    /**
+     * Why an aggregator line needs a person before the food is cooked.
+     *
+     * @param status {@code UNMAPPED} or {@code STOPPED}
+     * @param externalItemReference the partner's own identifier for the item, so the branch can name the
+     *     SKU to fix or to stop on the aggregator's side; null for a line entered without one
+     */
+    public record LineIntakeFlag(
+            UUID lineId, String status, @Nullable String externalItemReference) {}
+
     /** The stored ciphertext of one line's note, for the one endpoint that may reveal it. */
     public Optional<String> lineNote(UUID tenantId, UUID orderId, UUID lineId) {
         return jdbc.sql("""
@@ -2540,6 +2687,39 @@ public class JdbcOrderStore {
         return byLine;
     }
 
+    /**
+     * What each modifier option charged each line, from the order's adjustments (ADR 0166).
+     *
+     * <p>One row per line, option and source: an option the customer chose ({@code MODIFIER_OPTION}), an
+     * option the server applied ({@code HIDDEN_MODIFIER_OPTION}), and -- only on an order from before options
+     * were itemised -- the whole line's modifier charge as one step ({@code PRICE_BOOK}), which no receipt
+     * can split between the options and which the caller therefore reports and does not guess at. Read from
+     * the adjustments and not from the modifier rows, whose amounts are zero: every option's price is folded
+     * into its line's unit price, and the adjustment is where it was itemised.
+     */
+    public List<ModifierChargeRow> modifierCharges(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                SELECT order_line_id, source_type, source_id, SUM(amount_minor) AS amount_minor
+                FROM ordering.order_adjustments
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                  AND order_line_id IS NOT NULL AND adjustment_type = 'MODIFIER'
+                GROUP BY order_line_id, source_type, source_id
+                ORDER BY order_line_id, source_type, source_id
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, number) -> new ModifierChargeRow(
+                        row.getObject("order_line_id", UUID.class),
+                        row.getString("source_type"),
+                        row.getObject("source_id", UUID.class),
+                        row.getLong("amount_minor")))
+                .list();
+    }
+
+    /** @param sourceId the option, except on the legacy whole-line step, where it is the price book */
+    public record ModifierChargeRow(
+            UUID orderLineId, String sourceType, @Nullable UUID sourceId, long amountMinor) {}
+
     public List<OrderModifierRow> lineModifiers(UUID tenantId, UUID orderId) {
         return jdbc.sql("""
                 SELECT m.id, m.order_line_id, m.source_group_id, m.source_option_id,
@@ -2574,7 +2754,7 @@ public class JdbcOrderStore {
      * read this, matching {@link #lineModifiers}'s own shape.
      */
     public List<OrderCommentPresetRow> lineCommentPresets(UUID tenantId, UUID orderId) {
-        // The wording of a locale beyond the platform triple (V0433), one query for the whole
+        // The wording of each snapshot (V0433, the only home of it since V0678), one query for the whole
         // order and tenant-scoped on both sides of the join.
         Map<UUID, Map<String, String>> otherLabels = new HashMap<>();
         jdbc.sql("""
@@ -2597,8 +2777,7 @@ public class JdbcOrderStore {
                 })
                 .list();
         return jdbc.sql("""
-                SELECT p.id, p.order_line_id, p.source_preset_id, p.code_snapshot,
-                       p.label_ru_snapshot, p.label_uz_snapshot, p.label_en_snapshot, p.sort_order
+                SELECT p.id, p.order_line_id, p.source_preset_id, p.code_snapshot, p.sort_order
                 FROM ordering.order_line_comment_presets p
                 JOIN ordering.order_lines l ON l.id = p.order_line_id AND l.tenant_id = p.tenant_id
                 WHERE p.tenant_id = :tenantId AND l.order_id = :orderId
@@ -2610,15 +2789,8 @@ public class JdbcOrderStore {
                         row.getObject("order_line_id", UUID.class),
                         row.getObject("source_preset_id", UUID.class),
                         row.getString("code_snapshot"),
-                        row.getString("label_ru_snapshot"),
-                        row.getString("label_uz_snapshot"),
-                        row.getString("label_en_snapshot"),
                         row.getInt("sort_order"),
-                        LocalizedLabels.merge(
-                                row.getString("label_ru_snapshot"),
-                                row.getString("label_uz_snapshot"),
-                                row.getString("label_en_snapshot"),
-                                otherLabels.getOrDefault(row.getObject("id", UUID.class), Map.of()))))
+                        LocalizedLabels.merge(otherLabels.getOrDefault(row.getObject("id", UUID.class), Map.of()))))
                 .list();
     }
 
@@ -3485,15 +3657,18 @@ public class JdbcOrderStore {
             boolean presentablePayment,
             OrderTablesPort.@Nullable OrderTable table,
             @Nullable String createdByDisplayName,
-            @Nullable String acceptedByDisplayName) {
+            @Nullable String acceptedByDisplayName,
+            @Nullable String origin,
+            OrderBoardFacts facts) {
 
         /**
          * The row as this store constructs it: no courier, no open amendment, no
-         * presentable payment, no table and no actor names, each filled in afterward by {@code
-         * OrderQueryService} through the port or store that owns the fact.
+         * presentable payment, no table, no actor names and no further facts, each
+         * filled in afterward by {@code OrderQueryService} through the port or store
+         * that owns the fact.
          */
-        public OrderBoardRow(OrderRow order, @Nullable String processAttention) {
-            this(order, processAttention, null, false, false, null, null, null);
+        public OrderBoardRow(OrderRow order, @Nullable String processAttention, @Nullable String origin) {
+            this(order, processAttention, null, false, false, null, null, null, origin, OrderBoardFacts.NONE);
         }
 
         /** The row with no actor names, as the single-order summary builds it. */
@@ -3504,7 +3679,40 @@ public class JdbcOrderStore {
                 boolean amendmentAwaitingOperator,
                 boolean presentablePayment,
                 OrderTablesPort.@Nullable OrderTable table) {
-            this(order, processAttention, courierId, amendmentAwaitingOperator, presentablePayment, table, null, null);
+            this(
+                    order,
+                    processAttention,
+                    courierId,
+                    amendmentAwaitingOperator,
+                    presentablePayment,
+                    table,
+                    null,
+                    null,
+                    null,
+                    OrderBoardFacts.NONE);
+        }
+
+        /** The row with the actor names the single-order summary resolved, and no board-only facts. */
+        public OrderBoardRow(
+                OrderRow order,
+                @Nullable String processAttention,
+                @Nullable UUID courierId,
+                boolean amendmentAwaitingOperator,
+                boolean presentablePayment,
+                OrderTablesPort.@Nullable OrderTable table,
+                @Nullable String createdByDisplayName,
+                @Nullable String acceptedByDisplayName) {
+            this(
+                    order,
+                    processAttention,
+                    courierId,
+                    amendmentAwaitingOperator,
+                    presentablePayment,
+                    table,
+                    createdByDisplayName,
+                    acceptedByDisplayName,
+                    null,
+                    OrderBoardFacts.NONE);
         }
 
         /** {@link #courierId} filled in, once the caller has resolved it through the port. */
@@ -3517,7 +3725,9 @@ public class JdbcOrderStore {
                     presentablePayment,
                     table,
                     createdByDisplayName,
-                    acceptedByDisplayName);
+                    acceptedByDisplayName,
+                    origin,
+                    facts);
         }
 
         /** {@link #amendmentAwaitingOperator} filled in, once the caller has resolved it through the store. */
@@ -3530,7 +3740,9 @@ public class JdbcOrderStore {
                     presentablePayment,
                     table,
                     createdByDisplayName,
-                    acceptedByDisplayName);
+                    acceptedByDisplayName,
+                    origin,
+                    facts);
         }
 
         /** {@link #presentablePayment} filled in, once the caller has resolved it through the payments port. */
@@ -3543,7 +3755,9 @@ public class JdbcOrderStore {
                     resolvedPresentablePayment,
                     table,
                     createdByDisplayName,
-                    acceptedByDisplayName);
+                    acceptedByDisplayName,
+                    origin,
+                    facts);
         }
 
         /** {@link #table} filled in, once the caller has resolved it through {@link OrderTablesPort}. */
@@ -3556,7 +3770,9 @@ public class JdbcOrderStore {
                     presentablePayment,
                     resolvedTable,
                     createdByDisplayName,
-                    acceptedByDisplayName);
+                    acceptedByDisplayName,
+                    origin,
+                    facts);
         }
 
         /** The two actor names filled in, once the caller has resolved them through the staff directory. */
@@ -3569,9 +3785,190 @@ public class JdbcOrderStore {
                     presentablePayment,
                     table,
                     resolvedCreatedBy,
-                    resolvedAcceptedBy);
+                    resolvedAcceptedBy,
+                    origin,
+                    facts);
+        }
+
+        /** The row with {@code resolved} as its board facts, once the caller has read them. */
+        public OrderBoardRow withFacts(OrderBoardFacts resolved) {
+            return new OrderBoardRow(
+                    order,
+                    processAttention,
+                    courierId,
+                    amendmentAwaitingOperator,
+                    presentablePayment,
+                    table,
+                    createdByDisplayName,
+                    acceptedByDisplayName,
+                    origin,
+                    resolved);
         }
     }
+
+    /**
+     * What the order board draws for a row beyond the order itself, each fact read in one batch per page by
+     * the module that owns it (gap map row {@code 1.1}, ADR 0160 «Board columns»). Every field is nullable
+     * on purpose: a fact nobody asked for, and a fact the owning module has nothing to say about, are both
+     * {@code null}, and the console draws a dash for the second and nothing at all for the first -- it never
+     * reads a missing fact as a value.
+     *
+     * @param courierEtaAt   the ETA captured for the order's partner-quoted delivery plan
+     *                       ({@code fulfillment.api.CourierEtaPort}); absent for a house-courier order
+     * @param channelSystemType the channel's closed {@code SalesChannelSystemType} name
+     * @param channelIcon    the channel's own free-text icon (V0245's shape); the console falls back to a
+     *                       generic icon on a value it does not know
+     * @param channelDisplayName the tenant's name for the channel, for the icon's title
+     * @param paymentMethodCode the method of the order's payment intent ({@code PaymentMethod}'s codes)
+     * @param itemCount      how many positions the order holds now (a combo is one position)
+     * @param firstItemName  the name of the order's first position as it was sold
+     * @param fiscalStatus   {@code fiscal.fiscal_documents.status} of the sale document
+     * @param distanceMeters the delivery plan's route distance
+     * @param externalNumber the number the partner or the POS knows the order by
+     * @param reprintAvailable the order's branch has printing switched on and a printer to send to (ADR 0154),
+     *                       which is what lets {@code actions[]} carry {@code REPRINT}; read for every row
+     */
+    public record OrderBoardFacts(
+            @Nullable Instant courierEtaAt,
+            @Nullable String channelSystemType,
+            @Nullable String channelIcon,
+            @Nullable String channelDisplayName,
+            @Nullable String paymentMethodCode,
+            @Nullable Integer itemCount,
+            @Nullable String firstItemName,
+            @Nullable String fiscalStatus,
+            @Nullable Integer distanceMeters,
+            @Nullable String externalNumber,
+            boolean reprintAvailable) {
+
+        /** No fact read yet -- how every row leaves the store and how a single-order summary carries it. */
+        public static final OrderBoardFacts NONE =
+                new OrderBoardFacts(null, null, null, null, null, null, null, null, null, null, false);
+
+        public OrderBoardFacts withCourierEta(@Nullable Instant value) {
+            return new OrderBoardFacts(
+                    value,
+                    channelSystemType,
+                    channelIcon,
+                    channelDisplayName,
+                    paymentMethodCode,
+                    itemCount,
+                    firstItemName,
+                    fiscalStatus,
+                    distanceMeters,
+                    externalNumber,
+                    reprintAvailable);
+        }
+
+        public OrderBoardFacts withChannel(
+                @Nullable String systemType, @Nullable String icon, @Nullable String displayName) {
+            return new OrderBoardFacts(
+                    courierEtaAt,
+                    systemType,
+                    icon,
+                    displayName,
+                    paymentMethodCode,
+                    itemCount,
+                    firstItemName,
+                    fiscalStatus,
+                    distanceMeters,
+                    externalNumber,
+                    reprintAvailable);
+        }
+
+        public OrderBoardFacts withPaymentMethod(@Nullable String value) {
+            return new OrderBoardFacts(
+                    courierEtaAt,
+                    channelSystemType,
+                    channelIcon,
+                    channelDisplayName,
+                    value,
+                    itemCount,
+                    firstItemName,
+                    fiscalStatus,
+                    distanceMeters,
+                    externalNumber,
+                    reprintAvailable);
+        }
+
+        public OrderBoardFacts withItems(@Nullable Integer count, @Nullable String firstName) {
+            return new OrderBoardFacts(
+                    courierEtaAt,
+                    channelSystemType,
+                    channelIcon,
+                    channelDisplayName,
+                    paymentMethodCode,
+                    count,
+                    firstName,
+                    fiscalStatus,
+                    distanceMeters,
+                    externalNumber,
+                    reprintAvailable);
+        }
+
+        public OrderBoardFacts withFiscalStatus(@Nullable String value) {
+            return new OrderBoardFacts(
+                    courierEtaAt,
+                    channelSystemType,
+                    channelIcon,
+                    channelDisplayName,
+                    paymentMethodCode,
+                    itemCount,
+                    firstItemName,
+                    value,
+                    distanceMeters,
+                    externalNumber,
+                    reprintAvailable);
+        }
+
+        public OrderBoardFacts withDistance(@Nullable Integer value) {
+            return new OrderBoardFacts(
+                    courierEtaAt,
+                    channelSystemType,
+                    channelIcon,
+                    channelDisplayName,
+                    paymentMethodCode,
+                    itemCount,
+                    firstItemName,
+                    fiscalStatus,
+                    value,
+                    externalNumber,
+                    reprintAvailable);
+        }
+
+        public OrderBoardFacts withExternalNumber(@Nullable String value) {
+            return new OrderBoardFacts(
+                    courierEtaAt,
+                    channelSystemType,
+                    channelIcon,
+                    channelDisplayName,
+                    paymentMethodCode,
+                    itemCount,
+                    firstItemName,
+                    fiscalStatus,
+                    distanceMeters,
+                    value,
+                    reprintAvailable);
+        }
+
+        public OrderBoardFacts withReprintAvailable(boolean value) {
+            return new OrderBoardFacts(
+                    courierEtaAt,
+                    channelSystemType,
+                    channelIcon,
+                    channelDisplayName,
+                    paymentMethodCode,
+                    itemCount,
+                    firstItemName,
+                    fiscalStatus,
+                    distanceMeters,
+                    externalNumber,
+                    value);
+        }
+    }
+
+    /** One order's position count and first position, read for the board's items column. */
+    public record OrderItemSummary(int itemCount, @Nullable String firstItemName) {}
 
     /**
      * The order board's filter set (ADR 0102, orders.md §2.4).
@@ -4079,18 +4476,11 @@ public class JdbcOrderStore {
     /**
      * Row 2.1b: one preset a line was checked out carrying, labels as of that moment.
      *
-     * @param labels every wording the snapshot holds, keyed by locale: the platform triple from
-     *               its columns, then any locale beyond it (row 10.12, V0433)
+     * @param labels every wording the snapshot holds, keyed by locale, the platform triple first
+     *               (row 10.12, V0433)
      */
     public record OrderCommentPresetRow(
-            UUID orderLineId,
-            UUID sourcePresetId,
-            String code,
-            String labelRu,
-            String labelUz,
-            String labelEn,
-            int sortOrder,
-            Map<String, String> labels) {}
+            UUID orderLineId, UUID sourcePresetId, String code, int sortOrder, Map<String, String> labels) {}
 
     public record TransitionRow(
             int sequenceNumber,

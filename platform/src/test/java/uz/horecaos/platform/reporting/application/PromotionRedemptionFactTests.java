@@ -51,6 +51,7 @@ class PromotionRedemptionFactTests {
     private static final UUID BRAND = UUID.fromString("018f6f4e-2000-7000-8000-0000000d9002");
     private static final UUID LOCATION = UUID.fromString("018f6f4e-2000-7000-8000-0000000d9003");
     private static final UUID ENTITY = UUID.fromString("018f6f4e-2000-7000-8000-0000000d9004");
+    private static final UUID SECOND_ENTITY = UUID.fromString("018f6f4e-2000-7000-8000-0000000d900a");
     private static final UUID CUSTOMER_A = UUID.fromString("018f6f4e-2000-7000-8000-0000000d9005");
     private static final UUID CUSTOMER_B = UUID.fromString("018f6f4e-2000-7000-8000-0000000d9006");
     private static final UUID PROMOTION = UUID.fromString("018f6f4e-2000-7000-8000-0000000d9007");
@@ -99,6 +100,7 @@ class PromotionRedemptionFactTests {
                     reporting.fact_promotion_redemption
                 """).update();
         jdbc.sql("TRUNCATE TABLE ordering.orders CASCADE").update();
+        jdbc.sql("TRUNCATE TABLE payments.payment_intents CASCADE").update();
         jdbc.sql("TRUNCATE TABLE customer.customer_accounts CASCADE").update();
         jdbc.sql("TRUNCATE TABLE catalog.catalogs CASCADE").update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
@@ -383,6 +385,140 @@ class PromotionRedemptionFactTests {
         assertThat(orders).isEqualTo(1L);
     }
 
+    // ------------------------------------------------ the money grain (ADR 0038)
+
+    @Test
+    @DisplayName("the fact takes its branch and legal entity from the order's own fact at day close")
+    void theFactCarriesTheOrdersBranchAndLegalEntity() {
+        UUID order = insertOrderOf("ENT1", 100_000, "COMPLETED", CUSTOMER_A, ENTITY);
+        source.add(redemption(order, Kind.AUTOMATIC, null, CUSTOMER_A, 10_000, 0));
+
+        close.close(TENANT, DAY);
+
+        var row = jdbc.sql("""
+                SELECT location_id, legal_entity_id FROM reporting.fact_promotion_redemption
+                 WHERE tenant_id = :t AND order_id = :o
+                """).param("t", TENANT).param("o", order).query().singleRow();
+        assertThat(row.get("location_id")).isEqualTo(LOCATION);
+        assertThat(row.get("legal_entity_id")).isEqualTo(ENTITY);
+    }
+
+    @Test
+    @DisplayName("an order with no fiscal identity recorded keeps a null legal entity: its own bucket, not an entity")
+    void anOrderWithNoLegalEntityStaysInItsOwnBucket() {
+        UUID order = insertOrder("ENT0", 100_000, "COMPLETED", CUSTOMER_A);
+        source.add(redemption(order, Kind.AUTOMATIC, null, CUSTOMER_A, 10_000, 0));
+
+        close.close(TENANT, DAY);
+
+        var row = jdbc.sql("""
+                SELECT location_id, legal_entity_id FROM reporting.fact_promotion_redemption
+                 WHERE tenant_id = :t AND order_id = :o
+                """).param("t", TENANT).param("o", order).query().singleRow();
+        assertThat(row.get("location_id")).isEqualTo(LOCATION);
+        assertThat(row.get("legal_entity_id")).isNull();
+    }
+
+    @Test
+    @DisplayName("a tenant trading as two companies is never handed one discount total: one row per legal entity")
+    void theSummaryIsPerLegalEntity() {
+        UUID first = insertOrderOf("E1", 100_000, "COMPLETED", CUSTOMER_A, ENTITY);
+        UUID second = insertOrderOf("E2", 80_000, "COMPLETED", CUSTOMER_B, SECOND_ENTITY);
+        insertOrderOf("E3", 300_000, "COMPLETED", CUSTOMER_B, SECOND_ENTITY);
+        source.add(redemption(first, Kind.AUTOMATIC, null, CUSTOMER_A, 10_000, 0));
+        source.add(redemption(second, Kind.AUTOMATIC, null, CUSTOMER_B, 4_000, 0));
+
+        close.close(TENANT, DAY);
+
+        var all = queries.promotionSummary(TENANT, DAY, DAY, null);
+        assertThat(all.rows()).hasSize(2);
+        assertThat(all.rows())
+                .extracting(r -> r.legalEntityId(), r -> r.discountMinor())
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(ENTITY, 10_000L),
+                        org.assertj.core.groups.Tuple.tuple(SECOND_ENTITY, 4_000L));
+        var secondOnly = queries.promotionSummary(TENANT, DAY, DAY, null, null, SECOND_ENTITY);
+        assertThat(secondOnly.rows()).singleElement().satisfies(r -> {
+            assertThat(r.discountMinor()).isEqualTo(4_000L);
+            assertThat(r.averageCheckWith()).isEqualTo(80_000L);
+            assertThat(r.averageCheckWithout())
+                    .as("the other company's orders are not in this company's comparison")
+                    .isEqualTo(300_000L);
+        });
+    }
+
+    @Test
+    @DisplayName("the summary can be narrowed to one branch, and the provenance names the promo.* metrics it answers")
+    void theSummaryCanBeNarrowedToABranchAndNamesItsMetrics() {
+        UUID order = insertOrderOf("L1", 100_000, "COMPLETED", CUSTOMER_A, ENTITY);
+        source.add(redemption(order, Kind.AUTOMATIC, null, CUSTOMER_A, 10_000, 0));
+        close.close(TENANT, DAY);
+
+        var here = queries.promotionSummary(TENANT, DAY, DAY, null, LOCATION, null);
+        var elsewhere = queries.promotionSummary(TENANT, DAY, DAY, null, UUID.randomUUID(), null);
+
+        assertThat(here.rows()).hasSize(1);
+        assertThat(elsewhere.rows()).isEmpty();
+        assertThat(here.provenance().metricVersions())
+                .contains(
+                        "promo.redemptions.v1",
+                        "promo.unique_customers.v1",
+                        "promo.discount_som.v1",
+                        "promo.markup_som.v1",
+                        "promo.revenue_with.v1",
+                        "promo.avg_check_with.v1",
+                        "promo.avg_check_without.v1");
+    }
+
+    @Test
+    @DisplayName("a customer's one-off grant is a fact row with no promotion, grouped by where it came from")
+    void aGrantIsAFactRowWithNoPromotion() {
+        UUID grantOrder = insertOrderOf("G1", 90_000, "COMPLETED", CUSTOMER_A, ENTITY);
+        UUID plainOrder = insertOrderOf("G2", 150_000, "COMPLETED", CUSTOMER_B, ENTITY);
+        UUID grant = UUID.nameUUIDFromBytes("grant:G1".getBytes(StandardCharsets.UTF_8));
+        source.add(new Redemption(
+                grant,
+                BRAND,
+                null,
+                "GRANT:RECOVERY_CASE",
+                1,
+                Kind.GRANT,
+                null,
+                grantOrder,
+                CUSTOMER_A,
+                13_500,
+                0,
+                "UZS",
+                tashkent(13, 1),
+                grant));
+
+        close.close(TENANT, DAY);
+
+        var stored = jdbc.sql("""
+                SELECT promotion_id, grant_id, source_kind, promotion_code
+                  FROM reporting.fact_promotion_redemption WHERE tenant_id = :t
+                """).param("t", TENANT).query().singleRow();
+        assertThat(stored.get("promotion_id")).isNull();
+        assertThat(stored.get("grant_id")).isEqualTo(grant);
+        assertThat(stored.get("source_kind")).isEqualTo("GRANT");
+
+        var summary = queries.promotionSummary(TENANT, DAY, DAY, null);
+        assertThat(summary.rows()).singleElement().satisfies(r -> {
+            assertThat(r.promotionId()).isNull();
+            assertThat(r.sourceKind()).isEqualTo("GRANT");
+            assertThat(r.promotionCode()).isEqualTo("GRANT:RECOVERY_CASE");
+            assertThat(r.discountMinor()).isEqualTo(13_500L);
+            assertThat(r.averageCheckWith()).isEqualTo(90_000L);
+            assertThat(r.averageCheckWithout())
+                    .as("the order that spent the grant is not in its own comparison")
+                    .isEqualTo(150_000L);
+        });
+        assertThat(queries.promotionRedemptions(TENANT, DAY, DAY, null, 10).rows())
+                .singleElement()
+                .satisfies(r -> assertThat(r.promotionId()).isNull());
+        assertThat(plainOrder).isNotNull();
+    }
+
     private List<LocalDate> factDates() {
         return jdbc.sql("SELECT business_date FROM reporting.fact_promotion_redemption WHERE tenant_id = :t"
                         + " ORDER BY business_date")
@@ -510,6 +646,28 @@ class PromotionRedemptionFactTests {
         return orderId;
     }
 
+    /** An order whose money was taken by {@code legalEntity}: the payment intent is where the fact reads it. */
+    private UUID insertOrderOf(String seed, long totalMinor, String status, UUID customer, UUID legalEntity) {
+        UUID orderId = insertOrder(seed, totalMinor, status, customer);
+        jdbc.sql("""
+                INSERT INTO payments.payment_intents (id, tenant_id, order_id, brand_id,
+                    location_id, legal_entity_id, tender, payment_method_code, requested_amount_minor,
+                    currency, status, capture_timing, idempotency_key, created_at, settled_at)
+                VALUES (gen_random_uuid(), :t, :orderId, :b, :loc, :entity, 'CASH', 'CASH',
+                    :amount, 'UZS', 'PAID', 'ON_HANDOVER', :key, :createdAt, :createdAt)
+                """)
+                .param("t", TENANT)
+                .param("orderId", orderId)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("entity", legalEntity)
+                .param("amount", totalMinor)
+                .param("key", "intent-" + seed)
+                .param("createdAt", tashkent(13, 0).atOffset(ZoneOffset.UTC))
+                .update();
+        return orderId;
+    }
+
     private void seedTenancy() {
         jdbc.sql("""
                 INSERT INTO tenant.tenants (id, slug, legal_name, display_name, default_currency,
@@ -536,6 +694,10 @@ class PromotionRedemptionFactTests {
                 INSERT INTO tenant.legal_entities (id, tenant_id, code, legal_name, tin, status)
                 VALUES (:id, :t, 'ENTITY', 'Birinchi MCHJ', '123456789', 'ACTIVE')
                 """).param("id", ENTITY).param("t", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO tenant.legal_entities (id, tenant_id, code, legal_name, tin, status)
+                VALUES (:id, :t, 'ENTITY2', 'Ikkinchi MCHJ', '987654321', 'ACTIVE')
+                """).param("id", SECOND_ENTITY).param("t", TENANT).update();
         for (UUID customer : List.of(CUSTOMER_A, CUSTOMER_B)) {
             jdbc.sql("""
                     INSERT INTO customer.customer_accounts (id, tenant_id, status, display_name,

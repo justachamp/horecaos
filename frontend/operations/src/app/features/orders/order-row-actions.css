@@ -54,7 +54,7 @@
 
 .row-actions__overflow-menu {
   position: absolute;
-  right: 0;
+  inset-inline-end: 0;
   top: calc(100% + 2px);
   min-width: 160px;
   display: flex;
@@ -70,7 +70,7 @@
   background: transparent;
   color: var(--q-ink);
   font-size: var(--q-type-body-sm);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 

@@ -48,11 +48,11 @@
 }
 
 .ticket--warning .ticket__header {
-  border-left: 4px solid var(--q-sla-at-risk);
+  border-inline-start: 4px solid var(--q-sla-at-risk);
 }
 
 .ticket--danger .ticket__header {
-  border-left: 4px solid var(--q-sla-late);
+  border-inline-start: 4px solid var(--q-sla-late);
 }
 
 .ticket__number {
@@ -99,7 +99,7 @@
 }
 
 .ticket__items th {
-  text-align: left;
+  text-align: start;
   padding: 6px 12px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
@@ -114,7 +114,7 @@
 }
 
 .kitchen__num-col {
-  text-align: right;
+  text-align: end;
 }
 
 .ticket__item-actions {
@@ -235,7 +235,7 @@
 .ticket__assign-courier,
 .ticket__assign-cancel {
   width: 100%;
-  text-align: left;
+  text-align: start;
   padding: 4px 8px;
   border: none;
   background: var(--q-canvas);
@@ -260,7 +260,12 @@
 }
 
 .ticket__item--component td:first-child {
-  padding-left: 20px;
+  padding-inline-start: 20px;
+}
+
+.ticket__intake {
+  font-weight: 600;
+  color: var(--q-warning-text);
 }
 
 .ticket__weight {

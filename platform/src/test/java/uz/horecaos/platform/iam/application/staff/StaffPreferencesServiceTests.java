@@ -110,7 +110,9 @@ class StaffPreferencesServiceTests {
         StoredPreference saved = saveBoard(COOK, LABEL, null);
 
         assertThat(saved.version()).isEqualTo(1);
-        assertThat(saved.documentSchema()).isEqualTo(1);
+        assertThat(saved.documentSchema())
+                .as("the order board is at schema 2 since batch 21 added five columns")
+                .isEqualTo(2);
         assertThat(rawDocuments(COOK))
                 .singleElement()
                 .asString()
@@ -430,13 +432,18 @@ class StaffPreferencesServiceTests {
         Map<StaffPreferenceSurface, SurfaceDefinition> definitions = new EnumMap<>(StaffPreferenceSurface.class);
         definitions.put(
                 StaffPreferenceSurface.SHELL, new SurfaceDefinition(1, document -> (ObjectNode) document, List.of()));
+        // The order board is at schema 2 in production (batch 21); a release after it would be at 3, with the
+        // identity step 1 -> 2 that production has and a step 2 -> 3 that marks the document.
         definitions.put(
                 StaffPreferenceSurface.ORDER_BOARD,
-                new SurfaceDefinition(2, document -> (ObjectNode) document, List.of(document -> {
-                    ObjectNode copy = ((ObjectNode) document).deepCopy();
-                    copy.put("upgraded", true);
-                    return copy;
-                })));
+                new SurfaceDefinition(
+                        3,
+                        document -> (ObjectNode) document,
+                        List.of(java.util.function.UnaryOperator.identity(), document -> {
+                            ObjectNode copy = ((ObjectNode) document).deepCopy();
+                            copy.put("upgraded", true);
+                            return copy;
+                        })));
         StaffPreferencesService later = new StaffPreferencesService(
                 kit.preferenceStore,
                 kit.store,
@@ -448,12 +455,62 @@ class StaffPreferencesServiceTests {
 
         assertThat(later.readAll(StaffKit.TENANT_A, COOK)).singleElement().satisfies(stored -> {
             assertThat(stored.document().get("upgraded").asBoolean()).isTrue();
-            assertThat(stored.documentSchema()).isEqualTo(2);
+            assertThat(stored.documentSchema()).isEqualTo(3);
             assertThat(stored.version()).isEqualTo(1);
         });
         assertThat(rawDocuments(COOK).getFirst())
                 .as("reading never rewrites the row; the next save does, at the new schema")
                 .isEqualTo(sealedBefore);
+    }
+
+    @Test
+    @DisplayName(
+            "a board document a person saved before schema 2 reads back unchanged, and their next save is schema 2")
+    void aSchemaOneBoardDocumentSurvivesTheBump() {
+        // Written by the release before batch 21: the order board at schema 1.
+        Map<StaffPreferenceSurface, SurfaceDefinition> before = new EnumMap<>(StaffPreferenceSurface.class);
+        before.put(
+                StaffPreferenceSurface.SHELL, new SurfaceDefinition(1, document -> (ObjectNode) document, List.of()));
+        before.put(
+                StaffPreferenceSurface.ORDER_BOARD,
+                new SurfaceDefinition(1, document -> (ObjectNode) document, List.of()));
+        StaffPreferencesService earlier = new StaffPreferencesService(
+                kit.preferenceStore,
+                kit.store,
+                new StaffPreferenceSchemas(before),
+                kit.preferenceCache,
+                uz.horecaos.platform.support.TestProtection.envelope(),
+                kit.meters,
+                kit.clock);
+        StoredPreference old = earlier.write(
+                StaffKit.TENANT_A,
+                COOK,
+                StaffPreferenceSurface.ORDER_BOARD,
+                json("{\"columns\":{\"show\":[\"createdBy\"],\"hide\":[\"courier\"]}}"),
+                null);
+        assertThat(old.documentSchema()).isEqualTo(1);
+        String sealedBefore = rawDocuments(COOK).getFirst();
+
+        StoredPreference read = kit.preferences.readAll(StaffKit.TENANT_A, COOK).getFirst();
+
+        assertThat(read.documentSchema()).as("read at the schema in force").isEqualTo(2);
+        assertThat(read.document().toString())
+                .as("the person's choice is exactly what they saved: the upgrade step is the identity")
+                .isEqualTo("{\"columns\":{\"show\":[\"createdBy\"],\"hide\":[\"courier\"]}}");
+        assertThat(rawDocuments(COOK).getFirst())
+                .as("reading never rewrites the row")
+                .isEqualTo(sealedBefore);
+
+        StoredPreference resaved = kit.preferences.write(
+                StaffKit.TENANT_A,
+                COOK,
+                StaffPreferenceSurface.ORDER_BOARD,
+                json("{\"columns\":{\"show\":[\"createdBy\",\"courierEta\"],\"hide\":[\"courier\"]}}"),
+                (long) old.version());
+        assertThat(resaved.documentSchema()).isEqualTo(2);
+        assertThat(resaved.document().get("columns").get("show").size())
+                .as("and a column of schema 2 is now accepted")
+                .isEqualTo(2);
     }
 
     // ------------------------------------------------------------------ reset

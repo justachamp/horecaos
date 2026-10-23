@@ -443,6 +443,11 @@ export const reportsEn = {
   'reports.customers.funnel.stage.ORDERED': 'Ordered',
   'reports.customers.funnel.visits.notMeasured':
     'Visits: not measured. Nothing is collected from a browser, an app or a bot for this report, so visits are neither shown as zero nor estimated. A restaurant that wants visits can read them from its own Google Analytics.',
+  'reports.customers.funnel.pageLoads.label': 'page loads, not people',
+  'reports.customers.funnel.pageLoads.note':
+    'One page load is counted each time a browser tab opens the shop, with no cookie and no identifier. One person opening it twice is two, so this is shown beside the funnel and not as its first bar: the stages after it are not a share of it.',
+  'reports.customers.funnel.pageLoads.unrecorded':
+    '{days} days of this period came before the counter was switched on, so this total is partial.',
   'reports.customers.funnel.reason.NOT_BY_CHANNEL':
     'Registrations have no sales channel, so a channel cut leaves them out.',
   'reports.customers.funnel.unrecorded':
@@ -558,8 +563,12 @@ export const reportsEn = {
   'reports.marketing.campaigns.count.deferred': 'Deferred (quiet hours)',
   'reports.marketing.campaigns.count.refused': 'Refused',
   'reports.marketing.campaigns.count.total': 'Total recipients',
-  'reports.marketing.campaigns.readReceiptsNotBuilt':
-    'Read receipts are not shown: there is no read status or read_at column recorded yet — this is unmeasured, not zero.',
+  'reports.marketing.campaigns.column.messages': 'Messages',
+  'reports.marketing.campaigns.column.delivered': 'Delivered',
+  'reports.marketing.campaigns.column.failed': 'Failed',
+  'reports.marketing.campaigns.column.withheld': 'Withheld',
+  'reports.marketing.campaigns.column.notReported': 'n/a',
+  'reports.marketing.campaigns.delivery.title': 'What became of the messages',
 
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
   'reports.forecast.title': 'Demand forecast',

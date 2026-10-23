@@ -5,7 +5,6 @@ import {
   labelDrafts,
   labelsToSend,
   pickLabel,
-  platformColumns,
   presetLabelFor,
 } from './locale-labels';
 
@@ -75,41 +74,6 @@ describe('changedLabels', () => {
   });
 });
 
-describe('platformColumns', () => {
-  const stored = { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onion' };
-
-  it('uses the wording of an offered platform language the operator filled in', () => {
-    expect(
-      platformColumns(['ru', 'uz-Latn', 'en'], { ru: 'А', 'uz-Latn': 'B', en: 'C' }, 'ru'),
-    ).toEqual({ ru: 'А', 'uz-Latn': 'B', en: 'C' });
-  });
-
-  it('round-trips a platform language the editor does not offer exactly as the row has it', () => {
-    expect(platformColumns(['ru', 'en'], { ru: 'Новое', en: '' }, 'ru', stored)).toEqual({
-      ru: 'Новое',
-      'uz-Latn': 'Piyozsiz',
-      // Cleared but offered: "leave it", so the stored wording, not a blank.
-      en: 'No onion',
-    });
-  });
-
-  it('words a platform language nobody offered with the default language on a create', () => {
-    expect(
-      platformColumns(['uz-Latn', 'en'], { 'uz-Latn': 'Piyozsiz', en: 'No onion' }, 'uz-Latn'),
-    ).toEqual({
-      ru: 'Piyozsiz',
-      'uz-Latn': 'Piyozsiz',
-      en: 'No onion',
-    });
-  });
-
-  it('ignores a draft keyed by a language that is not offered', () => {
-    expect(
-      platformColumns(['ru'], { ru: 'А', 'uz-Latn': 'HIDDEN DRAFT' }, 'ru', stored)['uz-Latn'],
-    ).toBe('Piyozsiz');
-  });
-});
-
 describe('pickLabel', () => {
   it('prefers the operator’s language, then the fallbacks, then anything at all', () => {
     expect(pickLabel({ en: 'Centre', kaa: 'Orayı' }, 'ru', ['ru', 'uz-Latn', 'en'])).toBe('Centre');
@@ -120,47 +84,33 @@ describe('pickLabel', () => {
 });
 
 describe('presetLabelFor', () => {
-  const triple = { labelRu: 'Без лука', labelUz: 'Piyozsiz', labelEn: 'No onions' };
+  const labels = { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions' };
 
-  it('answers the triple column of the console language when the preset carries no map', () => {
-    expect(presetLabelFor(triple, 'ru')).toBe('Без лука');
-    expect(presetLabelFor(triple, 'uz-Latn')).toBe('Piyozsiz');
-    expect(presetLabelFor(triple, 'en')).toBe('No onions');
+  it('answers the wording of the console language from the labels map', () => {
+    expect(presetLabelFor({ labels }, 'ru')).toBe('Без лука');
+    expect(presetLabelFor({ labels }, 'uz-Latn')).toBe('Piyozsiz');
+    expect(presetLabelFor({ labels }, 'en')).toBe('No onions');
   });
 
-  it('reads the labels map first, so a wording the map holds wins over the column', () => {
-    expect(presetLabelFor({ ...triple, labels: { en: 'No onion rings' } }, 'en')).toBe(
-      'No onion rings',
+  it('shows a wording beyond the platform triple like any other', () => {
+    expect(presetLabelFor({ labels: { ...labels, kaa: 'Piyazsiz' } }, 'kaa')).toBe('Piyazsiz');
+  });
+
+  it('prefers the wording the platform resolved for the request over a language the map lacks', () => {
+    expect(presetLabelFor({ labels: { 'uz-Latn': 'Piyozsiz' }, label: 'Piyazsiz' }, 'en')).toBe(
+      'Piyazsiz',
     );
   });
 
-  it('falls back from a language the map lacks to the triple column, not to a blank', () => {
-    expect(presetLabelFor({ ...triple, labels: { kaa: 'Piyazsiz' } }, 'uz-Latn')).toBe('Piyozsiz');
-  });
-
-  it('shows a wording beyond the triple when every column is blank, before it shows nothing', () => {
-    const beyond = { labelRu: '', labelUz: ' ', labelEn: '', labels: { kaa: 'Piyazsiz' } };
-    expect(presetLabelFor(beyond, 'en')).toBe('Piyazsiz');
-  });
-
-  it('prefers the wording the platform resolved for the request over a foreign column', () => {
-    const resolved = {
-      labelRu: '',
-      labelUz: 'Piyozsiz',
-      labelEn: '',
-      labels: { 'uz-Latn': 'Piyozsiz' },
-      label: 'Piyazsiz',
-    };
-    expect(presetLabelFor(resolved, 'en')).toBe('Piyazsiz');
-  });
-
-  it('walks the triple in platform order when the console language has nothing', () => {
-    expect(presetLabelFor({ labelRu: '', labelUz: 'Piyozsiz', labelEn: 'No onions' }, 'ru')).toBe(
-      'Piyozsiz',
-    );
+  it('falls back to the first wording the map holds, the platform triple first, rather than a blank', () => {
+    expect(
+      presetLabelFor({ labels: { ru: '', 'uz-Latn': 'Piyozsiz', en: 'No onions' } }, 'kaa'),
+    ).toBe('Piyozsiz');
+    expect(presetLabelFor({ labels: { ru: ' ', kaa: 'Piyazsiz' } }, 'en')).toBe('Piyazsiz');
   });
 
   it('answers an empty string, never undefined, for a preset with no wording at all', () => {
-    expect(presetLabelFor({ labelRu: '', labelUz: '', labelEn: '' }, 'en')).toBe('');
+    expect(presetLabelFor({}, 'en')).toBe('');
+    expect(presetLabelFor({ labels: {} }, 'en')).toBe('');
   });
 });

@@ -29,6 +29,30 @@ describe('FiscalizationApi.backfillCodes', () => {
 
   afterEach(() => http.verify());
 
+  it('sends a unit code and a receipt name in the same MERGE item when an item supplies them', async () => {
+    const pending = api.backfillCodes(SCOPE, [
+      { nodeType: 'VARIANT', nodeId: 'gaps', fiscalUnitCode: 1500, fiscalName: 'Burger classic' },
+      { nodeType: 'VARIANT', nodeId: 'unit-only', fiscalUnitCode: 1500 },
+    ]);
+
+    const request = http.expectOne(
+      `${environment.apiBaseUrl}/api/v1/control-plane/tenants/tenant-1/brands/brand-1/catalog/fiscal-classifications/bulk`,
+    );
+    expect(request.request.body).toEqual({
+      mode: 'MERGE',
+      items: [
+        {
+          nodeType: 'VARIANT',
+          nodeId: 'gaps',
+          fiscal: { fiscalUnitCode: 1500, fiscalName: 'Burger classic' },
+        },
+        { nodeType: 'VARIANT', nodeId: 'unit-only', fiscal: { fiscalUnitCode: 1500 } },
+      ],
+    });
+    request.flush({ outcomes: [] });
+    await pending;
+  });
+
   it('puts a MERGE batch to the bulk classification endpoint with an idempotency key', async () => {
     const pending = api.backfillCodes(SCOPE, [
       {

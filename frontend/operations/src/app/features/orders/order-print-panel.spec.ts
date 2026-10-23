@@ -21,7 +21,11 @@ class FakeFlags {
 
 async function render(
   api: Partial<PrintingApi>,
-  options: { flagsOn?: boolean; browser?: Partial<BrowserPrinter> } = {},
+  options: {
+    flagsOn?: boolean;
+    reprintOffered?: boolean;
+    browser?: Partial<BrowserPrinter>;
+  } = {},
 ): Promise<ComponentFixture<OrderPrintPanel>> {
   await TestBed.configureTestingModule({
     imports: [OrderPrintPanel],
@@ -38,6 +42,9 @@ async function render(
   const fixture = TestBed.createComponent(OrderPrintPanel);
   fixture.componentRef.setInput('scope', SCOPE);
   fixture.componentRef.setInput('orderId', 'order-1');
+  if (options.reprintOffered !== undefined) {
+    fixture.componentRef.setInput('reprintOffered', options.reprintOffered);
+  }
   fixture.detectChanges();
   await flush();
   fixture.detectChanges();
@@ -50,6 +57,56 @@ describe('OrderPrintPanel', () => {
   it('is absent while printing is switched off for the tenant', async () => {
     const fixture = await render({}, { flagsOn: false });
     expect(el(fixture, '[data-testid="order-detail-print"]')).toBeNull();
+  });
+
+  // The server offers REPRINT to anyone holding print.reprint at the branch when printing is on and a printer exists,
+  // and the tenant-wide flag read is `tenant.read` at TENANT scope, which a cashier does not hold: their flags read
+  // is refused, so the flag alone would hide the section the action they were just offered opens.
+  it('is drawn for a person the server offered REPRINT, though their tenant flag read is refused', async () => {
+    const fixture = await render({}, { flagsOn: false, reprintOffered: true });
+    expect(el(fixture, '[data-testid="order-detail-print"]')).not.toBeNull();
+  });
+
+  it('loads the printers and reveals itself for that person too', async () => {
+    const printers = vi.fn().mockResolvedValue([printer()]);
+    const fixture = await render({ printers }, { flagsOn: false, reprintOffered: true });
+    const host = fixture.nativeElement as HTMLElement;
+    const scrolled = vi.fn();
+    host.scrollIntoView = scrolled;
+
+    fixture.componentInstance.reveal();
+
+    expect(printers).toHaveBeenCalledWith(SCOPE);
+    expect(scrolled).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(host.querySelector('[data-testid="order-print-document"]'));
+  });
+
+  it('is still absent when printing is off and the server offered nothing', async () => {
+    const fixture = await render({}, { flagsOn: false, reprintOffered: false });
+    expect(el(fixture, '[data-testid="order-detail-print"]')).toBeNull();
+  });
+
+  it('reveals itself on request: scrolled to, with the cursor on the first control (the row’s «Печать»)', async () => {
+    const fixture = await render({});
+    const host = fixture.nativeElement as HTMLElement;
+    const scrolled = vi.fn();
+    host.scrollIntoView = scrolled;
+
+    fixture.componentInstance.reveal();
+
+    expect(scrolled).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(host.querySelector('[data-testid="order-print-document"]'));
+  });
+
+  it('does not reveal anything while printing is off: a stale click scrolls to nothing', async () => {
+    const fixture = await render({}, { flagsOn: false });
+    const host = fixture.nativeElement as HTMLElement;
+    const scrolled = vi.fn();
+    host.scrollIntoView = scrolled;
+
+    fixture.componentInstance.reveal();
+
+    expect(scrolled).not.toHaveBeenCalled();
   });
 
   it('says it is not the POS export, so nobody presses one believing it is the other', async () => {

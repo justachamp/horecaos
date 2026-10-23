@@ -135,6 +135,16 @@ public enum ErrorCode {
      */
     PAYMENT_WINDOW_TOO_SHORT_FOR_CANCEL(HttpStatus.UNPROCESSABLE_ENTITY, "Payment window too short to cancel"),
 
+    /**
+     * ADR 0042, ADR 0178: a courier's pickup or handover was refused because a check it is held to did not
+     * hold, at a location that holds those steps {@code HARD}. The detail names the failed check kinds
+     * ({@code GEO}, {@code PHOTO}, {@code PAYMENT}); {@code failedChecks} and {@code reason} carry the same as
+     * data. Distinct from {@link #UNPROCESSABLE_STATE}, which refuses a rule of the delivery's state: this
+     * one says the step was fine and the evidence for it was not, so the courier's answer is to be where the
+     * step needs them, not to wait.
+     */
+    GATE_FAILED(HttpStatus.CONFLICT, "Gate failed"),
+
     /** ADR 0018: the quote's inputs changed; never silently charge the difference. */
     PRICE_CHANGED(HttpStatus.CONFLICT, "Price changed"),
 
@@ -188,6 +198,15 @@ public enum ErrorCode {
      * active at the branch. One answer for all of them, so a channel id of another tenant is not an oracle.
      */
     KIOSK_CHANNEL_NOT_AVAILABLE(HttpStatus.UNPROCESSABLE_ENTITY, "Kiosk channel not available"),
+
+    /**
+     * ADR 0187: a picture cannot go on a kiosk's idle loop. The answer carries {@code reason}: {@code WRONG_ASPECT_RATIO}
+     * (not 9:16), {@code TOO_LARGE} (over 1 MB), {@code NOT_A_RASTER_IMAGE}, {@code NOT_AVAILABLE} (not yet verified),
+     * {@code UNKNOWN_ASSET} (no such picture of this tenant's, or one uploaded for something else: one answer, so an
+     * id is not an oracle) or {@code LIMIT} (a ninth). One code and a reason, because the console branches on the
+     * reason and every one of them is the same kind of refusal: a well-formed request the list will not take.
+     */
+    IDLE_MEDIA_REFUSED(HttpStatus.UNPROCESSABLE_ENTITY, "Idle media refused"),
 
     /**
      * ADR 0155: a terminal refused an unlock, and says no more than that. A wrong PIN, an unknown member and an

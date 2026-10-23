@@ -433,6 +433,18 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
   'finance.subscription.statements.total': 'Jami',
   'finance.subscription.statements.status': 'Holat',
   'finance.subscription.statements.download': 'CSV yuklab olish',
+  'finance.subscription.einvoice.label': 'Elektron hisob-faktura',
+  'finance.subscription.einvoice.state.DRAFT':
+    '{operator}da tayyorlangan; HorecaOS uni hali sizga yubormagan',
+  'finance.subscription.einvoice.state.SENT':
+    '{operator} orqali sizga yuborilgan; imzoingizni kutmoqda',
+  'finance.subscription.einvoice.state.SIGNED': 'siz {operator}da imzolagansiz',
+  'finance.subscription.einvoice.state.REFUSED': '{operator}da rad etilgan',
+  'finance.subscription.einvoice.state.CANCELLED': '{operator}da bekor qilingan',
+  'finance.subscription.einvoice.state.UNKNOWN': '{operator} xabar beradi: «{status}»',
+  'finance.subscription.einvoice.state.UNCONFIRMED': '{operator}ga yuborilgan; tasdiq kutilmoqda',
+  'finance.subscription.einvoice.checked': 'tekshirilgan: {time}',
+  'finance.subscription.einvoice.sign': 'Imzolash yoki rad etish uchun {operator}ni oching.',
   'finance.subscription.statements.empty': 'Hali hisob chiqarilmagan.',
   'finance.subscription.statements.status.DRAFT': 'Oldindan koʻrish',
   'finance.subscription.statements.status.ISSUED': 'Chiqarilgan',
@@ -605,6 +617,30 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
     'HorecaOS endi undan yecha olmaydi, hozir esa toʻlov karta orqali — shuning uchun keyin hisob-faktura va bank oʻtkazmasi boʻladi. Siz allaqachon qoʻshgan pul hamyonda qoladi.',
   'finance.wallet.card.remove.confirm': 'Kartani oʻchirish',
   'finance.wallet.card.remove.cancel': 'Qoldirish',
+  'finance.wallet.enrol.browser.lead':
+    'Karta raqami va amal qilish muddatini quyiga kiriting. Ular HorecaOSga emas, toʻgʻridan-toʻgʻri toʻlov provayderiga yuboriladi va provayder javob berishi bilan bu sahifadan oʻchiriladi. Keyin provayder telefoningizga kod yuboradi.',
+  'finance.wallet.enrol.browser.number': 'Karta raqami',
+  'finance.wallet.enrol.browser.expiry': 'Amal qilish muddati (OO/YY)',
+  'finance.wallet.enrol.browser.send': 'Kodni yuborish',
+  'finance.wallet.enrol.browser.sent': 'Provayder {phone} raqamiga kod yubordi.',
+  'finance.wallet.enrol.browser.sentNoPhone':
+    'Provayder shu kartaga bogʻlangan telefonga kod yubordi.',
+  'finance.wallet.enrol.browser.unreachable':
+    'Toʻlov provayderiga ulanib boʻlmadi. HorecaOSga hech narsa yuborilmadi. Qayta urinib koʻring.',
+  'finance.wallet.enrol.browser.refused':
+    'Toʻlov provayderi bu kartani qabul qilmadi. Raqam va muddatni tekshiring.',
+  'finance.wallet.enrol.browser.unreadable':
+    'Toʻlov provayderining javobini oʻqib boʻlmadi. Qayta urinib koʻring.',
+  'finance.wallet.reason.CARD_EXPIRED': 'Bu kartaning amal qilish muddati tugagan.',
+  'finance.wallet.reason.CARD_EXPIRY_REQUIRED':
+    'Karta amal qilish muddatini oy va yil bilan kiriting.',
+  'finance.wallet.reason.PROVIDER_UNAVAILABLE':
+    'Toʻlov provayderi javob bermayapti. Bir necha daqiqadan keyin urinib koʻring.',
+  'finance.wallet.reason.PROVIDER_NOT_CONNECTED': 'Karta orqali toʻlov hozir ulanmagan.',
+  'finance.wallet.reason.PROVIDER_REFUSED': 'Toʻlov provayderi buni qabul qilmadi.',
+  'finance.wallet.decline.PROVIDER_ERROR': 'toʻlov provayderi rad etdi',
+  'finance.wallet.decline.PAYMENT_DECLINED': 'rad etildi',
+  'finance.wallet.decline.PROVIDER_REJECTED': 'toʻlov provayderi rad etdi',
   'finance.wallet.enrol.title': 'Kartangizni qoʻshing',
   'finance.wallet.enrol.lead':
     'Kartani toʻlov provayderining oʻz shaklida kiriting, soʻng shaklning bergan kodini va bankingiz SMS bilan yuborgan kodni shu yerga kiriting.',
@@ -775,6 +811,7 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
   'finance.fiscalEvidence.seller.source.UNRESOLVED':
     'Hujjatda yuridik shaxs koʻrsatilmagan, shuning uchun STIRni aytib boʻlmaydi.',
   'finance.fiscalEvidence.field.merchantAccount': 'Merchant hisobi',
+  'finance.fiscalEvidence.field.businessDate': 'Sotuvchi aniqlangan operatsion kun',
   'finance.fiscalEvidence.field.fiscalSign': 'Fiskal belgi',
   'finance.fiscalEvidence.field.receiptNumber': 'Chek raqami',
   'finance.fiscalEvidence.field.terminalId': 'Terminal',
@@ -798,7 +835,7 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
   'finance.fiscalEvidence.lines.kind.DELIVERY_FEE': 'Yetkazib berish',
   'finance.fiscalEvidence.lines.kind.SYNTHETIC': 'Vaqtincha',
   'finance.fiscalEvidence.lines.synthetic':
-    'Bu — ulanishni tekshirish uchun sinov muhiti yuboradigan bir qatorli vaqtincha chek. Undagi nollar sotuv emas.',
+    'Bu — cheklar buyurtma boʻyicha tuzila boshlashidan oldin ulanishni tekshirish uchun sinov muhiti yuborgan bir qatorli vaqtincha chek. Undagi nollar sotuv emas.',
   'finance.fiscalEvidence.lines.notSent':
     'Bu chek uchun qatorlar yozilmagan: yo hali hech narsa yuborilmagan, yo yuborilgani saqlanmagan. Oʻrniga hech narsa koʻrsatilmaydi.',
   'finance.fiscalEvidence.lines.notReadable':
@@ -829,6 +866,8 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
   'finance.fiscalEvidence.correction.reason.DUPLICATE_RECEIPT': 'Chek takrorlangan',
   'finance.fiscalEvidence.correction.reason.CUSTOMER_REFUND': 'Mijozga qaytarish',
   'finance.fiscalEvidence.correction.reason.OTHER': 'Boshqa',
+  'finance.fiscalEvidence.correction.reason.AMENDED_AFTER_ISSUE':
+    'Chek kiritilgandan keyin buyurtma oʻzgartirildi',
   'finance.fiscalEvidence.correction.note.label': 'Nima notoʻgʻri (255 belgigacha)',
   'finance.fiscalEvidence.correction.submit': 'Soʻrovni yuborish',
   'finance.fiscalEvidence.correction.submitting': 'Yuborilmoqda…',

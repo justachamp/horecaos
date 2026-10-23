@@ -45,6 +45,8 @@ Loud inside the window, in the morning digest outside it.
 | The routing dataset is more than 60 days old (ADR 0147) | [load-uzbekistan-routing-dataset.md](load-uzbekistan-routing-dataset.md), "The monthly refresh" |
 | The national ИКПУ/MXIK list is not loaded while a tenant has classified a node (`FISCAL_REFERENCE_NOT_LOADED`, ADR 0173) | [mxik-reference-import.md](mxik-reference-import.md), steps 1 to 4 |
 | The national ИКПУ/MXIK list is older than 45 days (`FISCAL_REFERENCE_STALE`, ADR 0173) | [mxik-reference-import.md](mxik-reference-import.md), "The monthly refresh" |
+| A closed business day holds orders and has no customer-funnel row (ADR 0167) | [customer-funnel-gap.md](customer-funnel-gap.md), steps 1 to 3 |
+| Customer-funnel days with a basket or checkout count that was never recorded are growing (ADR 0167) | [customer-funnel-gap.md](customer-funnel-gap.md), steps 2 and 4 |
 
 ## Not an alert, on purpose
 

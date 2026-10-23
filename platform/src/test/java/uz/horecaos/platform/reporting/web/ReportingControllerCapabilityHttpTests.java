@@ -223,6 +223,60 @@ class ReportingControllerCapabilityHttpTests {
         assertThat(ok.getResponse().getContentAsString()).isEqualTo("[]");
     }
 
+    // ------------------------------------------------------ 10.10c (ADR 0107)
+    // The read-only SLA bucket-set version card. Three console screens call this one route (the
+    // reference-data card, the branch SLA report and the courier report) and no test named it: the
+    // platform-admin sibling is only ever instantiated directly (SlaBucketControllerTests).
+
+    @Test
+    void slaBucketSetRefusesWithoutReportingRead() throws Exception {
+        MvcResult refused = mvc.perform(get(REPORTING + "/sla-bucket-set").with(tokenFor(DISPATCHER)))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.REPORTING_READ.code());
+        assertThat(refused.getResponse().getContentAsString())
+                .as("a refusal names the missing capability and says nothing of the buckets")
+                .doesNotContain("UNDER_30");
+    }
+
+    @Test
+    void slaBucketSetAnswersTheVersionAndTheSixBucketsWithReportingRead() throws Exception {
+        MvcResult ok = mvc.perform(get(REPORTING + "/sla-bucket-set").with(tokenFor(MANAGER)))
+                .andReturn();
+
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        String body = ok.getResponse().getContentAsString();
+        assertThat(JsonPath.<Integer>read(body, "$.version"))
+                .as("the version the reports are computed under")
+                .isEqualTo(1);
+        assertThat(JsonPath.<List<String>>read(body, "$.buckets[*].code"))
+                .containsExactly("UNDER_30", "M30_35", "M35_40", "M40_50", "M50_60", "OVER_60");
+        assertThat(JsonPath.<List<Integer>>read(body, "$.buckets[*].fromMinutes"))
+                .containsExactly(0, 30, 35, 40, 50, 60);
+        // Half-open and exhaustive: each bucket ends where the next begins, and the last one is open.
+        assertThat(JsonPath.<List<Integer>>read(body, "$.buckets[0:5].toMinutesExclusive"))
+                .containsExactly(30, 35, 40, 50, 60);
+        assertThat(JsonPath.<Object>read(body, "$.buckets[5].toMinutesExclusive"))
+                .as("the last bucket has no upper bound")
+                .isNull();
+    }
+
+    @Test
+    void slaBucketSetOfAnotherTenantIsRefusedToThisTenantsManager() throws Exception {
+        UUID otherTenant = UUID.fromString("018f9b20-9000-7000-8000-0000000000a2");
+
+        MvcResult refused = mvc.perform(get("/api/v1/tenants/" + otherTenant + "/reporting/sla-bucket-set")
+                        .with(tokenFor(MANAGER)))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus())
+                .as("REPORTING_READ is granted at this tenant's scope, not the whole platform's")
+                .isEqualTo(403);
+    }
+
     // ------------------------------------------------------ T13 (7.6/7.6a/7.6b)
 
     @Test

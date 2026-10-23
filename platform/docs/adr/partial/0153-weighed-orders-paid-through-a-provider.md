@@ -25,6 +25,10 @@
   `CheckoutEligibilityGuard` refuses it with the same code for every surface that
   checks out (storefront, operator, bot). Nothing takes an incremental charge, gives
   back a partial refund, or holds an amount and captures a smaller one.
+  Addition, 2026-10-14 ([ADR 0180](../partial/0180-stale-marketplace-channels-weighed-baskets-and-the-marketplace-menu-pull.md), Decision 2): Decision 2 of this record is the row's
+  final scope. A weighed basket settles at handover; paths A, B and C of Decision 3 are not
+  built and not scheduled, and the proposed default of Decision 4 is withdrawn as a build
+  target. The interim rule above is therefore not interim.
 - Date proposed: 2026-10-03
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (fix wave 17, finding on weighed orders paid through

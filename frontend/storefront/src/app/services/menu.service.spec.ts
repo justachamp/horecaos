@@ -40,6 +40,32 @@ function setUp() {
   return { service: TestBed.inject(MenuService), api };
 }
 
+describe('MenuService: the КБЖУ accuracy line switch (ADR 0137, row 4.2c)', () => {
+  it('is off until a menu says otherwise, and follows the menu last read', async () => {
+    const { service, api } = setUp();
+    expect(service.nutritionAccuracyNotice()).toBe(false);
+
+    api.get.mockResolvedValueOnce({ ...emptyMenu(), nutritionAccuracyNotice: true });
+    await service.menu('uz');
+    expect(service.nutritionAccuracyNotice()).toBe(true);
+
+    api.get.mockResolvedValueOnce({ ...emptyMenu(), nutritionAccuracyNotice: false });
+    await service.menu('uz');
+    expect(service.nutritionAccuracyNotice()).toBe(false);
+  });
+
+  it('reads a menu from a platform that predates the switch as off', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValueOnce({ ...emptyMenu(), nutritionAccuracyNotice: true });
+    await service.menu('uz');
+
+    api.get.mockResolvedValueOnce(emptyMenu());
+    await service.menu('ru');
+
+    expect(service.nutritionAccuracyNotice()).toBe(false);
+  });
+});
+
 describe('MenuService.menu: concurrent callers for the same key share one request', () => {
   it('two callers before the first resolves get one GET, not two -- home and a re-projecting cart asking together', async () => {
     const { service, api } = setUp();
@@ -118,9 +144,6 @@ describe('MenuService.item: row 10.12 comment preset wording', () => {
           commentPresets: [
             {
               code: 'NO_ONIONS',
-              labelRu: 'Без лука',
-              labelUz: 'Piyozsiz',
-              labelEn: 'No onions',
               labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions', kaa: 'Piyazsiz' },
               label: 'Piyozsiz',
             },
@@ -134,9 +157,6 @@ describe('MenuService.item: row 10.12 comment preset wording', () => {
     expect(item?.commentPresets).toEqual([
       {
         code: 'NO_ONIONS',
-        labelRu: 'Без лука',
-        labelUz: 'Piyozsiz',
-        labelEn: 'No onions',
         labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions', kaa: 'Piyazsiz' },
         label: 'Piyozsiz',
       },
@@ -158,7 +178,10 @@ describe('MenuService.item: row 10.12 comment preset wording', () => {
           variants: [],
           modifierGroupIds: [],
           commentPresets: [
-            { code: 'NO_ONIONS', labelRu: 'Без лука', labelUz: 'Piyozsiz', labelEn: 'No onions' },
+            {
+              code: 'NO_ONIONS',
+              labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions' },
+            },
           ],
         },
       ],
@@ -167,7 +190,7 @@ describe('MenuService.item: row 10.12 comment preset wording', () => {
     const item = await service.item('p1', 'uz');
 
     expect(item?.commentPresets).toEqual([
-      { code: 'NO_ONIONS', labelRu: 'Без лука', labelUz: 'Piyozsiz', labelEn: 'No onions' },
+      { code: 'NO_ONIONS', labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions' } },
     ]);
   });
 });

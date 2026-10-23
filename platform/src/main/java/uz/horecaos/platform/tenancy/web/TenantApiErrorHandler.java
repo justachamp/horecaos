@@ -42,7 +42,9 @@ import uz.horecaos.platform.web.api.ErrorCode;
             // raises the bare IllegalStateException this class already maps
             // for LegalEntity's own business conflicts.
             ChannelSetupController.class,
-            ChannelPagesController.class
+            ChannelPagesController.class,
+            TelegramChannelSetupController.class,
+            StorefrontBranchOrderController.class
         })
 public class TenantApiErrorHandler {
 

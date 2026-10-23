@@ -32,6 +32,7 @@ import { SettingsSaved } from '../settings-saved';
 import { SettingsScope } from '../settings-scope';
 import { DispatchRulesSummaryCard } from './dispatch-rules-summary-card';
 import { LatenessPolicyCard } from './lateness-policy-card';
+import { OrderPolicyNeighboursCard } from './order-policy-neighbours-card';
 import {
   AcceptanceMode,
   AcceptancePolicyResponse,
@@ -53,39 +54,16 @@ interface OrderPolicyFieldDef {
   readonly min?: number;
   readonly max?: number;
   readonly step?: number;
+  /**
+   * The scope levels the key can be written at, when that is narrower than every level the page edits at
+   * (`OrderingConfigurationKeys` declares it with `settableAt`). A field the server reads at one level and
+   * above says «Set at brand level» on a branch instead of offering a write that nothing would read.
+   */
+  readonly settableScopes?: readonly ConfigurationScopeType[];
 }
 
 /** Card 2 — Тайминги и SLA. */
 const CARD2_FIELDS: readonly OrderPolicyFieldDef[] = [
-  {
-    code: 'ordering.business_day_start_hour',
-    labelKey: 'settings.orderPolicy.field.businessDayStartHour',
-    kind: 'integer',
-    min: 0,
-    max: 23,
-    // Stored, read by nothing (the trading day follows the reporting calendar): the screen says so.
-    hintKey: 'settings.orderPolicy.notApplied.hint',
-    hintWhileEditing: true,
-  },
-  {
-    code: 'ordering.average_order_minutes',
-    labelKey: 'settings.orderPolicy.field.averageOrderMinutes',
-    kind: 'integer',
-    min: 1,
-    max: 600,
-    // Stored, read by nothing (ADR 0150 decision 5): the screen says so until a record names a reader.
-    hintKey: 'settings.orderPolicy.notApplied.hint',
-    hintWhileEditing: true,
-  },
-  {
-    code: 'ordering.maximum_order_minutes',
-    labelKey: 'settings.orderPolicy.field.maximumOrderMinutes',
-    kind: 'integer',
-    min: 1,
-    max: 600,
-    hintKey: 'settings.orderPolicy.notApplied.hint',
-    hintWhileEditing: true,
-  },
   {
     code: 'ordering.late_order_threshold_minutes',
     labelKey: 'settings.orderPolicy.field.lateOrderThresholdMinutes',
@@ -119,25 +97,6 @@ const CARD2_FIELDS: readonly OrderPolicyFieldDef[] = [
     min: 0,
     hintKey: 'settings.orderPolicy.minimumOrderAmount.hint',
   },
-  {
-    code: 'ordering.vat_rate_percent',
-    labelKey: 'settings.orderPolicy.field.vatRatePercent',
-    kind: 'decimal',
-    min: 0,
-    max: 100,
-    step: 0.1,
-    hintKey: 'settings.orderPolicy.notApplied.hint',
-    hintWhileEditing: true,
-  },
-  {
-    code: 'ordering.routing_poll_interval_minutes',
-    labelKey: 'settings.orderPolicy.field.routingPollIntervalMinutes',
-    kind: 'integer',
-    min: 1,
-    max: 120,
-    hintKey: 'settings.orderPolicy.notApplied.hint',
-    hintWhileEditing: true,
-  },
 ];
 
 /** Card 3 — Автоматизация's own gate on top of the read-only dispatch-rules summary. */
@@ -147,6 +106,7 @@ const CARD3_FIELDS: readonly OrderPolicyFieldDef[] = [
     labelKey: 'settings.orderPolicy.field.autoAcceptEligibleChannels',
     kind: 'text',
     hintKey: 'settings.orderPolicy.autoAcceptEligibleChannels.hint',
+    hintWhileEditing: true,
   },
   {
     code: 'ordering.auto_accept_min_prior_orders',
@@ -154,6 +114,8 @@ const CARD3_FIELDS: readonly OrderPolicyFieldDef[] = [
     kind: 'integer',
     min: 0,
     max: 1000,
+    hintKey: 'settings.orderPolicy.autoAcceptMinPriorOrders.hint',
+    hintWhileEditing: true,
   },
 ];
 
@@ -173,6 +135,10 @@ const CARD4_FIELDS: readonly OrderPolicyFieldDef[] = [
         labelKey: 'settings.orderPolicy.preorderBranchResolution.BY_OPENING_TIME',
       },
     ],
+    hintKey: 'settings.orderPolicy.preorderBranchResolution.hint',
+    // ADR 0177 decision 5: the branch resolver and the server's own re-derivation read it for the whole brand,
+    // so the key refuses a branch scope (`PREORDER_BRANCH_RESOLUTION`) and the page does not offer one.
+    settableScopes: ['TENANT', 'BRAND'],
   },
 ];
 
@@ -182,6 +148,19 @@ const CARD5_FIELDS: readonly OrderPolicyFieldDef[] = [
     code: 'ordering.operator_promo_code_allowed',
     labelKey: 'settings.orderPolicy.field.operatorPromoCodeAllowed',
     kind: 'boolean',
+    hintKey: 'settings.orderPolicy.operatorPromoCodeAllowed.hint',
+  },
+  {
+    code: 'ordering.operator_callback_flag_allowed',
+    labelKey: 'settings.orderPolicy.field.operatorCallbackFlagAllowed',
+    kind: 'boolean',
+    hintKey: 'settings.orderPolicy.operatorCallbackFlagAllowed.hint',
+  },
+  {
+    code: 'ordering.operator_change_due_allowed',
+    labelKey: 'settings.orderPolicy.field.operatorChangeDueAllowed',
+    kind: 'boolean',
+    hintKey: 'settings.orderPolicy.operatorChangeDueAllowed.hint',
   },
 ];
 
@@ -196,8 +175,9 @@ const CARD5_FIELDS: readonly OrderPolicyFieldDef[] = [
  * scope even though `OrderAcceptancePolicyController.scopeOf` already
  * builds TENANT and LOCATION too.
  *
- * **Cards 2, 3, 4 and 5** render through the eleven `ConfigurationKeys`
- * registry entries wave P46 adds (`OrderingConfigurationKeys`), following
+ * **Cards 2, 3, 4 and 5** render through the `ConfigurationKeys`
+ * registry entries wave P46 added (`OrderingConfigurationKeys`; ADR 0177 retired
+ * five that nothing read and added two operator toggles), following
  * the exact `ConfigurationApi` + `q-inherited-field` pattern P31 built —
  * "if a card cannot be authored at brand level and overridden for one
  * branch through that surface, the surface is not finished." Card 3 keeps
@@ -224,6 +204,7 @@ const CARD5_FIELDS: readonly OrderPolicyFieldDef[] = [
     ColorInput,
     LatenessPolicyCard,
     DispatchRulesSummaryCard,
+    OrderPolicyNeighboursCard,
   ],
   templateUrl: './order-policy-page.html',
   styleUrl: './order-policy-page.css',
@@ -251,11 +232,12 @@ export class OrderPolicyPage {
   protected readonly card5Fields = CARD5_FIELDS;
 
   /**
-   * None of the eleven keys call `.settableAt(...)` (see
+   * Most of the keys on Cards 2 to 5 do not call `.settableAt(...)` (see
    * `OrderingConfigurationKeys`), so their real `settableScopes` is every
    * `ScopeType` — but an operator on this screen never edits at `PLATFORM`,
    * so this only needs to name the three {@link EditableScopeType} levels
    * for `q-inherited-field`'s own "not settable here" check to stay accurate.
+   * A key that does narrow them says so on its own {@link OrderPolicyFieldDef.settableScopes}.
    */
   protected readonly editableScopes: readonly ConfigurationScopeType[] = [
     'TENANT',
@@ -392,9 +374,57 @@ export class OrderPolicyPage {
     this.editing.set(false);
   }
 
-  protected canPublish(): boolean {
-    return !this.saving() && this.draftReason().trim().length > 0;
+  /**
+   * Switching the mode resets the approval channel to what the new mode means, so a path is never carried
+   * across by accident: auto-confirm starts with no hold-back path (nobody to hold an order for), and
+   * restaurant approval needs a real channel (ADR 0177).
+   */
+  protected onModeChange(mode: AcceptanceMode): void {
+    this.draftMode.set(mode);
+    if (mode === 'AUTO_CONFIRM') {
+      this.draftApprovalChannel.set('NONE');
+    } else if (this.draftApprovalChannel() === 'NONE') {
+      this.draftApprovalChannel.set('HORECAOS_OPERATIONS');
+    }
   }
+
+  /** A channel chosen for the orders a gate holds back gets a timeout they can wait on, not the stored zero. */
+  protected onApprovalChannelChange(channel: ApprovalChannel): void {
+    this.draftApprovalChannel.set(channel);
+    if (channel !== 'NONE' && !this.timeoutIsValid()) {
+      this.draftTimeoutSeconds.set(300);
+    }
+  }
+
+  /**
+   * Whether the draft decides who confirms an order that needs a decision: restaurant approval always,
+   * auto-confirm only when it names a channel for the orders an auto-accept gate holds back (ADR 0177).
+   */
+  protected readonly draftHasApprovalPath = computed(
+    () => this.draftMode() === 'RESTAURANT_APPROVAL' || this.draftApprovalChannel() !== 'NONE',
+  );
+
+  /** The approval fields' timeout is bounded exactly when the draft has an approval path. */
+  protected timeoutIsValid(): boolean {
+    if (!this.draftHasApprovalPath()) {
+      return true;
+    }
+    const seconds = this.draftTimeoutSeconds();
+    return Number.isInteger(seconds) && seconds >= 30 && seconds <= 1800;
+  }
+
+  protected canPublish(): boolean {
+    return !this.saving() && this.draftReason().trim().length > 0 && this.timeoutIsValid();
+  }
+
+  /** The policy in force has a path an order a gate holds back can follow (so the Automation gates can hold one). */
+  protected readonly gatesCanHold = computed(() => {
+    const current = this.policy();
+    return (
+      current !== null &&
+      (current.mode === 'RESTAURANT_APPROVAL' || current.approvalChannel !== 'NONE')
+    );
+  });
 
   protected async publish(): Promise<void> {
     const tenantId = this.tenant.tenantId();

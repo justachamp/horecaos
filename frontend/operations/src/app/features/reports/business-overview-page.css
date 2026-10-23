@@ -45,7 +45,7 @@
 }
 
 .overview__retry {
-  margin-left: auto;
+  margin-inline-start: auto;
   padding: 4px 10px;
   border: 1px solid var(--q-error-text);
   background: transparent;
@@ -158,7 +158,7 @@
   margin: 8px 0 16px;
   border: none;
   background: transparent;
-  text-align: left;
+  text-align: start;
   font-family: inherit;
   color: var(--q-ink-subtle);
   cursor: pointer;
@@ -177,7 +177,7 @@
 
 .outcome-table th,
 .branch-table th {
-  text-align: left;
+  text-align: start;
   padding: 6px 10px;
   border-bottom: 1px solid var(--q-hairline);
   color: var(--q-ink-subtle);
@@ -192,5 +192,5 @@
 
 .outcome-table__num,
 .branch-table__num {
-  text-align: right;
+  text-align: end;
 }

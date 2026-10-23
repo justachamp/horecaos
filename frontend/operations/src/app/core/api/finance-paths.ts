@@ -228,6 +228,15 @@ export const financePaths = {
   },
 
   /**
+   * `CommercialOperationsEInvoiceController.einvoices` — where the e-invoice of each issued statement stands,
+   * as the operator reports it (ADR 0096, IA 8.6 «invoices»). A read for the merchant: sending, refreshing and
+   * releasing stay with HorecaOS staff.
+   */
+  commercialEInvoices(tenantId: string): string {
+    return `/api/v1/tenants/${enc(tenantId)}/commercial/einvoices`;
+  },
+
+  /**
    * `CommercialOperationsController.modulesOnSale`/`.purchaseModule` — Finance
    * 8.6's purchasable-module catalogue with inline purchase (ADR 0127). GET
    * browses what is on sale; POST purchases one for this tenant.

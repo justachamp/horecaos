@@ -47,6 +47,23 @@ describe('RecoveryApi', () => {
     expect((await promise).items).toEqual([]);
   });
 
+  it('sends the rating range the review’s stars were filtered to, and only when set', async () => {
+    const promise = api.list(SCOPE, firstPage(25), { minRating: 1, maxRating: 2 });
+
+    const request = http.expectOne((r) => r.url === url(CASES));
+    expect(request.request.params.get('minRating')).toBe('1');
+    expect(request.request.params.get('maxRating')).toBe('2');
+    request.flush({ items: [], nextCursor: null });
+    await promise;
+
+    const branch = api.listAtLocation(SCOPE, 'l1', firstPage(25), { maxRating: 3 });
+    const second = http.expectOne((r) => r.url === url(BRANCH_CASES));
+    expect(second.request.params.get('maxRating')).toBe('3');
+    expect(second.request.params.has('minRating')).toBe(false);
+    second.flush({ items: [], nextCursor: null });
+    await branch;
+  });
+
   it('omits a filter nobody set instead of sending the word undefined', async () => {
     const promise = api.list(SCOPE, firstPage(), {});
 
@@ -168,6 +185,143 @@ describe('RecoveryApi', () => {
     request.flush({ caseId: 'c1', kind: 'ORDER_REMEDY', refId: 'remedy-1', orderId: 'o1' });
 
     expect((await promise).refId).toBe('remedy-1');
+  });
+
+  it('reads what a case could be linked to at the case’s own branch, with the code never in it', async () => {
+    const promise = api.candidates(SCOPE, 'l1', 'c1');
+
+    const request = http.expectOne(url(`${BRANCH_CASES}/c1/compensation-candidates`));
+    expect(request.request.method).toBe('GET');
+    request.flush({
+      remedies: [],
+      grants: [
+        {
+          grantId: 'g1',
+          benefitType: 'FREE_DELIVERY',
+          value: 0,
+          currency: null,
+          status: 'ACTIVE',
+          sourceType: 'RECOVERY_CASE',
+          codeHint: 'K7Q2',
+          createdAt: '2026-10-14T05:00:00Z',
+          expiresAt: null,
+          taken: false,
+        },
+      ],
+      orderId: 'o1',
+      customerAccountId: 'cu1',
+    });
+
+    const found = await promise;
+    expect(found.grants[0].codeHint).toBe('K7Q2');
+    expect(found.orderId).toBe('o1');
+  });
+
+  it('mints an apology code at brand scope with the case as its source and a fresh idempotency key', async () => {
+    const promise = api.mintApologyCode(SCOPE, {
+      customerAccountId: 'cu1',
+      shape: 'PERCENTAGE_OFF_ORDER',
+      value: 1_000,
+      currency: 'UZS',
+      minBasketMinor: 0,
+      sourceId: 'c1',
+      expiresAt: '2026-11-13T05:00:00.000Z',
+    });
+
+    const request = http.expectOne(url('/api/v1/operations/tenants/t1/brands/b1/benefit-grants'));
+    expect(request.request.method).toBe('POST');
+    expect(request.request.headers.get('Idempotency-Key')).toBeTruthy();
+    expect(request.request.body).toEqual({
+      customerAccountId: 'cu1',
+      shape: 'PERCENTAGE_OFF_ORDER',
+      value: 1_000,
+      maximumDiscountMinor: null,
+      currency: 'UZS',
+      minBasketMinor: 0,
+      sourceType: 'RECOVERY_CASE',
+      sourceId: 'c1',
+      validFrom: null,
+      expiresAt: '2026-11-13T05:00:00.000Z',
+    });
+    request.flush({
+      grantId: 'g1',
+      plaintextCode: 'SORRY-1',
+      codeHint: 'RY-1',
+      validFrom: '2026-10-14T05:00:00Z',
+    });
+
+    expect((await promise).plaintextCode).toBe('SORRY-1');
+  });
+
+  describe('retrying an apology code mint (ADR 0031)', () => {
+    const MINT = '/api/v1/operations/tenants/t1/brands/b1/benefit-grants';
+    const INPUT = {
+      customerAccountId: 'cu1',
+      shape: 'PERCENTAGE_OFF_ORDER' as const,
+      value: 1_000,
+      currency: 'UZS',
+      minBasketMinor: 0,
+      sourceId: 'c1',
+      expiresAt: '2026-11-13T05:00:00.000Z',
+    };
+    const ISSUED = {
+      grantId: 'g1',
+      plaintextCode: 'SORRY-1',
+      codeHint: 'RY-1',
+      validFrom: '2026-10-14T05:00:00Z',
+    };
+
+    async function lose(promise: Promise<unknown>): Promise<string | null> {
+      const request = http.expectOne(url(MINT));
+      const key = request.request.headers.get('Idempotency-Key');
+      request.flush({ code: 'BAD_GATEWAY' }, { status: 502, statusText: 'Bad Gateway' });
+      await promise.catch(() => undefined);
+      return key;
+    }
+
+    it('sends the same key again when the same code is asked for after a lost response', async () => {
+      const firstKey = await lose(api.mintApologyCode(SCOPE, INPUT));
+
+      const retry = api.mintApologyCode(SCOPE, INPUT);
+      const request = http.expectOne(url(MINT));
+      expect(request.request.headers.get('Idempotency-Key')).toBe(firstKey);
+      request.flush(ISSUED);
+      await retry;
+    });
+
+    it('asks for a different code under a different key when the form changed', async () => {
+      const firstKey = await lose(api.mintApologyCode(SCOPE, INPUT));
+
+      const edited = api.mintApologyCode(SCOPE, { ...INPUT, value: 2_000 });
+      const request = http.expectOne(url(MINT));
+      expect(request.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+      request.flush(ISSUED);
+      await edited;
+    });
+
+    it('forgets the intent once the code is issued, so the next mint is a new code', async () => {
+      const first = api.mintApologyCode(SCOPE, INPUT);
+      const landed = http.expectOne(url(MINT));
+      const firstKey = landed.request.headers.get('Idempotency-Key');
+      landed.flush(ISSUED);
+      await first;
+
+      const second = api.mintApologyCode(SCOPE, INPUT);
+      const request = http.expectOne(url(MINT));
+      expect(request.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+      request.flush(ISSUED);
+      await second;
+    });
+
+    it('keeps one intent per case', async () => {
+      const firstKey = await lose(api.mintApologyCode(SCOPE, INPUT));
+
+      const other = api.mintApologyCode(SCOPE, { ...INPUT, sourceId: 'c2' });
+      const request = http.expectOne(url(MINT));
+      expect(request.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+      request.flush(ISSUED);
+      await other;
+    });
   });
 
   it('opens a case by hand from a review, at the review’s branch', async () => {

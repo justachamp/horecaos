@@ -550,8 +550,8 @@ class NewOrderBranchResolutionHttpTests {
     private void bindZone(UUID zoneId, String code, int priority, UUID locationId) {
         jdbc.sql("""
                 INSERT INTO fulfillment.service_zones
-                    (id, tenant_id, brand_id, zone_role, code, display_name_ru, display_name_uz, display_name_en, status)
-                VALUES (:id, :tenantId, :brandId, 'DELIVERY', :code, 'Zone', 'Zone', 'Zone', 'ACTIVE')
+                    (id, tenant_id, brand_id, zone_role, code, status)
+                VALUES (:id, :tenantId, :brandId, 'DELIVERY', :code, 'ACTIVE')
                 """)
                 .param("id", zoneId)
                 .param("tenantId", TENANT)

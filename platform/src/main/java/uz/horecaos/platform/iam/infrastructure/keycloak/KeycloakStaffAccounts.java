@@ -323,6 +323,52 @@ class KeycloakStaffAccounts implements StaffAccounts {
                 text(user.get("firstName")), text(user.get("lastName")), phoneAttribute(user), hasPassword));
     }
 
+    /**
+     * The numbers of these accounts (ADR 0182). One read per account: Keycloak's admin API has no
+     * by-ids call, and the numbers are wanted for a handful of couriers at a time.
+     *
+     * <p>An account that is not there, or has no number, is absent. Any other failure -- the server
+     * unreachable, a 5xx, a rejected credential -- stops the whole read with
+     * {@link DirectoryUnavailableException}: answering «nobody has a number» for a fleet because the
+     * identity provider was down would record couriers as unreachable that are not.
+     */
+    @Override
+    public Map<String, String> phones(java.util.Collection<String> subjectIds, String purpose) {
+        Map<String, String> numbers = new LinkedHashMap<>();
+        for (String subjectId : subjectIds) {
+            Map<String, Object> user;
+            try {
+                user = client.get()
+                        .uri("/admin/realms/{realm}/users/{id}", realm, subjectId)
+                        .retrieve()
+                        .body(SINGLE);
+            } catch (HttpClientErrorException.NotFound missing) {
+                continue;
+            } catch (RuntimeException unavailable) {
+                // The class only: a client exception can echo the URL, and the URL has the subject.
+                throw new DirectoryUnavailableException(
+                        "The identity provider could not be asked (%s)"
+                                .formatted(unavailable.getClass().getSimpleName()),
+                        unavailable);
+            }
+            if (user == null) {
+                continue;
+            }
+            String number = phoneAttribute(user);
+            if (number == null) {
+                // A phone-first account's username is the normalised number.
+                Object username = user.get("username");
+                number = username != null && String.valueOf(username).matches("\\+?\\d{9,15}")
+                        ? String.valueOf(username)
+                        : null;
+            }
+            if (number != null) {
+                numbers.put(subjectId, number);
+            }
+        }
+        return numbers;
+    }
+
     private static @Nullable String text(@Nullable Object value) {
         if (value == null) {
             return null;

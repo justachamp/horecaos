@@ -13,7 +13,9 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import uz.horecaos.platform.catalog.api.CatalogEvent;
 import uz.horecaos.platform.customers.api.CustomersEvent;
+import uz.horecaos.platform.fiscal.api.FiscalEvent;
 import uz.horecaos.platform.media.api.MediaEvent;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
 import uz.horecaos.platform.tenancy.api.TenancyEvent;
@@ -96,6 +98,41 @@ class EventCatalogCompletenessTests {
         assertThat(registered)
                 .as("every permitted CustomersEvent needs an ADR 0032 catalogue entry")
                 .containsAll(publishable);
+    }
+
+    @Test
+    void everyPublishableFiscalEventIsRegistered() {
+        List<String> registered =
+                EventCatalog.all().stream().map(EventContract::eventType).toList();
+
+        List<String> publishable = Arrays.stream(FiscalEvent.class.getPermittedSubclasses())
+                .map(Class::getSimpleName)
+                .toList();
+
+        assertThat(publishable)
+                .as("the scan must actually find the ADR 0166 events it claims to check")
+                .containsExactlyInAnyOrder("FiscalCorrectionRequested", "FiscalCorrectionAttached");
+        assertThat(registered)
+                .as("every permitted FiscalEvent needs an ADR 0032 catalogue entry")
+                .containsAll(publishable);
+    }
+
+    @Test
+    void everyPublishableCatalogEventIsRegistered() {
+        List<String> registered =
+                EventCatalog.all().stream().map(EventContract::eventType).toList();
+
+        List<String> publishable = Arrays.stream(CatalogEvent.class.getPermittedSubclasses())
+                .map(Class::getSimpleName)
+                .toList();
+
+        assertThat(publishable)
+                .as("the scan must actually find the ADR 0016 event it claims to check")
+                .containsExactly("CatalogDraftChanged");
+        assertThat(registered)
+                .as("every permitted CatalogEvent needs an ADR 0032 catalogue entry")
+                .containsAll(publishable);
+        assertThat(EventCatalog.require("CatalogDraftChanged", 1).topic()).isEqualTo("catalog.events");
     }
 
     @Test

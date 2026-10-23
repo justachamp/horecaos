@@ -15,9 +15,6 @@ const TENANT_ID = 'tenant-1';
 const NO_ONIONS: PresetResponse = {
   presetId: 'preset-1',
   code: 'NO_ONIONS',
-  labelRu: 'Без лука',
-  labelUz: 'Piyozsiz',
-  labelEn: 'No onions',
   labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions' },
   posModifierCode: 'MOD-NO-ONION',
   sortOrder: 0,
@@ -28,9 +25,6 @@ const NO_ONIONS: PresetResponse = {
 const WELL_DONE: PresetResponse = {
   presetId: 'preset-2',
   code: 'WELL_DONE',
-  labelRu: 'Хорошо прожарить',
-  labelUz: 'Yaxshi qovurish',
-  labelEn: 'Well done',
   labels: { ru: 'Хорошо прожарить', 'uz-Latn': 'Yaxshi qovurish', en: 'Well done' },
   posModifierCode: null,
   sortOrder: 1,
@@ -165,9 +159,6 @@ describe('CommentPresetsPage', () => {
     const created: PresetResponse = {
       presetId: 'preset-3',
       code: 'EXTRA_SPICY',
-      labelRu: 'Поострее',
-      labelUz: 'Поострее',
-      labelEn: 'Extra spicy',
       labels: { ru: 'Поострее', en: 'Extra spicy' },
       posModifierCode: 'MOD-SPICY',
       sortOrder: 2,
@@ -190,11 +181,7 @@ describe('CommentPresetsPage', () => {
 
     expect(api.create).toHaveBeenCalledWith(TENANT_ID, {
       code: 'EXTRA_SPICY',
-      // The contract keeps the platform triple required: uz-Latn was offered but
-      // left blank, so its column takes the default language's wording.
-      labelRu: 'Поострее',
-      labelUz: 'Поострее',
-      labelEn: 'Extra spicy',
+      // uz-Latn was offered but left blank: optional, so it is not sent and the preset has no Uzbek wording.
       labels: { ru: 'Поострее', en: 'Extra spicy' },
       posModifierCode: 'MOD-SPICY',
       sortOrder: 0,
@@ -221,7 +208,6 @@ describe('CommentPresetsPage', () => {
   it('edits an existing preset with the version it was read at, never a stale one', async () => {
     const updated: PresetResponse = {
       ...NO_ONIONS,
-      labelEn: 'No onions please',
       labels: { ...NO_ONIONS.labels, en: 'No onions please' },
       version: 4,
     };
@@ -244,9 +230,6 @@ describe('CommentPresetsPage', () => {
       TENANT_ID,
       'preset-1',
       expect.objectContaining({
-        labelRu: 'Без лука',
-        labelUz: 'Piyozsiz',
-        labelEn: 'No onions please',
         labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions please' },
         expectedVersion: 3,
       }),
@@ -298,14 +281,13 @@ describe('CommentPresetsPage', () => {
     expect(Object.keys(sent.labels)).not.toContain('uz-Latn');
     expect(Object.keys(sent.labels)).not.toContain('kaa');
     expect(Object.values(sent.labels)).not.toContain('');
-    // The contract keeps the platform triple required, so the columns still go back:
-    // the edited one changed, the hidden uz-Latn and the cleared en exactly as stored.
-    expect(sent.labelRu).toBe('Без лука!');
-    expect(sent.labelUz).toBe('Piyozsiz');
-    expect(sent.labelEn).toBe('No onions');
+    // And the legacy three fields are gone from the request: the map is the only shape of the wording.
+    expect(sent).not.toHaveProperty('labelRu');
+    expect(sent).not.toHaveProperty('labelUz');
+    expect(sent).not.toHaveProperty('labelEn');
   });
 
-  it('words a platform language the tenant does not offer with the default language’s wording on a create', async () => {
+  it('sends only the languages the tenant offers on a create, inventing no wording for a platform language it does not', async () => {
     api.localeSet = vi.fn().mockResolvedValue({
       locales: ['uz-Latn', 'en'],
       defaultLocale: 'uz-Latn',
@@ -316,9 +298,6 @@ describe('CommentPresetsPage', () => {
         ...NO_ONIONS,
         presetId: 'preset-9',
         code: 'EXTRA_SPICY',
-        labelRu: 'Achchiqroq',
-        labelUz: 'Achchiqroq',
-        labelEn: 'Extra spicy',
       }),
     );
     await setUp();
@@ -330,9 +309,6 @@ describe('CommentPresetsPage', () => {
     await flushMicrotasks();
 
     expect(api.create.mock.calls[0][1]).toMatchObject({
-      labelRu: 'Achchiqroq',
-      labelUz: 'Achchiqroq',
-      labelEn: 'Extra spicy',
       labels: { 'uz-Latn': 'Achchiqroq', en: 'Extra spicy' },
     });
   });

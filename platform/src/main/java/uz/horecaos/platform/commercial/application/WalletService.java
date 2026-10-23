@@ -31,6 +31,7 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.commercial.api.CardCharger;
 import uz.horecaos.platform.commercial.domain.BonusGrantBalance;
 import uz.horecaos.platform.commercial.domain.PaymentMethod;
 import uz.horecaos.platform.commercial.domain.StatementPayment;

@@ -20,9 +20,10 @@
   `BarcodeDetector`, loaded on demand) into a scan and keeps nothing, and
   `q-order-marking-panel` is embedded in the order detail and on the expo ticket, which
   will not hand an order over while a marked line is short. The receipt half is built:
-  `MarkedOrderReceiptProjection` builds a marked order's lines with their codes (decrypted
-  once, under a recorded purpose, and only for a provider that can carry them) so a marked
-  order never takes the synthetic aggregate line, `PartnerFiscalizationBridge` reports
+  `ReceiptLineBuilder` (which since batch 21 builds the lines of every order, and replaced
+  `MarkedOrderReceiptProjection`) builds a marked order's lines with their codes (decrypted
+  once, under a recorded purpose, and only for a provider that can carry them), so no order
+  takes a synthetic aggregate line (that line is deleted), `PartnerFiscalizationBridge` reports
   `BLOCKED_MARKS`, `FiscalReasonCode.MARKS_INCOMPLETE` now has its producer,
   `MarksCompletedReopener` reopens such a document when the marks complete, and the
   blocked fiscal worklist shows captured of required. Publishing a marked classification is
@@ -33,11 +34,16 @@
   on a scanner or a camera; the state system's check is a seam (`MarkingVerificationPort`,
   `NOT_WIRED`); the flag is tenant-visible because the registry test of ADR 0082 requires every
   flag to be, so a tenant administrator who holds `TENANT_CONFIGURATION_WRITE` can turn it on for
-  their own account and "the platform turns it on" is a rollout rule and not yet a mechanism; the
-  Payme payment-options exclusion
-  (`payments.payment_methods.supports_marking`) is not built, so a marked Payme document
-  is refused at the projection and not hidden at checkout; the receipt's VAT percent is
-  derived from the quote's tax share until ADR 0166's line builder replaces it; inventory
+  their own account and "the platform turns it on" is a rollout rule and not yet a mechanism; precondition
+  P1 is wired as of batch 21 (2026-10-14): `FiscalNodeFacts.requiresMarkingCapablePayment` is called from
+  `CartPaymentOptions` and `CheckoutEligibilityGuard` (through `MarkedCartLines` and
+  `PaymentIntentPort.carriesMarkingCodes`, answered from the method's receipt port, not from a
+  `supports_marking` column), so a basket holding a marked node is not offered Payme and a checkout naming
+  it is refused `MARKED_GOODS_NEED_MARKING_CAPABLE_PAYMENT`, while the flag is on for the tenant; the
+  `CHANGE_PAYMENT_METHOD` amendment makes the same refusal at propose (`MarkedOrderPayment`: an order that
+  holds a marked line, or whose batch adds one, is not moved to Payme), and the builder's own
+  `MARKING_CODES_UNSUPPORTED` refusal stands behind both; P2 and P3 are not met; the receipt's VAT percent is now the
+  whole percent of the rate the accepted quote recorded; inventory
   is not a scan point in v1; and the gap-map row `X.35` is for the owner to re-audit.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07

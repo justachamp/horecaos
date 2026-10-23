@@ -1,0 +1,109 @@
+:host {
+  display: block;
+}
+
+.switcher {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 760px;
+}
+
+.switcher__block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.switcher h2,
+.switcher h3 {
+  margin: 0;
+}
+
+.switcher__note {
+  margin: 0;
+  max-width: 70ch;
+  color: var(--q-ink-muted);
+}
+
+.switcher__error {
+  margin: 0;
+  color: var(--q-error-text);
+}
+
+.switcher__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.switcher__choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.switcher__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.switcher__entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.switcher__who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.switcher__name {
+  font-weight: 600;
+}
+
+.switcher__where {
+  color: var(--q-ink-muted);
+}
+
+.switcher__status--off {
+  color: var(--q-error-text);
+}
+
+.switcher__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.switcher__add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+}
+
+.switcher__add-title {
+  flex-basis: 100%;
+}
+
+.switcher__select {
+  min-width: 260px;
+}

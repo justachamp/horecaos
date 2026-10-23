@@ -507,6 +507,58 @@ describe('FiscalizationPage', () => {
       expect(tableText).not.toContain('Cheese');
     });
 
+    it('finds a dish that holds both codes and lacks a unit or a receipt name: it leaves the read-only list for the section that fills it', async () => {
+      api.fiscalCoverage.mockResolvedValue({
+        ...BACKFILL_COVERAGE,
+        nodes: [
+          BACKFILL_COVERAGE.nodes[0],
+          { ...BACKFILL_COVERAGE.nodes[1], fiscalUnitCode: null, fiscalName: 'Samsa' },
+        ],
+      });
+      selectTab(2);
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      const gaps = [
+        ...fixture.nativeElement.querySelectorAll('[data-testid="gaps-row"]'),
+      ] as HTMLElement[];
+      expect(gaps.map((row) => row.getAttribute('data-node-id'))).toEqual(['samsa']);
+      expect(fixture.nativeElement.querySelector('table.table:not(.vat)')).toBeNull();
+    });
+
+    it('reloads the coverage after the unit and name section saved a row', async () => {
+      api.fiscalCoverage.mockResolvedValue({
+        ...BACKFILL_COVERAGE,
+        nodes: [{ ...BACKFILL_COVERAGE.nodes[1], fiscalUnitCode: null, fiscalName: null }],
+      });
+      selectTab(2);
+      await flushMicrotasks();
+      fixture.detectChanges();
+      expect(api.fiscalCoverage).toHaveBeenCalledTimes(1);
+      const unit = fixture.nativeElement.querySelector(
+        '[data-testid="gaps-unit-samsa"]',
+      ) as HTMLInputElement;
+      unit.value = '15';
+      unit.dispatchEvent(new Event('input'));
+      const name = fixture.nativeElement.querySelector(
+        '[data-testid="gaps-name-samsa"]',
+      ) as HTMLInputElement;
+      name.value = 'Samsa';
+      name.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      (
+        fixture.nativeElement.querySelector('[data-testid="gaps-save"]') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(api.backfillCodes).toHaveBeenCalledWith(SCOPE, [
+        { nodeType: 'VARIANT', nodeId: 'samsa', fiscalUnitCode: 15, fiscalName: 'Samsa' },
+      ]);
+      expect(api.fiscalCoverage).toHaveBeenCalledTimes(2);
+    });
+
     it('hides the read-only list entirely when the editor already shows every unclassified node', async () => {
       api.fiscalCoverage.mockResolvedValue({
         ...BACKFILL_COVERAGE,
@@ -875,6 +927,15 @@ describe('FiscalizationPage', () => {
       expect(byTestId('fiscal-vat-denied')).not.toBeNull();
       expect(byTestId('fiscal-responsibility-failed')).not.toBeNull();
       expect(text()).toContain('Unclassified: 1 of 3 items');
+    });
+
+    it('says that receipts are built from the order’s own lines and that an unclassified item blocks one', async () => {
+      await openClassification();
+
+      const note = byTestId('fiscalization-receipt-lines')?.textContent ?? '';
+      expect(note).toContain('built from each order’s own lines');
+      expect(note).toContain('blocks that order’s receipt');
+      expect(note).toContain('no placeholder code');
     });
 
     it('reads the references when the classification tab is opened, not before', async () => {

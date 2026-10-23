@@ -82,7 +82,7 @@
               <div>
                 <dt class="q-caption">{{ 'staff.profile.field.phone' | t }}</dt>
                 <dd class="q-body-sm q-tnum" data-testid="my-profile-phone">
-                  {{ person.phone ?? '—' }}
+                  {{ person.phone ? (person.phone | phone) : '—' }}
                 </dd>
               </div>
               <div>
@@ -158,9 +158,14 @@
     }
   </section>
 
+  <!--
+    ADR 0098: «Пароль» is a hand-off to the reset flow, with the warning that it ends every sign-in. The
+    sentence that used to stand here, that the password and the PIN were not built, is gone: the PIN card is
+    below and this is the password.
+  -->
   <section class="section">
     <h2 class="q-emphasis">{{ 'staff.myProfile.security.title' | t }}</h2>
-    <p class="q-caption not-built-note">{{ 'staff.myProfile.security.notBuilt' | t }}</p>
+    <q-my-profile-password-card />
   </section>
 
   <!--

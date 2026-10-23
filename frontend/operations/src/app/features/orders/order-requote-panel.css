@@ -1,0 +1,73 @@
+:host {
+  display: contents;
+}
+
+.pane__requote-intro {
+  margin: 0 0 8px;
+  color: var(--q-ink-muted);
+}
+
+.pane__state-inline {
+  color: var(--q-ink-muted);
+  margin: 4px 0;
+}
+
+.pane__requote-list,
+.pane__requote-changes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pane__requote-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-block-end: 8px;
+}
+
+.pane__requote-finding {
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.pane__requote-finding--changed {
+  border-color: var(--q-warning-text);
+  background: var(--q-warning-tint);
+}
+
+.pane__requote-outcome,
+.pane__requote-finding p {
+  margin: 0;
+}
+
+.pane__requote-changes {
+  margin-block-start: 4px;
+  padding-inline-start: 12px;
+}
+
+.pane__requote-delta {
+  color: var(--q-ink-muted);
+}
+
+.pane__requote-refusal {
+  color: var(--q-error-text);
+  margin: 4px 0 0;
+}
+
+.pane__reveal-link {
+  margin-top: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-primary);
+  font-size: var(--q-type-caption);
+  cursor: pointer;
+}
+
+.pane__reveal-link:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

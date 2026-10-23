@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { LocationScope, operationsPaths } from './operations-paths';
+import { LocationScope, courierPaths, operationsPaths } from './operations-paths';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 
@@ -81,6 +81,9 @@ describe('operationsPaths inventory* group (row 4.4c/4.4d InventoryController pa
   it('the marketplace propagation and explainer paths build on the legacy tenant prefix', () => {
     expect(operationsPaths.inventoryMarketplacePropagation(SCOPE)).toBe(
       '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/marketplace-propagation',
+    );
+    expect(operationsPaths.inventoryMarketplaceWouldPush(SCOPE, 'b 1')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/marketplace-propagation/b%201/would-push',
     );
     expect(operationsPaths.inventoryAvailabilityExplanation(SCOPE, 'v1')).toBe(
       '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/variants/v1/availability-explanation',
@@ -245,6 +248,104 @@ describe('operationsPaths kitchen headcount (ADR 0163)', () => {
     );
     expect(operationsPaths.kitchenPaidHold('a/b')).toBe(
       '/api/v1/operations/tenants/a%2Fb/kitchen-paid-hold',
+    );
+  });
+});
+
+/**
+ * Row 3.2's defect, found by the batch-20 audit: `courierPositions` and `courierTrackReveals` were
+ * built on `/api/v1/operations/tenants/...` while `OperationsCourierPositionController` is mapped at
+ * `/api/v1/tenants/{t}/brands/{b}/locations/{l}/operations/couriers`, so the live map and the track
+ * reveal 404'd on every real call while every mocked-API spec stayed green. These pin the literal
+ * path the controller maps.
+ */
+describe('operationsPaths courier positions (OperationsCourierPositionController)', () => {
+  it('courierPositions builds on the legacy tenant prefix the controller is mapped on', () => {
+    expect(operationsPaths.courierPositions(SCOPE)).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/operations/couriers/positions',
+    );
+  });
+
+  it('courierTrackReveals names the courier, encoded, under the same prefix', () => {
+    expect(operationsPaths.courierTrackReveals(SCOPE, 'c1')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/operations/couriers/c1/track-reveals',
+    );
+    expect(operationsPaths.courierTrackReveals(SCOPE, 'a/b')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/operations/couriers/a%2Fb/track-reveals',
+    );
+  });
+});
+
+/** ADR 0178: the courier's lifecycle, app access and rule preview, on the tenant-scoped operations prefix. */
+describe('courierPaths (ADR 0178)', () => {
+  it('builds the correction on the courier and the lifecycle steps beneath it', () => {
+    expect(courierPaths.courierCorrection('t1', 'c1')).toBe(
+      '/api/v1/operations/tenants/t1/couriers/c1',
+    );
+    expect(courierPaths.courierEngagementEnding('t1', 'c1')).toBe(
+      '/api/v1/operations/tenants/t1/couriers/c1/engagement-ending',
+    );
+    expect(courierPaths.courierArchival('t1', 'c1')).toBe(
+      '/api/v1/operations/tenants/t1/couriers/c1/archival',
+    );
+  });
+
+  it('builds the access state and the invitation beneath the courier, encoded', () => {
+    expect(courierPaths.courierAccess('t1', 'c1')).toBe(
+      '/api/v1/operations/tenants/t1/couriers/c1/access',
+    );
+    expect(courierPaths.courierAccessInvitations('t1', 'a/b')).toBe(
+      '/api/v1/operations/tenants/t1/couriers/a%2Fb/access-invitations',
+    );
+  });
+
+  it('builds the rule preview beside the registry, not under a courier', () => {
+    expect(courierPaths.adjustmentRuleSimulations('t1')).toBe(
+      '/api/v1/operations/tenants/t1/adjustment-rule-simulations',
+    );
+  });
+});
+
+/**
+ * `ScheduledOrderRequoteController` is mapped on the pre-ADR-0031 tenant prefix with the order under the
+ * location, like `OperationsOrderController`; a builder on the `/operations` prefix would 404 on every call.
+ */
+describe('operationsPaths.orderPromotionRequotes (row 6.1)', () => {
+  it('is the literal path the controller is mapped on, with the order id encoded', () => {
+    expect(operationsPaths.orderPromotionRequotes(SCOPE, 'o-1')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/orders/o-1/promotion-requotes',
+    );
+    expect(operationsPaths.orderPromotionRequotes(SCOPE, 'a/b')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/orders/a%2Fb/promotion-requotes',
+    );
+  });
+});
+
+describe('operationsPaths phone-order address capture (ADR 0177, OperationsCustomerController)', () => {
+  it('builds on the location-scoped customers path beside the create-on-miss route', () => {
+    expect(operationsPaths.orderIntakeCustomerAddresses(SCOPE, 'c1')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/customers/c1/addresses',
+    );
+    expect(operationsPaths.orderIntakeCustomerAddressPin(SCOPE, 'c1', 'a1')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/customers/c1/addresses/a1/pin',
+    );
+  });
+
+  it('builds the entry policy beside the orders it governs', () => {
+    expect(operationsPaths.orderEntryPolicy(SCOPE)).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/orders/entry-policy',
+    );
+  });
+
+  it('is not the tenant-scoped address path a location grant cannot reach', () => {
+    expect(operationsPaths.orderIntakeCustomerAddresses(SCOPE, 'c1')).not.toBe(
+      operationsPaths.customerAddresses(SCOPE, 'c1'),
+    );
+  });
+
+  it('encodes the customer and the address, including a slash smuggled into one', () => {
+    expect(operationsPaths.orderIntakeCustomerAddressPin(SCOPE, 'c/1', 'a/1')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/customers/c%2F1/addresses/a%2F1/pin',
     );
   });
 });

@@ -10,6 +10,7 @@ import {
   CommercialApi,
   EntitlementSnapshotView,
   SellableModuleView,
+  StatementEInvoiceView,
   StatementView,
   SubscriptionView,
   TenantArrearsView,
@@ -229,6 +230,22 @@ const WALLET_OVERVIEW: TenantWalletView = {
   bankTransferAvailable: true,
 };
 
+/** What the operator reports of the August statement, as the tenant's own read serves it (ADR 0096). */
+const EINVOICE_SENT: StatementEInvoiceView = {
+  statementId: 'st-2',
+  documentNumber: 'S-2026-08-000001',
+  documentDate: '2026-09-02',
+  provider: 'DIDOX',
+  state: 'SENT',
+  awaitingYourSignature: true,
+  operatorStatus: 'sent to buyer',
+  stateCheckedAt: '2026-09-02T10:15:00Z',
+  stateChangedAt: '2026-09-02T09:50:00Z',
+  current: true,
+  total: { amountMinor: 1_500_000, currency: 'UZS' },
+  sentAt: '2026-09-02T09:00:00Z',
+};
+
 class FakeCurrentTenant {
   readonly tenantId = signal<string | null>(TENANT_ID);
   readonly denied = signal(false);
@@ -254,6 +271,7 @@ describe('SubscriptionPage', () => {
     purchaseModule: ReturnType<typeof vi.fn>;
     endModule: ReturnType<typeof vi.fn>;
     arrears: ReturnType<typeof vi.fn>;
+    einvoices: ReturnType<typeof vi.fn>;
   };
   let wallet: {
     statementPayments: ReturnType<typeof vi.fn>;
@@ -279,6 +297,7 @@ describe('SubscriptionPage', () => {
         lastBilledPeriod: '2026-09',
       }),
       arrears: vi.fn().mockResolvedValue(ARREARS_HEALTHY),
+      einvoices: vi.fn().mockResolvedValue([]),
     };
     wallet = {
       statementPayments: vi.fn().mockResolvedValue(STATEMENT_PAYMENTS),
@@ -906,6 +925,124 @@ describe('SubscriptionPage', () => {
     fixture.detectChanges();
     const host: HTMLElement = fixture.nativeElement;
     expect(host.querySelector('[data-testid="subscription-wallet"]')).toBeNull();
+    expect(host.textContent).toContain('S-2026-08-000001');
+  });
+
+  // ------------------------------------------------ the e-invoice of a statement (ADR 0096, IA 8.6)
+
+  async function reloadWithEInvoices(
+    invoices: readonly StatementEInvoiceView[],
+  ): Promise<HTMLElement> {
+    api.einvoices.mockResolvedValue(invoices);
+    fixture = TestBed.createComponent(SubscriptionPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    return fixture.nativeElement;
+  }
+
+  it('says nothing about an invoice for a statement HorecaOS has not sent to an operator', () => {
+    const host: HTMLElement = fixture.nativeElement;
+    expect(api.einvoices).toHaveBeenCalledWith(TENANT_ID);
+    expect(host.querySelector('[data-testid="statement-einvoice"]')).toBeNull();
+    expect(host.textContent).toContain('S-2026-08-000001');
+  });
+
+  it('tells the merchant their statement is waiting for their signature, and where to sign it', async () => {
+    const host = await reloadWithEInvoices([EINVOICE_SENT]);
+
+    const line = host.querySelector('[data-testid="statement-einvoice"]');
+    expect(line?.textContent).toContain('E-invoice');
+    expect(line?.textContent).toContain('sent to you through Didox; waiting for your signature');
+    expect(host.querySelector('[data-testid="statement-einvoice-sign"]')?.textContent).toContain(
+      'Open Didox to sign or refuse it.',
+    );
+    expect(line?.textContent).toContain('checked 02.09 15:15');
+  });
+
+  it('does not ask for a signature on a draft HorecaOS has not sent, or on one already signed', async () => {
+    let host = await reloadWithEInvoices([
+      { ...EINVOICE_SENT, state: 'DRAFT', awaitingYourSignature: false },
+    ]);
+    expect(host.querySelector('[data-testid="statement-einvoice-sign"]')).toBeNull();
+    expect(host.querySelector('[data-testid="statement-einvoice"]')?.textContent).toContain(
+      'prepared at Didox; HorecaOS has not sent it to you yet',
+    );
+
+    host = await reloadWithEInvoices([
+      { ...EINVOICE_SENT, state: 'SIGNED', awaitingYourSignature: false, provider: 'FAKTURA_UZ' },
+    ]);
+    expect(host.querySelector('[data-testid="statement-einvoice-sign"]')).toBeNull();
+    expect(host.querySelector('[data-testid="statement-einvoice"]')?.textContent).toContain(
+      'signed by you at Faktura.uz',
+    );
+  });
+
+  it('shows the operator’s own words for a status it cannot read, and an unconfirmed send as unconfirmed', async () => {
+    let host = await reloadWithEInvoices([
+      {
+        ...EINVOICE_SENT,
+        state: 'UNKNOWN',
+        awaitingYourSignature: false,
+        operatorStatus: 'под проверкой',
+      },
+    ]);
+    expect(host.querySelector('[data-testid="statement-einvoice"]')?.textContent).toContain(
+      'Didox reports “под проверкой”',
+    );
+
+    host = await reloadWithEInvoices([
+      {
+        ...EINVOICE_SENT,
+        state: 'UNCONFIRMED',
+        awaitingYourSignature: false,
+        operatorStatus: null,
+        stateCheckedAt: null,
+      },
+    ]);
+    expect(host.querySelector('[data-testid="statement-einvoice"]')?.textContent).toContain(
+      'sent to Didox; waiting for it to confirm',
+    );
+    expect(host.querySelector('[data-testid="statement-einvoice"]')?.textContent).not.toContain(
+      'checked',
+    );
+  });
+
+  it('shows the invoice standing as the statement’s, not an older refused attempt, whatever order they arrive in', async () => {
+    const refused: StatementEInvoiceView = {
+      ...EINVOICE_SENT,
+      state: 'REFUSED',
+      awaitingYourSignature: false,
+      current: false,
+      sentAt: '2026-09-01T09:00:00Z',
+    };
+    const host = await reloadWithEInvoices([refused, EINVOICE_SENT]);
+
+    expect(host.querySelectorAll('[data-testid="statement-einvoice"]')).toHaveLength(1);
+    expect(host.querySelector('[data-testid="statement-einvoice"]')?.textContent).toContain(
+      'waiting for your signature',
+    );
+  });
+
+  it('shows a refusal when it is all there is, because that is the news', async () => {
+    const host = await reloadWithEInvoices([
+      { ...EINVOICE_SENT, state: 'REFUSED', awaitingYourSignature: false, current: false },
+    ]);
+    expect(host.querySelector('[data-testid="statement-einvoice"]')?.textContent).toContain(
+      'refused at Didox',
+    );
+  });
+
+  it('still shows the statements when the invoice read is refused', async () => {
+    api.einvoices.mockRejectedValue(
+      new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null),
+    );
+    fixture = TestBed.createComponent(SubscriptionPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+    expect(host.querySelector('[data-testid="statement-einvoice"]')).toBeNull();
     expect(host.textContent).toContain('S-2026-08-000001');
   });
 });

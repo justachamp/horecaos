@@ -488,10 +488,6 @@ export const deliveryEn = {
   'delivery.regions.field.nameIn': 'Name ({locale})',
   'delivery.regions.field.boxHint':
     'The north-east corner must be north and east of the south-west one, and the centre must sit inside the box.',
-  'delivery.regions.field.swLat': 'SW latitude',
-  'delivery.regions.field.swLon': 'SW longitude',
-  'delivery.regions.field.neLat': 'NE latitude',
-  'delivery.regions.field.neLon': 'NE longitude',
   'delivery.regions.field.centreLat': 'Centre latitude',
   'delivery.regions.field.centreLon': 'Centre longitude',
 
@@ -706,6 +702,11 @@ export const deliveryEn = {
     'Sent for a second signature (request {request}). Nothing changes until it is approved; publish the same document again afterwards.',
   'delivery.policy.consequence.runPayMode':
     'Decides what a courier is paid when one run carries several orders to neighbouring doors. «First in full» pays each later order its per-order amount and minimum in full and its per-kilometre amount only for the distance beyond the previous drop-off; the courier sees the amount before accepting. A dispatch rule cannot turn grouping on while this is undecided.',
+  'delivery.policy.pickupHandoverGate': 'Pickup and handover position check',
+  'delivery.policy.pickupHandoverGate.SOFT': 'Soft: record it and let the courier go on',
+  'delivery.policy.pickupHandoverGate.HARD': 'Hard: refuse the step',
+  'delivery.policy.consequence.pickupHandoverGate':
+    'Applies to «picked up» and «delivered» once the GPS check is on. Soft (the default) lets a courier who cannot be placed finish the step and records the position as unverified, which is what the unverified-position rate of a bonus or penalty rule counts; hard refuses the step with the failed checks named. Accepting an offer and arriving at the branch are always hard.',
   'delivery.policy.shiftEnforcement': 'Shift enforcement',
   'delivery.policy.shiftEnforcement.ENFORCED': 'Enforced',
   'delivery.policy.shiftEnforcement.ADVISORY': 'Advisory',
@@ -839,6 +840,12 @@ export const deliveryEn = {
   'delivery.liveMap.map.pinLabel': '{courier}: {orders} active orders',
   'delivery.liveMap.map.hint':
     'Each pin is a courier whose last position is recent and precise enough to draw; the outlines are the live delivery zones. Couriers on duty without a pin are listed below with the reason, never placed on a guess.',
+  'delivery.liveMap.state.label': 'Work state',
+  'delivery.liveMap.state.ON_SHIFT': 'On shift',
+  'delivery.liveMap.state.CARRYING': 'Carrying',
+  'delivery.liveMap.state.IDLE': 'Idle',
+  'delivery.liveMap.state.NO_SIGNAL': 'No signal',
+  'delivery.liveMap.state.empty': 'No courier is in this state right now',
   'delivery.orderPoints.show': "Show today's delivery orders on the map",
   'delivery.orderPoints.refresh': 'Open them again',
   'delivery.orderPoints.openOnly': 'Only orders still in progress',
@@ -859,4 +866,67 @@ export const deliveryEn = {
   'delivery.orderPoints.legend.closed': 'order finished or cancelled',
   'delivery.dispatch.map.show': 'Map',
   'delivery.dispatch.map.hide': 'Hide the map',
+  'delivery.dispatch.legs.branchToDoor':
+    'Order {number}: branch to the door, nobody is carrying it yet — a straight line, not the road',
+  'delivery.dispatch.legs.branchToCourier':
+    'Order {number}: branch to courier {courier} — a straight line, not the road',
+  'delivery.dispatch.legs.courierToDoor':
+    'Order {number}: courier {courier} to the door — a straight line, not the road',
+  'delivery.dispatch.legs.road': ' · planned road {km} km',
+  'delivery.dispatch.legs.roadCaption': 'Order {number}: planned road {km} km',
+  'delivery.dispatch.legs.note':
+    'Dashed lines are straight lines between two points, not the road. Green: branch to the courier’s position now. Red: the courier’s position to the door, or the branch to the door while nobody is carrying the order.',
+  'delivery.rates.reasons.sim.heading': 'Who would this rule have hit?',
+  'delivery.rates.reasons.sim.hint':
+    'Replays the rule over the recent closed shifts or settlement periods of every branch, because a rule applies to all of them. Nothing is written or paid.',
+  'delivery.rates.reasons.sim.lookback': 'Look back (days)',
+  'delivery.rates.reasons.sim.run': 'Preview the rule',
+  'delivery.rates.reasons.sim.nobody':
+    'Nobody in the last {days} days ({windows} shifts or periods looked at).',
+  'delivery.rates.reasons.sim.hit':
+    '{couriers} couriers, {total} in all, over {windows} shifts or periods in the last {days} days.',
+  'delivery.rates.reasons.sim.openPeriod':
+    'A period that is still open is shown as it stands today and may change before it closes.',
+  'delivery.rates.reasons.sim.truncated':
+    'The preview is partial: more couriers would be hit than are listed, or more shifts closed than it could replay. The real figure may be higher.',
+  'delivery.rates.reasons.sim.courier': 'Courier',
+  'delivery.rates.reasons.sim.reading': 'Reading',
+  'delivery.rates.reasons.sim.amount': 'Would post',
+  'delivery.deliveries.title': 'Deliveries',
+  'delivery.deliveries.loading': 'Loading deliveries',
+  'delivery.deliveries.denied': 'You cannot read deliveries here.',
+  'delivery.deliveries.empty': 'No deliveries match these filters.',
+  'delivery.deliveries.more': 'Load more',
+  'delivery.deliveries.ownBranchOnly':
+    'Showing your branch only: reading every branch needs delivery access for the whole company.',
+  'delivery.deliveries.filter.branch': 'Branch',
+  'delivery.deliveries.filter.state': 'State',
+  'delivery.deliveries.filter.courier': 'Courier',
+  'delivery.deliveries.filter.from': 'From',
+  'delivery.deliveries.filter.to': 'To',
+  'delivery.deliveries.filter.all': 'All',
+  'delivery.deliveries.column.order': 'Order',
+  'delivery.deliveries.column.branch': 'Branch',
+  'delivery.deliveries.column.destination': 'Destination',
+  'delivery.deliveries.column.state': 'State',
+  'delivery.deliveries.column.courier': 'Courier',
+  'delivery.deliveries.column.promised': 'Promised',
+  'delivery.deliveries.column.delivered': 'Delivered',
+  'delivery.deliveries.column.cash': 'Cash to collect',
+  'delivery.deliveries.column.cost': 'Cost',
+  'delivery.deliveries.basis.ACCRUED': 'accrued',
+  'delivery.deliveries.basis.INVOICED': 'invoiced',
+  'delivery.deliveries.basis.SETTLED': 'settled',
+  'delivery.deliveries.state.PLANNED': 'Planned',
+  'delivery.deliveries.state.WAITING_TO_SOURCE': 'Waiting to find a courier',
+  'delivery.deliveries.state.SOURCING': 'Finding a courier',
+  'delivery.deliveries.state.BOOKING': 'Booking a partner',
+  'delivery.deliveries.state.RETRY_PENDING': 'Will retry',
+  'delivery.deliveries.state.SCHEDULED': 'Scheduled',
+  'delivery.deliveries.state.ASSIGNED': 'Assigned',
+  'delivery.deliveries.state.IN_PROGRESS': 'On the road',
+  'delivery.deliveries.state.COMPLETED': 'Delivered',
+  'delivery.deliveries.state.MANUAL_ACTION_REQUIRED': 'Needs a person',
+  'delivery.deliveries.state.CANCELLED': 'Cancelled',
+  'delivery.nav.deliveries': 'Deliveries',
 } as const;

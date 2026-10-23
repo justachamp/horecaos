@@ -28,7 +28,10 @@ import uz.horecaos.platform.ordering.api.OrderCapturedAfterLapse;
 import uz.horecaos.platform.ordering.api.OrderCompleted;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderExpired;
+import uz.horecaos.platform.ordering.api.OrderFulfilling;
 import uz.horecaos.platform.ordering.api.OrderPaymentLapsed;
+import uz.horecaos.platform.ordering.api.OrderPreparing;
+import uz.horecaos.platform.ordering.api.OrderReady;
 import uz.horecaos.platform.ordering.api.OrderRejected;
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
 import uz.horecaos.platform.ordering.domain.AcceptanceMode;
@@ -421,7 +424,10 @@ public class OrderStateService {
         }
 
         var policy = acceptancePolicies.pinned(order.acceptancePolicyId(), order.acceptancePolicyVersion());
-        boolean approvalRequired = policy.mode() == AcceptanceMode.RESTAURANT_APPROVAL;
+        // The order's own mode snapshot, not the pinned policy's: an AUTO_CONFIRM policy can hold an
+        // order back behind an auto-accept gate (ADR 0177), and that order was written
+        // RESTAURANT_APPROVAL. For every other order the two say the same thing.
+        boolean approvalRequired = AcceptanceMode.RESTAURANT_APPROVAL.name().equals(order.acceptanceMode());
         OrderStatus target = approvalRequired ? OrderStatus.AWAITING_APPROVAL : OrderStatus.CONFIRMED;
         OrderStateMachine.require(OrderStatus.PAYMENT_AUTHORIZING, target);
 
@@ -442,7 +448,9 @@ public class OrderStateService {
                 OrderStatus.PAYMENT_AUTHORIZING,
                 target,
                 TransitionTrigger.PAYMENT_RESULT,
-                "PAYMENT_CAPTURED",
+                // ADR 0177: an order an auto-accept gate held back waits for a person because of the gate,
+                // and the payment only decided when. Checkout kept the gate's reason on its own transition.
+                approvalRequired ? heldAtCheckout(tenantId, orderId).orElse("PAYMENT_CAPTURED") : "PAYMENT_CAPTURED",
                 "SYSTEM_JOB",
                 PAYMENT_CAPTURE_ACTOR,
                 null,
@@ -507,6 +515,18 @@ public class OrderStateService {
                 now);
 
         return new DecisionResult(true, target, version, null);
+    }
+
+    /**
+     * The reason an auto-accept gate gave when it held this order at checkout (ADR 0177), kept on the
+     * transition that put the order in {@code PAYMENT_AUTHORIZING}; empty for every other order.
+     */
+    private Optional<String> heldAtCheckout(UUID tenantId, UUID orderId) {
+        return orders.history(tenantId, orderId).stream()
+                .filter(row -> OrderStatus.PAYMENT_AUTHORIZING.name().equals(row.toStatus()))
+                .map(JdbcOrderStore.TransitionRow::reasonCode)
+                .filter(AutoAcceptGate.Reason::isReasonCode)
+                .findFirst();
     }
 
     /**
@@ -1713,12 +1733,49 @@ public class OrderStateService {
                         order.currency(),
                         order.totalMinor(),
                         version));
+            // ADR 0184. PREPARING, READY and FULFILLING were unpublished for as long as nothing
+            // outside ordering read them, and COMPLETED left that list when ADR 0075's rating
+            // prompt became its reader. These three have one now: ADR 0045 tells the customer each
+            // milestone as an ADR 0020 message, and notifications cannot trigger one from a row in
+            // the state history. Only the forward edges reach this method; a compensating edge
+            // (ADR 0110) goes through override() and is deliberately silent.
+            case PREPARING ->
+                events.publishEvent(new OrderPreparing(
+                        UUID.randomUUID(),
+                        tenant,
+                        order.orderId(),
+                        now,
+                        order.brandId(),
+                        order.locationId(),
+                        order.fulfillmentMode().name(),
+                        now,
+                        version));
+            case READY ->
+                events.publishEvent(new OrderReady(
+                        UUID.randomUUID(),
+                        tenant,
+                        order.orderId(),
+                        now,
+                        order.brandId(),
+                        order.locationId(),
+                        order.fulfillmentMode().name(),
+                        now,
+                        version));
+            case FULFILLING ->
+                events.publishEvent(new OrderFulfilling(
+                        UUID.randomUUID(),
+                        tenant,
+                        order.orderId(),
+                        now,
+                        order.brandId(),
+                        order.locationId(),
+                        order.fulfillmentMode().name(),
+                        now,
+                        version));
             default -> {
-                // PREPARING, READY and FULFILLING still have no external consumer,
-                // and stay unpublished for the reason this comment always gave.
-                // COMPLETED left the list when ADR 0075's rating prompt became its
-                // reader: a prompt has to know an order finished, and ADR 0071
-                // accepts a review only once it has.
+                // Every other status is either pre-confirmation machinery that has its own
+                // events (RECEIVED, AWAITING_APPROVAL) or a payment state that is not an order
+                // milestone a consumer reads (PAYMENT_AUTHORIZING).
             }
         }
     }

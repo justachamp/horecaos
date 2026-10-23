@@ -34,7 +34,7 @@
 }
 
 .tab__count {
-  margin-left: 4px;
+  margin-inline-start: 4px;
   color: var(--q-ink-subtle);
 }
 

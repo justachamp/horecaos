@@ -706,7 +706,10 @@ class ReviewFeedbackEndpointTests {
         evictSummary();
         BigDecimal before = publicSummary().path("average").decimalValue();
 
-        transactions.executeWithoutResult(status -> erasure.erase(TENANT, OrderBoardFixtures.customerOf(TENANT)));
+        transactions.executeWithoutResult(status -> erasure.erase(
+                TENANT,
+                OrderBoardFixtures.customerOf(TENANT),
+                uz.horecaos.platform.customers.spi.CustomerErasureParticipant.ErasedContacts.none()));
 
         assertThat(jdbc.sql("SELECT comment_protected FROM reviews.order_reviews WHERE id = :id")
                         .param("id", shared)
@@ -746,7 +749,10 @@ class ReviewFeedbackEndpointTests {
                 .contains("CUSTOMER_ERASED")
                 .contains("SYSTEM");
 
-        transactions.executeWithoutResult(status -> erasure.erase(TENANT, OrderBoardFixtures.customerOf(TENANT)));
+        transactions.executeWithoutResult(status -> erasure.erase(
+                TENANT,
+                OrderBoardFixtures.customerOf(TENANT),
+                uz.horecaos.platform.customers.spi.CustomerErasureParticipant.ErasedContacts.none()));
         assertThat(jdbc.sql(
                                 "SELECT count(*) FROM integration.outbox_events WHERE event_type = 'ReviewCommentModerated' "
                                         + "AND payload::text LIKE '%CUSTOMER_ERASED%'")

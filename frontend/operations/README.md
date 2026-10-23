@@ -161,6 +161,17 @@ the older `/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/or
 `src/app/core/api/operations-paths.ts` is the single file that knows this, so the
 day the controller moves, exactly one file changes.
 
+**A builder that points at a path the platform does not serve fails a test.**
+`src/app/core/api/path-conformance.spec.ts` calls every builder of every `*-paths.ts`
+file with marker arguments and requires the result to be a path published in
+`platform/api/openapi/v1/horecaos-api.operations.json` (builders on the control-plane
+and storefront prefixes are checked against those surfaces' own baselines). It exists
+because the live map's two builders spent a release on `/api/v1/operations/...` while
+the controller is mapped under `/api/v1/tenants/...`: every real call 404'd and no spec
+noticed, because each feature's spec replaces the API with a stub. A new `*-paths.ts`
+file is added to `PATH_FAMILIES` in that spec; a builder known to be wrong is listed in
+`KNOWN_MISMATCHES` with the row that owns the fix.
+
 ---
 
 ## Localisation
@@ -224,10 +235,19 @@ codes all read the registry's other tiers. A language the registry **declares bu
 
 `<html dir>` follows `<html lang>` (`core/i18n/document-direction.ts`): every entry says `LTR`, the
 document says so, and new or touched CSS uses logical properties (`margin-inline-start`,
-`inset-inline-end`, `text-align: start`). `no-physical-direction` (ESLint, `npm run lint`) fails a
-stylesheet that is not on `tools/eslint-plugin-horecaos/physical-direction-baseline.json` and says
-`margin-left`; the list can only shrink, and `npm run lint:rules` fails when a listed file no longer
-needs to be there.
+`inset-inline-end`, `text-align: start`). `no-physical-direction` (ESLint, `npm run lint`) fails any
+stylesheet that says `margin-left`, `padding-right`, `left:`, `text-align: right`, a `border-left`,
+a `float` or a corner radius by its physical name, in all four apps (the consoles' `.css`, the
+storefronts' `.css` and `.scss`) and the courier; `eslint --fix` rewrites it. There is no baseline
+list: the stylesheets that predated the rule were converted in one pass (X.40), and `npm run
+lint:rules` reads every stylesheet of every app, so it fails whichever lint config an app carries.
+A declaration that must stay physical -- `left: 50%` beside `translateX(-50%)` centres the same way
+in either direction -- says why in a comment on its line or the line above, `physical-ok: <reason>`;
+a comment with no reason allows nothing, and the exceptions are listed in
+`tools/eslint-plugin-horecaos/no-physical-direction.test.js`, so a new one is seen in review.
+Not covered, because the rule reads declarations and not values: a four-value `margin`, `padding` or
+`border-radius` shorthand, `translateX`, `background-position` and a `style=` attribute or a
+component's inline `styles:` in a `.ts` file.
 
 ### Activating a language
 
@@ -247,13 +267,21 @@ is activated by the registry's existence; `kk` and `ka` are declared with no tie
    it (`messages/<area>.<locale>.ts`, typed so a missing key fails the build; the control plane's
    `messages.<locale>.ts`), the face is bundled and the glyph audit has passed, then the entry gains
    `STAFF_UI`. Russian stays the staff default.
-4. **Script and layout** -- the bundled `@ibm/plex-sans` covers Latin, Latin Extended and Cyrillic,
-   and neither Kazakh's extra Cyrillic letters nor Georgian. Kazakh: audit the bundled face against
-   the Kazakh alphabet and add a second face only if it fails. Georgian: an openly licensed face chosen
-   at activation, declared as its own `@font-face` with a `unicode-range` and loaded only when the
-   locale is active, so a Russian-speaking cashier never downloads Mkhedruli. A right-to-left language
-   is not a checklist item: it reaches order lines, receipts, fiscal documents and SMS and needs its own
-   record.
+4. **Script and layout** -- run `npm run lint:rules`: it includes the **glyph audit**
+   (`frontend/tools/glyph-audit`, which reads the font files each console ships and checks every
+   letter of every language in `alphabets.json`). As of 2026-10-23 the bundled `@ibm/plex-sans` 1.1.0
+   (and the control plane's `@fontsource` subsets) draw every letter of Russian, Uzbek Latin, English
+   **and Kazakh** (Ә Ғ Қ Ң Ө Ұ Ү Һ І, both cases), so Kazakh needs no second face; Georgian is absent,
+   which the audit says out loud ("declared, no face shipped"). Activating a language therefore starts
+   with a row for it in `alphabets.json` (a backend test fails without one) and, if its face is a new
+   one, a shipped `@font-face`; the audit then fails the build if a letter of the language is not drawn.
+   Georgian: an openly licensed face chosen at activation, declared as its own `@font-face` with a
+   `unicode-range` and loaded only when the locale is active, so a Russian-speaking cashier never
+   downloads Mkhedruli; flip `"shipped": true` for `georgian-lazy` in `alphabets.json` in the same
+   change. The Uzbek modifier letters U+02BB-02BC are in no split subset of `@ibm/plex-sans`, so a
+   screen that shows `Oʻ` fetches the complete face (about 60 KB a weight); the audit pins that list
+   per app (`completeFaceAllowed`) so the cost cannot grow unseen. A right-to-left language is not a
+   checklist item: it reaches order lines, receipts, fiscal documents and SMS and needs its own record.
 
 What activating adds *no* migration and *no* change to any module other than its catalogue: the
 locale columns are a BCP 47 shape check (V0499), the brand's supported set is the tenant's choice,

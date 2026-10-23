@@ -132,8 +132,7 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.campaign.stats.refused': 'Отказано',
   'marketing.campaign.stats.total': 'Всего попыток',
   'marketing.campaign.stats.refusedByReason.title': 'Отказано, по причине',
-  'marketing.campaign.stats.deliveryUnavailableHint':
-    'Доставлено/не доставлено пока не отслеживается — для этой кампании нет отчёта о прочтении.',
+  'marketing.campaign.stats.delivery.title': 'Что стало с сообщениями',
   'marketing.campaign.stats.export': 'Экспортировать получателей в CSV',
   'marketing.campaign.stats.exportedCount': 'Экспортировано ID аккаунтов: {count}',
 
@@ -213,7 +212,7 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   // ------------------------------------------------------------- courier broadcasts 6.4b (T18)
   'marketing.courierBroadcasts.title': 'Рассылки курьерам',
   'marketing.courierBroadcasts.intro':
-    'Собственная оперативная SMS-рассылка диспетчера курьерам — смена смены, погодные условия, перекрытие маршрута. Никогда не клиентская кампания.',
+    'Собственные оперативные SMS диспетчера курьерам — смена смены, погодные условия, перекрытие маршрута. Отправляются по формулировке, одобренной SMS-шлюзом, на номер, с которым курьер входит в систему; платформа читает его на время одного сообщения и нигде не хранит. Никогда не клиентская кампания.',
   'marketing.courierBroadcasts.loading': 'Загрузка',
   'marketing.courierBroadcasts.empty': 'Рассылок пока нет',
   'marketing.courierBroadcasts.create.action': 'Новая рассылка',
@@ -222,10 +221,9 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.courierBroadcasts.create.targetKind.ALL_ACTIVE': 'Все активные курьеры',
   'marketing.courierBroadcasts.create.targetKind.GROUP': 'Одна группа курьеров',
   'marketing.courierBroadcasts.create.targetGroupId': 'ID группы',
-  'marketing.courierBroadcasts.create.message': 'Сообщение',
   'marketing.courierBroadcasts.create.submit': 'Сохранить черновик',
   'marketing.courierBroadcasts.column.target': 'Получатели',
-  'marketing.courierBroadcasts.column.message': 'Сообщение',
+  'marketing.courierBroadcasts.column.message': 'Формулировка',
   'marketing.courierBroadcasts.column.status': 'Статус',
   'marketing.courierBroadcasts.column.recipients': 'Получателей',
   'marketing.courierBroadcasts.status.DRAFT': 'Черновик',
@@ -233,11 +231,77 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.courierBroadcasts.status.FAILED': 'Не удалась',
   'marketing.courierBroadcasts.action.send': 'Отправить',
   'marketing.courierBroadcasts.refusalReason': 'Отклонено: {reason}',
+  'marketing.courierBroadcasts.create.template': 'Формулировка',
+  'marketing.courierBroadcasts.create.template.placeholder': 'Выберите одобренную формулировку',
+  'marketing.courierBroadcasts.create.template.awaiting': '{key} — ждёт одобрения SMS-шлюза',
+  'marketing.courierBroadcasts.create.templates.none':
+    'Нет готовой формулировки для курьеров. Создайте SMS-шаблон класса COURIER_DISPATCH в «Настройки → Уведомления» и дождитесь одобрения шлюза.',
+  'marketing.courierBroadcasts.create.variablesHint':
+    'Короткие значения, по одной строке, не более 80 символов. Только рабочий текст: без имён и телефонов.',
+  'marketing.courierBroadcasts.create.preview': 'Сообщение будет таким',
+  'marketing.courierBroadcasts.variable.place': 'Место',
+  'marketing.courierBroadcasts.variable.time': 'Время',
+  'marketing.courierBroadcasts.variable.note': 'Заметка',
+  'marketing.courierBroadcasts.action.results': 'Результаты',
+  'marketing.courierBroadcasts.action.hideResults': 'Скрыть результаты',
+  'marketing.courierBroadcasts.results.title': 'Что стало с сообщением каждому курьеру',
+  'marketing.courierBroadcasts.results.loading': 'Загрузка',
+  'marketing.courierBroadcasts.results.column.courier': 'Курьер',
+  'marketing.courierBroadcasts.results.column.state': 'Состояние',
+  'marketing.courierBroadcasts.results.column.reason': 'Почему',
+  'marketing.courierBroadcasts.results.empty': 'Ни один курьер не получил сообщение.',
+  'marketing.courierBroadcasts.results.state.NO_CONTACT': 'Нет номера',
+  'marketing.delivery.reason.COURIER_HAS_NO_NUMBER':
+    'У провайдера идентификации нет номера этого курьера, на который платформа отправляет сообщения. Исправьте профиль и создайте рассылку заново.',
+  'marketing.delivery.reason.RECIPIENT_UNRESOLVABLE':
+    'К моменту отправки номера курьера уже не было.',
+  'marketing.delivery.reason.SMS_PURPOSE_NOT_PERMITTED':
+    'SMS-аккаунт не допущен к курьерским сообщениям.',
+  'marketing.delivery.reason.RECEIVER_UNREACHABLE': 'Шлюз сообщает, что номер недоступен.',
+  'marketing.delivery.reason.PROVIDER_REPORTED_FAILURE': 'Шлюз сообщил, что сообщение не дошло.',
+  'marketing.delivery.reason.IDENTITY_PROVIDER_UNAVAILABLE':
+    'Провайдер идентификации не ответил на запрос номера курьера; платформа повторит попытку.',
+  'marketing.delivery.reason.other': 'Код причины: {code}',
+  'marketing.delivery.reason.ADDRESS_REJECTED': 'Почтовый сервер навсегда отклонил этот адрес',
+  'marketing.delivery.reason.ADDRESS_INVALID': 'Это не email-адрес',
+  'marketing.delivery.reason.MESSAGE_INVALID': 'Почтовый сервер отклонил само письмо',
+  'marketing.delivery.reason.SMTP_UNAVAILABLE': 'Почтовый сервер недоступен',
+  'marketing.delivery.reason.EMAIL_NOT_CONFIGURED':
+    'На этом развёртывании не настроен почтовый сервер',
+  'marketing.courierBroadcasts.readiness.heading':
+    'Курьерские SMS для этого бренда пока отправить нельзя',
+  'marketing.courierBroadcasts.wiring.SMS_PURPOSE_NOT_PERMITTED':
+    'SMS-аккаунт этого бренда не допущен к курьерским сообщениям. Коды входа и сообщения о заказах это не затрагивает. Пока владелец платформы письменно не подтвердит, что аккаунт может передавать курьерский трафик, и это не будет указано в подключении, курьерское SMS отправить нельзя.',
+  'marketing.courierBroadcasts.wiring.COURIER_CONTACTS_NOT_WIRED':
+    'Платформа пока не вправе использовать номер самого курьера для сообщений ему. Это номер, с которым он входит в систему, копий платформа не хранит; пока владелец платформы не запишет, что его можно использовать для сообщения диспетчера, рассылку курьерам отправить нельзя.',
+  'marketing.courierBroadcasts.wiring.COURIER_CONTACTS_UNAVAILABLE':
+    'Провайдер идентификации не ответил на запрос номеров курьеров. Ничего не отправлено, рассылка осталась черновиком; повторите через минуту.',
+  'marketing.courierBroadcasts.wiring.NO_PROVIDER_BINDING':
+    'Для этого бренда не подключён SMS-провайдер. Подключите его в настройках интеграций бренда.',
+  'marketing.courierBroadcasts.wiring.INSTALLATION_INACTIVE':
+    'Подключение SMS-провайдера отключено.',
+  'marketing.courierBroadcasts.wiring.INSTALLATION_MISSING':
+    'Подключения SMS-провайдера больше нет.',
+  'marketing.courierBroadcasts.wiring.SMS_ACCOUNT_MISCONFIGURED':
+    'В SMS-аккаунте этого бренда не хватает части настроек.',
+  'marketing.courierBroadcasts.wiring.PROVIDER_ADAPTER_MISMATCH':
+    'У подключённого SMS-провайдера нет адаптера в этой версии.',
+  'marketing.courierBroadcasts.wiring.NO_ADAPTER': 'В этой версии нет SMS-адаптера.',
+  'marketing.courierBroadcasts.wiring.NO_DELIVERY_ADAPTER': 'В этой версии нет пути доставки SMS.',
+  'marketing.courierBroadcasts.wiring.COURIER_TEMPLATE_NOT_AVAILABLE':
+    'Формулировка этой рассылки больше не является действующей курьерской формулировкой этого бренда.',
+  'marketing.courierBroadcasts.wiring.TEMPLATE_AWAITING_PROVIDER':
+    'Формулировка ещё ждёт одобрения SMS-шлюза, поэтому с ней пока ничего отправить нельзя.',
+  'marketing.courierBroadcasts.wiring.NO_ACTIVE_COURIER': 'В этой выборке нет активных курьеров.',
+  'marketing.courierBroadcasts.wiring.NO_COURIER_HAS_A_NUMBER':
+    'Ни у одного из выбранных курьеров нет номера, на который платформа отправляет сообщения; ничего не отправлено.',
+  'marketing.courierBroadcasts.wiring.UNKNOWN':
+    'Курьерское SMS сейчас нельзя отправить для этого бренда ({reason}).',
 
   // --------------------------------------------------------- attribution links 6.6a (ADR 0044, T18)
   'marketing.attributionLinks.title': 'Ссылки привлечения',
   'marketing.attributionLinks.intro':
-    'Отслеживаемая ссылка сайта ?ref= или диплинк Telegram — для кампании или блогера.',
+    'Ссылка для кампании или блогера: на сайт, на Telegram-бота или на Telegram Mini App. Она считает, сколько раз её открыли, но не кто.',
   'marketing.attributionLinks.empty': 'Ссылок пока нет',
   'marketing.attributionLinks.create.action': 'Создать ссылку',
   'marketing.attributionLinks.create.title': 'Создать ссылку привлечения',
@@ -259,6 +323,95 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.attributionLinks.destinationType.CAMPAIGN': 'Кампания',
   'marketing.attributionLinks.destinationType.STOREFRONT_HOME': 'Главная страница витрины',
   'marketing.attributionLinks.destinationType.INFLUENCER': 'Блогер',
+  'marketing.attributionLinks.copy': 'Копировать',
+  'marketing.attributionLinks.copied': 'Скопировано',
+  'marketing.attributionLinks.unavailable.WEB_HOSTNAME_NOT_CLAIMED':
+    'Адреса сайта пока нет: филиалы этого бренда не продают ни через один сайт-канал с адресом.',
+  'marketing.attributionLinks.unavailable.WEB_HOSTNAME_NOT_VERIFIED':
+    'Адрес сайта ещё не подтверждён.',
+  'marketing.attributionLinks.unavailable.WEB_HOSTNAME_AMBIGUOUS':
+    'Продажи идут через два подтверждённых адреса сайта, и платформа не гадает, на какой дать ссылку.',
+  'marketing.attributionLinks.unavailable.TELEGRAM_BOT_NOT_CONNECTED':
+    'Для этого бренда не подключён Telegram-бот.',
+  'marketing.attributionLinks.unavailable.TELEGRAM_BOT_UNREACHABLE':
+    'Telegram сейчас не сказал нам имя бота. Повторите чуть позже.',
+  'marketing.attributionLinks.unavailable.TELEGRAM_MINI_APP_NOT_SET_UP':
+    'Mini App ещё не настроен: завершите настройку Telegram Mini App ниже.',
+  'marketing.attributionLinks.unavailable.MOBILE_APP_ON_HOLD':
+    'Мобильное приложение приостановлено, поэтому эта ссылка никуда не ведёт.',
+  // ------------------------------------------- the guided Mini App setup (ADR 0183, row 6.6a)
+  'marketing.miniApp.title': 'Настройка Telegram Mini App',
+  'marketing.miniApp.lead':
+    'Ваша витрина внутри Telegram-бота. Два шага можете сделать только вы, в Telegram, и точные слова для отправки написаны ниже; остальное читается из фактов, поэтому можно уйти и вернуться.',
+  'marketing.miniApp.loading': 'Смотрим, на каком шаге настройка…',
+  'marketing.miniApp.denied': 'Для настройки Mini App нужно право управлять интеграциями.',
+  'marketing.miniApp.error': 'Не удалось прочитать, на каком шаге настройка.',
+  'marketing.miniApp.open': 'Открыть',
+  'marketing.miniApp.copy': 'Копировать',
+  'marketing.miniApp.state.DONE': 'Готово',
+  'marketing.miniApp.state.RECORDED': 'Записано',
+  'marketing.miniApp.state.TODO': 'Нужно сделать',
+  'marketing.miniApp.state.UNKNOWN': 'Не удалось проверить',
+  'marketing.miniApp.step.CONNECT_BOT.title': 'Подключите бота',
+  'marketing.miniApp.step.CONNECT_BOT.hint':
+    'Создайте бота в @BotFather (/newbot), затем вставьте его токен в Настройки → Интеграции. Токен больше не показывается.',
+  'marketing.miniApp.step.REGISTER_WEBHOOK.title': 'Зарегистрируйте webhook бота',
+  'marketing.miniApp.step.REGISTER_WEBHOOK.hint':
+    'Чтобы бот слышал клиентов: нажмите «Зарегистрировать webhook» на карточке бота в Интеграциях.',
+  'marketing.miniApp.step.TELEGRAM_CHANNEL.title': 'Добавьте канал продаж Telegram',
+  'marketing.miniApp.step.TELEGRAM_CHANNEL.hint':
+    'В Настройки → Каналы продаж добавьте канал типа Telegram, подключённый к этому боту. Кнопка меню, тексты и переключатель Mini App настраиваются в нём.',
+  'marketing.miniApp.step.STOREFRONT_ADDRESS.title': 'У витрины есть подтверждённый адрес',
+  'marketing.miniApp.step.STOREFRONT_ADDRESS.hint':
+    'Mini App открывает вашу витрину, поэтому ему нужен подтверждённый адрес сайт-канала. Адрес здесь вводить не нужно.',
+  'marketing.miniApp.step.BOTFATHER_APP.title': 'Создайте Mini App в BotFather',
+  'marketing.miniApp.step.BOTFATHER_APP.hint':
+    'Это может сделать только владелец бота, а проверить это мы не можем: Telegram не даёт такой возможности. Шаг получает статус «Записано», когда вы сообщите короткое имя.',
+  'marketing.miniApp.step.MENU_BUTTON.title': 'Поставьте Mini App на кнопку меню бота',
+  'marketing.miniApp.step.MENU_BUTTON.hint':
+    'Мы ставим кнопку и спрашиваем у Telegram, что он показывает. Шаг готов только тогда, когда Telegram показывает то, что мы поставили.',
+  'marketing.miniApp.step.TEST_LINK.title': 'Откройте на телефоне',
+  'marketing.miniApp.step.TEST_LINK.hint':
+    'Откройте эту ссылку в Telegram: витрина должна открыться внутри бота. Затем создайте выше ссылку «Telegram Mini App» и откройте её — клик будет засчитан.',
+  'marketing.miniApp.detail.STOREFRONT_ADDRESS.NOT_CLAIMED':
+    'Ни один сайт-канал, продающий в филиалах этого бренда, ещё не задал адрес.',
+  'marketing.miniApp.detail.STOREFRONT_ADDRESS.NOT_VERIFIED':
+    'Адрес сайт-канала задан, но не подтверждён. Опубликуйте DNS-запись и подтвердите его.',
+  'marketing.miniApp.detail.STOREFRONT_ADDRESS.AMBIGUOUS':
+    'В филиалах этого бренда продают через два подтверждённых адреса сайта, и платформа не гадает, какой из них витрина.',
+  'marketing.miniApp.detail.MENU_BUTTON.NOT_READY': 'Сначала завершите шаги выше.',
+  'marketing.miniApp.detail.MENU_BUTTON.MINI_APP_OFF':
+    'Mini App выключен в канале Telegram. Запись короткого имени включит его.',
+  'marketing.miniApp.detail.MENU_BUTTON.NOT_APPLIED':
+    'Telegram показывает не ту кнопку, которую мы собираемся поставить.',
+  'marketing.miniApp.detail.MENU_BUTTON.OTHER_BRAND':
+    'Mini App канала Telegram открывает витрину другого бренда. Запись короткого имени здесь переносит его на этот бренд.',
+  'marketing.miniApp.detail.MENU_BUTTON.STALE_BUTTON':
+    'Telegram по-прежнему показывает кнопку, открывающую витрину, хотя Mini App выключен или адрес больше не подтверждён. Снимите её, чтобы клиентов не отправляло туда.',
+  'marketing.miniApp.detail.TEST_LINK.NOT_READY':
+    'Ссылка появится, когда станут известны бот и короткое имя.',
+  'marketing.miniApp.botFather.step1': 'Откройте @BotFather в Telegram и отправьте /newapp.',
+  'marketing.miniApp.botFather.step2': 'Выберите своего бота: @{bot}.',
+  'marketing.miniApp.botFather.step3':
+    'Отправьте название и короткое описание. Клиенты увидят и то и другое.',
+  'marketing.miniApp.botFather.step4':
+    'Отправьте картинку 640×360, затем GIF или /empty, чтобы пропустить.',
+  'marketing.miniApp.botFather.step5':
+    'Когда BotFather спросит Web App URL, отправьте ровно адрес ниже.',
+  'marketing.miniApp.botFather.step6':
+    'Когда BotFather спросит короткое имя, отправьте любое на ваш выбор: буквы, цифры и подчёркивания, например order. BotFather ответит ссылкой, оканчивающейся им. Введите короткое имя здесь.',
+  'marketing.miniApp.shortName': 'Короткое имя, которое принял BotFather',
+  'marketing.miniApp.record': 'Записать короткое имя',
+  'marketing.miniApp.needsChannel':
+    'Сначала добавьте канал продаж Telegram: короткое имя записывается в нём.',
+  'marketing.miniApp.needsAddress':
+    'BotFather нужен адрес вашей витрины. Сначала завершите шаг выше.',
+  'marketing.miniApp.menu.wanted': 'Мы поставим подпись «{label}», открывающую {url}.',
+  'marketing.miniApp.menu.held': 'Сейчас Telegram показывает кнопку, открывающую {url}.',
+  'marketing.miniApp.menu.apply': 'Поставить кнопку меню',
+  'marketing.miniApp.menu.takeOff': 'Снять кнопку меню',
+  'marketing.miniApp.menu.notShown':
+    'Telegram принял вызов, но по-прежнему показывает другую кнопку. Повторите или проверьте бота в BotFather.',
 
   // ------------------------------------------------------- promo codes 6.2 (ADR 0072, wave 60)
   'marketing.promoCodes.title': 'Промокоды',
@@ -397,7 +550,7 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.loyalty.accrual.form.lotLifetime': 'Баллы сгорают через, дней',
   'marketing.loyalty.accrual.form.expiryWarning': 'Предупреждать за, дней до сгорания',
   'marketing.loyalty.accrual.form.expiryWarning.hint':
-    'За сколько дней партия баллов считается «скоро сгорит» — само уведомление об этом ещё не реализовано (ADR 0046).',
+    'За сколько дней партия баллов считается «скоро сгорит». Клиент получает одно сообщение в день, в нём все партии из этого окна, по вашему тексту LOYALTY_POINTS_EXPIRING. Пока этот текст не написан и не включён в разделе «Уведомления», ничего не отправляется (ADR 0046).',
 
   'marketing.loyalty.redemption.title': 'Списание',
   'marketing.loyalty.redemption.hint':
@@ -453,6 +606,23 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
     'Только отчёт: сверяет, ничего не применяет и не отправляет',
   'marketing.loyalty.posSync.mode.PULL': 'Загружает то, что произошло на кассе',
   'marketing.loyalty.posSync.mode.PULL_AND_PUSH': 'Загружает и отправляет баланс журнала',
+  // ------------------------------------------------------------------- staging the rollout (ADR 0171, row 6.3b)
+  'marketing.loyalty.posSync.stage.label': 'Стадия внедрения',
+  'marketing.loyalty.posSync.stage.hint':
+    'Сначала только отчёт, потом загрузка, потом отправка. Вверх — по одной стадии, вниз — сразу.',
+  'marketing.loyalty.posSync.stage.reason': 'Почему (сохраняется в журнале действий)',
+  'marketing.loyalty.posSync.stage.apply': 'Применить стадию',
+  'marketing.loyalty.posSync.stage.saved': 'Теперь подключение работает так: {mode}.',
+  'marketing.loyalty.posSync.stage.stale':
+    'Кто-то изменил это раньше. Страница показывает актуальное; повторите своё изменение.',
+  'marketing.loyalty.posSync.keeps.title': 'Ведёт ли ваша касса собственный бонусный баланс?',
+  'marketing.loyalty.posSync.keeps.body':
+    'Если ведёт, а здесь ничто его не отражает, сотрудникам сообщается, что баланс клиента здесь и на кассе может расходиться.',
+  'marketing.loyalty.posSync.keeps.label': 'Касса ведёт собственный бонусный баланс',
+  'marketing.loyalty.posSync.keeps.save': 'Сохранить',
+  'marketing.loyalty.posSync.keeps.saved': 'Сохранено.',
+  'marketing.loyalty.posSync.keeps.yes': 'Да: касса ведёт собственный бонусный баланс.',
+  'marketing.loyalty.posSync.keeps.no': 'Нет: касса его не ведёт или об этом не говорили.',
   'marketing.loyalty.posSync.reconcile.action': 'Сверить сейчас',
   'marketing.loyalty.posSync.reconcile.running': 'Идёт сверка…',
   'marketing.loyalty.posSync.runs.title': 'Отчёты о сверке',
@@ -666,10 +836,16 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
     'У подключённого провайдера в этой версии нет адаптера для этого канала.',
   'marketing.wiring.NO_ADAPTER': 'В этой версии нет адаптера для этого канала.',
   'marketing.wiring.NO_DELIVERY_ADAPTER': 'В этой версии у этого канала нет пути доставки.',
-  'marketing.wiring.NO_DELIVERY_ADAPTER.EMAIL':
-    'Email гостям не подключён. Почтовый сервис платформы отправляет только приглашения и сброс пароля сотрудникам; отправка писем гостям самого заведения — отдельное решение, которое ещё не принято.',
-  'marketing.wiring.NO_DELIVERY_ADAPTER.PUSH':
-    'Push не подключён: провайдера push-уведомлений пока нет, поэтому отправить гостю push нельзя.',
+  'marketing.wiring.EMAIL_NOT_CONFIGURED':
+    'Почта на этом развёртывании не настроена: почтовый сервер не указан, поэтому отправить ничего нельзя. Пока владелец платформы не подключит провайдера рассылки, email-кампанию запустить нельзя.',
+  'marketing.wiring.EMAIL_PURPOSE_NOT_PERMITTED':
+    'Почтовый сервис платформы отправляет только рассылки кампаний.',
+  'marketing.wiring.PUSH_NOT_CONFIGURED':
+    'Push не настроен на этом развёртывании: у платформы нет ключей и контакта для отправки, поэтому ничего отправить нельзя. Пока владелец платформы их не подключит, push-кампанию запустить нельзя.',
+  'marketing.wiring.PUSH_PURPOSE_NOT_PERMITTED':
+    'Push-сервис платформы передаёт только кампании и ничего другого.',
+  'marketing.wiring.ACCOUNT_MISCONFIGURED':
+    'В аккаунте для этого канала не хватает части настроек.',
   'marketing.wiring.UNKNOWN':
     'Этот канал сейчас не может доставлять сообщения для этого бренда ({reason}).',
   'marketing.refusal.SCENARIO_CONFLICT':
@@ -1018,6 +1194,41 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.delivery.NO_RECEIPT': 'Отчёта о доставке нет',
   'marketing.delivery.HANDED_TO_OPERATOR': 'Передано оператору',
   'marketing.delivery.PENDING': 'Ещё не отправлено',
+  'marketing.delivery.READ': 'Прочитано',
+  'marketing.delivery.WITHHELD': 'Удержано',
+  'marketing.delivery.HANDED_TO_OPERATOR.MESSAGING_APP': 'Отправлено',
+  'marketing.delivery.HANDED_TO_OPERATOR.PUSH': 'Принято push-сервисом',
+  'marketing.delivery.READ.PUSH': 'Нажато',
+  'marketing.delivery.reason.PUSH_SUBSCRIPTION_GONE':
+    'Push-сервис браузера сообщает, что подписка закончилась: пока клиент снова не включит push, достучаться до него здесь нельзя',
+  'marketing.delivery.reason.PUSH_VAPID_REJECTED':
+    'Push-сервис не принял ключ отправителя платформы для этой подписки (ключ сменили после того, как клиент подписался)',
+  'marketing.delivery.reason.PUSH_NOT_CONFIGURED': 'На этом развёртывании не настроен push',
+  'marketing.delivery.reason.PUSH_PAYLOAD_TOO_LARGE': 'Push-сервис отклонил размер сообщения',
+  'marketing.delivery.reason.PUSH_REQUEST_REFUSED': 'Push-сервис отклонил сообщение',
+  'marketing.delivery.reason.PUSH_PAYLOAD_UNUSABLE':
+    'Сообщение не удалось зашифровать для этой подписки',
+  'marketing.delivery.reason.PUSH_REDIRECT_REFUSED':
+    'Push-сервис перенаправил запрос; платформа переадресациям не следует',
+  'marketing.delivery.reason.PUSH_SERVICE_ERROR': 'Push-сервис раз за разом отвечал ошибкой',
+  'marketing.delivery.reason.PUSH_RATE_LIMITED':
+    'Push-сервис раз за разом просил платформу снизить темп',
+  'marketing.delivery.reason.PUSH_SERVICE_UNREACHABLE': 'Push-сервис недоступен',
+  'marketing.delivery.reason.PUSH_SECRET_UNAVAILABLE': 'Ключ push платформы недоступен',
+  'marketing.delivery.counts.notReported': 'Этот канал не сообщает',
+  'marketing.delivery.counts.segments': 'Оплачено сегментов',
+  'marketing.delivery.counts.withheldTitle': 'Удержано по причине',
+  'marketing.delivery.withheld.TEMPLATE_AWAITING_PROVIDER': 'Формулировка ждёт одобрения шлюза',
+  'marketing.delivery.withheld.TEMPLATE_REFUSED_BY_PROVIDER': 'Формулировку отклонил шлюз',
+  'marketing.delivery.withheld.CONSENT_WITHHELD': 'Согласие отозвано после формирования аудитории',
+  'marketing.delivery.withheld.PREFERENCE_DISABLED': 'Клиент отключил это',
+  'marketing.delivery.withheld.NO_RECIPIENT_ENDPOINT': 'Нет пригодного адреса или номера',
+  'marketing.delivery.withheld.NO_RECIPIENT_ACCOUNT': 'Нет аккаунта клиента',
+  'marketing.delivery.withheld.NO_ACTIVE_TEMPLATE': 'Нет действующей формулировки',
+  'marketing.delivery.withheld.NO_TEMPLATE_FOR_LOCALE': 'Нет формулировки на языке клиента',
+  'marketing.delivery.withheld.CHANNEL_NOT_AVAILABLE': 'Канал недоступен',
+  'marketing.delivery.withheld.CAMPAIGN_NOT_SENDING': 'Кампания приостановлена или остановлена',
+  'marketing.delivery.withheld.EXPIRED': 'Срок истёк до отправки',
   'marketing.campaign.recipients.deliveryHint':
     'Доставка — это сведения от шлюза, а не обещание: «передано оператору» значит, что сообщение принято и больше ничего не сообщалось.',
   'marketing.campaign.recipients.segments': 'Тарифицировано сегментов: {count}',
@@ -1400,14 +1611,59 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.storefront.tab.groups': 'Группы на главной',
   'marketing.storefront.tab.carousel': 'Карусель предложений',
   'marketing.storefront.tab.preview': 'Предпросмотр',
-  'marketing.storefront.tab.switcher': 'Переключатель брендов',
+  'marketing.storefront.tab.switcher': 'Переключатель брендов и раскладка',
+  'marketing.storefront.tab.branches': 'Порядок филиалов',
   'marketing.storefront.groups.hint':
     'Именованные ленты блюд на главном экране: выбранные вручную или целая категория. Порядок здесь — это порядок на экране.',
   'marketing.storefront.carousel.hint':
     'Карусель вверху главного экрана общая для баннеров и промо-карточек. Порядок задаётся здесь; писать и публиковать их нужно в разделе «Контент». Она одинакова для всех клиентов — персональное предложение для одного гостя — это отдельное.',
   'marketing.storefront.carousel.link': 'Открыть «Контент»',
-  'marketing.storefront.switcher.title':
-    'Переключатель брендов и раскладка маркетплейса — не созданы',
-  'marketing.storefront.switcher.body':
-    'Они ждут, пока арендатор не начнёт вести два бренда на одной витрине и не попросит об этом (ADR 0157, релиз 4). До тех пор настраивать нечего, и под это не зарезервировано ни одной настройки.',
+  'marketing.storefront.layout.title': 'Раскладка категорий',
+  'marketing.storefront.layout.hint':
+    'Стандартная — навигация по категориям, как сейчас у клиентов. «Маркетплейс» показывает компактную полосу категорий и оверлей «все категории» — для витрины, где их много. Выбор действует для этого бренда сразу после сохранения.',
+  'marketing.storefront.layout.standard': 'Стандартная',
+  'marketing.storefront.layout.marketplace': 'Маркетплейс',
+  'marketing.storefront.layout.saved': 'Раскладка сохранена.',
+  'marketing.storefront.switcher.title': 'Другие бренды на этой витрине',
+  'marketing.storefront.switcher.hint':
+    'Полоса ваших других брендов вверху витрины; каждый ведёт на собственный сайт бренда. Адрес — подтверждённый адрес сайта, он читается каждый раз: здесь ничего не вводится и ничего не устаревает.',
+  'marketing.storefront.switcher.empty':
+    'Здесь не предлагается ни один бренд. Витрина выглядит как раньше.',
+  'marketing.storefront.switcher.status.shown': 'Показывается клиентам',
+  'marketing.storefront.switcher.status.hidden': 'Скрыт',
+  'marketing.storefront.switcher.status.noHostname':
+    'Не показывается: у этого сайта ещё нет подтверждённого адреса',
+  'marketing.storefront.switcher.status.inactive': 'Не показывается: бренд не активен',
+  'marketing.storefront.switcher.up': 'Выше',
+  'marketing.storefront.switcher.down': 'Ниже',
+  'marketing.storefront.switcher.hide': 'Скрыть',
+  'marketing.storefront.switcher.show': 'Показать',
+  'marketing.storefront.switcher.remove': 'Убрать',
+  'marketing.storefront.switcher.add.title': 'Предложить другой бренд',
+  'marketing.storefront.switcher.add.target': 'Бренд и сайт',
+  'marketing.storefront.switcher.add.choose': 'Выберите бренд…',
+  'marketing.storefront.switcher.add.noAddress': 'подтверждённого адреса ещё нет',
+  'marketing.storefront.switcher.add.none':
+    'Нет другого бренда с сайтом, который можно предложить. Нужен активный канал-сайт другого бренда, который продаёт хотя бы в одном его филиале.',
+  'marketing.storefront.switcher.add.submit': 'Добавить в полосу',
+  'marketing.storefront.switcher.added': 'Бренд добавлен.',
+  'marketing.storefront.switcher.updated': 'Сохранено.',
+  'marketing.storefront.switcher.removed': 'Бренд убран.',
+  'marketing.storefront.switcher.reordered': 'Порядок сохранён.',
+  'marketing.storefront.branches.title': 'Порядок филиалов',
+  'marketing.storefront.branches.hint':
+    'Клиент, который поделился местоположением, сначала видит ближайший филиал; этот порядок лишь разрешает ничью. Клиент без местоположения видит филиалы именно в этом порядке. Филиал, который вы не включили, идёт последним, по названию.',
+  'marketing.storefront.branches.placed': 'В вашем порядке',
+  'marketing.storefront.branches.nonePlaced':
+    'Ни один филиал не расставлен. Витрина показывает филиалы по названию.',
+  'marketing.storefront.branches.unplaced': 'Не расставлены (идут последними, по названию)',
+  'marketing.storefront.branches.noneUnplaced': 'Все филиалы расставлены.',
+  'marketing.storefront.branches.place': 'Поставить',
+  'marketing.storefront.branches.unplace': 'Убрать из порядка',
+  'marketing.storefront.branches.inactive': 'не активен, клиенты его не видят',
+  'marketing.storefront.branches.save': 'Сохранить порядок',
+  'marketing.storefront.branches.reset': 'Отменить изменения',
+  'marketing.storefront.branches.saved': 'Порядок сохранён.',
+  'marketing.storefront.branches.stale':
+    'Пока вы редактировали, кто-то изменил порядок филиалов. Ниже порядок в его нынешнем виде; внесите своё изменение заново.',
 };

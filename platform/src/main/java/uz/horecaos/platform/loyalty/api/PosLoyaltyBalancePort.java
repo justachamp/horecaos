@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
@@ -100,6 +101,20 @@ public interface PosLoyaltyBalancePort {
             String idempotencyKey);
 
     /**
+     * Stages the binding's sync mode ({@code REPORT_ONLY}, {@code PULL}, {@code PULL_AND_PUSH}) in the binding's own
+     * non-sensitive configuration, against the version the caller read (ADR 0171 rollout; the key is {@value
+     * #SYNC_MODE_KEY}). The binding's version moves, as for any change to a binding.
+     *
+     * @return the binding's new version, or empty when the binding has moved on since {@code expectedVersion} (or is not a
+     *         POS binding of this tenant)
+     */
+    OptionalLong setSyncMode(UUID tenantId, UUID bindingId, String mode, long expectedVersion);
+
+    /** The binding configuration key the mode lives under. */
+    String SYNC_MODE_KEY = "loyalty.sync.mode";
+
+    /**
+     * @param version the binding's version, the {@code If-Match} of a change to its mode
      * @param enabled whether {@code LOYALTY_BALANCE_SYNC} is enabled on this binding (and so whether it
      *                syncs); false for a vendor that cannot be given it
      * @param limits  the ceiling row's sub-properties (reads_balance, credits, idempotency ...), empty when
@@ -113,6 +128,7 @@ public interface PosLoyaltyBalancePort {
             String providerType,
             @Nullable UUID locationId,
             String bindingStatus,
+            long version,
             CapabilityState state,
             boolean enabled,
             Map<String, Object> limits,

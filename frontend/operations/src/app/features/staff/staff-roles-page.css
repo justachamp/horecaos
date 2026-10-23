@@ -15,7 +15,7 @@
 }
 
 .table thead th {
-  text-align: left;
+  text-align: start;
   color: var(--q-ink-muted);
   padding: 10px 14px;
   border-bottom: 1px solid var(--q-hairline);
@@ -69,7 +69,7 @@
 
 .detail__column ul {
   margin: 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
 }
 
 .detail__muted {
@@ -134,4 +134,33 @@
 .empty {
   color: var(--q-ink-muted);
   margin-top: 16px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.primary-button {
+  height: 40px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+}
+
+.chip--own {
+  margin-inline-start: 8px;
+  border-color: var(--q-primary);
+  color: var(--q-primary);
+}
+
+.detail__actions {
+  display: flex;
+  gap: 16px;
+  padding-top: 12px;
 }

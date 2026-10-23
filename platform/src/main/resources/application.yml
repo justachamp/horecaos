@@ -371,6 +371,21 @@ horecaos:
       security: ${HORECAOS_MAIL_SMTP_SECURITY:STARTTLS}
       username: ${HORECAOS_MAIL_SMTP_USERNAME:}
       password-reference: ${HORECAOS_MAIL_SMTP_PASSWORD_REF:}
+  # ADR 0182, D14: Web Push to a customer's own browser, signed as the platform (VAPID, RFC 8292). With
+  # no key pair nothing is sent and the console says PUSH_NOT_CONFIGURED. Neither key is a value here
+  # that could leak: the public key is not a secret (the storefront subscribes under it), and the private
+  # key is named by an ADR 0028 reference whose value is the 32-byte P-256 private scalar, base64url,
+  # for example horecaos:production:provider_notification:platform:vapid. The subject is where a push
+  # service may write to about us: a mailto: or an https: address. The hosts a subscription may name
+  # default to the browser vendors' push services (horecaos.push.allowed-hosts, and
+  # horecaos.push.require-https, both read by PushEndpointPolicy and deliberately not mapped to an
+  # environment variable): they are what keeps a customer's browser from making the platform call an
+  # address of its choosing, so only a test sets them.
+  push:
+    vapid:
+      public-key: ${HORECAOS_PUSH_VAPID_PUBLIC_KEY:}
+      private-key-reference: ${HORECAOS_PUSH_VAPID_PRIVATE_KEY_REF:}
+      subject: ${HORECAOS_PUSH_VAPID_SUBJECT:}
   # ADR 0145: the map and geocoding provider. Unset is `none`, which is correct for every
   # environment that has no key: every lookup answers NOT_CONFIGURED, GET .../map-config says
   # `configured: false`, and the screens state it. Nothing here is a secret.

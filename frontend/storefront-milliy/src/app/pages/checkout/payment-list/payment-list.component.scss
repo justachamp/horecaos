@@ -17,7 +17,7 @@
   border: 1.5px solid var(--line-default);
   background: var(--surface-base);
   cursor: pointer;
-  text-align: left;
+  text-align: start;
 
   &.is-active {
     border-color: var(--brand-accent-deep);

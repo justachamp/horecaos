@@ -1,5 +1,7 @@
 package uz.horecaos.platform.pricing.infrastructure.persistence;
 
+import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -39,5 +41,35 @@ class JdbcBenefitGrantDirectory implements BenefitGrantDirectory {
                         rs.getString("source_type"),
                         rs.getObject("source_id", UUID.class)))
                 .optional();
+    }
+
+    @Override
+    public List<GrantListing> forCustomer(UUID tenantId, UUID brandId, UUID customerAccountId) {
+        return jdbc.sql("""
+                SELECT id, benefit_type, value, currency, status, source_type, source_id, code_hint,
+                       created_at, expires_at
+                  FROM pricing.benefit_grants
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND customer_account_id = :customerId
+                 ORDER BY created_at DESC, id
+                 LIMIT 50
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("customerId", customerAccountId)
+                .query((rs, n) -> new GrantListing(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("benefit_type"),
+                        rs.getLong("value"),
+                        rs.getString("currency"),
+                        rs.getString("status"),
+                        rs.getString("source_type"),
+                        rs.getObject("source_id", UUID.class),
+                        rs.getString("code_hint"),
+                        rs.getObject("created_at", OffsetDateTime.class).toInstant(),
+                        rs.getObject("expires_at") == null
+                                ? null
+                                : rs.getObject("expires_at", OffsetDateTime.class)
+                                        .toInstant()))
+                .list();
     }
 }

@@ -130,8 +130,7 @@ export const marketingEn = {
   'marketing.campaign.stats.refused': 'Refused',
   'marketing.campaign.stats.total': 'Total attempted',
   'marketing.campaign.stats.refusedByReason.title': 'Refused, by reason',
-  'marketing.campaign.stats.deliveryUnavailableHint':
-    'Delivered vs. failed is not tracked yet — no read receipt reaches this campaign.',
+  'marketing.campaign.stats.delivery.title': 'What became of the messages',
   'marketing.campaign.stats.export': 'Export recipients as CSV',
   'marketing.campaign.stats.exportedCount': 'Exported {count} account id(s)',
 
@@ -211,7 +210,7 @@ export const marketingEn = {
   // ------------------------------------------------------------- courier broadcasts 6.4b (T18)
   'marketing.courierBroadcasts.title': 'Courier broadcasts',
   'marketing.courierBroadcasts.intro':
-    'A dispatcher’s own operational SMS blast to couriers — a shift change, a weather closure, a route closure. Never a customer campaign.',
+    'A dispatcher’s own operational SMS to couriers — a shift change, a weather closure, a route closure. Sent from a wording the SMS gateway has approved, to each courier’s own login number, which the platform reads for one message and keeps nowhere. Never a customer campaign.',
   'marketing.courierBroadcasts.loading': 'Loading',
   'marketing.courierBroadcasts.empty': 'No broadcast sent yet',
   'marketing.courierBroadcasts.create.action': 'New broadcast',
@@ -220,10 +219,9 @@ export const marketingEn = {
   'marketing.courierBroadcasts.create.targetKind.ALL_ACTIVE': 'Every active courier',
   'marketing.courierBroadcasts.create.targetKind.GROUP': 'One courier group',
   'marketing.courierBroadcasts.create.targetGroupId': 'Group ID',
-  'marketing.courierBroadcasts.create.message': 'Message',
   'marketing.courierBroadcasts.create.submit': 'Save draft',
   'marketing.courierBroadcasts.column.target': 'Target',
-  'marketing.courierBroadcasts.column.message': 'Message',
+  'marketing.courierBroadcasts.column.message': 'Wording',
   'marketing.courierBroadcasts.column.status': 'Status',
   'marketing.courierBroadcasts.column.recipients': 'Recipients',
   'marketing.courierBroadcasts.status.DRAFT': 'Draft',
@@ -231,11 +229,80 @@ export const marketingEn = {
   'marketing.courierBroadcasts.status.FAILED': 'Failed',
   'marketing.courierBroadcasts.action.send': 'Send',
   'marketing.courierBroadcasts.refusalReason': 'Refused: {reason}',
+  'marketing.courierBroadcasts.create.template': 'Wording',
+  'marketing.courierBroadcasts.create.template.placeholder': 'Choose an approved wording',
+  'marketing.courierBroadcasts.create.template.awaiting':
+    '{key} — waiting for the SMS gateway’s approval',
+  'marketing.courierBroadcasts.create.templates.none':
+    'No courier wording is ready. Author an SMS template of the class COURIER_DISPATCH under Settings → Notifications and have the gateway approve it.',
+  'marketing.courierBroadcasts.create.variablesHint':
+    'Short values, one line each, 80 characters at most. Operational text only: no names or phone numbers.',
+  'marketing.courierBroadcasts.create.preview': 'The message will read',
+  'marketing.courierBroadcasts.variable.place': 'Place',
+  'marketing.courierBroadcasts.variable.time': 'Time',
+  'marketing.courierBroadcasts.variable.note': 'Note',
+  'marketing.courierBroadcasts.action.results': 'Results',
+  'marketing.courierBroadcasts.action.hideResults': 'Hide results',
+  'marketing.courierBroadcasts.results.title': 'What became of each courier’s message',
+  'marketing.courierBroadcasts.results.loading': 'Loading',
+  'marketing.courierBroadcasts.results.column.courier': 'Courier',
+  'marketing.courierBroadcasts.results.column.state': 'State',
+  'marketing.courierBroadcasts.results.column.reason': 'Why',
+  'marketing.courierBroadcasts.results.empty': 'No courier was addressed.',
+  'marketing.courierBroadcasts.results.state.NO_CONTACT': 'No number',
+  'marketing.delivery.reason.COURIER_HAS_NO_NUMBER':
+    'The identity provider holds no number the platform sends to for this courier. Fix their profile and draft again.',
+  'marketing.delivery.reason.RECIPIENT_UNRESOLVABLE':
+    'The courier’s number was gone when the message was sent.',
+  'marketing.delivery.reason.SMS_PURPOSE_NOT_PERMITTED':
+    'The SMS account is not cleared to carry courier messages.',
+  'marketing.delivery.reason.RECEIVER_UNREACHABLE':
+    'The gateway says the number cannot be reached.',
+  'marketing.delivery.reason.PROVIDER_REPORTED_FAILURE':
+    'The gateway reported that the message did not arrive.',
+  'marketing.delivery.reason.IDENTITY_PROVIDER_UNAVAILABLE':
+    'The identity provider could not be asked for the courier’s number; the platform will try again.',
+  'marketing.delivery.reason.other': 'Reason code: {code}',
+  'marketing.delivery.reason.ADDRESS_REJECTED': 'The mail relay refused this address for good',
+  'marketing.delivery.reason.ADDRESS_INVALID': 'This is not a valid email address',
+  'marketing.delivery.reason.MESSAGE_INVALID': 'The mail relay refused the message itself',
+  'marketing.delivery.reason.SMTP_UNAVAILABLE': 'The mail relay could not be reached',
+  'marketing.delivery.reason.EMAIL_NOT_CONFIGURED':
+    'No mail server is configured on this deployment',
+  'marketing.courierBroadcasts.readiness.heading': 'Courier SMS cannot be sent for this brand yet',
+  'marketing.courierBroadcasts.wiring.SMS_PURPOSE_NOT_PERMITTED':
+    'This brand’s SMS account is not cleared to carry courier messages. Sign-in codes and order messages are unaffected. Until the platform owner confirms in writing that the account may carry courier traffic and it is named on the connection, a courier SMS cannot be sent.',
+  'marketing.courierBroadcasts.wiring.COURIER_CONTACTS_NOT_WIRED':
+    'The platform may not yet use a courier’s own number to message them. The number is the one they sign in with and the platform keeps no copy; until the platform owner records that it may be used for a dispatcher’s message, a courier broadcast cannot be sent.',
+  'marketing.courierBroadcasts.wiring.COURIER_CONTACTS_UNAVAILABLE':
+    'The identity provider could not be asked for the couriers’ numbers. Nothing was sent and the broadcast is still a draft; try again in a moment.',
+  'marketing.courierBroadcasts.wiring.NO_PROVIDER_BINDING':
+    'No SMS provider is connected for this brand. Connect one in the brand’s integrations settings.',
+  'marketing.courierBroadcasts.wiring.INSTALLATION_INACTIVE':
+    'The SMS provider connection is switched off.',
+  'marketing.courierBroadcasts.wiring.INSTALLATION_MISSING':
+    'The SMS provider connection no longer exists.',
+  'marketing.courierBroadcasts.wiring.SMS_ACCOUNT_MISCONFIGURED':
+    'The SMS account for this brand is missing part of its configuration.',
+  'marketing.courierBroadcasts.wiring.PROVIDER_ADAPTER_MISMATCH':
+    'The connected SMS provider has no adapter in this release.',
+  'marketing.courierBroadcasts.wiring.NO_ADAPTER': 'This release has no SMS adapter.',
+  'marketing.courierBroadcasts.wiring.NO_DELIVERY_ADAPTER':
+    'This release has no SMS delivery path.',
+  'marketing.courierBroadcasts.wiring.COURIER_TEMPLATE_NOT_AVAILABLE':
+    'The wording this broadcast names is no longer an active courier wording for this brand.',
+  'marketing.courierBroadcasts.wiring.TEMPLATE_AWAITING_PROVIDER':
+    'The wording is still waiting for the SMS gateway’s approval, so nothing can be sent with it yet.',
+  'marketing.courierBroadcasts.wiring.NO_ACTIVE_COURIER': 'No active courier is in this target.',
+  'marketing.courierBroadcasts.wiring.NO_COURIER_HAS_A_NUMBER':
+    'None of the targeted couriers has a number the platform sends to; nothing was sent.',
+  'marketing.courierBroadcasts.wiring.UNKNOWN':
+    'A courier SMS cannot leave for this brand right now ({reason}).',
 
   // --------------------------------------------------------- attribution links 6.6a (ADR 0044, T18)
   'marketing.attributionLinks.title': 'Acquisition links',
   'marketing.attributionLinks.intro':
-    'A trackable website ?ref= link or Telegram deep link, for a campaign or an influencer.',
+    'A link for a campaign or an influencer: your website, your Telegram bot or your Telegram Mini App. It counts how many times it is opened, never who opened it.',
   'marketing.attributionLinks.empty': 'No link minted yet',
   'marketing.attributionLinks.create.action': 'Mint a link',
   'marketing.attributionLinks.create.title': 'Mint an acquisition link',
@@ -257,6 +324,94 @@ export const marketingEn = {
   'marketing.attributionLinks.destinationType.CAMPAIGN': 'A campaign',
   'marketing.attributionLinks.destinationType.STOREFRONT_HOME': 'The storefront home',
   'marketing.attributionLinks.destinationType.INFLUENCER': 'An influencer',
+  'marketing.attributionLinks.copy': 'Copy',
+  'marketing.attributionLinks.copied': 'Copied',
+  'marketing.attributionLinks.unavailable.WEB_HOSTNAME_NOT_CLAIMED':
+    'No website address yet: this brand’s branches sell on no website channel with an address.',
+  'marketing.attributionLinks.unavailable.WEB_HOSTNAME_NOT_VERIFIED':
+    'The website address is not verified yet.',
+  'marketing.attributionLinks.unavailable.WEB_HOSTNAME_AMBIGUOUS':
+    'Two verified website addresses sell here, and the platform will not guess which one to link.',
+  'marketing.attributionLinks.unavailable.TELEGRAM_BOT_NOT_CONNECTED':
+    'No Telegram bot is connected for this brand.',
+  'marketing.attributionLinks.unavailable.TELEGRAM_BOT_UNREACHABLE':
+    'Telegram would not tell us the bot’s name just now. Try again shortly.',
+  'marketing.attributionLinks.unavailable.TELEGRAM_MINI_APP_NOT_SET_UP':
+    'The Mini App is not set up yet: finish the Telegram Mini App setup below.',
+  'marketing.attributionLinks.unavailable.MOBILE_APP_ON_HOLD':
+    'The mobile app is on hold, so this link goes nowhere.',
+  // ------------------------------------------- the guided Mini App setup (ADR 0183, row 6.6a)
+  'marketing.miniApp.title': 'Telegram Mini App setup',
+  'marketing.miniApp.lead':
+    'Your storefront inside your Telegram bot. Two steps are only yours to do in Telegram, and the exact words to send are written out; the rest is read from the facts, so you can leave and come back.',
+  'marketing.miniApp.loading': 'Reading where the setup stands…',
+  'marketing.miniApp.denied':
+    'Setting up the Mini App needs the permission to manage integrations.',
+  'marketing.miniApp.error': 'Where the setup stands could not be read.',
+  'marketing.miniApp.open': 'Open',
+  'marketing.miniApp.copy': 'Copy',
+  'marketing.miniApp.state.DONE': 'Done',
+  'marketing.miniApp.state.RECORDED': 'Recorded',
+  'marketing.miniApp.state.TODO': 'To do',
+  'marketing.miniApp.state.UNKNOWN': 'Could not check',
+  'marketing.miniApp.step.CONNECT_BOT.title': 'Connect your bot',
+  'marketing.miniApp.step.CONNECT_BOT.hint':
+    'Create the bot with @BotFather (/newbot), then paste its token under Settings → Integrations. The token is never shown again.',
+  'marketing.miniApp.step.REGISTER_WEBHOOK.title': 'Register the bot’s webhook',
+  'marketing.miniApp.step.REGISTER_WEBHOOK.hint':
+    'So the bot hears your customers: press Register webhook on the bot’s card in Integrations.',
+  'marketing.miniApp.step.TELEGRAM_CHANNEL.title': 'Add a Telegram sales channel',
+  'marketing.miniApp.step.TELEGRAM_CHANNEL.hint':
+    'Under Settings → Sales channels, add a channel of type Telegram backed by this bot. Its menu button, texts and Mini App switch are set there.',
+  'marketing.miniApp.step.STOREFRONT_ADDRESS.title': 'Your storefront has a verified address',
+  'marketing.miniApp.step.STOREFRONT_ADDRESS.hint':
+    'The Mini App opens your storefront, so it needs the verified address of your website channel. You never type an address here.',
+  'marketing.miniApp.step.BOTFATHER_APP.title': 'Create the Mini App in BotFather',
+  'marketing.miniApp.step.BOTFATHER_APP.hint':
+    'Only the holder of the bot can do this, and Telegram gives us no way to check it, so this step reads “Recorded” once you tell us the short name.',
+  'marketing.miniApp.step.MENU_BUTTON.title': 'Put the Mini App on the bot’s menu button',
+  'marketing.miniApp.step.MENU_BUTTON.hint':
+    'We set the button and then ask Telegram what it shows. The step is done only when Telegram shows what we set.',
+  'marketing.miniApp.step.TEST_LINK.title': 'Open it on your phone',
+  'marketing.miniApp.step.TEST_LINK.hint':
+    'Open this link in Telegram: your storefront should open inside the bot. Then mint a “Telegram mini app” link above and open that to see a click counted.',
+  'marketing.miniApp.detail.STOREFRONT_ADDRESS.NOT_CLAIMED':
+    'No website channel selling at this brand’s branches has claimed an address yet.',
+  'marketing.miniApp.detail.STOREFRONT_ADDRESS.NOT_VERIFIED':
+    'The website channel’s address is claimed but not verified. Publish its DNS record and verify it.',
+  'marketing.miniApp.detail.STOREFRONT_ADDRESS.AMBIGUOUS':
+    'Two verified website addresses sell at this brand’s branches, and the platform will not guess which one is the storefront.',
+  'marketing.miniApp.detail.MENU_BUTTON.NOT_READY': 'Finish the steps above first.',
+  'marketing.miniApp.detail.MENU_BUTTON.MINI_APP_OFF':
+    'The Mini App is switched off on the Telegram channel. Recording the short name switches it on.',
+  'marketing.miniApp.detail.MENU_BUTTON.NOT_APPLIED':
+    'Telegram shows a different button from the one we mean to set.',
+  'marketing.miniApp.detail.MENU_BUTTON.OTHER_BRAND':
+    'The Telegram channel’s Mini App opens another brand’s storefront. Recording the short name here moves it to this brand.',
+  'marketing.miniApp.detail.MENU_BUTTON.STALE_BUTTON':
+    'Telegram still shows a button that opens the storefront, but the Mini App is switched off or the address is no longer verified. Take it off so customers are not sent there.',
+  'marketing.miniApp.detail.TEST_LINK.NOT_READY':
+    'The link appears once the bot and the short name are known.',
+  'marketing.miniApp.botFather.step1': 'Open @BotFather in Telegram and send /newapp.',
+  'marketing.miniApp.botFather.step2': 'Choose your bot: @{bot}.',
+  'marketing.miniApp.botFather.step3': 'Send a title and a short description. Customers see both.',
+  'marketing.miniApp.botFather.step4': 'Send a 640×360 picture, then a GIF or /empty to skip it.',
+  'marketing.miniApp.botFather.step5':
+    'When BotFather asks for the Web App URL, send exactly the address below.',
+  'marketing.miniApp.botFather.step6':
+    'When BotFather asks for a short name, send one of your choice: letters, digits and underscores, for example order. BotFather replies with a link ending in it. Enter the short name here.',
+  'marketing.miniApp.shortName': 'Short name BotFather accepted',
+  'marketing.miniApp.record': 'Record short name',
+  'marketing.miniApp.needsChannel':
+    'Add the Telegram sales channel first: the short name is recorded on it.',
+  'marketing.miniApp.needsAddress':
+    'BotFather needs your storefront address first. Finish the step above.',
+  'marketing.miniApp.menu.wanted': 'We will set the label “{label}”, opening {url}.',
+  'marketing.miniApp.menu.held': 'Telegram currently shows a button that opens {url}.',
+  'marketing.miniApp.menu.apply': 'Set the menu button',
+  'marketing.miniApp.menu.takeOff': 'Take the menu button off',
+  'marketing.miniApp.menu.notShown':
+    'Telegram accepted the call but still shows a different button. Try again, or check the bot in BotFather.',
 
   // ------------------------------------------------------- promo codes 6.2 (ADR 0072, wave 60)
   'marketing.promoCodes.title': 'Promo codes',
@@ -393,7 +548,7 @@ export const marketingEn = {
   'marketing.loyalty.accrual.form.lotLifetime': 'Points expire after, days',
   'marketing.loyalty.accrual.form.expiryWarning': 'Warn before expiry, days',
   'marketing.loyalty.accrual.form.expiryWarning.hint':
-    'How many days ahead a lot counts as "about to expire" — the message that would use this is not built yet (ADR 0046).',
+    'How many days ahead a lot counts as "about to expire". The customer is told once a day, in one message that covers every lot inside the window, using your LOYALTY_POINTS_EXPIRING wording. Until that wording is written and activated in Notifications, nothing is sent (ADR 0046).',
 
   'marketing.loyalty.redemption.title': 'Redemption',
   'marketing.loyalty.redemption.hint':
@@ -450,6 +605,23 @@ export const marketingEn = {
   'marketing.loyalty.posSync.mode.REPORT_ONLY': 'Report only: compares, applies and pushes nothing',
   'marketing.loyalty.posSync.mode.PULL': 'Imports what happens at the till',
   'marketing.loyalty.posSync.mode.PULL_AND_PUSH': 'Imports and sends the ledger’s balance',
+  // ------------------------------------------------------------------- staging the rollout (ADR 0171, row 6.3b)
+  'marketing.loyalty.posSync.stage.label': 'Stage of the rollout',
+  'marketing.loyalty.posSync.stage.hint':
+    'Report only first, then import, then send. Each step up is one stage; a step down is immediate.',
+  'marketing.loyalty.posSync.stage.reason': 'Why (kept in the activity log)',
+  'marketing.loyalty.posSync.stage.apply': 'Apply the stage',
+  'marketing.loyalty.posSync.stage.saved': 'The binding now runs: {mode}.',
+  'marketing.loyalty.posSync.stage.stale':
+    'Someone else changed this first. The page now shows what is true; make your change again.',
+  'marketing.loyalty.posSync.keeps.title': 'Does your till keep its own bonus balance?',
+  'marketing.loyalty.posSync.keeps.body':
+    'If it does and nothing here mirrors it, staff are told that a customer’s balance here and at the till can differ.',
+  'marketing.loyalty.posSync.keeps.label': 'The till keeps a bonus balance of its own',
+  'marketing.loyalty.posSync.keeps.save': 'Save',
+  'marketing.loyalty.posSync.keeps.saved': 'Saved.',
+  'marketing.loyalty.posSync.keeps.yes': 'Yes: the till keeps a bonus balance of its own.',
+  'marketing.loyalty.posSync.keeps.no': 'No: the till keeps none, or has not been asked.',
   'marketing.loyalty.posSync.reconcile.action': 'Reconcile now',
   'marketing.loyalty.posSync.reconcile.running': 'Reconciling…',
   'marketing.loyalty.posSync.runs.title': 'Reconciliation reports',
@@ -662,10 +834,16 @@ export const marketingEn = {
     'The connected provider has no adapter for this channel in this release.',
   'marketing.wiring.NO_ADAPTER': 'This release has no adapter for this channel.',
   'marketing.wiring.NO_DELIVERY_ADAPTER': 'This channel has no delivery path in this release.',
-  'marketing.wiring.NO_DELIVERY_ADAPTER.EMAIL':
-    'Email to guests is not connected. The platform’s mail service sends staff invitations and password resets only; sending email to a tenant’s own guests is a separate decision that has not been made.',
-  'marketing.wiring.NO_DELIVERY_ADAPTER.PUSH':
-    'Push is not connected: no push provider exists yet, so nothing can send a push notification to a guest.',
+  'marketing.wiring.EMAIL_NOT_CONFIGURED':
+    'Email is not set up on this deployment: no mail server is configured, so nothing can be sent. Until the platform owner connects a sending provider, an email campaign cannot be launched.',
+  'marketing.wiring.EMAIL_PURPOSE_NOT_PERMITTED':
+    'The platform’s mail service carries campaign email and nothing else.',
+  'marketing.wiring.PUSH_NOT_CONFIGURED':
+    'Push is not set up on this deployment: the platform’s push identity (a key pair and a contact) is not configured, so nothing can be sent. Until the platform owner connects it, a push campaign cannot be launched.',
+  'marketing.wiring.PUSH_PURPOSE_NOT_PERMITTED':
+    'The platform’s push service carries campaign push and nothing else.',
+  'marketing.wiring.ACCOUNT_MISCONFIGURED':
+    'The account for this channel is missing part of its configuration.',
   'marketing.wiring.UNKNOWN': 'This channel cannot deliver for this brand right now ({reason}).',
   'marketing.refusal.SCENARIO_CONFLICT':
     'Another live scenario gave this guest an offer a moment ago',
@@ -1016,6 +1194,43 @@ export const marketingEn = {
   'marketing.delivery.NO_RECEIPT': 'No receipt came back',
   'marketing.delivery.HANDED_TO_OPERATOR': 'Handed to the operator',
   'marketing.delivery.PENDING': 'Not sent yet',
+  'marketing.delivery.READ': 'Read',
+  'marketing.delivery.WITHHELD': 'Withheld',
+  'marketing.delivery.HANDED_TO_OPERATOR.MESSAGING_APP': 'Sent',
+  'marketing.delivery.HANDED_TO_OPERATOR.PUSH': 'Accepted by the push service',
+  'marketing.delivery.READ.PUSH': 'Tapped',
+  'marketing.delivery.reason.PUSH_SUBSCRIPTION_GONE':
+    'The browser’s push service says this subscription is over, so the customer is no longer reachable here until they turn push on again',
+  'marketing.delivery.reason.PUSH_VAPID_REJECTED':
+    'The push service did not accept the platform’s sending identity for this subscription (the key was changed after the customer subscribed)',
+  'marketing.delivery.reason.PUSH_NOT_CONFIGURED': 'Push is not set up on this deployment',
+  'marketing.delivery.reason.PUSH_PAYLOAD_TOO_LARGE':
+    'The push service refused the size of the message',
+  'marketing.delivery.reason.PUSH_REQUEST_REFUSED': 'The push service refused the message',
+  'marketing.delivery.reason.PUSH_PAYLOAD_UNUSABLE':
+    'The message could not be encrypted to this subscription',
+  'marketing.delivery.reason.PUSH_REDIRECT_REFUSED':
+    'The push service redirected the request, which is never followed',
+  'marketing.delivery.reason.PUSH_SERVICE_ERROR': 'The push service failed repeatedly',
+  'marketing.delivery.reason.PUSH_RATE_LIMITED':
+    'The push service kept asking the platform to slow down',
+  'marketing.delivery.reason.PUSH_SERVICE_UNREACHABLE': 'The push service could not be reached',
+  'marketing.delivery.reason.PUSH_SECRET_UNAVAILABLE': 'The platform’s push key is not available',
+  'marketing.delivery.counts.notReported': 'Not reported by this channel',
+  'marketing.delivery.counts.segments': 'Segments billed',
+  'marketing.delivery.counts.withheldTitle': 'Withheld because',
+  'marketing.delivery.withheld.TEMPLATE_AWAITING_PROVIDER':
+    'Wording awaiting the gateway’s approval',
+  'marketing.delivery.withheld.TEMPLATE_REFUSED_BY_PROVIDER': 'Wording refused by the gateway',
+  'marketing.delivery.withheld.CONSENT_WITHHELD': 'Consent withdrawn since the audience was built',
+  'marketing.delivery.withheld.PREFERENCE_DISABLED': 'The customer switched this off',
+  'marketing.delivery.withheld.NO_RECIPIENT_ENDPOINT': 'No usable address or number',
+  'marketing.delivery.withheld.NO_RECIPIENT_ACCOUNT': 'No customer account',
+  'marketing.delivery.withheld.NO_ACTIVE_TEMPLATE': 'No active wording',
+  'marketing.delivery.withheld.NO_TEMPLATE_FOR_LOCALE': 'No wording in the customer’s language',
+  'marketing.delivery.withheld.CHANNEL_NOT_AVAILABLE': 'Channel not available',
+  'marketing.delivery.withheld.CAMPAIGN_NOT_SENDING': 'The campaign was paused or stopped',
+  'marketing.delivery.withheld.EXPIRED': 'Expired before it was sent',
   'marketing.campaign.recipients.deliveryHint':
     'Delivery is evidence from the gateway, not a promise: “handed to the operator” means it was accepted and nothing more has been reported.',
   'marketing.campaign.recipients.segments': '{count} segment(s) billed',
@@ -1400,13 +1615,59 @@ export const marketingEn = {
   'marketing.storefront.tab.groups': 'Home groups',
   'marketing.storefront.tab.carousel': 'Offer carousel',
   'marketing.storefront.tab.preview': 'Preview',
-  'marketing.storefront.tab.switcher': 'Brand switcher',
+  'marketing.storefront.tab.switcher': 'Brand switcher and layout',
+  'marketing.storefront.tab.branches': 'Branch order',
   'marketing.storefront.groups.hint':
     'Titled rails of dishes on the home screen: hand-picked, or a whole category. Their order here is their order on the screen.',
   'marketing.storefront.carousel.hint':
     'The carousel at the top of the home screen is shared by banners and promo cards. Order it here; write and publish them under Content. It is the same for every customer — a personal offer for one guest is a separate thing.',
   'marketing.storefront.carousel.link': 'Open Content',
-  'marketing.storefront.switcher.title': 'Brand switcher and marketplace layout — not built',
-  'marketing.storefront.switcher.body':
-    'These wait until a tenant runs two brands on one storefront and asks for them (ADR 0157, Release 4). Until then there is nothing to configure, and no setting is reserved for it.',
+  'marketing.storefront.layout.title': 'Category layout',
+  'marketing.storefront.layout.hint':
+    'Standard is the category navigation customers have today. Marketplace shows a compact strip of categories and an “all categories” overlay, for a storefront with many of them. The choice applies to this brand as soon as you make it.',
+  'marketing.storefront.layout.standard': 'Standard',
+  'marketing.storefront.layout.marketplace': 'Marketplace',
+  'marketing.storefront.layout.saved': 'Layout saved.',
+  'marketing.storefront.switcher.title': 'Other brands on this storefront',
+  'marketing.storefront.switcher.hint':
+    'A strip of your other brands at the top of this storefront, each leading to that brand’s own website. The address is the website’s verified address, looked up every time; nothing is typed here and nothing goes stale.',
+  'marketing.storefront.switcher.empty':
+    'No brand is offered here. The storefront looks as it did before.',
+  'marketing.storefront.switcher.status.shown': 'Shown to customers',
+  'marketing.storefront.switcher.status.hidden': 'Hidden',
+  'marketing.storefront.switcher.status.noHostname':
+    'Not shown: this website has no verified address yet',
+  'marketing.storefront.switcher.status.inactive': 'Not shown: the brand is not active',
+  'marketing.storefront.switcher.up': 'Move up',
+  'marketing.storefront.switcher.down': 'Move down',
+  'marketing.storefront.switcher.hide': 'Hide',
+  'marketing.storefront.switcher.show': 'Show',
+  'marketing.storefront.switcher.remove': 'Remove',
+  'marketing.storefront.switcher.add.title': 'Offer another brand',
+  'marketing.storefront.switcher.add.target': 'Brand and website',
+  'marketing.storefront.switcher.add.choose': 'Choose a brand…',
+  'marketing.storefront.switcher.add.noAddress': 'no verified address yet',
+  'marketing.storefront.switcher.add.none':
+    'There is no other brand with a website to offer. Another brand needs an active website channel that sells at one of its branches.',
+  'marketing.storefront.switcher.add.submit': 'Add to the strip',
+  'marketing.storefront.switcher.added': 'Brand added.',
+  'marketing.storefront.switcher.updated': 'Saved.',
+  'marketing.storefront.switcher.removed': 'Brand removed.',
+  'marketing.storefront.switcher.reordered': 'Order saved.',
+  'marketing.storefront.branches.title': 'Order of branches',
+  'marketing.storefront.branches.hint':
+    'A customer who shares their location sees the nearest branch first; this order only breaks a tie. A customer who shares none sees the branches in exactly this order. A branch you leave out is listed last, by name.',
+  'marketing.storefront.branches.placed': 'In your order',
+  'marketing.storefront.branches.nonePlaced':
+    'No branch is placed. The storefront lists the branches by name.',
+  'marketing.storefront.branches.unplaced': 'Not placed (listed last, by name)',
+  'marketing.storefront.branches.noneUnplaced': 'Every branch is placed.',
+  'marketing.storefront.branches.place': 'Place',
+  'marketing.storefront.branches.unplace': 'Take out of the order',
+  'marketing.storefront.branches.inactive': 'not active, so customers do not see it',
+  'marketing.storefront.branches.save': 'Save order',
+  'marketing.storefront.branches.reset': 'Undo changes',
+  'marketing.storefront.branches.saved': 'Order saved.',
+  'marketing.storefront.branches.stale':
+    'Someone changed the branch order while you were editing. This is the order as it stands now; make your change again.',
 } as const;

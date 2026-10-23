@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -29,6 +30,7 @@ import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.ordering.api.OrderCounts;
 import uz.horecaos.platform.ordering.api.OrderCountsQuery;
+import uz.horecaos.platform.ordering.api.OrderSettlementPort;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
 import uz.horecaos.platform.ordering.domain.DeliveryDestination;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderAmendmentStore;
@@ -88,7 +90,10 @@ public class OrderQueryService implements OrderCountsQuery {
     private final Clock clock;
     private final OrderBoardReadModels boardReadModels;
     private final StaffDirectory staffDirectory;
+    private final OrderBoardEnrichment boardEnrichment;
+    private final @Nullable OrderSettlementPort settlements;
 
+    /** Without a settlement to ask: an order's cash is then its whole total, as it was before points were spendable. */
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderQueryService(
             JdbcOrderStore orders,
@@ -102,8 +107,45 @@ public class OrderQueryService implements OrderCountsQuery {
             AuditRecorder audit,
             Clock clock,
             OrderBoardReadModels boardReadModels,
-            StaffDirectory staffDirectory) {
+            StaffDirectory staffDirectory,
+            OrderBoardEnrichment boardEnrichment) {
+        this(
+                orders,
+                processes,
+                payments,
+                courierAssignments,
+                orderTables,
+                amendments,
+                protection,
+                objectMapper,
+                audit,
+                clock,
+                boardReadModels,
+                staffDirectory,
+                boardEnrichment,
+                null);
+    }
+
+    @Autowired
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public OrderQueryService(
+            JdbcOrderStore orders,
+            JdbcOrderProcessStore processes,
+            PaymentIntentPort payments,
+            ActiveCourierAssignmentsPort courierAssignments,
+            OrderTablesPort orderTables,
+            JdbcOrderAmendmentStore amendments,
+            FieldProtection protection,
+            ObjectMapper objectMapper,
+            AuditRecorder audit,
+            Clock clock,
+            OrderBoardReadModels boardReadModels,
+            StaffDirectory staffDirectory,
+            OrderBoardEnrichment boardEnrichment,
+            @Nullable OrderSettlementPort settlements) {
+        this.settlements = settlements;
         this.staffDirectory = staffDirectory;
+        this.boardEnrichment = boardEnrichment;
         this.orders = orders;
         this.processes = processes;
         this.payments = payments;
@@ -184,12 +226,19 @@ public class OrderQueryService implements OrderCountsQuery {
             // ADR 0136: what each hidden auto-selected option charged, itemised on the order.
             Map<UUID, Map<UUID, Long>> hiddenCharges = orders.hiddenCharges(tenantId, orderId);
 
+            // ADR 0040 / ADR 0141: the lines an aggregator order arrived flagged on (an item the catalogue
+            // does not carry, or a dish stopped here). Only the live set carries a flag, so a read of an
+            // earlier revision shows none.
+            Map<UUID, JdbcOrderStore.LineIntakeFlag> intakeFlags =
+                    revision == null ? orders.intakeFlags(tenantId, orderId) : Map.of();
+
             List<DetailLine> detailLines = new ArrayList<>(lines.size());
             lines.forEach(line -> detailLines.add(new DetailLine(
                     line,
                     modifiers.getOrDefault(line.lineId(), List.of()),
                     commentPresets.getOrDefault(line.lineId(), List.of()),
-                    hiddenCharges.getOrDefault(line.lineId(), Map.of()))));
+                    hiddenCharges.getOrDefault(line.lineId(), Map.of()),
+                    intakeFlags.get(line.lineId()))));
 
             return new OrderDetail(order, detailLines, warnings(), customerDetail(tenantId, order));
         });
@@ -436,6 +485,21 @@ public class OrderQueryService implements OrderCountsQuery {
     @Transactional(readOnly = true)
     public List<JdbcOrderStore.OrderBoardRow> forLocation(
             JdbcOrderStore.OrderListQuery query, @Nullable UUID cursorOrderId, int limit) {
+        return forLocation(query, cursorOrderId, limit, Set.of());
+    }
+
+    /**
+     * {@link #forLocation(JdbcOrderStore.OrderListQuery, UUID, int)} with the optional board facts the
+     * caller asked for (gap map row {@code 1.1}): the courier ETA, the source channel's presentation, the
+     * fiscal status, the delivery distance and the external number are each read, in one batch per page,
+     * only when named in {@code include}. The payment method and the item summary are always read.
+     */
+    @Transactional(readOnly = true)
+    public List<JdbcOrderStore.OrderBoardRow> forLocation(
+            JdbcOrderStore.OrderListQuery query,
+            @Nullable UUID cursorOrderId,
+            int limit,
+            Set<OrderBoardEnrichment.Fact> include) {
 
         @Nullable Instant before = null;
         if (cursorOrderId != null) {
@@ -444,14 +508,17 @@ public class OrderQueryService implements OrderCountsQuery {
         }
         JdbcOrderStore.OrderListQuery resolved = boardReadModels.withLatenessResolved(query);
         List<JdbcOrderStore.OrderBoardRow> rows = orders.listForLocation(resolved, before, cursorOrderId, limit);
-        return withActorNames(
+        return boardEnrichment.enrich(
                 query.tenantId(),
-                withTables(
+                withActorNames(
                         query.tenantId(),
-                        withPresentablePayments(
+                        withTables(
                                 query.tenantId(),
-                                withAmendmentAwaitingOperator(
-                                        query.tenantId(), withCourierAssignments(query.tenantId(), rows)))));
+                                withPresentablePayments(
+                                        query.tenantId(),
+                                        withAmendmentAwaitingOperator(
+                                                query.tenantId(), withCourierAssignments(query.tenantId(), rows))))),
+                include);
     }
 
     /**
@@ -617,6 +684,28 @@ public class OrderQueryService implements OrderCountsQuery {
 
     private static boolean couldOfferInvoice(OrderRow order) {
         return !order.status().terminal() && OrderActionsPolicy.paymentMayBeOwed(order.paymentStatusProjection());
+    }
+
+    /**
+     * Whether this order's branch can print its documents -- the detail-screen counterpart to the board's
+     * batched {@link JdbcOrderStore.OrderBoardFacts#reprintAvailable()}, so the two screens never disagree
+     * about whether {@code REPRINT} is offered.
+     */
+    @Transactional(readOnly = true)
+    public boolean reprintAvailableFor(UUID tenantId, UUID brandId, UUID locationId) {
+        return boardEnrichment.reprintAvailable(tenantId, brandId, locationId);
+    }
+
+    /**
+     * The cash the customer still owes for this order: its total less the points they spent (ADR 0185). What
+     * «Сдача» is reckoned against, on the detail pane and on the printed slip alike, so a customer who paid part of
+     * an 80 000 order in points and hands over 100 000 is given back 100 000 less the 70 000 owed, not less 80 000.
+     */
+    @Transactional(readOnly = true)
+    public long cashToCollectFor(UUID tenantId, OrderRow order) {
+        return settlements == null
+                ? order.totalMinor()
+                : settlements.cashToCollectMinor(tenantId, order.orderId(), order.totalMinor());
     }
 
     /**
@@ -786,12 +875,15 @@ public class OrderQueryService implements OrderCountsQuery {
     /**
      * @param hiddenChargeByOption what each hidden auto-selected option on this line charged, by
      *     option id, for the whole line (ADR 0136). It is already inside the line's final amount
+     * @param intakeFlag why an aggregator line needs a person before it is cooked (ADR 0040, ADR 0141);
+     *     null on every line that arrived sellable and mapped, which is every native line
      */
     public record DetailLine(
             OrderLineRow line,
             List<OrderModifierRow> modifiers,
             List<OrderCommentPresetRow> commentPresets,
-            Map<UUID, Long> hiddenChargeByOption) {
+            Map<UUID, Long> hiddenChargeByOption,
+            JdbcOrderStore.@Nullable LineIntakeFlag intakeFlag) {
 
         /** What the option the server applied cost for this line, zero when it was free. */
         public long hiddenChargeOf(UUID optionId) {

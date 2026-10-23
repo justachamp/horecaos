@@ -31,14 +31,14 @@ import java.util.stream.Collectors;
  * consequence of an approved enrolment — never chosen from a picker the way
  * the eight bundles below are.
  *
- * <p>Tenant-defined roles ({@code iam.roles} rows with a non-null
- * {@code tenant_id}) are deliberately absent — ADR 0025 defers them
- * ("Tenants may later define custom roles from the same capability
- * catalogue"), and {@code GrantManagementService.resolveRole} does not
- * accept one as a target for a tenant that has not defined it. This catalogue
- * grows a database read the day that ships; until then every tenant sees the
- * same eight bundles, so a static list is the honest shape rather than a
- * premature one.
+ * <p>Tenant-defined jobs (ADR 0186; {@code iam.roles} rows with a non-null
+ * {@code tenant_id}) are deliberately absent from this static list. They are a database
+ * read, per tenant: {@code TenantRoleService} lists them and {@code
+ * GrantManagementService#grantableRoles} joins them to these bundles. What this class
+ * still owns, because it is the one place that already knows which bundles are people's
+ * and which are machines', is the answer to "which code-owned jobs may a tenant see" and
+ * therefore, through {@link TenantJobRules}, which capabilities a tenant job may be
+ * composed from.
  */
 public final class TenantRoleCatalog {
 
@@ -46,6 +46,11 @@ public final class TenantRoleCatalog {
 
     /** The eight tenant-visible bundles, in {@link PlatformRole} declaration order. */
     public static List<RoleDescriptor> tenantVisible() {
+        return tenantVisibleRoles().stream().map(RoleDescriptor::of).toList();
+    }
+
+    /** The same eight, as the code-owned roles themselves. */
+    public static List<PlatformRole> tenantVisibleRoles() {
         return Arrays.stream(PlatformRole.values())
                 .filter(role -> role != PlatformRole.PLATFORM_ADMIN
                         && role != PlatformRole.PLATFORM_SUPPORT
@@ -54,7 +59,6 @@ public final class TenantRoleCatalog {
                         && role != PlatformRole.PRINT_AGENT
                         && role != PlatformRole.KIOSK_DEVICE
                         && !role.supportSessionOnly())
-                .map(RoleDescriptor::of)
                 .toList();
     }
 

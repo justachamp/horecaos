@@ -15,6 +15,9 @@ import org.jspecify.annotations.Nullable;
  * of them is served exactly the Release 1 document. A client skips a field, a kind or a block it
  * does not know.
  *
+ * <p>{@code layout} is present only for a brand that chose {@code MARKETPLACE} (ADR 0183 D17) and {@code brandSwitcher}
+ * only for a brand with entries that resolve, so a brand that uses neither is served the document it always was.
+ *
  * <p>A carousel item is <em>content</em>, not an offer: the brand chose it for everyone and it has no
  * guest, decision log or contact policy, so it is deliberately a different representation from ADR
  * 0112's {@code OfferItem}, which stays an authenticated, per-guest read (ADR 0157, Decision 5).
@@ -25,14 +28,36 @@ public record HomeDocument(
         List<Group> groups,
         @JsonInclude(JsonInclude.Include.NON_EMPTY) List<StoryGroup> stories,
         @JsonInclude(JsonInclude.Include.NON_EMPTY) List<CarouselItem> promoGrid,
-        @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable Popup popup) {
+        @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable Popup popup,
+        @JsonInclude(JsonInclude.Include.NON_EMPTY) List<SwitcherEntry> brandSwitcher,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable String layout) {
 
     public HomeDocument {
         carousel = List.copyOf(carousel);
         groups = List.copyOf(groups);
         stories = List.copyOf(stories);
         promoGrid = List.copyOf(promoGrid);
+        brandSwitcher = List.copyOf(brandSwitcher);
     }
+
+    /** A document with neither a switcher nor a layout: what every brand was served before Release 4. */
+    public HomeDocument(
+            String locale,
+            List<CarouselItem> carousel,
+            List<Group> groups,
+            List<StoryGroup> stories,
+            List<CarouselItem> promoGrid,
+            @Nullable Popup popup) {
+        this(locale, carousel, groups, stories, promoGrid, popup, List.of(), null);
+    }
+
+    /**
+     * A way to a sibling brand's storefront (ADR 0157 Release 4, ADR 0183 D17): the target's name, its logo when it has a
+     * servable one, and the address, built from a verified hostname on this read. Omitted from the document when empty.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record SwitcherEntry(
+            UUID targetBrandId, String name, @Nullable Media logo, String url) {}
 
     /** A banner or a promo card. {@code revisionNo} is what the anonymous counters are filed under. */
     public record CarouselItem(

@@ -134,6 +134,148 @@ class PricingEngineRuleEngineTests {
         assertThat(cash.contextHash()).isNotEqualTo(click.contextHash());
     }
 
+    // --------------------------------------------------- order-level markup (stage 5)
+
+    private Promotion serviceCharge(String code, String group, int priority, Action action) {
+        return new Promotion(
+                UUID.nameUUIDFromBytes(code.getBytes()),
+                TENANT,
+                BRAND,
+                code,
+                Promotion.Kind.MARKUP,
+                Promotion.Scope.ORDER,
+                group,
+                false,
+                priority,
+                false,
+                null,
+                "UZS",
+                NOW.minusSeconds(3_600),
+                null,
+                1,
+                null,
+                null,
+                Promotion.LoyaltyAccrual.ACCRUE,
+                Promotion.LoyaltyRedemption.ALLOW,
+                List.of(),
+                List.of(action));
+    }
+
+    @Test
+    @DisplayName(
+            "a service charge is a SERVICE_CHARGE line beside the delivery fee, inside the fees, never the discount")
+    void aServiceChargeIsAFeeLineOnTheGoods() {
+        Promotion tenPercent = serviceCharge(
+                "SERVICE10",
+                "service",
+                0,
+                new Action(1, Action.Type.ORDER_PERCENTAGE_MARKUP, ops("basisPoints", 1_000L)));
+
+        PricingEngine.Result result =
+                engine.price(workedExampleRequest(), inputs(List.of(tenPercent), Set.of(), "CLICK"), NOW);
+
+        // Goods 102 000, no discount: 10% is 10 200. The delivery fee is 15 000.
+        assertThat(result.fees().minor())
+                .as("the delivery fee and the service charge")
+                .isEqualTo(25_200L);
+        assertThat(result.discount().minor()).isZero();
+        assertThat(result.lines())
+                .extracting(Quote.QuoteLine::type)
+                .contains(Quote.LineType.ITEM, Quote.LineType.DELIVERY_FEE, Quote.LineType.SERVICE_CHARGE);
+        Quote.QuoteLine line = result.lines().stream()
+                .filter(l -> l.type() == Quote.LineType.SERVICE_CHARGE)
+                .findFirst()
+                .orElseThrow();
+        assertThat(line.finalAmount().minor()).isEqualTo(10_200L);
+        assertThat(line.taxAmount().minor())
+                .as("no tax share until finance and counsel answer how a service line is taxed")
+                .isZero();
+        assertThat(result.adjustments())
+                .filteredOn(adjustment -> adjustment.type() == Quote.Adjustment.Type.ORDER_MARKUP)
+                .singleElement()
+                .satisfies(adjustment -> {
+                    assertThat(adjustment.amount().minor()).isEqualTo(10_200L);
+                    assertThat(adjustment.sourceId()).isEqualTo(tenPercent.promotionId());
+                    assertThat(adjustment.sourceType()).isEqualTo(PricingEngine.PROMOTION_SOURCE);
+                });
+        assertThat(result.adjustments())
+                .extracting(Quote.Adjustment::sequence)
+                .as("sequence numbers stay unique and gap-free across the stages")
+                .isEqualTo(java.util.stream.IntStream.rangeClosed(
+                                1, result.adjustments().size())
+                        .boxed()
+                        .toList());
+        assertThat(result.tax().minor())
+                .as("VAT is still extracted from the goods alone")
+                .isEqualTo(10_929L);
+        assertThat(result.total().minor())
+                .isEqualTo(result.subtotal().minor()
+                        + result.tax().minor()
+                        + result.fees().minor()
+                        - result.discount().minor());
+        assertThat(result.total().minor()).isEqualTo(102_000L + 25_200L);
+    }
+
+    @Test
+    @DisplayName("the charge is computed on the goods after the discounts, not before them")
+    void aServiceChargeIsOwedOnThePostDiscountSubtotal() {
+        Promotion twentyOff = orderPromotion(
+                "TWENTYOFF", "order", false, ops("basisPoints", 2_000L), Action.Type.ORDER_PERCENTAGE_DISCOUNT);
+        Promotion tenPercent = serviceCharge(
+                "SERVICE10",
+                "service",
+                0,
+                new Action(1, Action.Type.ORDER_PERCENTAGE_MARKUP, ops("basisPoints", 1_000L)));
+
+        PricingEngine.Result result =
+                engine.price(workedExampleRequest(), inputs(List.of(twentyOff, tenPercent), Set.of(), "CLICK"), NOW);
+
+        // 102 000 - 20% = 81 600 goods; 10% of that is 8 160, not 10 200.
+        assertThat(result.discount().minor()).isEqualTo(20_400L);
+        assertThat(result.fees().minor()).isEqualTo(15_000L + 8_160L);
+        assertThat(result.total().minor()).isEqualTo(81_600L + 15_000L + 8_160L);
+    }
+
+    @Test
+    @DisplayName("within one group the higher priority wins, groups add, and a flat charge is a flat charge")
+    void serviceChargesStackByGroupAndPriority() {
+        Promotion weak = serviceCharge(
+                "WEAK", "service", 1, new Action(1, Action.Type.ORDER_PERCENTAGE_MARKUP, ops("basisPoints", 500L)));
+        Promotion strong = serviceCharge(
+                "STRONG", "service", 9, new Action(1, Action.Type.ORDER_PERCENTAGE_MARKUP, ops("basisPoints", 1_000L)));
+        Promotion flat = serviceCharge(
+                "FLAT", "flat", 0, new Action(1, Action.Type.ORDER_FIXED_MARKUP, ops("amountMinor", 2_000L)));
+
+        PricingEngine.Result result =
+                engine.price(workedExampleRequest(), inputs(List.of(weak, strong, flat), Set.of(), "CLICK"), NOW);
+
+        assertThat(result.fees().minor())
+                .as("delivery 15 000 + STRONG's 10 200 + FLAT's 2 000; WEAK lost its group")
+                .isEqualTo(15_000L + 10_200L + 2_000L);
+        assertThat(result.promotionTrace())
+                .filteredOn(entry -> entry.promotionId().equals(weak.promotionId()))
+                .singleElement()
+                .satisfies(entry -> assertThat(entry.verdict()).isEqualTo(Verdict.LOST_TO));
+    }
+
+    @Test
+    @DisplayName(
+            "a service charge is not a discount: no markup is ever suppressed by a code, and the hash moves with it")
+    void aServiceChargeChangesTheContextHash() {
+        Promotion tenPercent = serviceCharge(
+                "SERVICE10",
+                "service",
+                0,
+                new Action(1, Action.Type.ORDER_PERCENTAGE_MARKUP, ops("basisPoints", 1_000L)));
+
+        PricingEngine.Result without = engine.price(workedExampleRequest(), inputs(List.of(), Set.of(), "CLICK"), NOW);
+        PricingEngine.Result with =
+                engine.price(workedExampleRequest(), inputs(List.of(tenPercent), Set.of(), "CLICK"), NOW);
+
+        assertThat(with.contextHash()).isNotEqualTo(without.contextHash());
+        assertThat(with.total().minor() - without.total().minor()).isEqualTo(10_200L);
+    }
+
     // ------------------------------------------------------------------ markup
 
     @Test

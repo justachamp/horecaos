@@ -56,13 +56,44 @@
   `LOYALTY_POINTS` row exists once a tenant's first points redemption settles —
   created lazily on demand rather than seeded per tenant as the checklist below
   describes, which is a difference worth knowing before anybody writes the
-  seeding step it asks for. Also not built: the campaign-driven accrual rules ADR 0044
-  owns; expiry warning notifications; `fiscal.fiscal_document_lines`, so the
-  per-line allocation is written nowhere; the `cash_due_minor` handoff to ADR
-  0014's assignment; and the tax effect on the liability report. The storefront
-  balance endpoints exist but require `LOYALTY_READ` at tenant scope, a staff
-  capability no customer principal can hold, so there is still no
-  customer-facing balance surface.
+  seeding step it asks for. **Since batch 21, and what that corrects** (rewritten once on 2026-10-23, after two
+  waves' edits had been spliced into one paragraph that contradicted itself). *The pre-expiry warning is built dark* ([ADR
+  0181](../built/0181-compensation-from-a-case-promotion-targeting-requote-and-discretionary-discounts.md)):
+  `LoyaltyMaintenanceService.warnExpiringLots` groups a customer's lots inside their window into one call to
+  `LoyaltyExpiryWarningPort`, leaves a customer alone for 24 hours after a warning and never warns about a lot
+  already past its expiry; `LoyaltyExpiryWarningNotifier` (in `notifications`, the direction the module graph
+  allows) is the port's one implementation and creates an ADR 0020 intent for the semantic key
+  `LOYALTY_POINTS_EXPIRING` with three typed variables, `TRANSACTIONAL_REQUIRED` until counsel rules, so a
+  tenant that has not written and activated the wording sends nothing. It asks
+  `CustomerAccountAlertPort.canDeliver` (an active wording on the channel the customer is reached by, approved by the SMS
+  gateway where it moderates) before creating the intent, and `LoyaltyExpiryWarningPort.lotsExpiring` answers whether
+  it handed a message over; `warnExpiringLots` marks a lot warned only when it did, so lots nobody could be told about
+  stay due and are offered again on the next sweep (corrected 2026-10-23: the sweep first marked every lot as warned
+  and the intent was then suppressed `NO_ACTIVE_TEMPLATE`, which spent each lot's one warning before a tenant could
+  activate wording). A note added here on 2026-10-14 said the decision was only logged by
+  `LoggingLoyaltyExpiryWarningPort` and no customer could be told; that class no longer exists, and the sentence
+  is superseded by this one. *The per-line allocation reaches the receipt*: `fiscal.fiscal_document_lines` is not
+  a table (V0039 left it a sketch); `ReceiptLineAllocator` feeds `RedemptionAllocation` to the receipt line
+  builder, so a redeemed order is filed with the redemption as a per-line discount and the goods' VAT extracted
+  again from what they were paid (7 714 in the worked order); the lines as filed are kept behind the document's
+  protected request, not as rows; `RedemptionAllocation` caps the remainder at what a line can bear, so a
+  near-total redemption over equal small lines cannot make a line negative. The finance sign-off of that VAT
+  treatment is still open. *A customer reads their own balance*: `LoyaltyCustomerController` (ADR 0185) answers
+  `GET /api/v1/storefront/tenants/{tenantId}/brands/{brandId}/loyalty/balance` by ownership, and both
+  storefronts' `PointsService` call it; the staff balance reads still require `LOYALTY_READ`, a capability no
+  customer principal holds. *The `cash_due_minor` handoff is wired* (corrected against the code on 2026-10-23;
+  the rollout checklist below, written before it, still lists it as outstanding): the courier's cash figure is
+  read from the settlement's own money leg, on demand and not stored on the assignment, through
+  `CashDueLookupPort.cashDueMinorIfSettled` by `CourierDeliveryService` (the courier app), by
+  `DeliveryMoneyAdapter` (the operations delivery list's `cashToCollectMinor`), and by
+  `DeliveryAccrualOrderCompletionTrigger`, which hands it to `CourierAccrualService.recordDelivery`. A till's own
+  bonus balance is handled by [ADR
+  0171](../partial/0171-who-owns-a-loyalty-balance-when-the-till-also-keeps-one.md) (the ledger stays the one
+  authority, a till's number is a mirror, a movement at the till is an order-free `ADJUSTMENT` with reason
+  `POS_SYNC_EARN` or `POS_SYNC_SPEND`), built against a fake till. Also not built: the campaign-driven accrual
+  rules ADR 0044 owns; counsel's confirmation of the message class and the SMS gateway's approval of each
+  expiry-warning wording (`docs/runbooks/external-connections/w6-promotions-reviews-approvals.md`); the finance
+  sign-off named above; and the tax effect on the liability report.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-23
 - Deciders: Ayubkhon Abbosov (platform architecture; loyalty scope and the withdrawal of stored value, 2026-08-23), finance (VAT treatment of a merchant-funded rebate), legal (terms, expiry, offboarding), product (accrual and redemption defaults)
@@ -783,7 +814,7 @@ Balances are a liability; they are not deleted to undo a feature.
 - [x] Add settlement and tender tables. **V0042**, not the ADR 0013 migration: V0027 had already shipped by the time this ADR was implemented, and forward-only means the tables arrive in a later file rather than in the one this ADR asked for. No intent row exists yet, so the deadline the rollout section named is still met. `payments.order_settlements` and `payments.tenders` are there, and ADR 0013's intent model is one-to-many by way of `tenders.payment_intent_id`.
 - [x] Add `settles_from_balance` and the `LOYALTY_POINTS` row to ADR 0038's `payments.payment_methods`, and point `tenders.payment_method_id` at it. The registry table is created in V0042 for the same reason; the `LOYALTY_POINTS` row is seeded per tenant by the application, because the registry is tenant-scoped. `tenders` carries a snapshot of the flag tied back by composite foreign key, so the snapshot cannot disagree with the row it names, and `ck_tender_balance_has_no_intent` refuses a payment intent on a balance tender.
 - [x] Add the loyalty schema with `SELECT`/`INSERT`-only grants on `loyalty.entries`, the closed `entry_type` check constraint, and lot consumption. A trigger repeats the append-only rule to the callers a `GRANT` does not reach, and `entry_type` rejects `TOPUP` and `WITHDRAWAL` at the database rather than in an application enum.
-- [x] Implement reservation, release, redemption, and reversal with conditional SQL, plus deferred accrual, the expiry sweep and forfeiture. The hold is a debit taken by one conditional `UPDATE`, so two tabs are separated by PostgreSQL rather than by a read; `RELEASE` returns points whose tender never settled and `REVERSAL` returns points whose settled tender is refunded, at the lots' original `expires_at`. **Expiry warning notifications are not built**: the `expiry_warning_days` column and the nearest-expiry field on the balance read are there, and the ADR 0020 message is outstanding.
+- [x] Implement reservation, release, redemption, and reversal with conditional SQL, plus deferred accrual, the expiry sweep and forfeiture. The hold is a debit taken by one conditional `UPDATE`, so two tabs are separated by PostgreSQL rather than by a read; `RELEASE` returns points whose tender never settled and `REVERSAL` returns points whose settled tender is refunded, at the lots' original `expires_at`. **Expiry warning notifications are built dark** (batch 21): the `expiry_warning_days` column and the nearest-expiry field on the balance read feed one coalesced ADR 0020 message per customer per day, which sends nothing until a tenant activates the `LOYALTY_POINTS_EXPIRING` wording.
 - [x] Implement adjustment with reason codes and ADR 0027 approval thresholds, and the ADR 0015 merge path as an audited `ACCOUNT_MERGE` adjustment pair. The adjustment command takes one account and one signed amount and has no paired form, which is the whole treatment of the transfer back door.
 - [x] Implement the per-line discount allocation and the refund cap that stops a points tender refunding as money. The allocation is `loyalty.api.RedemptionAllocation`, a pure function over the quote snapshot's lines; **`fiscal.fiscal_document_lines` does not exist yet**, so nothing writes to it. The refund cap is enforced inside the reversing transaction against the tender's settled amount, and `OrderSettlementService.refund` unwinds money tenders first.
 - [ ] Extend checkout to plan, reserve, and settle ordered tenders, enforce the money-tender invariant, and carry `cash_due_minor` onto the delivery assignment. The checkout half is done: `CheckoutSettlementStep` is step 8 of `CheckoutService.checkout` and calls `planSettlement` unconditionally, so every order this build can tender against gets a settlement, its tenders ordered with the balance leg first, all five invariants enforced, and `cash_due_minor` computed. **The ADR 0014 half is still outstanding**, and it is the whole of what is left here: `cash_due_minor` is written by `payments.settlement` and read by nothing outside it, `fulfillment` carries no cash figure on an assignment at all, and `CourierAccrualService.recordDelivery` — which takes a `cashToCollectMinor` — has no production caller to receive one. So a courier is still handed no figure, and that belongs to ADR 0014's module rather than this one.
@@ -813,3 +844,14 @@ recomputing today's accrual rules.
 - [ADR 0019](../partial/0019-cart-checkout-and-order-orchestration.md) — `OrderCompleted`, the fact `OrderCompletionAccrualTrigger` listens for, and `OrderStateService`'s publish site.
 - [ADR 0032](../built/0032-event-contract-governance-and-topic-policy.md) — why `OrderCompleted` has a catalogue entry and schema before this record's trigger could consume it.
 - [Fiscalization via payment providers](../../providers/fiscalization-via-payment-providers.md) — the Click and Payme field lists that force the discount representation.
+
+## Status notes
+
+### 2026-10-14 — a redemption is never recorded after checkout
+
+[ADR 0185](../built/0185-a-redemption-is-taken-at-checkout-and-order-entry-never-recorded-after.md)
+declines a loyalty-redemption leg recorded after checkout and names what stands instead: the
+redemption stays inside checkout and operator order entry, as this record decides, and the console
+and both storefronts offer it there, never after. This record's Decision, Alternatives and
+Consequences are unchanged. The storefront balance endpoints that "need a staff capability"
+(the status line above) gain a customer-owned read in the same wave.

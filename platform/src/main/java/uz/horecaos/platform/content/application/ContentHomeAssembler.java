@@ -13,6 +13,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
+import uz.horecaos.platform.content.api.ContentPolicies;
 import uz.horecaos.platform.content.api.ContentTargetLookup;
 import uz.horecaos.platform.content.api.PromotionLiveLookup;
 import uz.horecaos.platform.content.application.HomeDocument.CarouselItem;
@@ -22,6 +23,7 @@ import uz.horecaos.platform.content.application.HomeDocument.Media;
 import uz.horecaos.platform.content.application.HomeDocument.Popup;
 import uz.horecaos.platform.content.application.HomeDocument.Slide;
 import uz.horecaos.platform.content.application.HomeDocument.StoryGroup;
+import uz.horecaos.platform.content.application.HomeDocument.SwitcherEntry;
 import uz.horecaos.platform.content.domain.ContentDocuments;
 import uz.horecaos.platform.content.domain.ContentKind;
 import uz.horecaos.platform.content.domain.ContentPlacement;
@@ -39,6 +41,7 @@ import uz.horecaos.platform.media.api.MediaCreativeLookup;
 import uz.horecaos.platform.media.api.MediaCreativeLookup.Creative;
 import uz.horecaos.platform.tenancy.api.PlatformLocales;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
+import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
 import uz.horecaos.platform.tenancy.api.TenantLocaleSet;
 
 /**
@@ -92,6 +95,7 @@ public class ContentHomeAssembler {
     private final MediaCreativeLookup media;
     private final ContentTargetLookup targets;
     private final PromotionLiveLookup promotions;
+    private final BrandSwitcherService switcher;
 
     public ContentHomeAssembler(
             JdbcContentStore store,
@@ -99,13 +103,15 @@ public class ContentHomeAssembler {
             ContentEnvironment environment,
             MediaCreativeLookup media,
             ContentTargetLookup targets,
-            PromotionLiveLookup promotions) {
+            PromotionLiveLookup promotions,
+            BrandSwitcherService switcher) {
         this.store = store;
         this.viewer = viewer;
         this.environment = environment;
         this.media = media;
         this.targets = targets;
         this.promotions = promotions;
+        this.switcher = switcher;
     }
 
     /** One item, ready to be read: its document and what it refers to. */
@@ -216,7 +222,23 @@ public class ContentHomeAssembler {
                 }
             }
         }
-        return new HomeDocument(documentLocale, carousel, groups, stories, promoGrid, popup);
+        // Release 4 (ADR 0183 D17): a switcher only on a website channel (its links leave the Mini App and the apps),
+        // and a
+        // layout only when it is not the standard one, so a brand that uses neither is served the document it always
+        // was.
+        List<SwitcherEntry> brandSwitcher = channel.systemType() == SalesChannelSystemType.WEB
+                ? switcher.forStorefront(tenantId, brandId)
+                : List.of();
+        String layout = environment.storefrontLayout(tenantId, brandId);
+        return new HomeDocument(
+                documentLocale,
+                carousel,
+                groups,
+                stories,
+                promoGrid,
+                popup,
+                brandSwitcher,
+                ContentPolicies.StorefrontLayoutPolicy.STANDARD.equals(layout) ? null : layout);
     }
 
     // ----------------------------------------------------------------- selection

@@ -1,0 +1,11 @@
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.limit p + p {
+  margin-block-start: 4px;
+}
+
+.textlink {
+  color: var(--q-primary);
+}

@@ -231,7 +231,11 @@
                   <span class="text-[13px] font-medium leading-snug text-text-primary">{{
                     variant.label
                   }}</span>
-                  <app-physical-facts [physical]="variant.physical" [priceMinor]="variant.price" />
+                  <app-physical-facts
+                    [physical]="variant.physical"
+                    [priceMinor]="variant.price"
+                    [accuracyNotice]="nutritionAccuracyNotice()"
+                  />
                   @if (variantExtraGroups(variant.id); as extras) {
                     @if (extras.length > 0) {
                       <div class="flex flex-col gap-3" data-testid="variant-groups">

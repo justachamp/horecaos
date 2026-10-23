@@ -655,6 +655,92 @@ class OperationsBrandOrderBoardHttpTests {
                 .isEqualTo(403);
     }
 
+    // ------------------------------------------------------ the board's own facts (row 1.1)
+
+    @Test
+    @DisplayName(
+            "the payment method and the item summary ride on every board row, the optional facts only when asked for")
+    void theBoardRowCarriesItsFactsOnlyWhenAskedFor() throws Exception {
+        Instant quoted = Instant.parse("2026-09-10T12:40:00Z");
+        UUID delivery = insert("HF-1", CHILONZOR);
+        fixtures.insertCheckoutRevision(TENANT, "HF-1", delivery);
+        fixtures.insertLine(TENANT, delivery, 1, "Lagman", null, null, null);
+        fixtures.insertLine(TENANT, delivery, 2, "Samsa", null, null, null);
+        fixtures.insertCashIntent(TENANT, BRAND, CHILONZOR, delivery, "PENDING");
+        fixtures.insertDeliveryPlan(TENANT, BRAND, CHILONZOR, delivery, "ASSIGNED", quoted, 5400);
+        fixtures.insertFiscalDocument(TENANT, delivery, "ISSUED");
+        fixtures.insertExternalReference(TENANT, delivery, "PARTNER_DISPLAY_CODE", "YE-77", quoted);
+
+        JsonNode plain = ok(get(BRAND_BOARD).with(tokenFor(BRAND_SUPERVISOR)));
+        JsonNode row = row(rowsByOrder(plain), delivery);
+        assertThat(row.get("paymentMethodCode").asString()).isEqualTo("CASH");
+        assertThat(row.get("itemCount").asInt()).isEqualTo(2);
+        assertThat(row.get("firstItemName").asString()).isEqualTo("Lagman");
+        assertThat(row.get("origin").asString()).isEqualTo("HORECAOS");
+        for (String optional : List.of(
+                "courierEtaAt",
+                "channelSystemType",
+                "channelIcon",
+                "channelDisplayName",
+                "fiscalStatus",
+                "distanceMeters",
+                "externalNumber")) {
+            assertThat(row.path(optional).isNull() || row.path(optional).isMissingNode())
+                    .as("%s was not asked for, so nothing was read for it", optional)
+                    .isTrue();
+        }
+
+        JsonNode asked = ok(board("include", "courierEta,source,fiscal", "distance", "externalNumber"));
+        JsonNode full = row(rowsByOrder(asked), delivery);
+        assertThat(Instant.parse(full.get("courierEtaAt").asString())).isEqualTo(quoted);
+        assertThat(full.get("channelSystemType").asString()).isEqualTo("TELEGRAM");
+        assertThat(full.get("channelDisplayName").asString()).isEqualTo("Telegram bot");
+        assertThat(full.get("fiscalStatus").asString()).isEqualTo("ISSUED");
+        assertThat(full.get("distanceMeters").asInt()).isEqualTo(5400);
+        assertThat(full.get("externalNumber").asString()).isEqualTo("YE-77");
+    }
+
+    @Test
+    @DisplayName("the branch board answers the same facts, and a fact named wrongly is a 400 that names it")
+    void theBranchBoardAnswersTheSameFactsAndATypoIsRefused() throws Exception {
+        UUID order = insert("HF-2", CHILONZOR);
+        fixtures.insertCheckoutRevision(TENANT, "HF-2", order);
+        fixtures.insertLine(TENANT, order, 1, "Plov", null, null, null);
+        fixtures.insertDeliveryPlan(TENANT, BRAND, CHILONZOR, order, "ASSIGNED", null, 900);
+
+        JsonNode branch =
+                ok(get(CHILONZOR_BOARD).with(tokenFor(BRANCH_MANAGER)).queryParam("include", "distance", "source"));
+        JsonNode row = row(rowsByOrder(branch), order);
+        assertThat(row.get("distanceMeters").asInt()).isEqualTo(900);
+        assertThat(row.get("channelSystemType").asString()).isEqualTo("TELEGRAM");
+        assertThat(row.get("firstItemName").asString()).isEqualTo("Plov");
+
+        MvcResult refused = mvc.perform(
+                        get(CHILONZOR_BOARD).with(tokenFor(BRANCH_MANAGER)).queryParam("include", "courier_eta"))
+                .andReturn();
+        assertThat(refused.getResponse().getStatus()).isEqualTo(400);
+        assertThat(refused.getResponse().getContentAsString(UTF_8)).contains("VALIDATION_FAILED", "courier_eta");
+    }
+
+    @Test
+    @DisplayName("asking for facts does not change the cursor: a page of facts continues into the next one")
+    void factsDoNotTouchTheCursor() throws Exception {
+        Instant base = Instant.parse("2026-09-10T12:00:00Z");
+        UUID oldest = insert("HF-3", CHILONZOR, base);
+        UUID middle = insert("HF-4", CHILONZOR, base.plusSeconds(60));
+        UUID newest = insert("HF-5", CHILONZOR, base.plusSeconds(120));
+
+        JsonNode first = ok(board("include", "source").queryParam("limit", "2"));
+        String cursor = first.get("nextCursor").asString();
+        JsonNode second =
+                ok(board("include", "distance").queryParam("limit", "2").queryParam("cursor", cursor));
+
+        assertThat(itemIds(first)).containsExactly(newest, middle);
+        assertThat(itemIds(second))
+                .as("a different set of facts is not a different board")
+                .containsExactly(oldest);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private MockHttpServletRequestBuilder board(String parameter, String... values) {

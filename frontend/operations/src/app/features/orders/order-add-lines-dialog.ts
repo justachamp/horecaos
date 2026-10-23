@@ -1,6 +1,16 @@
-import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 
+import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { formatQuantity, initialQuantity, isOrderableQuantity } from '../../core/format/quantity';
 import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
 import { Modal } from '../../shared/ui/modal';
 import { ComboDialogConfirmation, ComboPickerDialog } from './new-order/combo-picker-dialog';
@@ -9,7 +19,10 @@ import { BasketComboPick } from './new-order/new-order-total';
 
 export interface AddLinesSelection {
   readonly variantId: string;
-  /** Units, or — when {@link comboPicks} is set — how many combos. */
+  /**
+   * Units, or — when {@link comboPicks} is set — how many combos. A decimal for a dish sold by the portion
+   * (ADR 0137): `1.5` is a portion and a half, a whole number of the dish's published step.
+   */
   readonly quantity: number;
   /** ADR 0136: set exactly when `variantId` is a combo's container; what was picked inside it. */
   readonly comboPicks?: readonly { readonly componentId: string; readonly quantity: number }[];
@@ -21,6 +34,11 @@ interface SelectedLine {
   readonly variantId: string;
   readonly label: string;
   readonly quantity: number;
+  /**
+   * The step the quantity moves by (ADR 0137): the published portion size of a splittable dish, one for
+   * everything else and always one for a combo, which is a count of whole combos.
+   */
+  readonly step: number;
   /** ADR 0136: what the operator picked inside the combo; absent on an ordinary item. */
   readonly picks?: readonly BasketComboPick[];
 }
@@ -57,6 +75,13 @@ interface PendingCombo {
  * twice is one line of two combos, like any other item. {@link comboGroups} is supplied by the
  * caller from the order's channel menu, so this dialog still calls no API.
  *
+ * **A dish sold by the portion is added by its portion (ADR 0137, row `4.2c`).** {@link portionSteps} names, by
+ * variant, the step a splittable dish may be ordered in; a dish in it starts at one whole portion (or the first
+ * multiple of the step above one), moves by that step on each further tap, and takes a typed decimal
+ * (`1,5`) that must be a whole number of steps. The platform refuses an off-step quantity
+ * (`DecimalAmendmentHttpTests`); the dialog says so first, from the same rule. A dish with no step stays on
+ * whole units, exactly as before.
+ *
  * Reprices (an addition only ever raises the total), so
  * `order-detail-pane.ts` always proposes this with `applyImmediately: false`
  * and follows it with the priced-delta confirmation step.
@@ -69,6 +94,8 @@ interface PendingCombo {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OrderAddLinesDialog {
+  private readonly i18n = inject(I18n);
+
   readonly options = input<readonly ComboboxOption[]>([]);
   readonly searching = input(false);
   readonly busy = input(false);
@@ -78,6 +105,12 @@ export class OrderAddLinesDialog {
   readonly currency = input<string | null>(null);
   /** The menu could not be read, so a combo cannot be offered here: said, rather than added blind. */
   readonly combosUnavailable = input(false);
+  /**
+   * ADR 0137: the step each splittable dish of the order's channel menu may be ordered in, by variant id.
+   * A variant not in it is sold in whole units. Read from the same menu as {@link comboGroups}, so when that
+   * read fails every dish stays whole and the platform's own refusal remains the authority.
+   */
+  readonly portionSteps = input<ReadonlyMap<string, number>>(new Map());
 
   /** Fires after the operator stops typing — the caller runs the search and sets {@link options}. */
   readonly search = output<string>();
@@ -91,7 +124,8 @@ export class OrderAddLinesDialog {
 
   protected readonly canSubmit = computed(
     () =>
-      this.selectedLines().length > 0 && this.selectedLines().every((line) => line.quantity > 0),
+      this.selectedLines().length > 0 &&
+      this.selectedLines().every((line) => isOrderableQuantity(line.quantity, line.step)),
   );
 
   protected onQueryChange(value: string): void {
@@ -110,16 +144,26 @@ export class OrderAddLinesDialog {
       this.query.set('');
       return;
     }
+    const step = this.portionSteps().get(option.id) ?? 1;
     this.selectedLines.update((current) => {
       const existing = current.find((line) => line.key === option.id);
       if (existing) {
+        // Another tap is another portion: one more step, in thousandths so 0.3 + 0.3 is 0.6.
         return current.map((line) =>
-          line.key === option.id ? { ...line, quantity: line.quantity + 1 } : line,
+          line.key === option.id
+            ? { ...line, quantity: Math.round((line.quantity + line.step) * 1000) / 1000 }
+            : line,
         );
       }
       return [
         ...current,
-        { key: option.id, variantId: option.id, label: option.label, quantity: 1 },
+        {
+          key: option.id,
+          variantId: option.id,
+          label: option.label,
+          quantity: initialQuantity(step),
+          step,
+        },
       ];
     });
     this.query.set('');
@@ -153,6 +197,7 @@ export class OrderAddLinesDialog {
           variantId: pending.variantId,
           label: pending.label,
           quantity: 1,
+          step: 1,
           picks: confirmation.picks,
         },
       ];
@@ -171,13 +216,40 @@ export class OrderAddLinesDialog {
   }
 
   protected setQuantity(key: string, value: string): void {
-    const parsed = Number.parseInt(value, 10);
+    // A number input hands back a dot whatever the keyboard typed. A dish with no portion step keeps reading
+    // whole units only, exactly as before quantities were decimal.
+    const line = this.selectedLines().find((candidate) => candidate.key === key);
+    if (!line) {
+      return;
+    }
+    const parsed =
+      line.step !== 1
+        ? value.trim() === ''
+          ? Number.NaN
+          : Number(value)
+        : Number.parseInt(value, 10);
     if (!Number.isFinite(parsed)) {
       return;
     }
     this.selectedLines.update((current) =>
-      current.map((line) => (line.key === key ? { ...line, quantity: parsed } : line)),
+      current.map((candidate) =>
+        candidate.key === key ? { ...candidate, quantity: parsed } : candidate,
+      ),
     );
+  }
+
+  /** The line is sold by the portion: a decimal keyboard and the step are offered. */
+  protected splittable(line: SelectedLine): boolean {
+    return line.step !== 1;
+  }
+
+  /** The quantity is not a whole number of the dish's portions: said beside the field, not left to the server. */
+  protected offStep(line: SelectedLine): boolean {
+    return !isOrderableQuantity(line.quantity, line.step);
+  }
+
+  protected stepText(line: SelectedLine): string {
+    return formatQuantity(line.step, this.i18n.locale());
   }
 
   protected removeLine(key: string): void {

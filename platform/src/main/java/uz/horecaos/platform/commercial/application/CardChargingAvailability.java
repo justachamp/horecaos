@@ -1,5 +1,7 @@
 package uz.horecaos.platform.commercial.application;
 
+import uz.horecaos.platform.commercial.api.CardCharger;
+
 /**
  * Whether a card can be charged through this build right now (ADR 0095): a merchant account is connected,
  * its adapter is wired, and it may be used here.

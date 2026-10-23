@@ -117,6 +117,17 @@ public class JdbcPosBalanceSyncStore {
                 .list();
     }
 
+    /** Pairings that are not syncing: suspended by a person, or by the consent gate (which marks its own with an open or carried NOT_CONSENTED). */
+    public List<StateRow> suspendedStates(UUID tenantId, UUID bindingId) {
+        return jdbc.sql("SELECT " + STATE_COLUMNS + " FROM loyalty.pos_balance_sync_state"
+                        + " WHERE tenant_id = :tenantId AND binding_id = :bindingId AND status = 'SUSPENDED'"
+                        + " ORDER BY created_at, id")
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .query(JdbcPosBalanceSyncStore::toState)
+                .list();
+    }
+
     public long countMatched(UUID tenantId, UUID bindingId) {
         Long count = jdbc.sql("SELECT count(*) FROM loyalty.pos_balance_sync_state"
                         + " WHERE tenant_id = :tenantId AND binding_id = :bindingId AND status = 'MATCHED'")
@@ -148,6 +159,21 @@ public class JdbcPosBalanceSyncStore {
                         row.getInt("account_version"),
                         row.getString("currency")))
                 .list();
+    }
+
+    /** Whether any matched pair has moved since the platform last pushed it: the cheap question the push sweep asks every few seconds. */
+    public boolean hasPendingPushes(UUID tenantId, UUID bindingId) {
+        return jdbc.sql("""
+                        SELECT EXISTS (
+                            SELECT 1 FROM loyalty.pos_balance_sync_state s
+                              JOIN loyalty.accounts a ON a.tenant_id = s.tenant_id AND a.id = s.account_id
+                             WHERE s.tenant_id = :tenantId AND s.binding_id = :bindingId AND s.status = 'MATCHED'
+                               AND (s.last_pushed_version IS NULL OR s.last_pushed_version <> a.version))
+                        """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .query(Boolean.class)
+                .single();
     }
 
     public record PendingPush(
@@ -198,6 +224,27 @@ public class JdbcPosBalanceSyncStore {
                 .param("id", stateId)
                 .param("balance", tillBalanceMinor)
                 .param("at", utc(observedAt))
+                .update();
+    }
+
+    /**
+     * ADR 0029 erasure: retires the till link of every points account an erased customer held, so the balance
+     * stops being pushed to a till customer who is no longer anyone's. The till's own customer id stays on the row
+     * (an INTERNAL provider id, V0555) as the report's record that a link existed.
+     *
+     * @return how many links were retired
+     */
+    public int retireStatesOfCustomer(UUID tenantId, UUID customerAccountId, Instant now) {
+        return jdbc.sql("""
+                UPDATE loyalty.pos_balance_sync_state s
+                   SET status = 'RETIRED', version = s.version + 1, updated_at = :now
+                  FROM loyalty.accounts a
+                 WHERE s.tenant_id = :tenantId AND a.tenant_id = :tenantId AND a.id = s.account_id
+                   AND a.customer_account_id = :customerAccountId AND s.status <> 'RETIRED'
+                """)
+                .param("tenantId", tenantId)
+                .param("customerAccountId", customerAccountId)
+                .param("now", utc(now))
                 .update();
     }
 
@@ -782,6 +829,21 @@ public class JdbcPosBalanceSyncStore {
                 .list()
                 .forEach(run -> latest.putIfAbsent(run.bindingId(), run));
         return latest;
+    }
+
+    /** The newest finished run of this kind on the binding, if any. */
+    public Optional<RunRow> lastRunOfKind(UUID tenantId, UUID bindingId, String kind) {
+        return jdbc.sql(RUN_SELECT + """
+                 WHERE tenant_id = :tenantId AND binding_id = :bindingId AND kind = :kind
+                   AND status IN ('SUCCEEDED', 'FAILED')
+                 ORDER BY started_at DESC, id
+                 LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .param("kind", kind)
+                .query(JdbcPosBalanceSyncStore::toRun)
+                .optional();
     }
 
     /**

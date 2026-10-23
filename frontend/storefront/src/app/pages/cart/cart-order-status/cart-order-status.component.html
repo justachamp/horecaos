@@ -92,7 +92,7 @@
         </div>
         @for (row of discountRows(); track $index) {
           <div class="flex items-center justify-between text-zinc-400" data-testid="discount-row">
-            <span>{{ row.labelKey | t }}</span>
+            <span>{{ row.title ?? (row.labelKey | t) }}</span>
             <span>-{{ row.amount }}</span>
           </div>
         }
@@ -106,6 +106,9 @@
           <span>{{ totalFormatted() }}</span>
         </div>
       </div>
+
+      <!-- X.1 (ADR 0185): the points and the money that pay for this order, where both do -->
+      <app-payment-split [split]="split()" />
 
       @if (lastUpdated()) {
         <p class="mt-6 text-center text-[11px] text-zinc-500">

@@ -1,12 +1,18 @@
 package uz.horecaos.platform.payments.infrastructure.payme;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
 import uz.horecaos.platform.payments.application.PaymentProviderPort;
+import uz.horecaos.platform.payments.application.PresentedReceipts;
+import uz.horecaos.platform.payments.domain.FiscalReceiptLine;
 import uz.horecaos.platform.payments.domain.PaymentAttempt;
 import uz.horecaos.platform.payments.domain.PaymentAttemptStatus;
 import uz.horecaos.platform.payments.domain.PaymentProviderType;
@@ -38,6 +44,9 @@ public class PaymeProviderAdapter implements PaymentProviderPort {
     private final ProviderInstallationLookup installations;
     private final JdbcPaymentAttemptStore attempts;
     private final boolean percentEncodePathSeparator;
+    private final PresentedReceipts receipts;
+    private final PaymeReceiptSurface surface;
+    private final ObjectMapper json;
 
     /**
      * @param percentEncodePathSeparator whether a {@code /} in the base64 checkout
@@ -53,14 +62,35 @@ public class PaymeProviderAdapter implements PaymentProviderPort {
      *                                   only arbiter. It is a property so that the
      *                                   sandbox can settle it without a release
      */
+    @Autowired
     public PaymeProviderAdapter(
             ProviderInstallationLookup installations,
             JdbcPaymentAttemptStore attempts,
             @Value("${horecaos.payments.payme.checkout.percent-encode-path-separator:true}")
-                    boolean percentEncodePathSeparator) {
+                    boolean percentEncodePathSeparator,
+            PresentedReceipts receipts,
+            @Value("${horecaos.payments.payme.receipt-surface:BOTH}") PaymeReceiptSurface surface,
+            ObjectMapper json) {
         this.installations = installations;
         this.attempts = attempts;
         this.percentEncodePathSeparator = percentEncodePathSeparator;
+        this.receipts = receipts;
+        this.surface = surface;
+        this.json = json;
+    }
+
+    /** A checkout that carries no receipt detail, for the callers that present no fiscalised Payme cashbox. */
+    public PaymeProviderAdapter(
+            ProviderInstallationLookup installations,
+            JdbcPaymentAttemptStore attempts,
+            boolean percentEncodePathSeparator) {
+        this(
+                installations,
+                attempts,
+                percentEncodePathSeparator,
+                PresentedReceipts.NONE,
+                PaymeReceiptSurface.BOTH,
+                new ObjectMapper());
     }
 
     /**
@@ -122,7 +152,40 @@ public class PaymeProviderAdapter implements PaymentProviderPort {
         // which one the caller is told it is looking at.
         PresentationKind kind =
                 request.preferredKind() == PresentationKind.QR ? PresentationKind.QR : PresentationKind.PAYMENT_LINK;
-        return new ProviderInvoice(kind, url, url, null, null, null, null);
+        ProviderInvoice invoice = new ProviderInvoice(kind, url, url, null, null, null, null);
+
+        // ADR 0166 Decision 9: on a fiscalised cashbox the receipt lines travel with the checkout, and the
+        // GET link cannot carry them (the docs document `detail` for the POST form only, question U20). So
+        // where the form surface is switched on the customer's browser is handed a form to submit; the link
+        // and the QR stay what they were, for the surfaces that cannot post, and CheckPerformTransaction
+        // carries the same lines for them. A QR is a picture of the link and is never a form.
+        if (surface.form() && binding.supportsPartnerFiscalization() && kind != PresentationKind.QR) {
+            Optional<List<FiscalReceiptLine>> lines = receipts.lines(attempt.tenantId(), attempt.id());
+            if (lines.isPresent()) {
+                invoice = invoice.withForm(new ProviderInvoice.PaymentForm(
+                        checkoutHost.endsWith("/") ? checkoutHost : checkoutHost + "/",
+                        PaymeCheckoutLink.formFields(
+                                binding.merchantAccountReference(),
+                                attempt.merchantTransId(),
+                                TiyinAmount.of(attempt.amount()),
+                                request.language(),
+                                null,
+                                detailOf(lines.get(), attempt))));
+            }
+        }
+        return invoice;
+    }
+
+    /** The checkout form's {@code detail} field: the receipt lines as Payme's detail object, JSON, base64. */
+    private String detailOf(List<FiscalReceiptLine> lines, PaymentAttempt attempt) {
+        try {
+            Map<String, Object> detail = PaymeReceiptDetail.of(lines, TiyinAmount.of(attempt.amount()));
+            return PaymeReceiptDetail.encode(json.writeValueAsString(detail));
+        } catch (PaymeReceiptDetail.PaymeReceiptRefused refused) {
+            // A HorecaOS code and no amount: it reaches a log line and the customer's error.
+            throw new PresentationFailure.Refused(
+                    refused.code(), "The receipt cannot be expressed in Payme's detail object");
+        }
     }
 
     /**

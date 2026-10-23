@@ -17,7 +17,7 @@
 
 .order-queue__bulk-result-items {
   margin: 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
   font-size: var(--q-type-body-sm);
   color: var(--q-ink-muted);
   max-height: 120px;
@@ -38,7 +38,7 @@
 .order-queue__bulk-result-dismiss {
   position: absolute;
   top: 8px;
-  right: 12px;
+  inset-inline-end: 12px;
   border: none;
   background: none;
   color: var(--q-ink-muted);

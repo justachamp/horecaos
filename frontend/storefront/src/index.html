@@ -1,5 +1,6 @@
 <!doctype html>
-<html lang="uz" data-theme="dark" class="dark">
+<!-- lang and dir are the pre-bootstrap values only: LangService rewrites both from the active language (ADR 0149, Decision 6). -->
+<html lang="uz" dir="ltr" data-theme="dark" class="dark">
   <head>
     <meta charset="utf-8" />
     <title>Storefront</title>
@@ -71,7 +72,7 @@
         location.replace(url.toString());
       })();
     </script>
-    <!-- Yandex Maps API v2.1 loaded dynamically by YandexMapsService -->
+    <!-- Yandex Maps API v2.1 is loaded dynamically by angular8-yandex-maps, with the browser key GET .../map-config delivers -->
     <!-- ADR 0106 (wave P35, gap-map row 10.8e): analytics is a per-brand runtime
        decision, never a build-time constant. This file used to carry one
        tenant's hard-coded, switched-off Yandex Metrika counter id — wrong for

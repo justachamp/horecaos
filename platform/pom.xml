@@ -150,6 +150,14 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
+        <!-- The SMTP transport's own exception types. The starter brings the implementation at
+             runtime only, and SmtpPlatformMailer reads the reply code and the command of a failed
+             send from them to tell «the server never took the data» from «the server may have
+             queued it», which Spring's MailSendException does not say (version: Boot's BOM). -->
+        <dependency>
+            <groupId>org.eclipse.angus</groupId>
+            <artifactId>angus-mail</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>

@@ -52,6 +52,65 @@ already-running Keycloak from before this client existed needs
 situation `create-local-dev-client.sh` and `create-local-web-client.sh` solve
 for their own additions.
 
+## Courier sign-in (ADR 0179)
+
+`horecaos-courier` is the one redirect client this realm has for a person, and it is a public
+Authorization Code + PKCE client, not a second staff login. A courier's phone talks to Keycloak
+directly (there is no courier console to render a password form and the platform does not
+exchange a courier's password), the app keeps its tokens in memory, and the platform validates
+the access token like any other: issuer, signature, expiry and audience `horecaos-api`. A
+courier is authorized by owning a `fulfillment.couriers` row whose `principal_subject` is the
+token's subject (ADR 0049), so the token carries no roles and the client has
+`fullScopeAllowed = false`.
+
+It is created by `create-courier-login-client.sh`, never by the realm import: a public client's
+only defence is its redirect list, and the origins differ per environment.
+
+```bash
+# on a laptop, against the compose Keycloak: http://localhost:5200 (the dev server)
+./infra/keycloak/create-courier-login-client.sh
+
+# on the pre-production or production host: from the ops container on the compose network,
+# the way the bootstrap runbook runs assign-service-account-roles.sh (the public auth origin
+# refuses /admin/*). The origins are the real ones, https only, and must be named.
+read -rsp 'Keycloak admin password: ' HORECAOS_KEYCLOAK_ADMIN_PASSWORD; echo
+docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
+  run --rm --no-TTY \
+  --volume "$(pwd)/platform/infra/keycloak:/keycloak:ro" \
+  -e HORECAOS_KEYCLOAK_URL=http://keycloak:8080 \
+  -e HORECAOS_KEYCLOAK_ADMIN_PASSWORD \
+  -e HORECAOS_COURIER_ORIGINS=https://courier.staging.horecaos.uz \
+  ops bash /keycloak/create-courier-login-client.sh
+unset HORECAOS_KEYCLOAK_ADMIN_PASSWORD
+
+./infra/keycloak/create-courier-login-client.sh --print   # the client it would send, talking to nothing
+```
+
+It registers exact redirect URIs (`<origin>/auth/callback`), exact post-logout redirect URIs and
+exact web origins, refuses a wildcard, a path, a non-https origin that is not a localhost
+development server, a run that names localhost and real origins together, and the localhost
+default against any Keycloak but the compose one on `:8081`, and reads the
+client back and fails if it is not public, carries a secret, enables another flow, has a
+wildcard or lost PKCE. It is idempotent and converges: an override dropped from the environment
+is removed from the client, and the default scopes are the ones listed in the script (no
+`email`).
+
+**Session lifetimes are the realm's.** Keycloak refuses a client attribute that lengthens the
+realm's SSO session idle or maximum lifespan ("Client session idle timeout cannot exceed realm SSO
+session idle timeout", found on the script's first run), so at the realm's defaults a courier
+stays signed in for 30 minutes idle and 10 hours at most; an app in the foreground on duty never
+idles out. `HORECAOS_COURIER_SESSION_IDLE_SECONDS` and `HORECAOS_COURIER_SESSION_MAX_SECONDS`
+make this client's sessions shorter than the realm's; making them longer is a realm setting that
+changes every account's, and is the owner's decision (ADR 0179, open inputs).
+
+Verified against Keycloak 26.7.0 on 2026-10-14, with a real user and a hand-driven browser
+round trip: the callback carries `code`, `state`, `session_state` and `iss`; a wrong
+`code_verifier` is `invalid_grant`; the access token is `aud = horecaos-api`, `azp =
+horecaos-courier`, scope `openid profile`, no `realm_access` or `resource_access`; the identity
+token carries the nonce, a name and a login and no email; refresh works; an unregistered
+`redirect_uri` or post-logout redirect is a 400; a request with no code challenge is answered
+`error=invalid_request`; and CORS allows the registered origin on the token endpoint.
+
 ## Verified, not assumed
 
 Checked against Keycloak 26.7 on 2026-08-21:

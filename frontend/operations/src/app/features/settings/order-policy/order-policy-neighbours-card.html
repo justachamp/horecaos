@@ -1,0 +1,33 @@
+<div class="neighbours" data-testid="order-policy-neighbours">
+  <p class="q-body-sm neighbours__lead">{{ 'settings.orderPolicy.neighbours.lead' | t }}</p>
+  <ul class="neighbours__rows">
+    @for (row of rows(); track row.id) {
+      <li class="neighbours__row" [attr.data-testid]="'neighbour-' + row.id">
+        <span class="q-body-sm neighbours__label">{{ row.labelKey | t }}</span>
+        <span class="q-body-sm neighbours__value" [attr.data-testid]="'neighbour-value-' + row.id">
+          @if (row.unreadable) {
+            <span class="neighbours__muted">{{
+              'settings.orderPolicy.neighbours.unreadable' | t
+            }}</span>
+          } @else if (row.value === null) {
+            <span class="neighbours__muted">{{
+              'settings.orderPolicy.neighbours.loading' | t
+            }}</span>
+          } @else {
+            {{ row.value }}
+          }
+        </span>
+        @if (row.noteKey) {
+          <span class="q-caption neighbours__note">{{ row.noteKey | t }}</span>
+        }
+        <a
+          class="q-body-sm neighbours__link"
+          [routerLink]="row.link"
+          [attr.data-testid]="'neighbour-link-' + row.id"
+        >
+          {{ 'settings.orderPolicy.neighbours.open' | t }}
+        </a>
+      </li>
+    }
+  </ul>
+</div>

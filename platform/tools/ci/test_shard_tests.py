@@ -364,11 +364,24 @@ class RealTreeTests(unittest.TestCase):
         # none today; this keeps it so.
         discovered = {c.rel for c in self.classes}
         annotation = re.compile(r"@(?:Test|ParameterizedTest|RepeatedTest|TestFactory|TestTemplate)\b")
-        hidden = [
-            path.relative_to(st.TEST_ROOT).as_posix()
+        # An abstract base class (a port contract, ADR 0007) carries the cases every adapter must pass and
+        # runs through the concrete `*Tests` classes that extend it, so it is not hiding: those subclasses
+        # are discovered, sharded and reported. An abstract class nobody extends still is hidden.
+        sources = {
+            path.relative_to(st.TEST_ROOT).as_posix(): path.read_text(encoding="utf-8")
             for path in sorted(st.TEST_ROOT.rglob("*.java"))
-            if path.relative_to(st.TEST_ROOT).as_posix() not in discovered
-            and annotation.search(path.read_text(encoding="utf-8"))
+        }
+        concrete = "\n".join(text for rel, text in sources.items() if rel in discovered)
+
+        def inherited(rel: str, text: str) -> bool:
+            name = rel.rsplit("/", 1)[-1][: -len(".java")]
+            is_abstract = re.search(r"\babstract\s+class\s+" + re.escape(name) + r"\b", text) is not None
+            return is_abstract and re.search(r"\bextends\s+" + re.escape(name) + r"\b", concrete) is not None
+
+        hidden = [
+            rel
+            for rel, text in sources.items()
+            if rel not in discovered and annotation.search(text) and not inherited(rel, text)
         ]
         self.assertEqual([], hidden, "test classes outside Surefire's default name patterns never run in CI")
 

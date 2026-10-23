@@ -2,6 +2,7 @@ package uz.horecaos.platform.reporting.application;
 
 import java.time.LocalDate;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The four things a reporting query is refused for (ADR 0043).
@@ -130,6 +131,39 @@ public final class ReportingRefusals {
 
         public NonScalarMetricException(String metricCode, String endpoint) {
             super("%s is not a single value per slice; read it from %s".formatted(metricCode, endpoint));
+            this.metricCode = metricCode;
+        }
+
+        public String metricCode() {
+            return metricCode;
+        }
+    }
+
+    /**
+     * The metric is built, and {@code /queries} cannot compute it.
+     *
+     * <p>{@code /queries} reads {@code agg_branch_day}, which holds a handful of figures per branch and day. A
+     * metric registered with a built source in another fact -- a promotion's spend, a review's rating, a distinct
+     * customer -- is answered by its own report, and the registry's rule is that an unanswerable metric is refused
+     * by name. Anything else is worse than a refusal: a crash for a tenant with aggregate rows, and an empty 200 for
+     * a tenant without any, which reads as a quiet day.
+     */
+    public static final class MetricNotQueryableException extends IllegalArgumentException {
+
+        private final String metricCode;
+
+        /**
+         * @param endpoint where the figure is answered, or null for a built metric that has no report of its own yet,
+         *     in which case the refusal points at the metric dictionary
+         */
+        public MetricNotQueryableException(String metricCode, @Nullable String endpoint) {
+            super(
+                    endpoint == null
+                            ? ("%s is built but is not a figure /queries can compute; its definition and source are "
+                                            + "at GET .../reporting/metrics")
+                                    .formatted(metricCode)
+                            : "%s is not a figure /queries can compute; read it from %s"
+                                    .formatted(metricCode, endpoint));
             this.metricCode = metricCode;
         }
 

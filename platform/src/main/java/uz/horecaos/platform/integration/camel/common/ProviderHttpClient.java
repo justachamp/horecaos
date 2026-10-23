@@ -260,6 +260,62 @@ public class ProviderHttpClient {
     }
 
     /**
+     * A GET with accepted statuses (see {@link #getAccepting}) whose path carries an identifier that must
+     * never reach a log line, logged under a fixed label instead.
+     *
+     * <p>Here because Click's payment lookups name the payment (and the charge's idempotency key) in the
+     * path, and {@link #getAccepting} logs the path when the connection fails (ADR 0029). The label is what
+     * a log line may say.
+     *
+     * @param operation a fixed, identifier-free name for the call, such as {@code payment.status}
+     */
+    public ProviderOutcome getAcceptingWithSensitivePath(
+            ProviderCall call,
+            String path,
+            String operation,
+            Map<String, String> headers,
+            Set<Integer> acceptedStatuses,
+            Function<Map<String, Object>, ProviderOutcome> onSuccess) {
+        return exchange(
+                call, "GET", path, "", operation, headers, null, "application/json", acceptedStatuses, onSuccess);
+    }
+
+    /**
+     * A bodyless DELETE (see {@link #delete}) whose path carries a credential, logged under a fixed label
+     * instead.
+     *
+     * <p>Here because Click deletes a card token with {@code DELETE /card_token/<service>/<token>}, and the
+     * token is the credential to charge the card (ADR 0028). {@link #delete} logs the path when the
+     * connection fails, which would put the token into the log aggregator on the first reset or timeout.
+     *
+     * @param operation a fixed, credential-free name for the call, such as {@code card_token.delete}
+     */
+    public ProviderOutcome deleteWithSensitivePath(
+            ProviderCall call,
+            String path,
+            String operation,
+            Map<String, String> headers,
+            Function<Map<String, Object>, ProviderOutcome> onSuccess) {
+        return exchange(call, "DELETE", path, "", operation, headers, null, onSuccess);
+    }
+
+    /**
+     * A JSON POST (see {@link #post}) whose path may carry an identifier, logged under a fixed label
+     * instead, so a gateway that cannot know what its adapters put in a path never logs one.
+     *
+     * @param operation a fixed, identifier-free name for the call
+     */
+    public ProviderOutcome postWithSensitivePath(
+            ProviderCall call,
+            String path,
+            String operation,
+            Map<String, String> headers,
+            @Nullable Object body,
+            Function<Map<String, Object>, ProviderOutcome> onSuccess) {
+        return exchange(call, "POST", path, "", operation, headers, body, onSuccess);
+    }
+
+    /**
      * A form-encoded POST, for the provider whose token endpoint takes {@code
      * application/x-www-form-urlencoded} and nothing else (Faktura.uz's OAuth password
      * grant, ADR 0096). The values are percent-encoded here; the body is never logged,

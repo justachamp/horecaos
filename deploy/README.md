@@ -17,7 +17,7 @@ Read that to actually deploy something. This file is the map.
 
 | Path | What it is |
 |---|---|
-| `compose.production.yml` | The stack: edge, three frontend bundles, the platform JVM, PostgreSQL, Kafka, Keycloak, OpenBao, backup tooling. Pulls pinned images; contains no `build:` block. The edge image is `horecaos-edge`, CI's eighth published image — stock `caddy:2.10-alpine` recompiled with `caddy-ratelimit` (ADR 0023), since the stock image cannot run this file's `rate_limit` directives. |
+| `compose.production.yml` | The stack: edge, four frontend bundles (storefront, control-plane, operations, and the courier PWA of ADR 0179, which is dormant until a courier origin is set), the platform JVM, PostgreSQL, Kafka, Keycloak, OpenBao, backup tooling. Pulls pinned images; contains no `build:` block. The edge image is `horecaos-edge`, CI's eighth published image — stock `caddy:2.10-alpine` recompiled with `caddy-ratelimit` (ADR 0023), since the stock image cannot run this file's `rate_limit` directives. |
 | `compose.local-test.override.yml` | Port remapping ONLY, applied by `local-smoke.sh`. Never used on a real host. |
 | `compose.preprod-mailpit.yml` | PRE-PRODUCTION ONLY: a Mailpit SMTP sink as its own compose project on the stack's internal network, so invitations and password resets can be proven end to end with no provider; inbox on the host's loopback, read through the IAP tunnel. Never beside a stack expected to deliver mail. |
 | `env.template` | The per-environment file, exhaustively documented inline. Copy it, fill it, keep the result outside this repository. |
@@ -91,8 +91,8 @@ CI builds and pushes pinned images, a devops engineer pulls them by tag,
 following `production-setup.md` — and it is the model the owner actually
 decided on 2026-09-01: no repository checkout on the server, no Maven
 toolchain there, no SSH access for CI. It is also the only compose file that
-serves the current three-frontend architecture (storefront, control-plane,
-operations); `platform/compose.production.yaml` predates the second and
+serves the current four-frontend architecture (storefront, control-plane,
+operations, courier); `platform/compose.production.yaml` predates the second and
 third frontends and has no containers for them at all.
 
 An older stack still lives at
@@ -143,7 +143,7 @@ consolidation pass exists to close.
 deploy/local-smoke.sh
 ```
 
-Builds all eight images from this checkout, stands the entire production
+Builds all nine images from this checkout, stands the entire production
 stack up under compose project `horecaos-prod-smoke` (never the dev stack's
 `horecaos-platform` project — see the script's own header), runs a smoke
 checklist against it over real TLS (Caddy's internal CA, verified rather

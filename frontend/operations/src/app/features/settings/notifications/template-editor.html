@@ -43,12 +43,14 @@
 
     @if (hasSubject()) {
       <label class="q-caption" [for]="'subject-' + activeLocale()">{{
-        'settings.notifications.editor.subject' | t
+        (isPush() ? 'settings.notifications.editor.title' : 'settings.notifications.editor.subject')
+          | t
       }}</label>
       <input
         [id]="'subject-' + activeLocale()"
         class="q-body field"
         type="text"
+        data-testid="editor-subject"
         [value]="subjectOf(activeLocale())"
         (input)="setSubject(activeLocale(), $any($event.target).value)"
       />
@@ -65,6 +67,36 @@
       [value]="bodyOf(activeLocale())"
       (input)="setBody(activeLocale(), $any($event.target).value)"
     ></textarea>
+
+    @if (copyTargets().length > 0) {
+      <div class="copy-row" data-testid="copy-row">
+        <span class="q-caption">{{ 'settings.notifications.editor.copy.label' | t }}</span>
+        @for (target of copyTargets(); track target) {
+          <button
+            type="button"
+            class="q-body-sm link"
+            [attr.data-testid]="'copy-to-' + target"
+            [disabled]="bodyOf(activeLocale()).trim().length === 0"
+            (click)="copyActiveTo(target)"
+          >
+            {{
+              bodyOf(target).trim().length === 0
+                ? ('settings.notifications.editor.copy.into' | t: { locale: target })
+                : ('settings.notifications.editor.copy.replace' | t: { locale: target })
+            }}
+          </button>
+        }
+      </div>
+    }
+    @if (isPush()) {
+      <q-push-wording-fields
+        [scope]="scope()"
+        [coverAssetId]="coverAssetId()"
+        [targetPath]="targetPath()"
+        (coverChange)="coverAssetId.set($event)"
+        (targetPathChange)="targetPath.set($event)"
+      />
+    }
 
     <span class="q-caption">{{ 'settings.notifications.editor.variables' | t }}</span>
     <div class="variable-chips" data-testid="variable-chips">
@@ -85,6 +117,29 @@
         }
       }
     </div>
+
+    @if (offersPersonalVariables()) {
+      <p class="q-caption hint" data-testid="personal-variables-note">
+        {{ 'settings.notifications.editor.personal.note' | t }}
+      </p>
+    }
+
+    @if (offersProductList()) {
+      <label class="checkbox q-body-sm" data-testid="show-item-prices">
+        <input
+          type="checkbox"
+          [checked]="showItemPrices()"
+          [disabled]="submitting()"
+          (change)="showItemPrices.set($any($event.target).checked)"
+        />
+        {{ 'settings.notifications.editor.showItemPrices' | t }}
+      </label>
+      @if (showItemPrices() && !usesProductList()) {
+        <p class="q-caption hint" data-testid="show-item-prices-unused">
+          {{ 'settings.notifications.editor.showItemPrices.unused' | t }}
+        </p>
+      }
+    }
 
     @if (error(); as message) {
       <p class="q-body-sm error" role="alert">{{ message }}</p>
@@ -115,6 +170,9 @@
 
   <div class="editor__preview">
     <q-phone-frame [caption]="'settings.notifications.editor.preview' | t">
+      @if (isPush() && subjectOf(activeLocale()).trim().length > 0) {
+        <div class="preview-title" data-testid="preview-title">{{ subjectOf(activeLocale()) }}</div>
+      }
       <div class="preview-message" data-testid="preview-body">{{ preview() }}</div>
     </q-phone-frame>
   </div>

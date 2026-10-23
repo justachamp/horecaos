@@ -42,11 +42,11 @@
 .new-order__pane {
   padding: 16px;
   overflow-y: auto;
-  border-right: 1px solid var(--q-hairline);
+  border-inline-end: 1px solid var(--q-hairline);
 }
 
 .new-order__pane--order {
-  border-right: none;
+  border-inline-end: none;
 }
 
 .new-order__pane-title {
@@ -91,7 +91,7 @@
   gap: 2px;
   width: 100%;
   padding: 8px 10px;
-  text-align: left;
+  text-align: start;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   background: var(--q-canvas);
@@ -228,7 +228,7 @@
   gap: 2px;
   width: 100%;
   padding: 8px 10px;
-  text-align: left;
+  text-align: start;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   background: var(--q-canvas);

@@ -77,6 +77,26 @@ public final class FakePosAdapter implements PosAdapter {
 
     private @Nullable ProviderOutcome nextDiscountsOutcome;
 
+    /** What {@link #discoverOperators} answers by default: two fake till operators. */
+    private List<PosAdapter.ExternalReference> nextOperators = List.of(
+            new PosAdapter.ExternalReference("fake-op-17", "Aziza"),
+            new PosAdapter.ExternalReference("fake-op-18", "Bobur"));
+
+    private @Nullable ProviderOutcome nextOperatorsOutcome;
+
+    /**
+     * Whether this till's order API carries the operator (PosCapability#ORDER_OPERATOR_ATTRIBUTION). True
+     * by default, because the point of the fake is to be the shape Clopos is not; {@link
+     * #withoutOperatorAttribution} turns it into a till that, like Clopos, receives none.
+     */
+    private boolean carriesOperator = true;
+
+    /** The body each create-order call would put on the wire, in the order they came. */
+    private final List<Map<String, Object>> wireBodies = new ArrayList<>();
+
+    /** The {@code operatorExternalId} each create-order call was handed, in the order they came. */
+    private final List<@Nullable String> operatorsReceived = new ArrayList<>();
+
     // ------------------------------------------------------------------
     // The customer wallet (ADR 0171, PosCapability#LOYALTY_BALANCE_SYNC)
     //
@@ -95,8 +115,20 @@ public final class FakePosAdapter implements PosAdapter {
     private boolean duplicateNextMovementPage;
     private boolean movementFeedUnreadable;
     private boolean customerListUnreadable;
+    private boolean tillDown;
     private @Nullable String balanceCurrency;
     private @Nullable Runnable atNextBalanceWrite;
+
+    // Order revision (ADR 0137, ORDER_REVISION): what the till was told, and the failure modes it can be commanded
+    // into.
+    private final List<RecordedRevision> revisions = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private final Set<String> appliedRevisionKeys = ConcurrentHashMap.newKeySet();
+    private @Nullable ProviderOutcome nextRevisionOutcome;
+    private boolean loseNextRevisionReply;
+    private @Nullable Runnable duringNextRevision;
+
+    /** One revised total the fake applied. */
+    public record RecordedRevision(String externalOrderId, PosAdapter.TillRevision revision) {}
 
     private static final class Wallet {
         final String externalId;
@@ -125,6 +157,7 @@ public final class FakePosAdapter implements PosAdapter {
         duplicateNextMovementPage = false;
         movementFeedUnreadable = false;
         customerListUnreadable = false;
+        tillDown = false;
         balanceCurrency = null;
         atNextBalanceWrite = null;
         return this;
@@ -212,6 +245,12 @@ public final class FakePosAdapter implements PosAdapter {
 
     public FakePosAdapter customerListUnreadable(boolean unreadable) {
         this.customerListUnreadable = unreadable;
+        return this;
+    }
+
+    /** Every balance write fails with a retryable fault, as a till that is down does: nothing is applied. */
+    public FakePosAdapter tillDown(boolean down) {
+        this.tillDown = down;
         return this;
     }
 
@@ -304,6 +343,9 @@ public final class FakePosAdapter implements PosAdapter {
         }
         synchronized (this) {
             balanceWrites.incrementAndGet();
+            if (tillDown) {
+                return ProviderOutcome.retryable("FAKE_DOWN", "the till is not answering", null);
+            }
             Wallet wallet = wallets.get(externalCustomerId);
             if (wallet == null) {
                 return ProviderOutcome.rejected("NOT_FOUND", "no such till customer");
@@ -321,6 +363,57 @@ public final class FakePosAdapter implements PosAdapter {
     }
 
     /** How many orders the fake actually created, as opposed to was asked to. */
+    /** The next revision is answered with {@code outcome} and not applied: a refusal, or a till that is down. */
+    public synchronized FakePosAdapter failNextRevisionWith(ProviderOutcome outcome) {
+        this.nextRevisionOutcome = outcome;
+        return this;
+    }
+
+    /** The next revision is applied and the reply is lost: the platform sees an unknown outcome. */
+    /**
+     * Runs {@code action} while the next revision is in flight, after the platform has chosen what to send and
+     * before the vendor answers: another request's write landing in the middle of a call that is outside any
+     * transaction (the second weighing the operator never saw).
+     */
+    public synchronized FakePosAdapter duringNextRevision(Runnable action) {
+        this.duringNextRevision = action;
+        return this;
+    }
+
+    public synchronized FakePosAdapter loseNextRevisionReply() {
+        this.loseNextRevisionReply = true;
+        return this;
+    }
+
+    /** Every revised total the fake applied, oldest first; a repeat under one key is applied once. */
+    public List<RecordedRevision> revisions() {
+        return List.copyOf(revisions);
+    }
+
+    @Override
+    public synchronized ProviderOutcome reviseExportedOrder(
+            PosContext context, String externalOrderId, TillRevision revision) {
+        Runnable during = duringNextRevision;
+        duringNextRevision = null;
+        if (during != null) {
+            during.run();
+        }
+        ProviderOutcome scripted = nextRevisionOutcome;
+        nextRevisionOutcome = null;
+        if (scripted != null) {
+            return scripted;
+        }
+        if (appliedRevisionKeys.add(revision.idempotencyKey())) {
+            revisions.add(new RecordedRevision(externalOrderId, revision));
+            sideEffects.incrementAndGet();
+        }
+        if (loseNextRevisionReply) {
+            loseNextRevisionReply = false;
+            return ProviderOutcome.uncertain("CONNECTION_RESET", "Connection lost after sending");
+        }
+        return ProviderOutcome.success(Map.of("revised", true), externalOrderId);
+    }
+
     public int sideEffectCount() {
         return sideEffects.get();
     }
@@ -392,6 +485,37 @@ public final class FakePosAdapter implements PosAdapter {
         return this;
     }
 
+    /** From the next {@link #discoverOperators} call onward, this is what it finds. */
+    public FakePosAdapter scriptOperators(List<ExternalReference> entries) {
+        this.nextOperators = List.copyOf(entries);
+        return this;
+    }
+
+    /** Makes {@link #discoverOperators} answer the way an unsupported vendor does. */
+    public FakePosAdapter failOperatorsWith(ProviderOutcome outcome) {
+        this.nextOperatorsOutcome = outcome;
+        return this;
+    }
+
+    /**
+     * A till like Clopos: it lists its users but its order API receives no operator, so the capability is not
+     * declared and the body never carries one.
+     */
+    public FakePosAdapter withoutOperatorAttribution() {
+        this.carriesOperator = false;
+        return this;
+    }
+
+    /** What each create-order call would have put on the wire. */
+    public List<Map<String, Object>> wireBodies() {
+        return Collections.unmodifiableList(new ArrayList<>(wireBodies));
+    }
+
+    /** What each create-order call was handed as the operator, before this adapter decided what to send. */
+    public List<@Nullable String> operatorsReceived() {
+        return Collections.unmodifiableList(new ArrayList<>(operatorsReceived));
+    }
+
     @Override
     public String providerType() {
         return PROVIDER_TYPE;
@@ -399,16 +523,24 @@ public final class FakePosAdapter implements PosAdapter {
 
     @Override
     public Set<PosCapability> declaredCapabilities() {
-        // Everything, including the two Clopos lacks. A capability no adapter in
+        // Everything, including the ones Clopos lacks. A capability no adapter in
         // the build implements is a capability whose refusal path is never
         // exercised, and its support path never exercised either.
-        return EnumSet.allOf(PosCapability.class);
+        EnumSet<PosCapability> declared = EnumSet.allOf(PosCapability.class);
+        if (!carriesOperator) {
+            declared.remove(PosCapability.ORDER_OPERATOR_ATTRIBUTION);
+        }
+        return declared;
     }
 
     @Override
     public CapabilitySnapshot discoverCapabilities(PosContext context) {
         Map<PosCapability, Entry> entries = new EnumMap<>(PosCapability.class);
         for (PosCapability capability : PosCapability.values()) {
+            if (!declaredCapabilities().contains(capability)) {
+                entries.put(capability, Entry.unsupported("Fake provider configured without " + capability));
+                continue;
+            }
             entries.put(
                     capability,
                     new Entry(
@@ -475,6 +607,16 @@ public final class FakePosAdapter implements PosAdapter {
     }
 
     @Override
+    public ReferenceListRead discoverOperators(PosContext context) {
+        if (nextOperatorsOutcome != null) {
+            ProviderOutcome scripted = nextOperatorsOutcome;
+            nextOperatorsOutcome = null;
+            return new ReferenceListRead(scripted, List.of());
+        }
+        return new ReferenceListRead(ProviderOutcome.success(Map.of(), null), nextOperators);
+    }
+
+    @Override
     public ReferenceListRead discoverDiscounts(PosContext context) {
         if (nextDiscountsOutcome != null) {
             ProviderOutcome scripted = nextDiscountsOutcome;
@@ -492,6 +634,15 @@ public final class FakePosAdapter implements PosAdapter {
             return new ExportResult(scripted, null, false);
         }
         exportedCorrelations.add(order.correlationReference());
+        operatorsReceived.add(order.operatorExternalId());
+        // The body this till would be sent. The operator rides on it as operator_id exactly when the
+        // till's API carries one - the clause PosAdapterContractTests holds every adapter to.
+        Map<String, Object> wire = new LinkedHashMap<>();
+        wire.put("order_number", order.correlationReference());
+        if (carriesOperator && order.operatorExternalId() != null) {
+            wire.put("operator_id", order.operatorExternalId());
+        }
+        wireBodies.add(wire);
         // ConcurrentHashMap refuses a null key outright, and a null correlation
         // reference has no identity to deduplicate on anyway, so it always gets a
         // fresh external id instead of going through the map.

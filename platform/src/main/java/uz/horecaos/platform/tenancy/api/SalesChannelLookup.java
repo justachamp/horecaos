@@ -23,6 +23,22 @@ public interface SalesChannelLookup {
     Optional<SalesChannel> byCode(UUID tenantId, String code);
 
     /**
+     * Several channels by code in one read -- what the order board resolves for a page's distinct channel
+     * codes so it can draw each order's source icon (gap map row {@code 1.1}).
+     *
+     * <p>A code the tenant has no channel for is absent from the result. Defaulted to one {@link #byCode}
+     * per code so the test doubles of this port that predate the need are untouched; the registry's own
+     * implementation answers in a single statement.
+     */
+    default java.util.Map<String, SalesChannel> byCodes(UUID tenantId, java.util.Collection<String> codes) {
+        java.util.Map<String, SalesChannel> found = new java.util.LinkedHashMap<>();
+        for (String code : codes) {
+            byCode(tenantId, code).ifPresent(channel -> found.put(code, channel));
+        }
+        return found;
+    }
+
+    /**
      * The payment-method codes this channel is configured to offer.
      *
      * <p>Enabled rows only. V0020 makes an absent row mean unavailable, so a

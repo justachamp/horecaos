@@ -1,7 +1,9 @@
 package uz.horecaos.platform.payments.settlement;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
@@ -12,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.ordering.OrderBoardFixtures;
+import uz.horecaos.platform.reviews.spi.CompensationDirectory.CompensationCandidate;
 import uz.horecaos.platform.reviews.spi.CompensationDirectory.CompensationSummary;
 import uz.horecaos.platform.support.TestDatabase;
 
@@ -87,6 +90,25 @@ class OrderRemedyCompensationDirectoryTests {
         return id;
     }
 
+    /** A remedy that gives nothing yet: no money, no channel, nobody has executed it. */
+    private UUID unexecutedFutureDiscount(UUID tenant, UUID brand, UUID orderId) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO payments.order_remedies (id, tenant_id, brand_id, order_id, remedy_type, reason_code, reason,
+                    currency, amount_minor, attested_money_minor, platform_settled_minor, settlement_basis,
+                    recorded_by, recorded_at, idempotency_key, version)
+                VALUES (:id, :t, :b, :o, 'FUTURE_DISCOUNT', 'LATE_DELIVERY', 'a discount for next time', 'UZS', 0, 0, 0,
+                    'NOT_MONEY', 'manager-1', now() + interval '1 second', :key, 1)
+                """)
+                .param("id", id)
+                .param("t", tenant)
+                .param("b", brand)
+                .param("o", orderId)
+                .param("key", "remedy-" + id)
+                .update();
+        return id;
+    }
+
     @Test
     @DisplayName("it names itself ORDER_REMEDY, the kind a link to it carries")
     void itsKindIsOrderRemedy() {
@@ -112,5 +134,38 @@ class OrderRemedyCompensationDirectoryTests {
         assertThat(directory.summary(TENANT, theirs)).isEmpty();
         assertThat(directory.summary(TENANT, UUID.randomUUID())).isEmpty();
         assertThat(directory.summary(OTHER_TENANT, theirs)).isPresent();
+    }
+
+    @Test
+    @DisplayName("the picker lists what was recorded against the order, oldest first, with whether it was executed")
+    void itListsTheRemediesOfOneOrder() {
+        UUID order = order(TENANT, BRAND, LOCATION, "R-3");
+        UUID refund = remedy(TENANT, BRAND, order, 45_000L);
+        UUID discount = unexecutedFutureDiscount(TENANT, BRAND, order);
+        UUID elsewhere = order(TENANT, BRAND, LOCATION, "R-4");
+        remedy(TENANT, BRAND, elsewhere, 9_000L);
+
+        List<CompensationCandidate> candidates = directory.candidatesForOrder(TENANT, order);
+
+        assertThat(candidates)
+                .extracting(CompensationCandidate::refId, CompensationCandidate::label, CompensationCandidate::state)
+                .containsExactly(
+                        tuple(refund, "ORDER_REFUND", "EXECUTED"), tuple(discount, "FUTURE_DISCOUNT", "RECORDED"));
+        assertThat(candidates.get(0).kind()).isEqualTo("ORDER_REMEDY");
+        assertThat(candidates.get(0).amountMinor()).isEqualTo(45_000L);
+        assertThat(candidates.get(0).currency()).isEqualTo("UZS");
+        assertThat(candidates.get(1).amountMinor()).isZero();
+    }
+
+    @Test
+    @DisplayName("another tenant's order has no candidates, and an order with no remedy has none either")
+    void anotherTenantsOrderHasNothing() {
+        UUID theirOrder = order(OTHER_TENANT, OTHER_BRAND, OTHER_LOCATION, "R-5");
+        remedy(OTHER_TENANT, OTHER_BRAND, theirOrder, 10_000L);
+        UUID untouched = order(TENANT, BRAND, LOCATION, "R-6");
+
+        assertThat(directory.candidatesForOrder(TENANT, theirOrder)).isEmpty();
+        assertThat(directory.candidatesForOrder(TENANT, untouched)).isEmpty();
+        assertThat(directory.candidatesForOrder(OTHER_TENANT, theirOrder)).hasSize(1);
     }
 }

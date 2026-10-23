@@ -112,6 +112,13 @@ export interface FiscalCoverageNode {
   readonly mxikWithdrawnOn?: string | null;
   /** ADR 0173: the successor the list itself names for that withdrawn code; a suggestion for a person to click. */
   readonly mxikReplacedBy?: string | null;
+  /**
+   * The unit code the node already holds (batch 21). `null` means the node holds none; absent means an older
+   * server that does not say, which the console treats as unknown and never as a gap.
+   */
+  readonly fiscalUnitCode?: number | null;
+  /** The name printed on the receipt line the node already holds (batch 21); `null` none, absent unknown. */
+  readonly fiscalName?: string | null;
 }
 
 /**
@@ -150,6 +157,9 @@ export interface FiscalBackfillItem {
   readonly nodeId: string;
   readonly mxikCode?: string;
   readonly packageCode?: string;
+  /** Batch 21: a node that holds both codes and lacks these is filled the same way (`MERGE` fills gaps only). */
+  readonly fiscalUnitCode?: number;
+  readonly fiscalName?: string;
 }
 
 /** Mirrors `CatalogAuthoringService.BulkClassifyStatus`. */
@@ -168,7 +178,12 @@ interface BulkClassifyRequest {
   readonly items: readonly {
     readonly nodeType: 'VARIANT' | 'MODIFIER_OPTION' | 'FEE';
     readonly nodeId: string;
-    readonly fiscal: { readonly mxikCode?: string; readonly packageCode?: string };
+    readonly fiscal: {
+      readonly mxikCode?: string;
+      readonly packageCode?: string;
+      readonly fiscalUnitCode?: number;
+      readonly fiscalName?: string;
+    };
   }[];
 }
 
@@ -455,6 +470,8 @@ export class FiscalizationApi {
             fiscal: {
               ...(item.mxikCode ? { mxikCode: item.mxikCode } : {}),
               ...(item.packageCode ? { packageCode: item.packageCode } : {}),
+              ...(item.fiscalUnitCode ? { fiscalUnitCode: item.fiscalUnitCode } : {}),
+              ...(item.fiscalName ? { fiscalName: item.fiscalName } : {}),
             },
           })),
         }),

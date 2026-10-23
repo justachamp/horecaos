@@ -28,6 +28,7 @@ import uz.horecaos.platform.media.api.MediaAssetAvailable;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAssetStatus;
 import uz.horecaos.platform.media.api.MediaAvailability;
+import uz.horecaos.platform.media.api.MediaPurpose;
 import uz.horecaos.platform.media.api.ObjectStorage;
 import uz.horecaos.platform.media.domain.DerivativeVariant;
 import uz.horecaos.platform.media.domain.ImageCostLimits;
@@ -164,7 +165,53 @@ public class MediaAssetService implements MediaAvailability {
             @Nullable String originalFilename,
             @Nullable UUID actorId,
             @Nullable String renditionProfile) {
+        return requestUpload(
+                tenantId, owner, visibility, contentType, sizeBytes, originalFilename, actorId, renditionProfile, null);
+    }
 
+    /**
+     * {@link #requestUpload(UUID, MediaOwner, MediaVisibility, String, long, String, UUID, String)} for an asset
+     * with a purpose (ADR 0187, D25): always a {@code PUBLIC}, tenant-owned still image no larger than the purpose
+     * allows, so a picture meant for a kiosk's idle loop is refused over its cap before a byte is uploaded.
+     *
+     * @param purpose null for an ordinary asset
+     * @throws IllegalArgumentException if the purpose's rules are not met by the request
+     */
+    @Transactional
+    public UploadTicket requestUpload(
+            UUID tenantId,
+            MediaOwner owner,
+            MediaVisibility visibility,
+            String contentType,
+            long sizeBytes,
+            @Nullable String originalFilename,
+            @Nullable UUID actorId,
+            @Nullable String renditionProfile,
+            @Nullable MediaPurpose purpose) {
+
+        if (purpose != null) {
+            if (owner.scope() != MediaOwner.Scope.TENANT || visibility != MediaVisibility.PUBLIC) {
+                throw new IllegalArgumentException("A " + purpose + " image is a public image owned by the tenant");
+            }
+            if (renditionProfile != null) {
+                throw new IllegalArgumentException("A " + purpose + " image has no rendition profile");
+            }
+            String declared = contentType == null
+                    ? ""
+                    : contentType.toLowerCase(Locale.ROOT).strip();
+            if (VIDEO_MP4.equals(declared)) {
+                throw new IllegalArgumentException("A " + purpose + " asset is a still image, not a video");
+            }
+            if (!purpose.allowsContentType(declared)) {
+                // The purpose's own closed set, narrower than ALLOWED_IMAGE_TYPES: an AVIF is a stored image type
+                // and not one a kiosk's browser is promised to decode.
+                throw new IllegalArgumentException("A " + purpose + " image is a JPEG, PNG or WebP");
+            }
+            if (sizeBytes > purpose.maximumBytes()) {
+                throw new IllegalArgumentException(
+                        "A %s image is at most %d bytes".formatted(purpose, purpose.maximumBytes()));
+            }
+        }
         if (renditionProfile != null && !MediaAsset.CREATIVE_PROFILE.equals(renditionProfile)) {
             throw new IllegalArgumentException("Unknown rendition profile: " + renditionProfile);
         }
@@ -216,7 +263,8 @@ public class MediaAssetService implements MediaAvailability {
                 null,
                 now,
                 renditionProfile,
-                null));
+                null,
+                purpose == null ? null : purpose.name()));
 
         ObjectStorage.PresignedUpload presigned =
                 storage.presignUpload(bucket, key, normalizedType, sizeBytes, UPLOAD_WINDOW);
@@ -402,6 +450,32 @@ public class MediaAssetService implements MediaAvailability {
                                     image.heightPx(),
                                     image.decodedBytesPerPixel(),
                                     image.decodedBytes()));
+        }
+
+        // A purposed asset answers to its purpose's shape (ADR 0187, D25), measured on the header's own
+        // dimensions and the store's own size, never the request's: a wrong picture never becomes AVAILABLE.
+        Optional<MediaPurpose> purpose = MediaPurpose.ofColumn(asset.purpose());
+        if (purpose.isPresent()) {
+            MediaPurpose required = purpose.get();
+            if (!required.matchesRatio(image.widthPx(), image.heightPx())) {
+                return reject(
+                        asset,
+                        "PURPOSE_ASPECT_RATIO",
+                        "A %s image is %d:%d; the header says %dx%d"
+                                .formatted(
+                                        required,
+                                        required.ratioWidth(),
+                                        required.ratioHeight(),
+                                        image.widthPx(),
+                                        image.heightPx()));
+            }
+            if (object.sizeBytes() > required.maximumBytes()) {
+                return reject(
+                        asset,
+                        "PURPOSE_SIZE_EXCEEDED",
+                        "A %s image is at most %d bytes; the stored object is %d"
+                                .formatted(required, required.maximumBytes(), object.sizeBytes()));
+            }
         }
 
         // The one check this method added that finalizeUpload never had:
@@ -639,6 +713,11 @@ public class MediaAssetService implements MediaAvailability {
     }
 
     @Transactional(readOnly = true)
+    /** The code a rejected asset was refused with (ADR 0187), for the console to explain; empty when it was not. */
+    public Optional<String> rejectionCodeOf(UUID tenantId, MediaAssetId assetId) {
+        return store.rejectionCodeOf(tenantId, assetId);
+    }
+
     public Optional<MediaAsset> find(UUID tenantId, MediaAssetId assetId) {
         return store.findOwned(tenantId, assetId);
     }

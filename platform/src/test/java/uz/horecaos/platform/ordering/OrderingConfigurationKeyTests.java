@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.api.OrderingConfigurationKeys;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
@@ -62,28 +64,26 @@ class OrderingConfigurationKeyTests {
 
     /**
      * Wave P46 (gap map row {@code 10.3b}): settings.md §10.3 cards 2–5's
-     * eleven registry entries, each declared twice for the same cyclic-import
+     * registry entries, each declared twice for the same cyclic-import
      * reason as {@link #CART_EXPIRY_MINUTES_CODE}. One test walking the whole
      * list is what the brief calls for — "a registry drift test naming every
      * new key and its default" — rather than eleven near-identical methods.
+     * ADR 0177 retired five of the eleven and added two, so there are eight.
      */
     @Test
     @DisplayName("every P46 order-policy key agrees between its two declarations and is tenant visible")
     void theOrderPolicyKeysAgreeAndAreTenantVisible() {
         List<ConfigurationKey<?>> declaredHere = List.of(
-                OrderingConfigurationKeys.BUSINESS_DAY_START_HOUR,
-                OrderingConfigurationKeys.AVERAGE_ORDER_MINUTES,
-                OrderingConfigurationKeys.MAXIMUM_ORDER_MINUTES,
                 OrderingConfigurationKeys.LATE_ORDER_THRESHOLD_MINUTES,
                 OrderingConfigurationKeys.MINIMUM_ORDER_AMOUNT_MINOR,
-                OrderingConfigurationKeys.VAT_RATE_PERCENT,
-                OrderingConfigurationKeys.ROUTING_POLL_INTERVAL_MINUTES,
                 OrderingConfigurationKeys.PREORDER_BRANCH_RESOLUTION,
                 OrderingConfigurationKeys.OPERATOR_PROMO_CODE_ALLOWED,
+                OrderingConfigurationKeys.OPERATOR_CALLBACK_FLAG_ALLOWED,
+                OrderingConfigurationKeys.OPERATOR_CHANGE_DUE_ALLOWED,
                 OrderingConfigurationKeys.AUTO_ACCEPT_ELIGIBLE_CHANNELS,
                 OrderingConfigurationKeys.AUTO_ACCEPT_MIN_PRIOR_ORDERS);
 
-        assertThat(declaredHere).hasSize(11);
+        assertThat(declaredHere).hasSize(8);
         for (ConfigurationKey<?> key : declaredHere) {
             assertThat(registered(key.code()))
                     .as("registry entry for %s", key.code())
@@ -101,29 +101,76 @@ class OrderingConfigurationKeyTests {
     @Test
     @DisplayName("the order-policy defaults match what settings.md §10.3 and this wave's report name")
     void theOrderPolicyDefaultsAreThePublishedOnes() {
-        assertThat(OrderingConfigurationKeys.BUSINESS_DAY_START_HOUR.defaultValue())
-                .isEqualTo(6);
-        assertThat(OrderingConfigurationKeys.AVERAGE_ORDER_MINUTES.defaultValue())
-                .isEqualTo(30);
-        assertThat(OrderingConfigurationKeys.MAXIMUM_ORDER_MINUTES.defaultValue())
-                .isEqualTo(60);
         assertThat(OrderingConfigurationKeys.LATE_ORDER_THRESHOLD_MINUTES.defaultValue())
                 .isEqualTo(45);
         assertThat(OrderingConfigurationKeys.MINIMUM_ORDER_AMOUNT_MINOR.defaultValue())
                 .isEqualTo(0L);
-        assertThat(OrderingConfigurationKeys.VAT_RATE_PERCENT.defaultValue()).isEqualByComparingTo("12");
-        assertThat(OrderingConfigurationKeys.ROUTING_POLL_INTERVAL_MINUTES.defaultValue())
-                .isEqualTo(2);
         assertThat(OrderingConfigurationKeys.PREORDER_BRANCH_RESOLUTION.defaultValue())
                 .isEqualTo("BY_DISTANCE");
         assertThat(OrderingConfigurationKeys.OPERATOR_PROMO_CODE_ALLOWED.defaultValue())
-                .isEqualTo(false);
+                .as("operators apply promo codes today (row 1.3e), so a reader that honoured a false default "
+                        + "would lock every tenant out of what its operators already do (ADR 0177 decision 5)")
+                .isEqualTo(true);
+        assertThat(OrderingConfigurationKeys.OPERATOR_CALLBACK_FLAG_ALLOWED.defaultValue())
+                .as("the flag only asks a person to ring back; allowing it changes nothing a tenant did not do")
+                .isEqualTo(true);
+        assertThat(OrderingConfigurationKeys.OPERATOR_CHANGE_DUE_ALLOWED.defaultValue())
+                .as("the cash-tendered field exists and is used, so it stays on until a tenant turns it off")
+                .isEqualTo(true);
         assertThat(OrderingConfigurationKeys.AUTO_ACCEPT_ELIGIBLE_CHANNELS.defaultValue())
                 .as("unrestricted, so wiring the key changes nothing for a tenant that has not narrowed it")
                 .isEqualTo("ALL");
         assertThat(OrderingConfigurationKeys.AUTO_ACCEPT_MIN_PRIOR_ORDERS.defaultValue())
                 .as("no gate, preserving today's unconditional auto-accept")
                 .isEqualTo(0);
+    }
+
+    /**
+     * ADR 0177 decision 2: five card-2 scalars nothing read are gone from the registry, so a stored row
+     * for one would stop the platform booting -- {@code RetiredOrderPolicyKeysMigrationTests} proves the
+     * migration that removes the rows. This is the other half: the keys are undeclared in both places, so
+     * nothing can resolve, author or display them, and none of them quietly returns.
+     */
+    @Test
+    @DisplayName("the five retired order-policy scalars are declared nowhere")
+    void theRetiredScalarsAreGone() {
+        for (String code : List.of(
+                "ordering.business_day_start_hour",
+                "ordering.average_order_minutes",
+                "ordering.maximum_order_minutes",
+                "ordering.vat_rate_percent",
+                "ordering.routing_poll_interval_minutes")) {
+            assertThat(ConfigurationKeys.find(code))
+                    .as("%s has a neighbour that owns the behaviour and no reader of its own", code)
+                    .isEmpty();
+        }
+        assertThat(ConfigurationKeys.all().stream().map(ConfigurationKey::code))
+                .noneMatch(code -> code.startsWith("ordering.")
+                        && (code.contains("business_day")
+                                || code.contains("vat_rate")
+                                || code.contains("poll_interval")));
+    }
+
+    /**
+     * ADR 0177 decision 5: the pre-order branch rule is read at brand scope, because the question is asked of the
+     * brand's branches. A key that took a value at a branch would accept one nothing reads, which is the defect
+     * the record exists to remove, so neither declaration lets a branch set it.
+     */
+    @Test
+    @DisplayName("the pre-order branch rule is settable at platform, tenant and brand and never at a branch")
+    void thePreOrderBranchRuleIsNotSettableAtABranch() {
+        Set<ScopeType> readAt = Set.of(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND);
+
+        assertThat(OrderingConfigurationKeys.PREORDER_BRANCH_RESOLUTION.settableScopes())
+                .as("the ordering module's declaration")
+                .isEqualTo(readAt);
+        assertThat(registered(OrderingConfigurationKeys.PREORDER_BRANCH_RESOLUTION_CODE)
+                        .settableScopes())
+                .as("the tenancy registry's declaration, which the settings writer consults")
+                .isEqualTo(readAt);
+        assertThat(registered(OrderingConfigurationKeys.PREORDER_BRANCH_RESOLUTION_CODE)
+                        .isSettableAt(ScopeType.LOCATION))
+                .isFalse();
     }
 
     private static ConfigurationKey<?> registered(String code) {

@@ -937,8 +937,12 @@ public class PosOrderExportService {
                 // a moment ago, on the other screen.
                 "RESTAURANT_APPROVAL".equals(order.acceptanceMode()) && !"CONFIRMED".equals(order.status()),
                 order.placedAt(),
-                resolveOperatorExternalId(
-                        tenantId, binding.bindingId(), order.acceptedByActorType(), order.acceptedByActorId()));
+                operatorFor(
+                        adapter,
+                        tenantId,
+                        binding.bindingId(),
+                        order.acceptedByActorType(),
+                        order.acceptedByActorId()));
 
         PosContext context = new PosContext(
                 tenantId,
@@ -949,6 +953,29 @@ public class PosOrderExportService {
                 export.id().toString());
 
         return new Prepared(adapter, context, command, List.copyOf(fingerprintLines), order.locationId());
+    }
+
+    /**
+     * The operator to hand an adapter: the resolved pairing for a till whose adapter puts it on
+     * the wire ({@link PosCapability#ORDER_OPERATOR_ATTRIBUTION}), and nothing, without even
+     * reading the mapping, for any other.
+     *
+     * <p>A pairing for a till that cannot receive one is a pairing nothing sends. Handing it to
+     * the adapter anyway would present a field with a reader and no sender as live, which is what
+     * the gap map's standing rule calls PARTIAL, and it would put an identifier in an adapter that
+     * has no documented place for it. Package-private so the gate can be tested without an order.
+     */
+    @Nullable
+    String operatorFor(
+            PosAdapter adapter,
+            UUID tenantId,
+            UUID bindingId,
+            @Nullable String acceptedByActorType,
+            @Nullable String acceptedByActorId) {
+        if (!adapter.declaredCapabilities().contains(PosCapability.ORDER_OPERATOR_ATTRIBUTION)) {
+            return null;
+        }
+        return resolveOperatorExternalId(tenantId, bindingId, acceptedByActorType, acceptedByActorId);
     }
 
     /**

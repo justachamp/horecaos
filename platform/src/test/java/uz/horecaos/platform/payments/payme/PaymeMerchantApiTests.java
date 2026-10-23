@@ -31,7 +31,9 @@ import uz.horecaos.platform.iam.api.secrets.SecretCategory;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.payments.application.PaymentAttemptService;
+import uz.horecaos.platform.payments.application.PresentedReceipts;
 import uz.horecaos.platform.payments.domain.CaptureTiming;
+import uz.horecaos.platform.payments.domain.FiscalReceiptLine;
 import uz.horecaos.platform.payments.domain.PaymentAttempt;
 import uz.horecaos.platform.payments.domain.PaymentAttemptStatus;
 import uz.horecaos.platform.payments.domain.PaymentIntent;
@@ -45,6 +47,7 @@ import uz.horecaos.platform.payments.domain.ProviderBinding;
 import uz.horecaos.platform.payments.domain.SomAmount;
 import uz.horecaos.platform.payments.infrastructure.payme.JdbcPaymeTransactionView;
 import uz.horecaos.platform.payments.infrastructure.payme.PaymeMerchantApi;
+import uz.horecaos.platform.payments.infrastructure.payme.PaymeReceiptSurface;
 import uz.horecaos.platform.payments.infrastructure.payme.PaymeRpcException;
 import uz.horecaos.platform.payments.infrastructure.payme.PaymeTransactionView;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcFiscalDocumentStore;
@@ -111,6 +114,164 @@ class PaymeMerchantApiTests {
         binding = binding();
 
         when(intents.find(eq(tenantId), eq(intentId))).thenReturn(Optional.of(intent(PaymentIntentStatus.PENDING)));
+    }
+
+    // -----------------------------------------------------------------------
+    // CheckPerformTransaction carries the receipt (ADR 0166 Decision 9, question U10)
+    // -----------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("CheckPerformTransaction with the receipt detail")
+    class CheckPerformDetail {
+
+        private FiscalReceiptLine plov(String quantity, long unitSom) {
+            return new FiscalReceiptLine(
+                    "Plov",
+                    "10901001001000000",
+                    "1500123",
+                    796L,
+                    new java.math.BigDecimal(quantity),
+                    new SomAmount(unitSom, UZS),
+                    new SomAmount(16_071, UZS),
+                    12,
+                    null,
+                    null,
+                    List.of(),
+                    null,
+                    null,
+                    FiscalReceiptLine.Kind.ITEM);
+        }
+
+        private PaymeMerchantApi withReceipts(PresentedReceipts receipts, PaymeReceiptSurface surface) {
+            return new PaymeMerchantApi(
+                    attempts,
+                    intents,
+                    fiscalDocuments,
+                    view,
+                    attemptService,
+                    orders,
+                    receipts,
+                    surface,
+                    Clock.fixed(now, ZoneOffset.UTC));
+        }
+
+        private PresentedReceipts holding(List<FiscalReceiptLine> lines) {
+            return new PresentedReceipts() {
+                @Override
+                public Prepared prepare(PaymentAttempt attempt, UUID order) {
+                    return new Prepared.Ready(lines);
+                }
+
+                @Override
+                public Optional<List<FiscalReceiptLine>> lines(UUID tenant, UUID attempt) {
+                    return Optional.of(lines);
+                }
+
+                @Override
+                public Optional<List<FiscalReceiptLine>> linesOfIntent(UUID tenant, UUID intent) {
+                    return Optional.of(lines);
+                }
+            };
+        }
+
+        @Test
+        @DisplayName("a fiscalised cashbox is told allow together with the receipt lines the checkout carried")
+        @SuppressWarnings("unchecked")
+        void returnsTheDetail() {
+            given(attempt(PaymentAttemptStatus.PRESENTED, null, null));
+            PaymeMerchantApi fiscal = withReceipts(holding(List.of(plov("1", AMOUNT_SOM))), PaymeReceiptSurface.BOTH);
+
+            Map<String, Object> result = fiscal.dispatch(binding, "CheckPerformTransaction", checkParams(AMOUNT_TIYIN));
+
+            assertThat(result).containsEntry("allow", true);
+            Map<String, Object> detail = (Map<String, Object>) Objects.requireNonNull(result.get("detail"));
+            assertThat(detail).containsEntry("receipt_type", 0);
+            List<Map<String, Object>> items = (List<Map<String, Object>>) Objects.requireNonNull(detail.get("items"));
+            assertThat(items).singleElement().satisfies(item -> {
+                assertThat(item).containsEntry("title", "Plov");
+                assertThat(item).containsEntry("price", AMOUNT_TIYIN);
+                assertThat(item).containsEntry("count", 1);
+                assertThat(item).containsEntry("code", "10901001001000000");
+                assertThat(item).containsEntry("package_code", "1500123");
+                assertThat(item).containsEntry("vat_percent", 12);
+            });
+        }
+
+        @Test
+        @DisplayName("a weighed line is a decimal count whose unit price times the count adds up to the charge")
+        @SuppressWarnings("unchecked")
+        void aWeighedLineIsADecimalCount() {
+            given(attempt(PaymentAttemptStatus.PRESENTED, null, null));
+            // 1.5 kg at 100 000 som a kilogram: the line is a whole 150 000 and the count is the decimal it is.
+            PaymeMerchantApi fiscal = withReceipts(holding(List.of(plov("1.5", 100_000))), PaymeReceiptSurface.BOTH);
+
+            Map<String, Object> result = fiscal.dispatch(binding, "CheckPerformTransaction", checkParams(AMOUNT_TIYIN));
+
+            Map<String, Object> detail = (Map<String, Object>) Objects.requireNonNull(result.get("detail"));
+            Map<String, Object> item = ((List<Map<String, Object>>) Objects.requireNonNull(detail.get("items"))).get(0);
+            assertThat(item.get("count")).isEqualTo(new java.math.BigDecimal("1.5"));
+            assertThat(item).containsEntry("price", 10_000_000L);
+        }
+
+        @Test
+        @DisplayName(
+                "a fiscalised cashbox is never told allow with no lines to register: the attempt holds none, so it is refused while nothing has moved")
+        void refusesWithoutLines() {
+            given(attempt(PaymentAttemptStatus.PRESENTED, null, null));
+            PaymeMerchantApi fiscal = withReceipts(
+                    new PresentedReceipts() {
+                        @Override
+                        public Prepared prepare(PaymentAttempt attempt, UUID order) {
+                            return new Prepared.Ready(List.of());
+                        }
+
+                        @Override
+                        public Optional<List<FiscalReceiptLine>> lines(UUID tenant, UUID attempt) {
+                            return Optional.empty();
+                        }
+
+                        @Override
+                        public Optional<List<FiscalReceiptLine>> linesOfIntent(UUID tenant, UUID intent) {
+                            return Optional.empty();
+                        }
+                    },
+                    PaymeReceiptSurface.BOTH);
+
+            assertThatThrownBy(() -> fiscal.dispatch(binding, "CheckPerformTransaction", checkParams(AMOUNT_TIYIN)))
+                    .isInstanceOfSatisfying(PaymeRpcException.class, failure -> {
+                        assertThat(failure.code()).isEqualTo(-31008);
+                        assertThat(failure.localised().ru()).isNotBlank();
+                    });
+            verify(attemptService, never())
+                    .recordProviderEvent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("lines that do not add up to the amount charged are refused rather than registered")
+        void refusesLinesThatDoNotAddUp() {
+            given(attempt(PaymentAttemptStatus.PRESENTED, null, null));
+            PaymeMerchantApi fiscal =
+                    withReceipts(holding(List.of(plov("1", AMOUNT_SOM - 1_000))), PaymeReceiptSurface.BOTH);
+
+            assertThatThrownBy(() -> fiscal.dispatch(binding, "CheckPerformTransaction", checkParams(AMOUNT_TIYIN)))
+                    .isInstanceOfSatisfying(
+                            PaymeRpcException.class,
+                            failure -> assertThat(failure.code()).isEqualTo(-31008));
+        }
+
+        @Test
+        @DisplayName("with the form as the only surface, or a cashbox that does not fiscalise, only allow is returned")
+        void onlyAllowWhenTheSurfaceIsOffOrTheCashboxIsNotFiscalised() {
+            given(attempt(PaymentAttemptStatus.PRESENTED, null, null));
+            PresentedReceipts lines = holding(List.of(plov("1", AMOUNT_SOM)));
+
+            assertThat(withReceipts(lines, PaymeReceiptSurface.FORM)
+                            .dispatch(binding, "CheckPerformTransaction", checkParams(AMOUNT_TIYIN)))
+                    .containsExactly(Map.entry("allow", true));
+            assertThat(withReceipts(lines, PaymeReceiptSurface.BOTH)
+                            .dispatch(binding(false), "CheckPerformTransaction", checkParams(AMOUNT_TIYIN)))
+                    .containsExactly(Map.entry("allow", true));
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -894,6 +1055,10 @@ class PaymeMerchantApiTests {
     }
 
     private ProviderBinding binding() {
+        return binding(true);
+    }
+
+    private ProviderBinding binding(boolean fiscalised) {
         return new ProviderBinding(
                 bindingId,
                 tenantId,
@@ -907,7 +1072,7 @@ class PaymeMerchantApiTests {
                 new SecretReference("test", SecretCategory.PROVIDER_PAYMENT, "payme", "cashbox"),
                 "payme-cashbox-one",
                 false,
-                true,
+                fiscalised,
                 LocalDate.of(2026, 1, 1),
                 null);
     }

@@ -58,11 +58,11 @@
   padding: 6px 12px;
   background: var(--q-surface-1);
   border-radius: var(--q-radius);
-  border-left: 3px solid transparent;
+  border-inline-start: 3px solid transparent;
 }
 
 .publication__finding--blocker {
-  border-left-color: var(--q-error);
+  border-inline-start-color: var(--q-error);
 }
 
 .publication__finding-main {
@@ -196,7 +196,7 @@
 }
 
 .publication__table th {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
@@ -210,11 +210,11 @@
 }
 
 .publication__num-col {
-  text-align: right;
+  text-align: end;
 }
 
 .publication__actions {
-  text-align: right;
+  text-align: end;
 }
 
 .status-badge {

@@ -620,6 +620,68 @@ public class RecoveryCaseService {
         return link;
     }
 
+    /**
+     * What the drawer's picker may offer (ADR 0159, Decision 9): the remedies recorded against the case's order
+     * and the one-off codes minted for the case's customer at its brand, each marked when it already belongs to a
+     * case.
+     *
+     * <p>Read through the compensation SPI and the grant directory under the case's own capability, because the
+     * order-remedy console's read needs a tenant-scope payment capability that a branch case worker does not
+     * hold. It lists and verifies nothing the attach would not verify again: choosing one still goes through
+     * {@link #attach}, which re-checks the tenant, the order and the customer. A case never pays: this is a menu
+     * of what exists.
+     */
+    @Transactional(readOnly = true)
+    public CompensationCandidates candidates(Scope scope, UUID caseId) {
+        CaseRow current = require(scope, caseId);
+        List<CompensationDirectory.CompensationCandidate> remedies = compensationDirectories.stream()
+                .filter(directory -> CompensationKind.ORDER_REMEDY.name().equals(directory.kind()))
+                .flatMap(directory -> directory.candidatesForOrder(current.tenantId(), current.orderId()).stream())
+                .toList();
+        Set<UUID> takenRemedies = cases.linkedRefs(
+                current.tenantId(),
+                CompensationKind.ORDER_REMEDY,
+                remedies.stream()
+                        .map(CompensationDirectory.CompensationCandidate::refId)
+                        .toList());
+        List<BenefitGrantDirectory.GrantListing> offered = current.customerAccountId() == null
+                ? List.of()
+                : grants.forCustomer(current.tenantId(), current.brandId(), current.customerAccountId()).stream()
+                        .filter(grant -> !"REVOKED".equals(grant.status()))
+                        .toList();
+        Set<UUID> takenGrants = cases.linkedRefs(
+                current.tenantId(),
+                CompensationKind.BENEFIT_GRANT,
+                offered.stream()
+                        .map(BenefitGrantDirectory.GrantListing::grantId)
+                        .toList());
+        return new CompensationCandidates(
+                remedies.stream()
+                        .map(candidate -> new RemedyCandidate(candidate, takenRemedies.contains(candidate.refId())))
+                        .toList(),
+                offered.stream()
+                        .map(listing -> new GrantCandidate(listing, takenGrants.contains(listing.grantId())))
+                        .toList(),
+                current.orderId(),
+                current.customerAccountId());
+    }
+
+    /** A remedy on the case's order, and whether it already belongs to a case. */
+    public record RemedyCandidate(CompensationDirectory.CompensationCandidate remedy, boolean taken) {}
+
+    /** A one-off code minted for the case's customer, and whether it already belongs to a case. */
+    public record GrantCandidate(BenefitGrantDirectory.GrantListing grant, boolean taken) {}
+
+    /**
+     * @param orderId           the case's order, so the console can deep-link to the order-remedy console with it
+     * @param customerAccountId the case's customer, so the console can prefill the mint; null for a guest
+     */
+    public record CompensationCandidates(
+            List<RemedyCandidate> remedies,
+            List<GrantCandidate> grants,
+            UUID orderId,
+            @Nullable UUID customerAccountId) {}
+
     private CompensationRow remedyLink(CaseRow current, UUID refId, @Nullable UUID actorMember, Instant now) {
         CompensationDirectory directory = compensationDirectories.stream()
                 .filter(candidate -> CompensationKind.ORDER_REMEDY.name().equals(candidate.kind()))
@@ -728,6 +790,30 @@ public class RecoveryCaseService {
             @Nullable SlaState slaState,
             @Nullable UUID cursor,
             int limit) {
+        return list(scope, state, ownerStaffMemberId, slaState, null, null, cursor, limit);
+    }
+
+    /**
+     * As above, narrowed to the cases about reviews rated {@code minRating} to {@code maxRating} stars (the
+     * IA's «filters by rating»); either may be null. A bound outside one to five is refused rather than
+     * answered with an empty list that looks like a quiet week.
+     */
+    @Transactional(readOnly = true)
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public Listing list(
+            Scope scope,
+            @Nullable CaseState state,
+            @Nullable UUID ownerStaffMemberId,
+            @Nullable SlaState slaState,
+            @Nullable Integer minRating,
+            @Nullable Integer maxRating,
+            @Nullable UUID cursor,
+            int limit) {
+        requireRating(minRating, "minRating");
+        requireRating(maxRating, "maxRating");
+        if (minRating != null && maxRating != null && minRating > maxRating) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "minRating cannot be above maxRating");
+        }
         CaseRow cursorKey = null;
         if (cursor != null) {
             cursorKey = cases.cursor(scope.tenantId(), scope.brandId(), scope.locationId(), cursor)
@@ -742,6 +828,8 @@ public class RecoveryCaseService {
                 state,
                 ownerStaffMemberId,
                 slaState,
+                minRating,
+                maxRating,
                 now,
                 cursorKey,
                 limit);
@@ -750,6 +838,12 @@ public class RecoveryCaseService {
                 ? null
                 : page.get(page.size() - 1).row().id().toString();
         return new Listing(items, next);
+    }
+
+    private static void requireRating(@Nullable Integer rating, String name) {
+        if (rating != null && (rating < 1 || rating > 5)) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, name + " is a rating from 1 to 5");
+        }
     }
 
     @Transactional(readOnly = true)

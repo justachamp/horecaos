@@ -98,7 +98,7 @@ public final class FiscalReceiptDocument {
         for (Line line : receipt.lines()) {
             blocks.add(new Item(
                     line.name(),
-                    Integer.toString(line.quantity()),
+                    line.quantity().toPlainString(),
                     Value.Amount.row(line.lineTotalMinor(), currency),
                     false,
                     List.of()));

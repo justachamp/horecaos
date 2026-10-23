@@ -143,6 +143,78 @@ class PaymeReceiptDetailTests {
                 .isEqualTo("NO_RECEIPT_LINES");
     }
 
+    /**
+     * A weighed line (ADR 0137): the count is a decimal and the price beside it is still per unit.
+     *
+     * <p>1.040 kg at 80 000 a kilogram is 83 200 listed, less the 1 som rounding the line builder states as
+     * discount, for the 83 199 the customer paid. The receipt adds up to the charge exactly, which is the
+     * only check Payme's documents leave to the merchant.
+     */
+    @Test
+    @DisplayName("a weighed count is a decimal number and price stays the unit price")
+    void aWeighedCountIsADecimal() {
+        FiscalReceiptLine line =
+                weighed("Баранина, kg", new java.math.BigDecimal("1.040"), 80_000, new SomAmount(1, UZS));
+
+        Map<String, Object> detail = PaymeReceiptDetail.of(List.of(line), TiyinAmount.of(new SomAmount(83_199, UZS)));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> items =
+                Objects.requireNonNull((List<Map<String, Object>>) detail.get("items"), "detail must carry items");
+        assertThat(items.getFirst())
+                .containsEntry("price", 8_000_000L)
+                .containsEntry("count", new java.math.BigDecimal("1.04"))
+                .containsEntry("discount", 100L);
+    }
+
+    @Test
+    @DisplayName("half a kilogram is a count of 0.5")
+    void halfAKilogram() {
+        FiscalReceiptLine line = weighed("Баранина, kg", new java.math.BigDecimal("0.5"), 80_000, null);
+
+        Map<String, Object> detail = PaymeReceiptDetail.of(List.of(line), TiyinAmount.of(new SomAmount(40_000, UZS)));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> items =
+                Objects.requireNonNull((List<Map<String, Object>>) detail.get("items"), "detail must carry items");
+        assertThat(items.getFirst())
+                .containsEntry("price", 8_000_000L)
+                .containsEntry("count", new java.math.BigDecimal("0.5"))
+                .doesNotContainKey("discount");
+    }
+
+    @Test
+    @DisplayName(
+            "a whole count is still a whole number on the wire, and a weighed receipt that misses the charge is refused")
+    void aWholeCountStaysWholeAndAMisaddedWeighedReceiptIsRefused() {
+        assertThat(PaymeReceiptDetail.count(new java.math.BigDecimal("3.000"))).isEqualTo(3);
+        FiscalReceiptLine line =
+                weighed("Баранина, kg", new java.math.BigDecimal("1.040"), 80_000, new SomAmount(1, UZS));
+
+        assertThatThrownBy(() -> PaymeReceiptDetail.of(List.of(line), TiyinAmount.of(new SomAmount(83_200, UZS))))
+                .isInstanceOf(PaymeReceiptDetail.PaymeReceiptRefused.class)
+                .hasMessageContaining("8319900");
+    }
+
+    private static FiscalReceiptLine weighed(
+            String name, java.math.BigDecimal quantity, long unitPriceSom, @Nullable SomAmount discount) {
+        return new FiscalReceiptLine(
+                name,
+                "10101001001000000",
+                "1500321",
+                166L,
+                quantity,
+                new SomAmount(unitPriceSom, UZS),
+                new SomAmount(0, UZS),
+                12,
+                discount,
+                null,
+                List.of(),
+                "123456789",
+                null,
+                FiscalReceiptLine.Kind.ITEM);
+    }
+
     private static FiscalReceiptLine line(String name, int quantity, long unitPriceSom, @Nullable SomAmount discount) {
         return new FiscalReceiptLine(
                 name,

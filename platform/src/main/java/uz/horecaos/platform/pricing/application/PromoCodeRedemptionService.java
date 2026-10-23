@@ -65,17 +65,25 @@ public class PromoCodeRedemptionService implements PromoCodeRedemptionPort {
     private final JdbcPromoCodeStore store;
     private final Clock clock;
     private final PromotionMetrics metrics;
+    private final @Nullable BenefitGrantService grants;
 
     /** A service nobody scrapes the counters of: every caller that predates them. */
     public PromoCodeRedemptionService(JdbcPromoCodeStore store, Clock clock) {
         this(store, clock, PromotionMetrics.none());
     }
 
-    @Autowired
+    /** A service for a caller that predates one-off grants: a quote is only ever priced with a shared code. */
     public PromoCodeRedemptionService(JdbcPromoCodeStore store, Clock clock, PromotionMetrics metrics) {
+        this(store, clock, metrics, null);
+    }
+
+    @Autowired
+    public PromoCodeRedemptionService(
+            JdbcPromoCodeStore store, Clock clock, PromotionMetrics metrics, @Nullable BenefitGrantService grants) {
         this.store = store;
         this.clock = clock;
         this.metrics = metrics;
+        this.grants = grants;
     }
 
     @Override
@@ -89,7 +97,10 @@ public class PromoCodeRedemptionService implements PromoCodeRedemptionPort {
         // was not actually priced with.
         Optional<AppliedCoupon> applied = store.findCouponAppliedToQuote(tenantId, quoteId);
         if (applied.isEmpty()) {
-            return new RedemptionResult(Result.NO_CODE_APPLIED);
+            // Not a shared code: it may be the customer's one-off grant (ADR 0140), spent with one conditional
+            // update on the grant itself. A quote carries at most one presented code, so at most one of the two
+            // paths has anything to do.
+            return reserveGrant(tenantId, brandId, quoteId, orderId, customerAccountId, now);
         }
         AppliedCoupon coupon = applied.get();
 
@@ -138,11 +149,32 @@ public class PromoCodeRedemptionService implements PromoCodeRedemptionPort {
         return new RedemptionResult(Result.REDEEMED);
     }
 
+    private RedemptionResult reserveGrant(
+            UUID tenantId, UUID brandId, UUID quoteId, UUID orderId, @Nullable UUID customerAccountId, Instant now) {
+        if (grants == null) {
+            return new RedemptionResult(Result.NO_CODE_APPLIED);
+        }
+        BenefitGrantService.Claim claim =
+                grants.claimForQuote(tenantId, brandId, quoteId, orderId, customerAccountId, now);
+        return switch (claim.outcome()) {
+            case NONE -> new RedemptionResult(Result.NO_CODE_APPLIED);
+            case CLAIMED -> {
+                metrics.redemptionClaimed(PromotionMetrics.Source.GRANT);
+                yield new RedemptionResult(Result.REDEEMED);
+            }
+            case REFUSED -> {
+                metrics.redemptionRefused(PromotionMetrics.Source.GRANT, false);
+                // The grant was spent by another checkout, revoked or retired between pricing and now.
+                yield new RedemptionResult(Result.CODE_NOT_ELIGIBLE);
+            }
+        };
+    }
+
     @Override
     @Transactional
     public boolean restateForOrder(UUID tenantId, UUID orderId, UUID amendedQuoteId) {
         if (store.findRedemptionHeldByOrder(tenantId, orderId).isEmpty()) {
-            return false;
+            return grants != null && grants.restateForOrder(tenantId, orderId, amendedQuoteId);
         }
         long discountMinor = store.findCouponAppliedToQuote(tenantId, amendedQuoteId)
                 .map(AppliedCoupon::discountMinor)
@@ -161,6 +193,10 @@ public class PromoCodeRedemptionService implements PromoCodeRedemptionPort {
                 store.releaseCustomerSlot(tenantId, redemption.couponId(), redemption.customerAccountId());
             }
         });
-        return released.isPresent();
+        if (released.isPresent()) {
+            return true;
+        }
+        // The same compensation for a one-off grant claimed under this quote (ADR 0140).
+        return grants != null && grants.releaseForQuote(tenantId, quoteId);
     }
 }

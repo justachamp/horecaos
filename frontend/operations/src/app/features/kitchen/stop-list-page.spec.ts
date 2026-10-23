@@ -1,12 +1,13 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { from, of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClient } from '../../core/api/api-client';
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
+import { ShortcutRegistry } from '../../shared/keyboard/shortcut-registry';
 import { StopListPage } from './stop-list-page';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
@@ -978,5 +979,173 @@ describe('StopListPage', () => {
     expect(host.querySelector('[data-testid="stop-propagation"]')?.textContent).toContain(
       'Wolt: not propagated automatically',
     );
+  });
+
+  // ------------------------------------------------------------------ the keys (catalog.md §4.6, row X.1)
+
+  describe('the keys', () => {
+    const THREE = {
+      items: [
+        { variantId: 'v1', productName: 'Lagman', category: 'Soups', available: true },
+        { variantId: 'v2', productName: 'Plov', category: 'Mains', available: true },
+        { variantId: 'v3', productName: 'Somsa', category: 'Bakery', available: false },
+      ].map((item) => ({ ...item, stopSource: 'UNKNOWN' })),
+      nextCursor: null,
+    };
+
+    function key(value: string, target?: HTMLElement): boolean {
+      const event = new KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'target', {
+        value: target ?? document.activeElement ?? document.body,
+      });
+      return TestBed.inject(ShortcutRegistry).dispatch(event);
+    }
+
+    const rows = (): HTMLElement[] => [
+      ...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+        'tbody tr[data-testid="dt-row"]',
+      ),
+    ];
+
+    async function settle(): Promise<void> {
+      await flushMicrotasks();
+      fixture.detectChanges();
+    }
+
+    it('is on the cheat-sheet while the list is', async () => {
+      await render(vi.fn().mockReturnValue(of(THREE)));
+      const scope = TestBed.inject(ShortcutRegistry)
+        .scopes()
+        .find((candidate) => candidate.id === 'stop-list')!;
+
+      expect(scope.title()).toBe('Stop list');
+      expect(scope.shortcuts.flatMap((shortcut) => shortcut.caps)).toEqual([
+        '/',
+        'j',
+        '↓',
+        'k',
+        '↑',
+        'Enter',
+        's',
+        'u',
+        'Esc',
+      ]);
+    });
+
+    it('/ goes to the search box, and j and k move along the rows', async () => {
+      await render(vi.fn().mockReturnValue(of(THREE)));
+      const host = fixture.nativeElement as HTMLElement;
+
+      expect(key('/', document.body)).toBe(true);
+      expect(document.activeElement).toBe(host.querySelector('[data-testid="stop-list-search"]'));
+      (document.activeElement as HTMLElement).blur();
+
+      key('j');
+      expect(document.activeElement).toBe(rows()[0]);
+      key('j');
+      expect(document.activeElement).toBe(rows()[1]);
+      key('k');
+      expect(document.activeElement).toBe(rows()[0]);
+    });
+
+    it('Enter and s stop the dish under the cursor with the one-tap toggle, and bring a stopped one back', async () => {
+      const { put } = await render(vi.fn().mockReturnValue(of(THREE)));
+      key('j');
+      key('j');
+
+      expect(key('s')).toBe(true);
+      await settle();
+
+      expect(put).toHaveBeenCalledTimes(1);
+      expect(put.mock.calls[0][0]).toBe(
+        '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/variants/v2/availability',
+      );
+      expect(put.mock.calls[0][1].body).toEqual({
+        available: false,
+        reasonCode: 'OPERATIONS_STOP_LIST_TOGGLE',
+      });
+
+      key('j', rows()[2]);
+      expect(key('Enter', rows()[2])).toBe(true);
+      await settle();
+
+      expect(put).toHaveBeenCalledTimes(2);
+      expect(put.mock.calls[1][1].body).toEqual({
+        available: true,
+        reasonCode: 'OPERATIONS_STOP_LIST_TOGGLE',
+      });
+    });
+
+    it('u puts back the dish the last key stopped, on that row, once', async () => {
+      const { put } = await render(vi.fn().mockReturnValue(of(THREE)));
+      key('j');
+      key('s');
+      await settle();
+      expect(put).toHaveBeenCalledTimes(1);
+
+      key('j', rows()[0]);
+      expect(key('u', rows()[1])).toBe(true);
+      await settle();
+
+      expect(put).toHaveBeenCalledTimes(2);
+      expect(put.mock.calls[1][0]).toBe(put.mock.calls[0][0]);
+      expect(put.mock.calls[1][1].body).toEqual({
+        available: true,
+        reasonCode: 'OPERATIONS_STOP_LIST_TOGGLE',
+      });
+      expect(key('u', rows()[1]), 'a second u has nothing to undo').toBe(false);
+      expect(put).toHaveBeenCalledTimes(2);
+    });
+
+    it('u does nothing before any stop has been made by a key', async () => {
+      const { put } = await render(vi.fn().mockReturnValue(of(THREE)));
+
+      expect(key('u', document.body)).toBe(false);
+      expect(put).not.toHaveBeenCalled();
+    });
+
+    it('s does nothing while the cursor is on no row, and nothing on a row whose button is busy', async () => {
+      let release: () => void = () => undefined;
+      const pending = new Promise<void>((resolve) => (release = resolve));
+      const put = vi.fn().mockImplementation(() => from(pending));
+      const { put: used } = await render(vi.fn().mockReturnValue(of(THREE)), { put });
+
+      expect(key('s', document.body)).toBe(false);
+      key('j');
+      expect(key('s')).toBe(true);
+      fixture.detectChanges();
+      expect(key('s'), 'the dish is being stopped already').toBe(false);
+      expect(used).toHaveBeenCalledTimes(1);
+      release();
+      await settle();
+    });
+
+    it('Esc in the search box empties it, and a second Esc lets go of it', async () => {
+      await render(vi.fn().mockReturnValue(of(THREE)));
+      const search = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+        '[data-testid="stop-list-search"]',
+      )!;
+      search.focus();
+      search.value = 'Pl';
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+
+      expect(key('Escape', search)).toBe(true);
+      expect(search.value).toBe('');
+      expect(document.activeElement).toBe(search);
+
+      key('Escape', search);
+      expect(document.activeElement).not.toBe(search);
+    });
+
+    it('leaves a letter typed in the search box to the box', async () => {
+      await render(vi.fn().mockReturnValue(of(THREE)));
+      const search = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+        '[data-testid="stop-list-search"]',
+      )!;
+      search.focus();
+
+      expect(key('s', search)).toBe(false);
+      expect(key('u', search)).toBe(false);
+    });
   });
 });

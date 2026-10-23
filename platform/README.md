@@ -49,6 +49,7 @@ make up             # local PostgreSQL, Kafka, Keycloak, OpenBao, MinIO
 make verify          # full build and every test — the definition of done
 make run             # API on :8080, with the local-fixtures demo tenant
 make seed-payments   # give that tenant a working CLICK payment setup
+make seed-marketplace # give that tenant a fake aggregator to propagate stops to
 make format          # reformat Java sources (ADR 0054) before committing
 make lint            # this repo's own rules — under a minute, no JVM
 make eval            # agent-configuration regression suite

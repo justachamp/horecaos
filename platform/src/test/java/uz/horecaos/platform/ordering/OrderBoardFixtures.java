@@ -8,6 +8,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 
 /**
  * Real-schema fixtures for the order board's tests: tenants with several
@@ -591,6 +592,179 @@ public final class OrderBoardFixtures {
                 .param("segment", "board-" + merchantBindingId.toString().substring(0, 8))
                 .update();
         return merchantBindingId;
+    }
+
+    // ------------------------------------------------------- the board's facts
+
+    /**
+     * Revision 1 of an order, the checkout snapshot every line refers to ({@code fk_order_line_revision}).
+     * {@code seed} is the one the order was inserted with: the revision names the same quote the order does.
+     */
+    public void insertCheckoutRevision(UUID tenantId, String seed, UUID orderId) {
+        jdbc.sql("""
+                INSERT INTO ordering.order_revisions (order_id, revision, tenant_id, source, pricing_quote_id,
+                    pricing_context_hash, currency, subtotal_minor, tax_minor, discount_minor, fee_minor,
+                    total_minor)
+                VALUES (:orderId, 1, :t, 'CHECKOUT', :quote, :hash, 'UZS', 100000, 0, 1000, 2000, 101000)
+                """)
+                .param("orderId", orderId)
+                .param("t", tenantId)
+                .param("quote", derived("quote:" + tenantId + seed))
+                .param("hash", "hash-" + orderId)
+                .update();
+    }
+
+    /**
+     * One line of an order. {@code revisionTo} closes it (an amendment removed it); {@code comboSelection} and
+     * {@code comboName} make it one component of a combo, with the five companion columns {@code
+     * ck_order_line_combo_provenance} demands set together.
+     */
+    public void insertLine(
+            UUID tenantId,
+            UUID orderId,
+            int lineNumber,
+            String product,
+            @Nullable UUID comboSelection,
+            @Nullable String comboName,
+            @Nullable Integer revisionTo) {
+        boolean combo = comboSelection != null;
+        jdbc.sql("""
+                INSERT INTO ordering.order_lines (id, tenant_id, order_id, line_number, source_product_id,
+                    source_variant_id, product_name_snapshot, quantity, unit_amount_minor, base_amount_minor,
+                    final_amount_minor, tax_amount_minor, revision_to,
+                    combo_selection_id, combo_container_variant_id, combo_name_snapshot, combo_component_id,
+                    combo_quantity, combo_pick_quantity)
+                VALUES (:id, :t, :orderId, :lineNumber, :product, :variant, :name, 1, 10000, 10000, 10000, 0,
+                    :revisionTo, :selection, :container, :comboName, :component, :comboQuantity, :comboPick)
+                """)
+                .param("id", derived("line:" + orderId + lineNumber))
+                .param("t", tenantId)
+                .param("orderId", orderId)
+                .param("lineNumber", lineNumber)
+                .param("product", derived("product:" + orderId + lineNumber))
+                .param("variant", derived("variant:" + orderId + lineNumber))
+                .param("name", product)
+                .param("revisionTo", revisionTo)
+                .param("selection", comboSelection)
+                .param("container", combo ? derived("container:" + comboSelection) : null)
+                .param("comboName", comboName)
+                .param("component", combo ? derived("component:" + orderId + lineNumber) : null)
+                .param("comboQuantity", combo ? 1 : null)
+                .param("comboPick", combo ? 1 : null)
+                .update();
+    }
+
+    /** An identifier somebody else knows the order by (ADR 0040), with no binding (a POS id, a partner id). */
+    public void insertExternalReference(
+            UUID tenantId, UUID orderId, String referenceType, String value, Instant firstSeenAt) {
+        jdbc.sql("""
+                INSERT INTO ordering.order_external_references (id, tenant_id, order_id, reference_type,
+                    reference_value, reference_value_normalised, issued_by, first_seen_at)
+                VALUES (:id, :t, :orderId, :type, :value, :normalised, 'PARTNER', :seen)
+                """)
+                .param("id", derived("reference:" + orderId + referenceType + value))
+                .param("t", tenantId)
+                .param("orderId", orderId)
+                .param("type", referenceType)
+                .param("value", value)
+                .param("normalised", JdbcOrderStore.normalisedExternalReference(value))
+                .param("seen", firstSeenAt.atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
+    /**
+     * A delivery plan with the two facts the board reads off it: the ETA the winning partner quote named and the
+     * route distance. A null for either leaves the column null, the way a house-courier plan really is.
+     */
+    public void insertDeliveryPlan(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID orderId,
+            String status,
+            @Nullable Instant courierEtaAt,
+            @Nullable Integer distanceMeters) {
+        jdbc.sql("""
+                INSERT INTO fulfillment.delivery_plans (id, tenant_id, brand_id, location_id,
+                    order_id, status, currency, confirmed_at, preparation_seconds,
+                    estimated_ready_at, pickup_window_start, pickup_window_end, source_at,
+                    latest_assignment_at, branch_zone, courier_eta_at, distance_meters, distance_source)
+                VALUES (:id, :t, :b, :loc, :orderId, :status, 'UZS', :confirmedAt, 2100,
+                    :readyAt, :windowStart, :windowEnd, :sourceAt, :latest, 'Asia/Tashkent',
+                    :eta, :distance, :distanceSource)
+                """)
+                .param("id", derived("plan:" + orderId))
+                .param("t", tenantId)
+                .param("b", brandId)
+                .param("loc", locationId)
+                .param("orderId", orderId)
+                .param("status", status)
+                .param("confirmedAt", NOON.atOffset(ZoneOffset.UTC))
+                .param("readyAt", NOON.plusSeconds(2100).atOffset(ZoneOffset.UTC))
+                .param("windowStart", NOON.plusSeconds(2100).atOffset(ZoneOffset.UTC))
+                .param("windowEnd", NOON.plusSeconds(2400).atOffset(ZoneOffset.UTC))
+                .param("sourceAt", NOON.atOffset(ZoneOffset.UTC))
+                .param("latest", NOON.plusSeconds(2400).atOffset(ZoneOffset.UTC))
+                .param("eta", courierEtaAt == null ? null : courierEtaAt.atOffset(ZoneOffset.UTC))
+                .param("distance", distanceMeters)
+                .param("distanceSource", distanceMeters == null ? null : "ROAD")
+                .update();
+    }
+
+    /**
+     * A payment intent of an order that is not the one {@link #insertCashIntent} and its siblings write, so a
+     * test can give one order several intents (an expired attempt and the one that replaced it). The settled
+     * instant {@code ck_payment_intent_settled} demands is {@code createdAt} for every closed status.
+     */
+    public void insertIntentOf(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID orderId,
+            String suffix,
+            String status,
+            String methodCode,
+            Instant createdAt) {
+        boolean open = "PENDING".equals(status) || "AUTHORIZING".equals(status);
+        boolean cash = "CASH".equals(methodCode);
+        jdbc.sql("""
+                INSERT INTO payments.payment_intents (id, tenant_id, order_id, brand_id, location_id,
+                    tender, payment_method_code, provider_type, requested_amount_minor, currency, status,
+                    capture_timing, idempotency_key, created_at, updated_at, settled_at)
+                VALUES (:id, :t, :orderId, :b, :loc, :tender, :method, :providerType, 101000, 'UZS', :status,
+                    :captureTiming, :key, :createdAt, :createdAt, :settledAt)
+                """)
+                .param("id", derived("intent:" + orderId + suffix))
+                .param("t", tenantId)
+                .param("orderId", orderId)
+                .param("b", brandId)
+                .param("loc", locationId)
+                .param("tender", cash ? "CASH" : "PROVIDER")
+                .param("method", methodCode)
+                .param("providerType", cash ? null : methodCode)
+                .param("status", status)
+                .param("captureTiming", cash ? "ON_HANDOVER" : "BEFORE_CONFIRMATION")
+                .param("key", "intent-" + orderId + suffix)
+                .param("createdAt", createdAt.atOffset(ZoneOffset.UTC))
+                .param("settledAt", open ? null : createdAt.atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
+    /** A further channel of the tenant, with the presentation the registry keeps for it (V0245's free-text icon). */
+    public void insertChannel(
+            UUID tenantId, String code, String systemType, String displayName, @Nullable String icon) {
+        jdbc.sql("""
+                INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name, status,
+                    guest_orders_allowed, icon)
+                VALUES (:id, :t, :code, :type, :name, 'ACTIVE', false, :icon)
+                """)
+                .param("id", derived("channel:" + tenantId + code))
+                .param("t", tenantId)
+                .param("code", code)
+                .param("type", systemType)
+                .param("name", displayName)
+                .param("icon", icon)
+                .update();
     }
 
     // ------------------------------------------------------------------ ids

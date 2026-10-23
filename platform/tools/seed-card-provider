@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+#
+# Points a local dev database at the fake of Click's card-token API, so the wallet's card flow
+# (add a card, top up, a lost answer) can be walked on a laptop through the real Click adapter,
+# the real Camel route, the real egress check and the real secret resolution, without a Click
+# merchant account (ADR 0095, ADR 0007).
+#
+# Dev-only, and structurally so rather than by convention: every write below targets the fixed
+# local addresses `make up` starts (`http://localhost:8200` for OpenBao, the `platform-db` compose
+# service for Postgres) with no environment variable that could repoint it at a real deployment.
+# The production way to connect the real account is docs/runbooks/connect-card-merchant-account.md,
+# which this script does not touch, call or imitate.
+#
+# What it does, honestly:
+#   1. Writes the fake's merchant credential to the local OpenBao at the ADR 0028 reference format
+#      the platform resolves. The values are FakeClickCardHttpProvider's own constants.
+#   2. Moves the approved `click_card_sandbox` environment (V0689) onto the fake, which `make run`
+#      starts on the port below under the local profile (FakeClickCardProviderConfiguration). There
+#      is no endpoint for this by design: integration.provider_environments is platform-owned
+#      reference data (ADR 0026) and a real deployment changes it with a migration.
+#   3. Declares HorecaOS's own card account (commercial.platform_card_installations) on that
+#      environment and activates it, directly in Postgres. The same two steps over HTTP need a
+#      capability-bearing Keycloak token (INTEGRATION_INSTALLATION_MANAGE) that only a signed-in
+#      operator has, and a script minting its own is the thing ADR 0025 exists to prevent; the
+#      requests are printed below for when you want to do it the way an operator would.
+#
+# Idempotent. Run it after `make up`, and after `make run` has applied the migrations once.
+# `docker compose down -v` throws all of it away.
+#
+# The test values the fake knows (also in docs/providers/click-card-token.md):
+#   card 8600 1234 1234 4242   approves          SMS code 246810
+#   card 8600 1234 1234 0002   declines
+#   card 8600 1234 1234 0003   the first charge is taken and the answer is lost
+
+set -euo pipefail
+
+BAO_URL="http://localhost:8200"
+BAO_TOKEN="horecaos-local-root"
+COMPOSE_DB_SERVICE="platform-db"
+# horecaos_migrator, not horecaos_app: integration.provider_environments is platform-owned
+# reference data that horecaos_app is granted no write on, exactly so that nothing at runtime can
+# repoint an approved endpoint. This script stands in for the migration that would do it.
+DB_USER="horecaos_migrator"
+DB_PASSWORD="horecaos_migrator"
+DB_NAME="horecaos"
+
+ENVIRONMENT_CODE="click_card_sandbox"
+INSTALLATION_ID="20000000-0000-0000-0000-0000000000c1"
+SECRET_REFERENCE="horecaos:local:provider_payment:platform:click-card"
+# FakeClickCardProviderConfiguration's own default (horecaos.fake-providers.click-card.port).
+FAKE_PORT="18090"
+FAKE_SERVICE_ID="100100"
+
+echo "==> Pointing the local database at the fake Click card API (:${FAKE_PORT})"
+
+echo "==> Writing the fake merchant credential to OpenBao at ${SECRET_REFERENCE}"
+if ! curl -sf -o /dev/null "${BAO_URL}/v1/sys/health"; then
+  echo "!! OpenBao is not answering at ${BAO_URL}. Run 'make up' first." >&2
+  exit 1
+fi
+# The secret is one JSON object, held as the string value of the KV entry.
+curl -sf -X POST \
+  -H "X-Vault-Token: ${BAO_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"data":{"value":"{\"merchantUserId\":\"fake-merchant-user\",\"secretKey\":\"fake-click-card-secret-key-not-a-real-credential\"}"}}' \
+  "${BAO_URL}/v1/horecaos/data/local/provider_payment/platform/click-card" \
+  > /dev/null
+echo "    done"
+
+echo "==> Moving ${ENVIRONMENT_CODE} onto the fake and declaring the account in Postgres"
+docker compose exec -T -e PGPASSWORD="${DB_PASSWORD}" "${COMPOSE_DB_SERVICE}" \
+  psql -v ON_ERROR_STOP=1 -U "${DB_USER}" -d "${DB_NAME}" <<SQL
+UPDATE integration.provider_environments
+   SET base_url = 'http://localhost:${FAKE_PORT}/v2/merchant',
+       egress_allowlist = 'localhost',
+       notes = 'tools/seed-card-provider: local dev only, points at FakeClickCardHttpProvider'
+ WHERE code = '${ENVIRONMENT_CODE}';
+
+-- At most one card account is ACTIVE (ux_platform_card_installation_one_active). Declare this one
+-- only when nothing else is, so re-running never trips the index and never takes over an account
+-- someone else activated.
+INSERT INTO commercial.platform_card_installations
+    (id, provider_type, environment_code, display_name, status, secret_reference,
+     external_account_reference, non_sensitive_config, capability_snapshot, adapter_version,
+     last_connection_status, created_by, activated_by, version, created_at, updated_at)
+SELECT '${INSTALLATION_ID}'::uuid, 'CLICK_CARD', '${ENVIRONMENT_CODE}', 'Click (local fake)', 'ACTIVE',
+       '${SECRET_REFERENCE}', '${FAKE_SERVICE_ID}', '{}'::jsonb, '{}'::jsonb, 'click-card-v1',
+       'UNVERIFIED', 'tools/seed-card-provider', 'tools/seed-card-provider', 0, now(), now()
+ WHERE NOT EXISTS (
+     SELECT 1 FROM commercial.platform_card_installations
+      WHERE id = '${INSTALLATION_ID}'::uuid OR status = 'ACTIVE');
+SELECT id, provider_type, status, environment_code
+  FROM commercial.platform_card_installations ORDER BY created_at;
+SQL
+echo "    done"
+
+echo
+echo "==> If the table above shows another account ACTIVE, suspend it first (the control plane's"
+echo "    Billing setup screen, or the suspension request below) and run this again."
+echo
+echo "==> What an operator would send instead of step 3 (needs a signed-in token):"
+echo "      POST /api/v1/platform-admin/commercial/billing/card-installations"
+echo "      {\"providerType\":\"CLICK_CARD\",\"environmentCode\":\"${ENVIRONMENT_CODE}\","
+echo "       \"displayName\":\"Click (local fake)\",\"secretReference\":\"${SECRET_REFERENCE}\","
+echo "       \"externalAccountReference\":\"${FAKE_SERVICE_ID}\",\"reason\":\"local walk\"}"
+echo "      POST .../card-installations/{id}/activation   {\"expectedVersion\":0,\"reason\":\"local walk\"}"
+echo
+echo "==> Then, with 'make run' up: Finance > Wallet > Add a card, with the test card above."

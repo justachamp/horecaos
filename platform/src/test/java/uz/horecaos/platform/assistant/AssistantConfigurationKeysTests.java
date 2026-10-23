@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.assistant.api.AssistantConfigurationKeys;
+import uz.horecaos.platform.assistant.domain.ReplyLocale;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 import uz.horecaos.platform.tenancy.domain.configuration.ConfigurationKeys;
@@ -63,6 +64,23 @@ class AssistantConfigurationKeysTests {
         }
         assertThat(AssistantConfigurationKeys.disclosureKeyFor("de"))
                 .isSameAs(AssistantConfigurationKeys.DISCLOSURE_TEXT_EN);
+    }
+
+    @Test
+    @DisplayName(
+            "every language the detector speaks has a disclosure key of its own, so the console that reads the languages from the backend never lands two on one key")
+    void everyReplyLanguageHasItsOwnDisclosureKey() {
+        var codes = new java.util.HashSet<String>();
+        for (String language : ReplyLocale.SUPPORTED) {
+            String code = AssistantConfigurationKeys.disclosureKeyFor(language).code();
+            assertThat(code).as("the key for %s", language).isEqualTo("assistant.disclosure_text_" + language);
+            assertThat(ConfigurationKeys.require(code).tenantVisible())
+                    .as("%s is declared in the registry the validator reads", code)
+                    .isTrue();
+            assertThat(codes.add(code))
+                    .as("%s is not shared with another language", code)
+                    .isTrue();
+        }
     }
 
     @Test

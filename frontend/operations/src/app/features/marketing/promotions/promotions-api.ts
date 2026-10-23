@@ -59,6 +59,8 @@ export interface PromotionView {
   readonly loyaltyRedemption: LoyaltyRedemption;
   readonly conditions: readonly PromotionRule[];
   readonly actions: readonly PromotionRule[];
+  /** What a guest may read for this promotion, by locale tag (ADR 0140). Empty when none was written. */
+  readonly titles?: Readonly<Record<string, string>>;
   readonly validatedAt: string | null;
   readonly activatedAt: string | null;
   readonly activatedBy: string | null;
@@ -92,6 +94,8 @@ export interface PromotionBody {
   readonly loyaltyRedemption: LoyaltyRedemption;
   readonly conditions: readonly PromotionRule[];
   readonly actions: readonly PromotionRule[];
+  /** The wording a guest may read, by locale tag; omitted or empty when none is written (ADR 0140). */
+  readonly titles?: Readonly<Record<string, string>> | null;
 }
 
 /** One refusal or warning of `PromotionValidator`: a stable code, the condition or action it concerns, and a message. */

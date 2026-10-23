@@ -154,13 +154,20 @@ class CommentPresetTests {
         PresetRow created =
                 presets.create(TENANT, newPreset("NO_ONION", "Без лука", "Piyozsiz", "No onion", null), ACTOR_SUBJECT);
 
-        PresetRow updated = presets.update(
+        CommentPresetService.PresetView view = presets.updateWithLabels(
                 TENANT,
                 created.id(),
-                new PresetEdit("Без лука!", "Piyozsiz!", "No onion!", "MOD_NO_ONION", 3, "ARCHIVED", created.version()),
+                new PresetEdit(
+                        "MOD_NO_ONION",
+                        3,
+                        "ARCHIVED",
+                        created.version(),
+                        java.util.Map.of("ru", "Без лука!", "uz-Latn", "Piyozsiz!", "en", "No onion!")),
                 ACTOR_SUBJECT);
+        PresetRow updated = view.row();
 
-        assertThat(updated.labelRu()).isEqualTo("Без лука!");
+        assertThat(view.labels()).containsEntry("ru", "Без лука!").containsEntry("en", "No onion!");
+        assertThat(presets.listWithLabels(TENANT).getFirst().labels()).containsEntry("uz-Latn", "Piyozsiz!");
         assertThat(updated.posModifierCode()).isEqualTo("MOD_NO_ONION");
         assertThat(updated.status()).isEqualTo("ARCHIVED");
         assertThat(updated.version()).isEqualTo(2);
@@ -177,7 +184,7 @@ class CommentPresetTests {
         Throwable failure = catchThrowable(() -> presets.update(
                 TENANT,
                 created.id(),
-                new PresetEdit("x", "x", "x", null, 0, "ACTIVE", created.version() + 1),
+                new PresetEdit(null, 0, "ACTIVE", created.version() + 1, java.util.Map.of("ru", "x")),
                 ACTOR_SUBJECT));
 
         assertThat(failure).isInstanceOf(ApiException.class);
@@ -330,50 +337,49 @@ class CommentPresetTests {
 
     @Test
     @DisplayName(
-            "a preset must be worded in the tenant's default language, and the other platform columns take that wording")
-    void aPresetNeedsTheTenantsDefaultLanguageAndFillsTheOtherColumnsFromIt() {
+            "a preset must be worded in the tenant's default language, and nothing is invented for a language it leaves out")
+    void aPresetNeedsTheTenantsDefaultLanguageAndInventsNothingForTheOthers() {
         brandOffers("uz-Latn", "en");
         CommentPresetService service = brandAware();
 
         // English alone: the tenant's default is Uzbek (its first brand's), so this is refused.
         Throwable refused = catchThrowable(() -> service.createWithLabels(
-                TENANT,
-                new NewPreset("NO_ONION", null, null, null, null, 0, java.util.Map.of("en", "No onion")),
-                ACTOR_SUBJECT));
+                TENANT, new NewPreset("NO_ONION", null, 0, java.util.Map.of("en", "No onion")), ACTOR_SUBJECT));
         assertThat(refused).isInstanceOf(ApiException.class);
         assertThat(((ApiException) refused).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
         assertThat(refused.getMessage()).contains("uz-Latn");
         assertThat(presets.list(TENANT)).isEmpty();
 
-        // Uzbek and English: Russian is a NOT NULL column the tenant does not offer, so it
-        // takes the default (Uzbek) wording rather than English or a blank.
+        // Uzbek and English: Russian is a language the tenant does not offer, so the preset simply has
+        // no Russian wording -- since V0678 no NOT NULL column forces the default wording into it.
         CommentPresetService.PresetView created = service.createWithLabels(
                 TENANT,
-                new NewPreset("NO_ONION", null, "Piyozsiz", null, null, 0, java.util.Map.of("en", "No onion")),
+                new NewPreset("NO_ONION", null, 0, java.util.Map.of("uz-Latn", "Piyozsiz", "en", "No onion")),
                 ACTOR_SUBJECT);
-        assertThat(created.row().labelRu()).isEqualTo("Piyozsiz");
-        assertThat(created.row().labelUz()).isEqualTo("Piyozsiz");
-        assertThat(created.row().labelEn()).isEqualTo("No onion");
+        assertThat(created.labels())
+                .containsExactly(java.util.Map.entry("uz-Latn", "Piyozsiz"), java.util.Map.entry("en", "No onion"));
     }
 
     @Test
-    @DisplayName("an edit that names no language for a column leaves that column as it was")
-    void anEditLeavesAColumnItDoesNotNameAsItWas() {
+    @DisplayName("an edit that names only one language changes only that language's wording")
+    void anEditChangesOnlyTheLanguageItNames() {
         PresetRow created =
                 presets.create(TENANT, newPreset("NO_ONION", "Без лука", "Piyozsiz", "No onion", null), ACTOR_SUBJECT);
 
-        PresetRow edited = presets.update(
+        CommentPresetService.PresetView edited = presets.updateWithLabels(
                 TENANT,
                 created.id(),
-                new PresetEdit(null, null, "No onions!", null, 0, "ACTIVE", created.version(), java.util.Map.of()),
+                new PresetEdit(null, 0, "ACTIVE", created.version(), java.util.Map.of("en", "No onions!")),
                 ACTOR_SUBJECT);
 
-        assertThat(edited.labelRu()).isEqualTo("Без лука");
-        assertThat(edited.labelUz()).isEqualTo("Piyozsiz");
-        assertThat(edited.labelEn()).isEqualTo("No onions!");
-        assertThat(presets.list(TENANT))
+        assertThat(edited.labels())
+                .containsExactly(
+                        java.util.Map.entry("ru", "Без лука"),
+                        java.util.Map.entry("uz-Latn", "Piyozsiz"),
+                        java.util.Map.entry("en", "No onions!"));
+        assertThat(presets.listWithLabels(TENANT))
                 .singleElement()
-                .satisfies(row -> assertThat(row.labelUz()).isEqualTo("Piyozsiz"));
+                .satisfies(view -> assertThat(view.labels()).containsEntry("uz-Latn", "Piyozsiz"));
     }
 
     // ---------------------------------------------- row 10.12: the customer-facing reads
@@ -403,11 +409,6 @@ class CommentPresetTests {
         PresetRow created =
                 presets.create(TENANT, newPreset("NO_ONION", "Без лука", "Piyozsiz", "No onion", null), ACTOR_SUBJECT);
         insertTranslation(TENANT, created.id(), "kaa", "Piyazsiz");
-        // A stale mirror of a triple locale must lose to the column, the way every merged read does.
-        jdbc.sql("""
-                UPDATE catalog.comment_preset_translations SET label = 'STALE'
-                WHERE preset_id = :id AND locale = 'ru'
-                """).param("id", created.id()).update();
 
         var resolved = new uz.horecaos.platform.catalog.application.CommentPresetLookupAdapter(
                         catalogStore, presetStore)
@@ -421,7 +422,6 @@ class CommentPresetTests {
                         java.util.Map.entry("uz-Latn", "Piyozsiz"),
                         java.util.Map.entry("en", "No onion"),
                         java.util.Map.entry("kaa", "Piyazsiz"));
-        assertThat(noOnion.labelRu()).isEqualTo("Без лука");
     }
 
     private void insertTranslation(UUID tenantId, UUID presetId, String locale, String label) {
@@ -440,7 +440,8 @@ class CommentPresetTests {
 
     private static NewPreset newPreset(
             String code, String labelRu, String labelUz, String labelEn, @Nullable String posModifierCode) {
-        return new NewPreset(code, labelRu, labelUz, labelEn, posModifierCode, 0);
+        return new NewPreset(
+                code, posModifierCode, 0, java.util.Map.of("ru", labelRu, "uz-Latn", labelUz, "en", labelEn));
     }
 
     private ProductCreated createProduct(String code, String name) {

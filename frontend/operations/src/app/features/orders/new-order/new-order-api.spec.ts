@@ -353,3 +353,106 @@ describe('NewOrderApi.quote', () => {
     request.flush({});
   });
 });
+
+/**
+ * ADR 0177: the delivery address of a phone order goes to the location-scoped routes
+ * `LOCATION_STAFF` and `LOCATION_MANAGER` are granted, never the tenant-scoped ones a `LOCATION`
+ * grant cannot reach (which is what answered 403 to the persona this screen is for).
+ */
+describe('NewOrderApi address capture (ADR 0177)', () => {
+  let api: NewOrderApi;
+  let http: HttpTestingController;
+  const ADDRESSES = `${CUSTOMERS_BASE}/acct-1/addresses`;
+  const SAVE = {
+    label: 'Home',
+    fields: { line1: 'Amir Temur 15', city: 'Tashkent', district: 'Yunusobod' },
+    latitude: 41.3,
+    longitude: 69.2,
+    coordinateSource: 'OPERATOR_PIN' as const,
+  };
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting(), NewOrderApi],
+    });
+    api = TestBed.inject(NewOrderApi);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  it('reads the masked list from the location-scoped route and sends no purpose', async () => {
+    const answered = api.capturedAddresses(SCOPE, 'acct-1');
+    const request = http.expectOne(ADDRESSES);
+
+    expect(request.request.method).toBe('GET');
+    expect(request.request.params.keys()).toEqual([]);
+    request.flush([
+      {
+        id: 'a1',
+        label: 'Home',
+        street: 'Amir Temur',
+        city: 'Tashkent',
+        district: 'Yunusobod',
+        latitude: null,
+        longitude: null,
+        coordinateSource: 'NOT_GEOCODED',
+        version: 1,
+      },
+    ]);
+
+    expect((await answered)[0].street).toBe('Amir Temur');
+  });
+
+  it('saves an address on the location-scoped route and answers the new id', async () => {
+    const answered = api.captureAddress(SCOPE, 'acct-1', SAVE);
+    const request = http.expectOne(ADDRESSES);
+
+    expect(request.request.method).toBe('POST');
+    expect(request.request.headers.has('Idempotency-Key')).toBe(true);
+    expect(request.request.body).toEqual(SAVE);
+    request.flush({ id: 'a-new' });
+
+    expect(await answered).toBe('a-new');
+  });
+
+  it('reuses the Idempotency-Key across a retried save, so a lost response does not save the address twice', () => {
+    void api.captureAddress(SCOPE, 'acct-1', SAVE);
+    const first = http.expectOne(ADDRESSES);
+    const key = first.request.headers.get('Idempotency-Key');
+
+    void api.captureAddress(SCOPE, 'acct-1', SAVE);
+    const second = http.expectOne(ADDRESSES);
+
+    expect(second.request.headers.get('Idempotency-Key')).toBe(key);
+    first.flush({ id: 'a-new' });
+    second.flush({ id: 'a-new' });
+  });
+
+  it('places a pin at the version it read, sending the point and nothing else', async () => {
+    const answered = api.placeAddressPin(
+      SCOPE,
+      'acct-1',
+      'a1',
+      { latitude: 41.35, longitude: 69.25 },
+      7,
+    );
+    const request = http.expectOne(`${ADDRESSES}/a1/pin`);
+
+    expect(request.request.method).toBe('PUT');
+    expect(request.request.headers.get('If-Match')).toBe('W/"7"');
+    expect(request.request.headers.has('Idempotency-Key')).toBe(true);
+    expect(request.request.body).toEqual({ latitude: 41.35, longitude: 69.25 });
+    request.flush({
+      id: 'a1',
+      label: 'Home',
+      street: 'Amir Temur',
+      city: 'Tashkent',
+      district: 'Yunusobod',
+      latitude: 41.35,
+      longitude: 69.25,
+      coordinateSource: 'OPERATOR_PIN',
+      version: 8,
+    });
+
+    expect((await answered).version).toBe(8);
+  });
+});

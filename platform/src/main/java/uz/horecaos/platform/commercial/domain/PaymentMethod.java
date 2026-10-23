@@ -14,7 +14,7 @@ public enum PaymentMethod {
     /**
      * Charged automatically for the remainder once a merchant account
      * exists. Until then a CARD tenant is collected exactly like
-     * {@link #INVOICE} — see {@code uz.horecaos.platform.commercial.application.CardCharger}.
+     * {@link #INVOICE} — see {@code uz.horecaos.platform.commercial.api.CardCharger}.
      */
     CARD
 }

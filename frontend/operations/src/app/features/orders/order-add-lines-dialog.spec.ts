@@ -14,12 +14,14 @@ const RESULTS: readonly ComboboxOption[] = [
 function render(
   options: readonly ComboboxOption[] = [],
   comboGroups: readonly MenuComboGroup[] = [],
+  portionSteps: ReadonlyMap<string, number> = new Map(),
 ): {
   fixture: ReturnType<typeof TestBed.createComponent<OrderAddLinesDialog>>;
 } {
   const fixture = TestBed.createComponent(OrderAddLinesDialog);
   fixture.componentRef.setInput('options', options);
   fixture.componentRef.setInput('comboGroups', comboGroups);
+  fixture.componentRef.setInput('portionSteps', portionSteps);
   fixture.componentRef.setInput('currency', 'UZS');
   fixture.detectChanges();
   return { fixture };
@@ -205,6 +207,117 @@ describe('OrderAddLinesDialog', () => {
     dismissButton.click();
 
     expect(dismissed).toBe(true);
+  });
+
+  describe('dishes sold by the portion (ADR 0137, row 4.2c)', () => {
+    /** Plov (variant-2) is sold by the half portion; Lagman (variant-1) has no step. */
+    const STEPS: ReadonlyMap<string, number> = new Map([['variant-2', 0.5]]);
+
+    function pick(
+      fixture: ReturnType<typeof TestBed.createComponent<OrderAddLinesDialog>>,
+      index: number,
+    ): void {
+      const host: HTMLElement = fixture.nativeElement;
+      searchInput(host).dispatchEvent(new Event('focus'));
+      fixture.detectChanges();
+      (host.querySelectorAll('[data-testid="q-combobox-option"]')[index] as HTMLLIElement).click();
+      fixture.detectChanges();
+    }
+
+    function quantityField(host: HTMLElement, id: string): HTMLInputElement {
+      return host.querySelector(
+        `[data-testid="order-add-lines-dialog-quantity-${id}"]`,
+      ) as HTMLInputElement;
+    }
+
+    function type(
+      fixture: ReturnType<typeof TestBed.createComponent<OrderAddLinesDialog>>,
+      id: string,
+      value: string,
+    ): void {
+      const field = quantityField(fixture.nativeElement, id);
+      field.value = value;
+      field.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    }
+
+    function emitted(fixture: ReturnType<typeof TestBed.createComponent<OrderAddLinesDialog>>) {
+      let selection: readonly AddLinesSelection[] | null = null;
+      fixture.componentInstance.confirm.subscribe((value) => (selection = value));
+      (
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="order-add-lines-dialog-confirm"]',
+        ) as HTMLButtonElement
+      ).click();
+      return selection;
+    }
+
+    it('adds a splittable dish at one portion and moves it by its step on each further pick', () => {
+      const { fixture } = render(RESULTS, [], STEPS);
+      const host: HTMLElement = fixture.nativeElement;
+
+      pick(fixture, 1);
+      expect(quantityField(host, 'variant-2').value).toBe('1');
+      pick(fixture, 1);
+      expect(quantityField(host, 'variant-2').value).toBe('1.5');
+      expect(quantityField(host, 'variant-2').step).toBe('0.5');
+    });
+
+    it('starts a dish whose step does not divide one at the first multiple above it', () => {
+      const { fixture } = render(RESULTS, [], new Map([['variant-2', 0.3]]));
+
+      pick(fixture, 1);
+
+      expect(quantityField(fixture.nativeElement, 'variant-2').value).toBe('1.2');
+    });
+
+    it('sends a typed decimal that is a whole number of portions', () => {
+      const { fixture } = render(RESULTS, [], STEPS);
+      pick(fixture, 1);
+      type(fixture, 'variant-2', '2.5');
+
+      expect(emitted(fixture)).toEqual([{ variantId: 'variant-2', quantity: 2.5 }]);
+    });
+
+    it('refuses a quantity that is not a whole number of portions, and says what the step is', () => {
+      const { fixture } = render(RESULTS, [], STEPS);
+      const host: HTMLElement = fixture.nativeElement;
+      pick(fixture, 1);
+      type(fixture, 'variant-2', '1.3');
+
+      expect(
+        (host.querySelector('[data-testid="order-add-lines-dialog-confirm"]') as HTMLButtonElement)
+          .disabled,
+      ).toBe(true);
+      const step = host.querySelector('[data-testid="order-add-lines-dialog-step-variant-2"]');
+      expect(step?.getAttribute('role')).toBe('alert');
+      expect(step?.textContent).toContain('0.5');
+    });
+
+    it('keeps a dish with no published step on whole units, with no step offered', () => {
+      const { fixture } = render(RESULTS, [], STEPS);
+      const host: HTMLElement = fixture.nativeElement;
+      pick(fixture, 0);
+      type(fixture, 'variant-1', '2.7');
+
+      expect(
+        host.querySelector('[data-testid="order-add-lines-dialog-step-variant-1"]'),
+      ).toBeNull();
+      expect(quantityField(host, 'variant-1').step).toBe('1');
+      expect(emitted(fixture)).toEqual([{ variantId: 'variant-1', quantity: 2 }]);
+    });
+
+    it('sends a whole and a split dish together, each as the operator set it', () => {
+      const { fixture } = render(RESULTS, [], STEPS);
+      pick(fixture, 0);
+      pick(fixture, 1);
+      type(fixture, 'variant-2', '0.5');
+
+      expect(emitted(fixture)).toEqual([
+        { variantId: 'variant-1', quantity: 1 },
+        { variantId: 'variant-2', quantity: 0.5 },
+      ]);
+    });
   });
 
   describe('combos (ADR 0136)', () => {

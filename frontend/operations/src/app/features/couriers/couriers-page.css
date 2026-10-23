@@ -29,7 +29,7 @@
 }
 
 .couriers__table th {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
@@ -63,7 +63,7 @@
   background: var(--q-surface-1);
   border-radius: var(--q-radius);
   font-size: var(--q-type-caption);
-  margin-right: 4px;
+  margin-inline-end: 4px;
 }
 
 .status-badge--warning {
@@ -186,7 +186,7 @@
 }
 
 .couriers__primary {
-  margin-left: 6px;
+  margin-inline-start: 6px;
   font-size: var(--q-type-caption-sm);
   color: var(--q-ink-subtle);
 }
@@ -212,4 +212,14 @@
   margin-bottom: 8px;
   background: var(--q-error-tint);
   color: var(--q-error-text);
+}
+
+.couriers__photo {
+  display: block;
+  width: 96px;
+  height: 96px;
+  margin: 4px 0 8px;
+  object-fit: cover;
+  border-radius: var(--q-radius);
+  border: 1px solid var(--q-hairline);
 }

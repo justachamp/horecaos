@@ -1,6 +1,5 @@
 package uz.horecaos.platform.tenancy.domain.configuration;
 
-import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -261,6 +260,17 @@ public final class ConfigurationKeys {
                     + "before it is treated as stale.")
             .build();
 
+    /** ADR 0141 Phase 3: the dry-run switch, declared identically in {@code integration.api.MarketplaceConfigurationKeys}. */
+    public static final ConfigurationKey<Boolean> MARKETPLACE_AVAILABILITY_DRY_RUN = ConfigurationKey.of(
+                    "marketplace.availability.dry_run", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("integration")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND, ScopeType.LOCATION)
+            .describedAs("Whether a marketplace binding rehearses its stop-list pushes without calling the "
+                    + "partner. On, the platform records what it would have sent; off, it sends. Switching it "
+                    + "off resends every item once.")
+            .build();
+
     /**
      * ADR 0021: the strongest enforcement mode entitlement checks may apply.
      *
@@ -437,6 +447,53 @@ public final class ConfigurationKeys {
             .build();
 
     /**
+     * ADR 0029, batch 21: the days the platform gives itself to answer a data-subject access request. Declared here so a
+     * stored row passes the startup validator, and identically in {@code customers.api.CustomerConfigurationKeys} where it
+     * is consumed, for the reason recorded on {@link #COMMERCIAL_ENFORCEMENT_CEILING}.
+     */
+    public static final ConfigurationKey<Integer> CUSTOMERS_DSAR_RESPONSE_DEADLINE_DAYS = ConfigurationKey.of(
+                    "customers.dsar_response_deadline_days", Integer.class)
+            .defaultValue(30)
+            .ownedBy("customers")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs(
+                    "Days from the day a data-subject access request is raised by which the tenant owes the customer "
+                            + "her data (ADR 0029). Provisional until legal confirms it.")
+            .build();
+
+    /** ADR 0029, batch 21: days a produced export stays in object storage. Declared twice; see above. */
+    public static final ConfigurationKey<Integer> CUSTOMERS_DSAR_BUNDLE_RETENTION_DAYS = ConfigurationKey.of(
+                    "customers.dsar_bundle_retention_days", Integer.class)
+            .defaultValue(7)
+            .ownedBy("customers")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs(
+                    "Days a produced data-subject export is kept in object storage before it is removed (ADR 0029).")
+            .build();
+
+    /** ADR 0029, batch 21: the Russian note that opens a data-subject export. Declared twice; see above. */
+    public static final ConfigurationKey<String> CUSTOMERS_DSAR_COVER_NOTE_RU =
+            coverNoteKey("customers.dsar_cover_note_ru", "Russian");
+
+    /** ADR 0029, batch 21: the Uzbek (Latin) note that opens a data-subject export. Declared twice; see above. */
+    public static final ConfigurationKey<String> CUSTOMERS_DSAR_COVER_NOTE_UZ_LATN =
+            coverNoteKey("customers.dsar_cover_note_uz_latn", "Uzbek (Latin)");
+
+    /** ADR 0029, batch 21: the English note that opens a data-subject export. Declared twice; see above. */
+    public static final ConfigurationKey<String> CUSTOMERS_DSAR_COVER_NOTE_EN =
+            coverNoteKey("customers.dsar_cover_note_en", "English");
+
+    private static ConfigurationKey<String> coverNoteKey(String code, String language) {
+        return ConfigurationKey.of(code, String.class)
+                .defaultValue("")
+                .ownedBy("customers")
+                .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+                .describedAs("The " + language + " note that opens a data-subject export (ADR 0029). Blank keeps the "
+                        + "platform's provisional wording until legal's text is set.")
+                .build();
+    }
+
+    /**
      * ADR 0111: minutes before its time a scheduled lead callback joins the call centre's
      * needs-attention view again, declared identically in {@code
      * customers.api.CustomerConfigurationKeys} (customers cannot import this registry without a
@@ -463,6 +520,7 @@ public final class ConfigurationKeys {
             .defaultValue(false)
             .ownedBy("assistant")
             .tenantVisible()
+            .entitledBy("assistant.answering.enabled")
             .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
             .describedAs("Whether the grounded assistant answers customers' questions in this scope's "
                     + "conversations (ADR 0069). Off until switched on; the plan entitlement "
@@ -512,6 +570,7 @@ public final class ConfigurationKeys {
                 .defaultValue("")
                 .ownedBy("assistant")
                 .tenantVisible()
+                .entitledBy("assistant.answering.enabled")
                 .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
                 .describedAs("The " + language + " sentence the assistant says ahead of its first answer in a "
                         + "conversation, telling the customer it is automated and that the question is "
@@ -628,37 +687,13 @@ public final class ConfigurationKeys {
             .build();
 
     /**
-     * Wave P46 (gap map row {@code 10.3b}), settings.md §10.3 cards 2–5:
-     * order policy's eleven registry entries. Declared identically in {@code
-     * ordering.api.OrderingConfigurationKeys}, which is where every one of
-     * them is actually consumed once a reader exists — see that class's own
-     * doc for why none of them is consumed yet, and {@code
-     * OrderingConfigurationKeyTests} for the drift check.
+     * Wave P46 (gap map row {@code 10.3b}), settings.md §10.3 cards 2–5: order policy's registry
+     * entries, with ADR 0177's five retired (the business day's start hour, the average and maximum
+     * order minutes, the VAT rate, the routing poll interval -- none had a reader and each has a
+     * neighbour that owns the behaviour). Declared identically in {@code
+     * ordering.api.OrderingConfigurationKeys}, which is where every one of them is consumed -- see that
+     * class's own doc, and {@code OrderingConfigurationKeyTests} for the drift check.
      */
-    public static final ConfigurationKey<Integer> ORDERING_BUSINESS_DAY_START_HOUR = ConfigurationKey.of(
-                    "ordering.business_day_start_hour", Integer.class)
-            .defaultValue(6)
-            .ownedBy("ordering")
-            .tenantVisible()
-            .describedAs("The local hour (0-23) a trading day is considered to start.")
-            .build();
-
-    public static final ConfigurationKey<Integer> ORDERING_AVERAGE_ORDER_MINUTES = ConfigurationKey.of(
-                    "ordering.average_order_minutes", Integer.class)
-            .defaultValue(30)
-            .ownedBy("ordering")
-            .tenantVisible()
-            .describedAs("Minutes an order is expected to take from acceptance to ready.")
-            .build();
-
-    public static final ConfigurationKey<Integer> ORDERING_MAXIMUM_ORDER_MINUTES = ConfigurationKey.of(
-                    "ordering.maximum_order_minutes", Integer.class)
-            .defaultValue(60)
-            .ownedBy("ordering")
-            .tenantVisible()
-            .describedAs("Minutes beyond which an order is unambiguously overdue.")
-            .build();
-
     public static final ConfigurationKey<Integer> ORDERING_LATE_ORDER_THRESHOLD_MINUTES = ConfigurationKey.of(
                     "ordering.late_order_threshold_minutes", Integer.class)
             .defaultValue(45)
@@ -748,37 +783,38 @@ public final class ConfigurationKeys {
                     + "Delivery's own minimum comes from the service zone, not this key.")
             .build();
 
-    public static final ConfigurationKey<BigDecimal> ORDERING_VAT_RATE_PERCENT = ConfigurationKey.of(
-                    "ordering.vat_rate_percent", BigDecimal.class)
-            .defaultValue(new BigDecimal("12"))
-            .ownedBy("ordering")
-            .tenantVisible()
-            .describedAs("The VAT rate applied at checkout, as a percentage.")
-            .build();
-
-    public static final ConfigurationKey<Integer> ORDERING_ROUTING_POLL_INTERVAL_MINUTES = ConfigurationKey.of(
-                    "ordering.routing_poll_interval_minutes", Integer.class)
-            .defaultValue(2)
-            .ownedBy("ordering")
-            .tenantVisible()
-            .describedAs("Minutes between polls of the routing port while a delivery order awaits assignment.")
-            .build();
-
     public static final ConfigurationKey<String> ORDERING_PREORDER_BRANCH_RESOLUTION = ConfigurationKey.of(
                     "ordering.preorder_branch_resolution", String.class)
             .defaultValue("BY_DISTANCE")
             .ownedBy("ordering")
             .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
             .describedAs("How a pre-order outside working hours picks its fulfilling branch: "
                     + "BY_DISTANCE or BY_OPENING_TIME.")
             .build();
 
     public static final ConfigurationKey<Boolean> ORDERING_OPERATOR_PROMO_CODE_ALLOWED = ConfigurationKey.of(
                     "ordering.operator_promo_code_allowed", Boolean.class)
-            .defaultValue(false)
+            .defaultValue(true)
             .ownedBy("ordering")
             .tenantVisible()
             .describedAs("Whether an operator hand-entering an order may apply a promo code.")
+            .build();
+
+    public static final ConfigurationKey<Boolean> ORDERING_OPERATOR_CALLBACK_FLAG_ALLOWED = ConfigurationKey.of(
+                    "ordering.operator_callback_flag_allowed", Boolean.class)
+            .defaultValue(true)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("Whether an operator keying in an order may flag it «call the customer back».")
+            .build();
+
+    public static final ConfigurationKey<Boolean> ORDERING_OPERATOR_CHANGE_DUE_ALLOWED = ConfigurationKey.of(
+                    "ordering.operator_change_due_allowed", Boolean.class)
+            .defaultValue(true)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("Whether an operator keying in a cash order may record the cash tendered (change due).")
             .build();
 
     public static final ConfigurationKey<String> ORDERING_AUTO_ACCEPT_ELIGIBLE_CHANNELS = ConfigurationKey.of(
@@ -786,8 +822,8 @@ public final class ConfigurationKeys {
             .defaultValue("ALL")
             .ownedBy("ordering")
             .tenantVisible()
-            .describedAs("\"ALL\", or a comma-separated list of sales channel codes eligible for "
-                    + "auto-accept. Not yet enforced.")
+            .describedAs("\"ALL\", or a comma-separated list of sales channel codes eligible for auto-accept; "
+                    + "an order on any other channel waits for the approval path of the acceptance policy.")
             .build();
 
     public static final ConfigurationKey<Integer> ORDERING_AUTO_ACCEPT_MIN_PRIOR_ORDERS = ConfigurationKey.of(
@@ -796,7 +832,7 @@ public final class ConfigurationKeys {
             .ownedBy("ordering")
             .tenantVisible()
             .describedAs("Prior successful orders a customer needs before auto-accept applies to "
-                    + "them. 0 means no gate. Not yet enforced.")
+                    + "them. 0 means no gate; a new customer's order waits for the approval path instead.")
             .build();
 
     /** ADR 0158's rollout gate, declared identically in {@code ordering.api.OrderingConfigurationKeys}. */
@@ -836,6 +872,16 @@ public final class ConfigurationKeys {
             .settableAt(ScopeType.TENANT)
             .describedAs("Whether a mandatory auto-add rule (a cart line the customer cannot remove) may be "
                     + "published for this tenant. Written by a platform administrator on the owner's instruction.")
+            .build();
+
+    /** ADR 0137 (row 4.2c), declared identically in {@code catalog.api.CatalogConfigurationKeys}. */
+    public static final ConfigurationKey<Boolean> CATALOG_NUTRITION_ACCURACY_LINE_ENABLED = ConfigurationKey.of(
+                    "catalog.nutrition_accuracy_line_enabled", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("catalog")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("Whether the storefront menu and the product editor show the code-owned line under "
+                    + "a nutrition table saying the figures are approximate. Off until the wording is settled.")
             .build();
 
     /** ADR 0173, declared identically in {@code catalog.api.CatalogConfigurationKeys}. */
@@ -1044,6 +1090,22 @@ public final class ConfigurationKeys {
             .ownedBy("pricing")
             .tenantVisible()
             .describedAs("The most lines a promotion simulation may price.")
+            .build();
+
+    /**
+     * ADR 0140: whether an order-level markup (a service charge such as the common 10% «обслуживание») may be
+     * priced at all. <strong>Off, and meant to stay off</strong> until finance and counsel have answered how a
+     * service line is taxed, how it is carried on the fiscal receipt and whether a charge that depends on the
+     * payment method is lawful (ADR 0140 open input 3, the external-connections runbook for this wave). While it
+     * is off the validator refuses to author one, the engine is never handed one, and no total moves.
+     */
+    public static final ConfigurationKey<Boolean> ORDER_MARKUP_ENABLED = ConfigurationKey.of(
+                    "pricing.order_markup.enabled", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("pricing")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("An order-level markup (a service charge) may be authored and priced. Off until the fiscal "
+                    + "and tax treatment of a service line is answered (ADR 0140).")
             .build();
 
     /**
@@ -1271,8 +1333,23 @@ public final class ConfigurationKeys {
             .defaultValue(400)
             .ownedBy("reporting")
             .settableAt(ScopeType.PLATFORM)
+            .provisionalRetention(false, "finance and legal counsel (ADR 0167 open input 4)")
             .describedAs("Days the customer funnel, registration and attribution-link click counts are "
                     + "kept, by business date. The rows hold counts and no personal data.")
+            .build();
+
+    /**
+     * ADR 0183 D18: whether the storefront's page-load ping is counted. Declared here so a stored row passes the startup
+     * validator, and declared identically in {@code reporting.api.ReportingConfigurationKeys} where it is consumed, for the
+     * reason recorded on {@link #COMMERCIAL_ENFORCEMENT_CEILING}.
+     */
+    public static final ConfigurationKey<Boolean> REPORTING_PAGE_LOAD_COUNT_ENABLED = ConfigurationKey.of(
+                    "reporting.page_load_count_enabled", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("reporting")
+            .settableAt(ScopeType.PLATFORM)
+            .describedAs("Whether a storefront's page-load ping is counted into the customer funnel's visits figure "
+                    + "(page loads, not people). Off until counsel answers (ADR 0183 D18).")
             .build();
 
     /**
@@ -1321,6 +1398,27 @@ public final class ConfigurationKeys {
             .describedAs("Seconds between pulls of the movements that happened at a point-of-sale terminal.")
             .build();
 
+    /** ADR 0171 Decision 3 and the accepted 60-second convergence window: seconds between sends of what moved on the platform. */
+    public static final ConfigurationKey<Integer> LOYALTY_POS_SYNC_PUSH_INTERVAL_SECONDS = ConfigurationKey.of(
+                    "loyalty.pos_sync.push_interval_seconds", Integer.class)
+            .defaultValue(30)
+            .ownedBy("loyalty")
+            .settableAt(ScopeType.PLATFORM)
+            .describedAs(
+                    "Seconds between sends to a point-of-sale terminal of the balances that moved on the platform.")
+            .build();
+
+    /** ADR 0171, open input 4: whether a customer must have consented before their balance is synced with the till. */
+    public static final ConfigurationKey<Boolean> LOYALTY_POS_SYNC_REQUIRE_CONSENT = ConfigurationKey.of(
+                    "loyalty.pos_sync.require_consent", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("loyalty")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("Whether a customer must have consented before their balance is synced with the point-of-sale "
+                    + "till.")
+            .build();
+
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             CART_EXPIRY_MINUTES,
             ORDERING_CART_RETENTION_DAYS,
@@ -1334,6 +1432,7 @@ public final class ConfigurationKeys {
             PROMOTION_APPROVAL_AMOUNT_OVER_MINOR,
             PROMOTION_APPROVAL_ALWAYS_FOR_MARKUP,
             PROMOTION_SIMULATE_MAX_LINES,
+            ORDER_MARKUP_ENABLED,
             INVENTORY_RESERVATION_TTL_SECONDS,
             COMMERCIAL_ENFORCEMENT_CEILING,
             TELEMETRY_COLLECTION_GATE,
@@ -1350,14 +1449,22 @@ public final class ConfigurationKeys {
             WORKFORCE_ROSTER_LATE_AFTER_MINUTES,
             WORKFORCE_ROSTER_MATCH_WINDOW_MINUTES,
             REPORTING_FUNNEL_RETENTION_DAYS,
+            REPORTING_PAGE_LOAD_COUNT_ENABLED,
             LOYALTY_POS_SYNC_MAX_AUTO_CREDIT_MINOR,
             LOYALTY_POS_SYNC_MAX_BINDING_CREDIT_MINOR_PER_DAY,
             LOYALTY_POS_TILL_KEEPS_BALANCE,
             LOYALTY_POS_SYNC_PULL_INTERVAL_SECONDS,
+            LOYALTY_POS_SYNC_PUSH_INTERVAL_SECONDS,
+            LOYALTY_POS_SYNC_REQUIRE_CONSENT,
             CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN,
             CUSTOMERS_OTP_DELIVERY_CHANNEL_ORDER,
             CUSTOMERS_PII_EXPORT_APPROVAL_THRESHOLD_ROWS,
             CUSTOMER_LEAD_CALLBACK_REMINDER_MINUTES,
+            CUSTOMERS_DSAR_RESPONSE_DEADLINE_DAYS,
+            CUSTOMERS_DSAR_BUNDLE_RETENTION_DAYS,
+            CUSTOMERS_DSAR_COVER_NOTE_RU,
+            CUSTOMERS_DSAR_COVER_NOTE_UZ_LATN,
+            CUSTOMERS_DSAR_COVER_NOTE_EN,
             ASSISTANT_ENABLED,
             ASSISTANT_MONTHLY_SPEND_CEILING_USD_CENTS,
             ASSISTANT_CONVERSATION_TURN_CAP,
@@ -1374,9 +1481,6 @@ public final class ConfigurationKeys {
             TERMINAL_SESSION_MAX_HOURS,
             TERMINAL_ROSTER_DISPLAY,
             TERMINAL_ATTRIBUTION_DEFAULT,
-            ORDERING_BUSINESS_DAY_START_HOUR,
-            ORDERING_AVERAGE_ORDER_MINUTES,
-            ORDERING_MAXIMUM_ORDER_MINUTES,
             ORDERING_LATE_ORDER_THRESHOLD_MINUTES,
             KITCHEN_DISPLAY_NOT_SEEN_AFTER_MINUTES,
             FEATURE_PRINTING,
@@ -1386,16 +1490,19 @@ public final class ConfigurationKeys {
             ORDERING_AT_RISK_BEFORE_MINUTES,
             ORDERING_LATE_COLOUR,
             ORDERING_MINIMUM_ORDER_AMOUNT_MINOR,
-            ORDERING_VAT_RATE_PERCENT,
-            ORDERING_ROUTING_POLL_INTERVAL_MINUTES,
             ORDERING_PREORDER_BRANCH_RESOLUTION,
             ORDERING_OPERATOR_PROMO_CODE_ALLOWED,
+            ORDERING_OPERATOR_CALLBACK_FLAG_ALLOWED,
+            ORDERING_OPERATOR_CHANGE_DUE_ALLOWED,
             ORDERING_AUTO_ACCEPT_ELIGIBLE_CHANNELS,
             ORDERING_AUTO_ACCEPT_MIN_PRIOR_ORDERS,
             ORDERING_AUTO_ADD_ENABLED,
             ORDERING_AUTO_ADD_SHADOW_ENABLED,
             ORDERING_AMENDMENT_LINE_REMOVAL_ENABLED,
+            ORDERING_AMENDMENT_CUT_POINT_STATUS,
+            ORDERING_AMENDMENT_DECREASE_APPROVAL_THRESHOLD_MINOR,
             CATALOG_AUTO_ADD_MANDATORY_ALLOWED,
+            CATALOG_NUTRITION_ACCURACY_LINE_ENABLED,
             CATALOG_MXIK_REFERENCE_MAX_AGE_DAYS,
             CATALOG_MXIK_IMPORT_WITHDRAWAL_THRESHOLD_PERCENT,
             CATALOG_MXIK_IMPORT_MAX_BYTES,
@@ -1405,6 +1512,7 @@ public final class ConfigurationKeys {
             MARKETPLACE_AVAILABILITY_RECONCILE_ENABLED,
             MARKETPLACE_AVAILABILITY_RESYNC_INTERVAL_SECONDS,
             MARKETPLACE_AVAILABILITY_STALE_AFTER_SECONDS,
+            MARKETPLACE_AVAILABILITY_DRY_RUN,
             CATALOG_QR_KIOSK_PRICE_PLANE,
             NOTIFICATIONS_PAYMENT_LINK_AUTO_SEND,
             NOTIFICATIONS_AGGREGATOR_SHIFT_NOTIFICATIONS_ENABLED,

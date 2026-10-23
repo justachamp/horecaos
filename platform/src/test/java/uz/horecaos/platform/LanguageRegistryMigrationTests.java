@@ -33,9 +33,11 @@ import uz.horecaos.platform.support.TestDatabase;
  *   <li>every one of the fourteen closed {@code CHECK}s is, by name, a shape check: it accepts
  *       {@code kk} and {@code kaa-Latn-KZ} and refuses {@code Russian};
  *   <li>no other locale column anywhere holds a bare {@code uz}, found by name and by the
- *       translation tables so a store added after this record is caught too, with the three named
- *       exemptions asserted (not skipped): the catalog's own code, the published snapshots and the
- *       ISO 639 spoken languages.
+ *       translation tables so a store added after this record is caught too, with the named
+ *       exemptions asserted (not skipped): the catalog's own code, the published snapshots, the
+ *       ISO 639 spoken languages and the assistant's own language codes (its notes and its turn
+ *       ledger, whose vocabulary is the detector's {@code ru}, {@code uz}, {@code en}: ADR 0149,
+ *       Decision 3, "not locales").
  * </ul>
  */
 class LanguageRegistryMigrationTests {
@@ -66,8 +68,14 @@ class LanguageRegistryMigrationTests {
             new String[] {"ordering.branch_override_reason_texts", "ck_branch_override_reason_text_locale", "locale"},
             new String[] {"iam.staff_members", "ck_staff_member_locale", "ui_locale"});
 
-    /** Where a bare {@code uz} is still correct, each with the reason, asserted below rather than skipped. */
-    private static final Set<String> EXEMPT = Set.of("catalog.translations.locale");
+    /**
+     * Where a bare {@code uz} is still correct, each with the reason, asserted below rather than skipped.
+     * The two assistant columns hold the assistant's own language codes (ISO 639: {@code ReplyLocale},
+     * the detector's vocabulary), the same family as {@code iam.staff_members.spoken_languages}, which
+     * is an array and so is not found by this scan of text columns.
+     */
+    private static final Set<String> EXEMPT =
+            Set.of("catalog.translations.locale", "assistant.knowledge_entries.locale", "assistant.turns.locale");
 
     @Test
     @DisplayName("the six columns that held a bare uz hold uz-Latn after it, and nothing else about a row changes")
@@ -290,7 +298,9 @@ class LanguageRegistryMigrationTests {
                             "tenant.owner_invitations.locale",
                             "iam.staff_members.ui_locale",
                             "customer.customer_accounts.preferred_locale",
-                            "catalog.translations.locale")
+                            "catalog.translations.locale",
+                            "assistant.knowledge_entries.locale",
+                            "assistant.turns.locale")
                     .hasSizeGreaterThan(15);
 
             List<String> offenders = candidates.stream()
@@ -306,10 +316,44 @@ class LanguageRegistryMigrationTests {
             assertThat(holdsBareUz(jdbc, "catalog.translations.locale"))
                     .as("catalog.translations is the registry's one named place for the catalog's own uz")
                     .isTrue();
+
+            // The assistant answers in ISO 639 codes (ReplyLocale: ru, uz, en), not in platform tags: a
+            // note's and a turn's language is the detector's. Row 10.12 names them here so a reader of
+            // the scan does not "fix" them, and writes a note the way the API does to prove the exemption
+            // is real and not an empty promise.
+            insertAssistantRowsInUzbek(dataSource);
+            assertThat(holdsBareUz(jdbc, "assistant.knowledge_entries.locale"))
+                    .as("the assistant's notes are in its own language codes (ADR 0149, Decision 3: not locales)")
+                    .isTrue();
+            assertThat(holdsBareUz(jdbc, "assistant.turns.locale"))
+                    .as("the assistant's turn ledger names the language it answered in with the same code")
+                    .isTrue();
         }
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /** A note and a turn in Uzbek as the assistant writes them: the detector's code, never the registry's tag. */
+    private static void insertAssistantRowsInUzbek(DataSource dataSource) throws SQLException {
+        try (Connection connection = dataSource.getConnection()) {
+            JdbcClient jdbc = withoutForeignKeys(connection);
+            jdbc.sql("""
+                            INSERT INTO assistant.knowledge_entries
+                                (id, tenant_id, scope_type, locale, created_by)
+                            VALUES (:id, :tenant, 'TENANT', 'uz', 'fixture')
+                            """).param("id", UUID.randomUUID()).param("tenant", TENANT).update();
+            jdbc.sql("""
+                            INSERT INTO assistant.turns
+                                (id, tenant_id, brand_id, conversation_id, occurred_at, locale, question_kinds, outcome)
+                            VALUES (:id, :tenant, :brand, :conversation, now(), 'uz', 'PRICE', 'ANSWERED')
+                            """)
+                    .param("id", UUID.randomUUID())
+                    .param("tenant", TENANT)
+                    .param("brand", BRAND)
+                    .param("conversation", UUID.randomUUID())
+                    .update();
+        }
+    }
 
     private static boolean holdsBareUz(JdbcClient jdbc, String qualifiedColumn) {
         int lastDot = qualifiedColumn.lastIndexOf('.');

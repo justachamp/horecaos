@@ -114,6 +114,16 @@ Every scalar setting renders through one control with five visual states, driven
 | **Not settable at this level** | Value muted, chip disabled: `Задаётся на уровне бренда`. | Link that switches the scope bar to that level |
 | **Locked by plan** | Field greyed, `LockedState` inline with the module name and a `Подробнее` link to Finance 8.6. | none |
 
+**Since then (batch 21, `w1-board-shell`, ADR 0021):** the fifth state is built. A `ConfigurationKey` can
+declare `entitledBy(<entitlement key>)` — a plain code, because `tenancy` cannot import `commercial` —
+and the key list and the resolution answer `lockedByPlan {entitlementKey, description}` through the
+platform's `EntitlementGate`, which is enforcement-aware: **under the default meter-only mode nothing is
+locked and no key shows the state.** A write to a locked key is refused with `ENTITLEMENT_REQUIRED` (not
+`INSUFFICIENT_CAPABILITY`) and stores nothing. `q-inherited-field` greys, names the feature, and links
+«Подробнее» to the console's own Finance → Subscription screen; the platform's upgrade path is an API path
+and is never shown. One family is annotated today: `assistant.enabled` and the three disclosure texts against
+`assistant.answering.enabled`; the rest were audited against the entitlement catalogue on 2026-10-23 and none names a feature the platform itself reads to apply the setting (the six tenant-visible `feature.*` flags are not plan features; the POS loyalty-sync keys sit beside `pos.integrations.enabled`, which nothing reads, so locking them would claim a refusal the platform does not make). A key joins the family by one `entitledBy(...)` line, and `ConfigurationKeyEntitlementTests` lists the family so that a change to it is deliberate.
+
 Clicking any chip opens the **resolution trace popover** — the four levels as a ladder, most
 specific at the top, each row carrying the value or `не задано` / `снято явно`, who set it
 (`tenant.configuration_values.set_by`), when (`.updated_at`) and why (`.reason`). The winning row
@@ -172,7 +182,7 @@ muscle memory beats freshness at 20:30 on a Friday.
 | Key | Action |
 |---|---|
 | `/` | Find a setting (§10.0) from anywhere in Settings |
-| `⌘K` | Global console command palette |
+| `⌘K` | Global console command palette — **built (batch 21):** `Ctrl+K` / `⌘K` opens one box over the sections the operator may open, the Settings screens, «Find a setting» (§10.0) and the order board's number search (`?tab=all&q=`); it fires from inside a text field, not over a dialog, and lists only places the rail and Settings would list |
 | `⌘S` | Save draft |
 | `⌘⏎` | Activate policy / submit the primary action of the open dialog |
 | `Esc` | Close dialog or popover, discarding an unsaved draft only after a confirm |
@@ -238,6 +248,21 @@ Results read:
 Enter navigates to the screen with the scope bar already set to the level the value was found at.
 This one control does more for findability than any amount of navigation redesign, and it is only
 possible because ADR 0030 made the key registry code-owned and enumerable.
+
+**Since then (batch 21, `w1-board-shell`):** built as written. `GET .../tenants/{t}/configuration/placements`
+answers, for every tenant-visible key and every listed policy, the tenant, brand and branch rows that hold
+it (names, a display value cut at 80 characters, version, and who and when by the name the tenant knows
+them by — never a subject). A result has three columns: the setting's own name in the operator's language,
+the Group → Screen it lives on, and where it is set («задано: бренд «Rayhon» (15 мин)»); several holders
+resolve to the one nearest the operator's own branch and say how many more; a key set nowhere says «не
+задано», its default, and the levels that may set it («только бренд и выше»). Enter opens the screen with
+`?brand=&location=&level=tenant` at the level the value was found at; the screens outside Settings
+(courier policy, staff, shifts, feedback, dispatch rules, buffer, capacity, content) do not read the bar,
+so they open without it and the result line is what says the level. Policies are a source of their own
+(`POLICY_ROUTES`, held to `TenantPolicyFamilies` by a platform test), with their version and publisher.
+**The coverage guard:** every tenant-visible key either has a screen (`SETTING_ENTRIES`) or is on
+`NO_CONSOLE_SCREEN` naming the gap-map row that owes it one — 17 keys today, settable through the API
+alone — and `ConfigurationKeyConsoleCoverageTests` fails the build for a key that is neither.
 
 **Actions:** none destructive. **States:** the readiness panel's empty state is the good one —
 *«Всё настроено для приёма заказов»* — and should be visibly a success, not a blank.
@@ -453,9 +478,13 @@ visible and most valuable.
 | Требовать причину отказа | boolean | `document.rejectionReasonRequired` |
 | Сообщать клиенту, пока заказ ждёт | boolean | `document.notifyCustomerWhilePending` |
 
-The form enforces the record's own invariants *as affordances*, not as errors: choosing
-`AUTO_CONFIRM` collapses the other four fields rather than letting the user fill them and then
-rejecting the save. The 30 s–30 min bound is a slider with the ends labelled.
+The form enforces the record's own invariants *as affordances*, not as errors. Choosing
+`AUTO_CONFIRM` starts with **Кто подтверждает = «Никто»** and shows no timeout: every order is
+confirmed on its own and no gate can hold one. Picking a channel under `AUTO_CONFIRM` is the
+**hold-back path** (ADR 0177): it names who confirms an order that a Card 3 gate holds back, how
+long they have (30 s–30 min, offered at 300 s, the same bound restaurant approval has), and what
+happens when nobody decides. The 30 s–30 min bound is validated, not merely hinted: a path whose
+timeout is outside it cannot be published, because a held order waits on that deadline.
 
 Version banner and draft→diff→activate per §1.3. `Активировать` is confirmed with the sentence
 *«Новые заказы в филиале Чиланзар будут подтверждаться вручную. Уже принятые заказы не
@@ -463,28 +492,42 @@ Version banner and draft→diff→activate per §1.3. `Активировать`
 
 **Delever comparison.** Delever has *Автопринятие заказа* as a toggle plus a channel list plus a
 minimum-prior-successful-orders gate. HorecaOS's mode/channel/timeout/timeout-action model is richer
-and versioned, but is missing two things Delever has and this screen should carry:
+and versioned, and carries both of the things Delever has (**built**, ADR 0177 decision 3). They are
+not fields of this document but two scalars on Card 3, authored and inherited like the rest, and read
+at checkout:
 
-- **Auto-accept restricted to a set of channels** — *not built.* The document needs an
-  `eligibleChannelIds` field; ADR 0002/0030 own it. Without it a tenant cannot say "auto-accept the
-  bot, hand-check the aggregator", which every one of them wants.
-- **Minimum prior successful orders before auto-accept applies** — *not built.* It is an
-  anti-fraud gate, not a convenience, and it is cheap.
+- **Auto-accept restricted to a set of channels** — `ordering.auto_accept_eligible_channels`, «ALL»
+  or a list of channel codes: "auto-accept the bot, hand-check the aggregator".
+- **Minimum prior successful orders before auto-accept applies** — `ordering.auto_accept_min_prior_orders`,
+  the anti-fraud gate: completed orders of the customer at this brand; a guest counts as none.
+
+An order a gate holds back is not auto-confirmed: it follows this card's own channel, timeout and
+timeout action (the hold-back path above), is `AWAITING_APPROVAL`, and says why in its history
+(`AUTO_ACCEPT_HELD_CHANNEL`, `AUTO_ACCEPT_HELD_PRIOR_ORDERS`). A gate set while this card names
+nobody can hold nothing — such an order is confirmed anyway, counted, and the page says so beside
+the gates. The gates do not apply to a marketplace or aggregator order, which arrives already
+accepted (ADR 0040).
 
 ### Card 2 — Тайминги и SLA
 
 | Field | Type | Source |
 |---|---|---|
-| Начало и конец рабочего дня | two local times | **not built** — needs a config key; ADR 0043 depends on it (a business day that crosses midnight is an open question the matrix names) |
-| Среднее время заказа | minutes | stored and inherited, read by nothing (ADR 0150 decision 5); the field says «Пока не применяется» |
-| Максимальное время заказа | minutes | stored and inherited, read by nothing (ADR 0150 decision 5); the field says «Пока не применяется» |
-| Заказ без обещанного времени опаздывает через (was «Заказ опаздывает с») | minutes | **built** (ADR 0150): `ordering.late_order_threshold_minutes`, default 45 = the `ordering.lateness` platform default. The tenant-wide default for the no-promise fallback of every fulfilment mode whose document sets none of its own, when set anywhere in the chain; measured from `created_at`, and nothing for an order that carries a promise. Delever's «the single most-used value on the order board», kept where it is meaningful. The two fields above it say «Пока не применяется» |
+| ~~Начало и конец рабочего дня~~ | — | **retired** (ADR 0177): the business day is the reporting calendar's (`reporting.business_day_policies`, §10.10, ADR 0043/0107); a second key beside it would be a second answer to "which business day", and nothing read it |
+| ~~Среднее время заказа~~ | — | **retired** (ADR 0177): the promise comes from the preparation bands (ADR 0036, §10.2) and nothing read the key |
+| ~~Максимальное время заказа~~ | — | **retired** (ADR 0177): it would have been a fourth lateness severity beyond `BLOCKED`/`LATE`/`AT_RISK` that orders.md §2.7 does not have, and nothing read it |
+| ~~Ставка НДС~~ | — | **retired** (ADR 0177): VAT is `pricing.tax_profiles` with `valid_from`/`valid_until` (§4.8a); a flat percentage here never reached a receipt |
+| Заказ без обещанного времени опаздывает через (was «Заказ опаздывает с») | minutes | **built** (ADR 0150): `ordering.late_order_threshold_minutes`, default 45 = the `ordering.lateness` platform default. The tenant-wide default for the no-promise fallback of every fulfilment mode whose document sets none of its own, when set anywhere in the chain; measured from `created_at`, and nothing for an order that carries a promise. Delever's «the single most-used value on the order board», kept where it is meaningful |
 | Предупреждать до обещанного времени | minutes | **built** (batch 15, row `X.39`): `ordering.at_risk_before_minutes`, default 5 = the `ordering.lateness` platform default. Since wave 16 the *default* at-risk window of every fulfilment mode whose `ordering.lateness` document sets none of its own (a window a mode carries wins), when set anywhere in the chain; both boards read the result |
 | Когда заказ считается опаздывающим (доставка / самовывоз / зал) | per mode: warn-before, grace, no-promise fallback | **built** (wave 16, rows `X.39`/`10.3b`): the `ordering.lateness` policy document, edited on its own card under this table with the same `q-inherited-field` control (TENANT / BRAND / LOCATION, versioned, `expectedVersion` checked, a required reason). A blank warn-before window takes the at-risk field above, else the platform's five minutes; a blank no-promise fallback takes the late-order field above, else the platform's forty-five (ADR 0150); the grace is the document's. No «revert to inherited» — a published version is not withdrawn. See orders.md §2.7 |
 | Цвет индикатора опоздания | colour | **built** (batch 15, row `X.39`): `ordering.late_colour`, blank = the design-system red. `#rrggbb` validated at write and again where served; the card warns under the swatch below WCAG AA 4.5:1 against the page, a card and the late and at-risk row tints. Repaints only a `LATE` order (orders.md §2.7) |
 | Минимальная сумма заказа | money UZS | overlaps `fulfillment.service_zone_versions.min_basket_minor` — **decide once**: the zone value wins for delivery, this one applies to pickup and dine-in. Say so in the helper text |
-| Расчёт дистанции | `RADIUS` / `ROAD` | `fulfillment.delivery_tariffs.distance_mode` — **per tariff, not global.** Shown here read-only with a link to 3.7, because Delever's global toggle is the worse design and HorecaOS already decided against it (ADR 0037) |
-| Интервал опроса маршрутизации | minutes | **not built**, ADR 0037 routing port |
+| Расчёт дистанции | `RADIUS` / `ROAD` | `fulfillment.delivery_tariffs.distance_mode` — **per tariff, not global.** **Built** (ADR 0177) as a read-only echo in the «Settings that live elsewhere» card at the foot of the page, naming the standard tariff's mode, with a link to 3.7, because Delever's global toggle is the worse design and HorecaOS already decided against it (ADR 0037) |
+| ~~Интервал опроса маршрутизации~~ | — | **retired** (ADR 0177): the sourcing scheduler's poll is a deploy property and the dispatch rules (§3.8, ADR 0142) own the behaviour; nothing read the key |
+
+The five retired rows were registered by wave P46 so they could be authored before anything read them,
+and ADR 0150 decision 5 left them "either given a reader by a record that names one, or removed". ADR
+0177 removed them: the keys, their stored values (V0653), their strings and their fields. The page
+therefore has no setting that changes nothing.
 
 Lateness must be modelled as a computed **overlay**, never as an order status (IA Part 4,
 `StatusPill extensions`). This card sets the threshold; nothing here creates a state.
@@ -501,16 +544,21 @@ provider-agnostic rule engine. This card therefore shows a read-only summary of 
 currently in force for the scope, with a link. Reason: Delever duplicates near-identical config
 inside five provider pages and consequently cannot express provider fallback at all.
 
+What it does carry are the two **auto-accept gates** of Card 1's Delever comparison
+(`ordering.auto_accept_eligible_channels`, `ordering.auto_accept_min_prior_orders`; **built**, ADR 0177
+decision 3), read at checkout at the order's location, with a notice when Card 1 names nobody to hold
+an order for. The channel list is validated against the tenant's real channels when it is written.
+
 ### Card 4 — Условия
 
 | Field | Source |
 |---|---|
-| Ограничение по количеству заказов на филиал | `tenant.location_service_state.max_concurrent_orders` — echoed here read-only, edited in 10.2 |
+| Ограничение по количеству заказов на филиал | `tenant.location_service_state.max_concurrent_orders` — **built** (ADR 0177) as a read-only echo for the branch the bar is on (it is a per-branch setting with no batched read, so above the branch level the row says where it is set), edited in 10.2 |
 | Не принимать заказы из других зон доставки | `CATCHMENT` zone enforcement — **the resolver behaviour is built**: `DeliveryFeeResolver` already refuses an address outside a branch's `CATCHMENT`-role zone (`OUTSIDE_CATCHMENT`) rather than matching nothing. There is no separate on/off setting because there does not need to be one — a brand with no `CATCHMENT` zone enforces nothing. What is missing is that zone authoring itself is control-plane only (see brands-and-locations.md §9), so this row has nothing to link to from here yet |
-| Что делать с адресом вне зоны | `REJECT` / `OFFER_PICKUP` / `MANUAL_REVIEW` | `delivery.out_of_zone_policy`, ADR 0030 key — **not built** |
-| Подбор филиала для предзаказа вне рабочего времени | `по расстоянию` / `по времени открытия` | **not built**, config key |
-| Показывать курьеру и кухне только оплаченные заказы | boolean | **not built**, ADR 0042 |
-| Кто принимает первым | `курьер` / `филиал` | **not built.** This one is design-forcing, not configuration: it reorders the lifecycle. The matrix flags it, and ADR 0019's state machine must carry it as a parameter or refuse it |
+| Что делать с адресом вне зоны | `REJECT` / `OFFER_PICKUP` / `MANUAL_REVIEW` | `delivery.out_of_zone_policy`, ADR 0030 key — registered and edited in 10.13; **echoed here** (ADR 0177) with its own caveat, «Пока не применяется»: the delivery fee resolver does not read the key yet (`DeliveryConfigurationKeys`) |
+| Подбор филиала для предзаказа вне рабочего времени | `по расстоянию` / `по времени открытия` | **built** (ADR 0177): `ordering.preorder_branch_resolution`, read for the whole brand by the operator's branch resolver at the **promised** time, so it is set at the brand level or above and a single branch is not offered a value of its own. A branch open then is a candidate like any other; when none is, the closed ones are ranked by distance to the delivery point or by when they open, branches that take no pre-order into a closed slot last. A pickup has no customer point, so «по расстоянию» there is «по времени открытия» (the field says so) |
+| Показывать курьеру и кухне только оплаченные заказы | boolean | `kitchen` paid-only hold, ADR 0168 (§2.2) — **echoed here** (ADR 0177), edited on the kitchen buffer screen; the courier's side of it, «only kitchen-ready orders» (`kitchenReadyOnly` of the courier policy, §10.13), is echoed beside it and edited on the courier policy screen |
+| ~~Кто принимает первым~~ | ~~`курьер` / `филиал`~~ | **declined** (ADR 0177 decision 4): orders are branch-first. The setting would reorder the lifecycle, ADR 0019 said to carry it as a parameter or refuse it, and this refuses it, as ADR 0165 struck the deposit. No screen offers it and the matrix's line is withdrawn. Revisit when a signed tenant needs courier-first dispatch |
 
 ### Card 5 — Оформление заказа оператором
 
@@ -519,11 +567,11 @@ channel; ADR 0036 agrees — `CALL_CENTRE` is a `system_type`.
 
 | Field | Source |
 |---|---|
-| Доступные способы оплаты | `tenant.channel_payment_methods` for the `CALL_CENTRE` channel — edited in 10.4, echoed here |
+| Доступные способы оплаты | `tenant.channel_payment_methods` for the `CALL_CENTRE` channel — edited in 10.4, **echoed here** (ADR 0177) with the channel's order types |
 | Доступные типы получения | `tenant.channel_fulfillment_modes` for that channel |
-| Оператор может отметить «клиент просит перезвонить» | `ordering.orders.callback_requested` — ADR 0039, **not built** |
-| Оператор может вводить промокод | **not built**, config key; ADR 0018 promotions |
-| Показывать поле «сдача с» | `ordering.orders.cash_tendered_expected_minor` — ADR 0039, **not built** |
+| Оператор может отметить «клиент просит перезвонить» | `ordering.operator_callback_flag_allowed` (default on) — **built** (ADR 0177): `ordering.orders.callback_requested` is raised while the order is keyed in; refused with `OPERATOR_CALLBACK_NOT_ALLOWED` where off |
+| Оператор может вводить промокод | `ordering.operator_promo_code_allowed` (default **on**, flipped from the registered `false` because operators have applied codes since row 1.3e and nothing read the key) — **built**: refused with `OPERATOR_PROMO_CODE_NOT_ALLOWED` on the quote and on the order where off |
+| Показывать поле «сдача с» | `ordering.operator_change_due_allowed` (default on) — **built**: `ordering.orders.cash_tendered_expected_minor` at creation; refused with `OPERATOR_CHANGE_DUE_NOT_ALLOWED` where off |
 
 ### Resolved-for preview
 
@@ -635,8 +683,10 @@ links, `Предпросмотр` in the matching frame (`PhoneFrame`, `Telegram
 ### TELEGRAM
 
 Token paste + `Проверить` (validates and auto-fills bot display name and `@username`); menu
-button label and URL; mini-app mode; per-language texts; public-offer link; a dynamic button; the
-positive/negative review chat routing. Backing: `integration.installations` with
+button label per language (**the URL is never typed**: it is the brand's verified storefront
+hostname, ADR 0183 D27); mini-app mode with the BotFather short name; per-language welcome
+texts; public-offer link (the tenant's terms page on that hostname); ~~a dynamic button~~ *(declined 2026-10-14, ADR 0187 D28: no app reads it; it goes with the wave that un-holds the mobile app; ADR 0183 D27 agrees)*; the
+positive/negative review chat routing *(built, ADR 0187: the event classes `REVIEW_POSITIVE`, 4 or 5 stars, and `REVIEW_NEGATIVE`, 1 to 3, a chat subscribes to in Notifications, routing; the message is the review's id and stars only)*. Backing: `integration.installations` with
 `provider_category='NOTIFICATION'`/`OTHER`, `secret_reference` for the token — **the token is never
 rendered after entry** (`SecretInput`, ADR 0028), which is a straight improvement on pasting it into
 a plain text field.
@@ -656,7 +706,7 @@ tenants, which is an XSS surface pointed at the tenant's own customers.
 
 Delever's kiosk form is the most completely documented page in its whole settings tree, and it is
 worth matching field for field because every field is a real Uzbek compliance or hardware fact:
-kiosk name, legal company name, branch, the customer profile orders are booked under, payment
+kiosk name, legal company name, branch, ~~the customer profile orders are booked under~~ *(struck 2026-10-14, ADR 0187 D26: it describes the kiosk ordering application's order booking, not the channel's setup; that application is its own row and record)*, payment
 types, order types, company address, **ИНН для фискализации**, printer width (58/80 mm), VAT rate,
 service PIN, device login and password, status; plus idle media (9:16, ≤1 MB), content type, fiscal
 operator, fiscal URL/IP, terminal protocol, marking endpoint, kiosk marking ID, marking toggle,
@@ -664,8 +714,7 @@ table service, available reports.
 
 HorecaOS's position: **the kiosk stays a first-class channel from day one — it costs one row — and the
 device/hardware integration is declined for now** (matrix: "Self-service kiosk hardware
-integration" is on the do-not-build list). So this form ships with identity, branch, booking
-customer profile, payment/order types and idle media; the fiscal identity comes from the location's
+integration" is on the do-not-build list). So this form ships with identity, branch, payment/order types and idle media; the fiscal identity comes from the location's
 legal entity rather than a typed-in ИНН (ADR 0038: a kiosk is a `fiscal_terminals` row of kind
 `KIOSK` bound to a location, "the whole of kiosk fiscal identity at the cost of one row"); and the
 printer/terminal/marking block renders as a `LockedState` naming what is not built.
@@ -681,7 +730,14 @@ display does, and "service PIN" and "device login and password" are deliberately
 operating system's, see `docs/runbooks/terminals-and-kiosks.md`). The people who pair kiosks are branch managers, who
 hold `kiosk.device.manage` and not `tenant.read` or `channel.read`: the approval page and a *Kiosks* screen that mounts
 this same section for the working branch (`settings/channel-setup/kiosks`) are admitted to them by their own paths, and
-the rest of Settings is not. The printer, terminal and marking block is still a `LockedState`.
+the rest of Settings is not. The printer, terminal and marking block is a `LockedState` that names what is not built (drawn since ADR 0187).
+
+**Idle media (ADR 0187, D25, built).** Below the registry, *Idle screen pictures*: up to eight pictures for the KIOSK channel, each 9:16 and at
+most 1 MB, JPEG, PNG or WebP, no video. The uploader crops to 9:16 in the manager's browser and refuses a file over the cap before an upload; the
+platform checks the shape again on the file's own header and again when a picture is attached. The list is the channel's, not a kiosk's: every
+kiosk on the channel plays it, at every branch where the channel sells, in the order shown, eight seconds a picture. A branch manager does the whole
+job under `kiosk.device.manage`; the upload is lent by the media module because she holds neither `channel.manage` nor `media.upload`. A kiosk
+that has no pictures, or whose channel is switched off here, shows the status screen it always showed.
 
 ### QR_TABLE
 
@@ -694,17 +750,21 @@ rather than letting an admin choose a mode that silently fails at a table.
 
 ### IOS / ANDROID
 
-Per platform and independent of each other: payment types, fulfilment types, app store links,
-version gating, push credentials (`SecretInput`).
+*Amended 2026-10-14 (ADR 0187, D28).* The customer mobile app is on hold (ADR 0055), so these forms are not built: the hub shows an honest
+`LockedState` for `IOS` and `ANDROID` and no field. What was specified here (per platform and independent of each other: payment types,
+fulfilment types, app store links, version gating, push credentials (`SecretInput`)), the dynamic button and a per-channel «languages offered»
+belong to the wave that un-holds the app, and push credentials will also need an Apple or Google account that is the owner's to open. Languages
+offered stays brand-level (10.12).
 
 ### AGGREGATOR
 
 Read-only here; configured in 10.8 because an aggregator channel is an installation with mappings,
-not a storefront. The channel page links to it.
+not a storefront. The channel page links to it *(built: a link to Integrations, the installation it rests on, and the *Предпросмотр* link to the
+catalog's channel preview)*.
 
 ### CALL_CENTRE
 
-Read-only summary of card 5 of 10.3.
+Read-only summary of card 5 of 10.3 *(built: the operator promo-code switch as the brand resolves it, with a link to Order policy)*.
 
 **States across all types.** A channel whose `provider_installation_id` points at an installation
 with `last_connection_status='FAILED'` shows a banner at the top of the form, not at the bottom.
@@ -996,9 +1056,17 @@ brand override → tenant override → platform default, with locale falling bac
 default → tenant default. That is ADR 0020's stated resolution order; the screen must show which
 of those steps produced the template being previewed, using the same origin chip as §1.2.
 
+**Built (ADR 0184, wave 21).** The list carries an origin chip per row (`Бренд`, `Организация`) and a
+read-only card of the platform's own default wording beneath it (`Платформа`), eight order events in
+ru / uz-Latn / en, with `Настроить` copying one into a template of the brand. The precedence is lexicographic
+and not a sum: a brand's wording beats a tenant's whatever the tenant pinned; then more pinned dimensions
+(fulfilment mode, source channel) beat fewer; then fulfilment mode beats source channel (D20). The platform
+default answers only when the tenant has no active template at any scope, and never for `ORDER_COMPLETED`
+(the rating prompt stays opt-in, ADR 0075).
+
 | Column | Source |
 |---|---|
-| Событие | `notifications.templates.template_key` — order statuses from the canonical machine (`CONFIRMED`, `PREPARING`, `READY`, `FULFILLING`, `COMPLETED`, `CANCELLED`, `REJECTED`), plus OTP, payment link, review request |
+| Событие | `notifications.templates.template_key` — order statuses from the canonical machine (`CONFIRMED`, `PREPARING`, `READY`, `FULFILLING`, `COMPLETED`, `CANCELLED`, `REJECTED`), plus payment link, review request. The one-time code is **not a row**: its sentence is the platform's (ADR 0184, D19), shown in its own read-only card with the gateway's approval state, and a `SECURITY` template cannot be created |
 | Класс | `.notification_class` ∈ `TRANSACTIONAL_REQUIRED / TRANSACTIONAL_OPTIONAL / MARKETING / SECURITY / OPERATIONS_ALERT` |
 | Канал доставки | `.channel` — SMS / Telegram / push / email |
 | Языки | completeness chips per locale from `notifications.template_versions.locale` |
@@ -1009,6 +1077,9 @@ of those steps produced the template being previewed, using the same origin chip
 **Sort.** Severity: blocked in moderation and required (0) → missing a locale that a channel
 actually serves (1) → draft (2) → active (3); then event order along the order lifecycle, not
 alphabetically — an admin reading this list is walking an order through its life.
+*Built (ADR 0184):* the language chips show every language the template's brand serves, written or
+missing; the moderation state is its own column on the list; the sort is `template-list-order.ts`. A
+moderation state counts against a template only while it is in force.
 
 **Editor.** A `TemplateEditor` with `VariableChip` insertion and a live preview inside the matching
 frame. Variables are **allowlisted typed variables from a versioned schema**
@@ -1018,6 +1089,13 @@ match: order id, restaurant name, delivery time, preparation time, product list,
 amount, delivery fee, courier first name, courier surname, courier phone, customer name,
 customer phone. Plus a `Показывать цены товаров` toggle, which Delever has and which changes the
 rendered product list.
+
+*Built (ADR 0184, D21):* ten of the thirteen are merge variables: order id, restaurant name (the brand's
+display name), delivery time, preparation time, product list, total (`amount` and `currency`), discount
+amount, delivery fee, courier first name (the on-the-way message only) and customer name (a message to the
+customer only). The toggle is a column of the version (`show_item_prices`). **Declined, and refused when a
+version names one:** the customer's phone, the courier's phone and the courier's surname. The two personal
+values are looked up when a message is sent and are never stored.
 
 Left pane: language tabs (`LocalizedFieldGroup`, ru / uz-Latn / en, default marked, completeness
 indicated). Right pane: the key fields — event, source channels, fulfilment modes, default
@@ -1036,12 +1114,16 @@ not model this at all and the IA calls it out as something HorecaOS adds.
 `NotificationTemplateController.create`/`.activate`. `Изменить` (creates a new
 `template_version`, never mutates) is built as `.addVersion`. `Тестовая отправка` (to a staff
 phone, recorded as an audit fact) and `Дублировать на другой язык` have no matching endpoint yet.
+*Built (ADR 0184):* `Тестовая отправка` sends an SMS template to a number and a Telegram template to one of the
+brand's bound chats, and writes `notification.template.test_sent` without the destination; `Дублировать`
+is an editor action that copies the active language's text into another to start its translation.
 Activation of a `TRANSACTIONAL_REQUIRED` template is confirmed by naming what it changes.
 
 **Consent is visible but not editable here.** A `MARKETING`-class template shows
 *«отправляется только клиентам с согласием»* with a link to Customers 5.2. Unsubscribe changes
 future eligibility and never erases delivery evidence — say so where an admin might expect a
-delete button.
+delete button. *Built (ADR 0184):* the notice is on the create form, beside every `MARKETING` row and in the
+versions drawer; creating an optional or marketing template asks for its consent purpose.
 
 ### Tab 2 — Маршрутизация
 
@@ -1153,6 +1235,14 @@ would rewrite the meaning of every chart already drawn and is exactly what ADR 0
 ADR 0107 for the contradiction this correction resolves and why configurability is declined rather
 than deferred.
 
+**The card is the whole affordance (pinned, wave 21).** It carries the version it was read at and one
+row per bucket, and **no input, no select and no button**: `reference-data-page.spec.ts` fails if any
+control appears inside `#sla-boundaries`. The route behind it,
+`GET /api/v1/tenants/{tenantId}/reporting/sla-bucket-set`, is refused without `REPORTING_READ` and answers
+the version with the six buckets with it (`ReportingControllerCapabilityHttpTests`). Where an order counts
+as *late on the boards* is a different setting, the order-policy lateness card; the reports' buckets do not
+follow it.
+
 ### Теги филиалов
 
 **Built (wave P37).** A tenant registers its own tags (`tenant.branch_tags`) and assigns any
@@ -1172,14 +1262,54 @@ reference, and a small request queue. Tier 3.
 
 | Item | Source |
 |---|---|
-| Сроки хранения: брошенные корзины, локация курьера, записи кандидатов | ADR 0029 — **not built** |
-| Определения состояний согласия | ADR 0015 consent model — partially built (`customer.*`) |
-| Запросы на выгрузку и удаление (DSAR) | ADR 0029 — **not built** |
-| Аудит выгрузок PII | `audit.audit_events` where `action_code` is an export and `audit_class='SECURITY'` — the table exists (V0007) |
+| Сроки хранения: брошенные корзины, локация курьера, неподтверждённые кандидаты-курьеры | **built (ADR 0109, batch 21):** three tenant-visible ADR 0030 keys (`ordering.cart_retention_days`, `courier.applicant_retention_months`, `telemetry.track_retention_days`) written through the generic configuration write. Beside each field the card shows what the platform does with the value, asked of the job that deletes (`GET /api/v1/operations/tenants/{tenantId}/retention-windows`, `RetentionWindowController`, capability `TENANT_CONFIGURATION_READ`): the tenant's own value, the **effective** window, the **platform floor**, whether the window is the tenant's alone or shared, and whether the number is still provisional. Carts and unverified applicants are swept **per tenant** on the tenant's own window, so a shorter value is honoured down to the floor (a day for carts, a month for applicants). Courier tracks live in shared daily partitions, so a shorter tenant value cannot shorten what other tenants keep; the card says so, and the floor is the legal one (settlement period plus dispute window). *Candidate records* stay not-applicable: HorecaOS deliberately has no recruitment ATS |
+| Определения состояний согласия | **built:** `customer.consent_types`, a tenant-wide catalogue worded per language in `customer.consent_type_translations` (V0683) over the languages the tenant's brands offer, read in the console's language, then the tenant's default, then any. A reference catalogue: the card does not author purposes. `ConsentService.record` still accepts any purpose; a flag that defaults off (`HORECAOS_CUSTOMERS_CONSENT_PURPOSE_CHECK=REPORT_ONLY`) counts and logs, without the purpose, a decision recorded under an unregistered one, until legal answers which basis each purpose rests on |
+| Запросы на выгрузку и удаление (DSAR) | **built (ADR 0029, batch 21):** the tenant-wide worklist lists three kinds beside one another, erasure, a copy of her data and a correction, with the day a copy is owed by (`GET /api/v1/tenants/{tenantId}/customers/privacy-requests`, capability `CUSTOMER_ERASURE_RAISE`). Each is raised and worked on the customer's own record (the customers pane, tab *Copy & corrections*, and the erasure section beside it), and by the customer herself on the storefront (Profile → My data). See the lifecycle below |
+| Аудит выгрузок PII | **built:** `audit.audit_events` rows whose action is registered in `PiiEgressActions` (the backend list of every code that is personal data leaving: reveals, exports, the data-subject copy and each link to it), asked of `AuditController.operationsSearch` with `piiEgress=true`. A build test (`PiiEgressRegistryTests`) requires every audit code in the code shaped like a reveal, an export or a disclosure to be registered or excused with a reason, so the merchant's egress log cannot silently omit a new one |
 
 The one thing worth building early even in a thin form: **an export from any screen in the console
 is an audited PII egress event**, and the merchant should be able to see their own egress log. The
 audit table already supports it (`actor_display`, `capability_used`, `evidence_reference`).
+
+**Built (batch 21, wave w10-privacy): the data-subject request lifecycles.** Three requests, one
+worklist, each on the customer's record.
+
+- **Erasure** (since V0178, completed here). Raise, execute under the tighter capability, cancel. An
+  executed erasure reaches **every module's copy** of the customer through
+  `customers.spi.CustomerErasureParticipant` (ordering snapshots and recipients, loyalty, marketing,
+  referral, pricing grants, notifications, conversations, assistant transcripts, voice, reviews,
+  dine-in, Telegram bindings, the digest of her number on the POS export of each order) and stores the **per-module row counts as its proof**
+  (`GET .../erasure-requests/{id}/proof`, V0681), which the pane shows. A build test
+  (`ErasureInventoryTests`) requires every table carrying a customer key or a PERSONAL column to
+  have a participant or a named exemption, so the next module that stores a phone number cannot
+  escape. Financial history survives, anonymised. The erasure is **refused** while the customer has an
+  open order, an open service-recovery case (the platform's only record of a dispute) or a **legal
+  hold** (`customer.legal_holds`, V0682), which a second person must approve both to place and to lift
+  (ADR 0027) and which also keeps the retention jobs away from her.
+- **A copy of her data** (`customer.export_requests`, V0684). Raised by the customer on the storefront
+  (`POST /api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/export-request`) or by staff for her (`customer.manage`); produced by a
+  person who holds `customer.pii.export`, with a purpose they state and, where the tenant published
+  a policy for the action, a second person's approval (ADR 0027). Each module contributes through
+  `customers.spi.CustomerExportParticipant`; the result is **one JSON document** in object storage,
+  a section per module, values decrypted under the declared purpose with the audit fact written
+  before the first decrypt, a manifest of counts, and a cover note whose wording and response
+  deadline are ADR 0030 keys (provisional until legal confirms; the file says `PROVISIONAL` or
+  `AUTHORED`). The download is a link that lives five minutes and is itself an audit fact; the file
+  is removed after `customers.dsar_bundle_retention_days` (default 7) or at once on erasure. Asking
+  twice returns the first request; producing twice writes one file and one fact. The request, the
+  manifest and the audit facts carry counts and codes, never a value (ADR 0029).
+- **A correction** (`customer.profile_corrections`, V0684). Staff amend the display name, date of
+  birth, a contact point or an address against an **evidence reference** (a ticket or document
+  number, never prose). The prior value is kept encrypted, bound to its own row, and is returned
+  only inside a data-subject export.
+
+What stays open is legal's, not the build's: the retention periods and the lawful basis per purpose,
+the wording and deadline of the cover note, whether a data subject is entitled to the tenant's
+internal notes about her, and what happens to a remaining loyalty balance on erasure. A production
+start is refused (`ProvisionalRetentionGuard`) while any retention value or the cover note is
+unconfirmed; the steps to confirm are in `docs/runbooks/external-connections/w10-privacy.md`.
+Key rotation, re-encryption and masked projections are ADR 0029's other items and are not part of
+this screen.
 
 ---
 
@@ -1194,7 +1324,7 @@ who will never open any other settings screen, and because half the console's ot
 | Field | Type | Source |
 |---|---|---|
 | Поддерживаемые языки | multi-select over **the registry's content tier** (`GET /api/v1/operations/locales`, ADR 0149): `ru, uz-Latn, en` live; `kk`, `ka` declared and offered nowhere until a release makes them live. `uz-Cyrl` and `kaa` are not declared (the registry has room for both) | **built** (10.1's brand profile, V0242 `tenant.brand_locales`): the brand's own set and default, validated against the registry's content tier, not a list this screen keeps. A bare `uz` from an older client is read as `uz-Latn` and never stored |
-| Язык по умолчанию | single select | `platform.default_locale` (`ConfigurationKeys.DEFAULT_LOCALE`, default `"uz"`, tenant-visible) — a **real registered key today**, resolvable at every level |
+| Язык по умолчанию | single select | **built** (10.1's brand profile): `tenant.brand_locales.is_default`, one per brand, which must be one of the brand's own set. It is also what a storefront opens in (`GET /api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locales`, ADR 0149). The configuration key `platform.default_locale` this row used to cite was deleted by V0194 (ADR 0030); nothing reads a platform-wide default language any more, and a brand that has chosen none falls back to the registry's `ru` |
 | Валюта | read-only `UZS` | `tenant.tenants.default_currency` |
 | Часовой пояс | IANA | `tenant.tenants.default_timezone`; per-location `tenant.locations.timezone` |
 | Формат даты | read-only `DD.MM` | platform reference data (control-plane 8.3) |
@@ -1208,7 +1338,15 @@ customer: notification wordings, the bot, emails, SMS) and **staff UI** (the con
 activating one in a tier is a release, never a tenant's configuration. What this screen therefore means:
 
 - the languages it offers are the registry's content tier; a declared language that is not live is not on
-  the list, and adding one needs no change here;
+  the list, and adding one needs no change here. The same holds for every form that authors in a brand's
+  languages: a cancellation, line-removal or completion reason is worded in the **union of the tenant's brands**
+  (`GET .../order-outcome-reasons/locale-set`, the very set the service refuses to leave a wording out of), an
+  auto-add rule's customer text in the brand's set, a receipt footer and the document-language policy in the
+  registry's messages tier narrowed to the brand's set, and a storefront offers a language when the registry has
+  it live, the build has its catalogue and the brand serves it;
+- the assistant's notes and disclosure sentences are the one exception: they are written in the languages
+  its detector has word lists for (`GET /api/v1/operations/assistant/languages`), which are ISO 639 codes and not
+  platform tags (ADR 0149, Decision 3, "not locales");
 - **"all of this brand's languages are required"**: a notification template version needs a wording in
   every language *the template's brand serves* (a tenant-wide template: the union of the tenant's
   brands) before it can be saved or activated, not in every language the platform has. A customer whose
@@ -1480,8 +1618,8 @@ Named precisely, with the owning decision. Everything not listed here is built a
 |---|---|
 | `payments.payment_methods.provider_installation_id` and `.contract_reference`; a localized-name texts table | ADR 0038 — the table itself, `code`, `responsibility`, `settles_from_balance` and the foreign key from `channel_payment_methods.payment_method_code` are built (V0042, V0175); see §10.6 |
 | `delivery.out_of_zone_policy` as a registered ADR 0030 key | ADR 0037 + ADR 0030 |
-| Order-policy config keys with no declaration today: business-day start/end, average order time, maximum order time, late threshold, late indicator colour, minimum order sum, routing poll interval, pre-order branch resolution rule, operator promo-code permission | ADR 0030 registry (`ConfigurationKeys`), content owned by ADR 0002 / 0019 / 0037 |
-| Auto-accept eligible-channel set and minimum-prior-successful-orders gate on the acceptance policy document | ADR 0002 + ADR 0030 |
+| ~~Order-policy config keys with no declaration today~~ — all declared, and every one that remains is read (ADR 0150, ADR 0177); five that nothing read were retired: business-day start/end, average order time, maximum order time, VAT rate, routing poll interval. Originally listed: business-day start/end, average order time, maximum order time, late threshold, late indicator colour, minimum order sum, routing poll interval, pre-order branch resolution rule, operator promo-code permission | ADR 0030 registry (`ConfigurationKeys`), content owned by ADR 0002 / 0019 / 0037 |
+| ~~Auto-accept eligible-channel set and minimum-prior-successful-orders gate on the acceptance policy document~~ — built as two scalars read at checkout, with the document carrying the hold-back path (ADR 0177 decision 3) | ADR 0002 + ADR 0030 |
 | An operations-facing resolution-trace endpoint for the §1.2 origin chip | `ConfigurationController` does the work; it sits on `/api/v1/control-plane/...`, not `/api/v1/operations/...` |
 | `payments.payment_method_entity_bindings`, fiscal-responsibility validation at method activation, bulk fiscal-classification assignment, and the three `CatalogValidator` rules becoming publication errors rather than warnings | ADR 0038 |
 | Provider template moderation state and the send block it implies | ADR 0020 — the rest of the `notifications` schema and template authoring are built; see §10.9 |
@@ -1508,13 +1646,13 @@ Named precisely, with the owning decision. Everything not listed here is built a
 |---|---|
 | A purpose/role column on `media.assets`, so "the logo" and "the aggregator banner" are distinguishable | ADR 0010 |
 | Brand contact fields and a brand description with translations | ADR 0002 |
-| Per-brand supported-language set (only `platform.default_locale` exists) | ADR 0030 key, content ADR 0002 |
+| ~~Per-brand supported-language set~~ — built: `tenant.brand_locales` (V0242), read by every localized editor and by the storefronts (`GET .../brands/{brandId}/locales`, ADR 0149). `platform.default_locale`, which this row used to cite, was deleted by V0194 | ADR 0149 |
 | Location sort order and venue attributes (branch tags built wave P37 — `BranchTagController`, §10.10) | ADR 0002 |
 | Courier policy settings: billing mode, shift enforcement, ready-only visibility, address-before-accept, post-delivery payment check, acceptance SLA, max concurrent orders, GPS radii | ADR 0042, Proposed |
 | ~~Business calendar, business-day boundary that may cross midnight, weekend definition~~ — built wave P37, `BusinessCalendarController`, §10.10. Delever's forecast-window default (09:00→09:00) is still an open product question the matrix records | ADR 0043 |
 | ~~Tenant-configurable SLA bucket boundaries, versioned~~ — declined, not deferred: ADR 0043 fixes the buckets platform-side. Corrected wave P37, ADR 0107; a read-only version card is built (§10.10) | ADR 0043 |
-| `ordering.orders.callback_requested`, `cash_tendered_expected_minor` | ADR 0039 |
-| Courier-first vs branch-first acceptance ordering — **design-forcing, not configuration**: it reorders the lifecycle and ADR 0019's state machine must carry it as a parameter or refuse it | ADR 0019 |
+| ~~`ordering.orders.callback_requested`, `cash_tendered_expected_minor`~~ — both columns exist (V0029) and both are now settable while an order is keyed in, behind Card 5's two toggles (ADR 0177) | ADR 0039 |
+| ~~Courier-first vs branch-first acceptance ordering~~ — declined: orders are branch-first (ADR 0177 decision 4), the way ADR 0019 said to settle it ("carry it as a parameter or refuse it") | ADR 0019 |
 | Retention schedules, consent state definitions, DSAR request handling | ADR 0029 |
 | **A print capability port on ADR 0011, and a decision that owns printing and receipt presentation at all.** Nothing owns it today | new ADR |
 

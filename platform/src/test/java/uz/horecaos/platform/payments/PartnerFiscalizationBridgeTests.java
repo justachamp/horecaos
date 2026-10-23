@@ -1,7 +1,9 @@
 package uz.horecaos.platform.payments;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -10,6 +12,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -18,29 +21,37 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
-import uz.horecaos.platform.audit.api.ActorRef;
-import uz.horecaos.platform.fiscal.api.FiscalEvidencePolicies;
+import uz.horecaos.platform.catalog.api.FiscalClassificationLookup;
+import uz.horecaos.platform.catalog.api.FiscalClassificationLookup.FiscalClassificationFacts;
+import uz.horecaos.platform.fiscal.ControlledFiscalTerminal;
+import uz.horecaos.platform.fiscal.FiscalTerminalPortContract;
+import uz.horecaos.platform.fiscal.api.FiscalTerminalDirectory;
+import uz.horecaos.platform.fiscal.api.FiscalTerminalPort;
 import uz.horecaos.platform.fiscal.api.PartnerFiscalizationPort.Outcome;
 import uz.horecaos.platform.fiscal.api.SentReceiptEvidence;
-import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.integration.api.payment.MerchantApiCall;
 import uz.horecaos.platform.integration.api.payment.MerchantApiTransport;
 import uz.horecaos.platform.integration.provider.JdbcProviderActivityRecorder;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.ordering.api.OrderMarksPort;
+import uz.horecaos.platform.ordering.api.OrderReceiptSource;
 import uz.horecaos.platform.payments.application.FiscalReceiptPort;
-import uz.horecaos.platform.payments.application.MarkedOrderReceiptProjection;
 import uz.horecaos.platform.payments.application.PartnerFiscalizationBridge;
 import uz.horecaos.platform.payments.application.PaymentBindingResolver;
 import uz.horecaos.platform.payments.application.PaymentFiscalService;
+import uz.horecaos.platform.payments.application.PresentedReceipts;
+import uz.horecaos.platform.payments.application.ProtectedPresentedReceipts;
 import uz.horecaos.platform.payments.application.ProtectedSentEvidenceRecorder;
-import uz.horecaos.platform.payments.application.SyntheticLineGate;
+import uz.horecaos.platform.payments.application.ReceiptLineBuilder;
+import uz.horecaos.platform.payments.application.TerminalFiscalizationBridge;
 import uz.horecaos.platform.payments.domain.CaptureTiming;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.domain.FiscalReceiptLine;
 import uz.horecaos.platform.payments.domain.FiscalStatus;
 import uz.horecaos.platform.payments.domain.FiscalSubmission;
+import uz.horecaos.platform.payments.domain.PaymentAttempt;
+import uz.horecaos.platform.payments.domain.PaymentAttemptStatus;
 import uz.horecaos.platform.payments.domain.PaymentIntent;
 import uz.horecaos.platform.payments.domain.PaymentIntentStatus;
 import uz.horecaos.platform.payments.domain.PaymentMethod;
@@ -55,8 +66,8 @@ import uz.horecaos.platform.payments.infrastructure.persistence.JdbcFiscalDocume
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentAttemptStore;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentBindingResolver;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentIntentStore;
-import uz.horecaos.platform.payments.infrastructure.persistence.JdbcSyntheticLineGate;
-import uz.horecaos.platform.support.InMemoryPlatformPolicies;
+import uz.horecaos.platform.payments.infrastructure.persistence.JdbcReceiptPaymentFacts;
+import uz.horecaos.platform.payments.settlement.JdbcSettlementStore;
 import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.support.TestProtection;
@@ -92,7 +103,7 @@ class PartnerFiscalizationBridgeTests {
     private PaymentFiscalService fiscalService;
     private PaymentBindingResolver bindings;
     private OrderDirectory orders;
-    private SyntheticLineGate syntheticLines = binding -> true;
+    private World world = new World();
 
     @BeforeAll
     static void startDatabase() {
@@ -112,6 +123,8 @@ class PartnerFiscalizationBridgeTests {
     @BeforeEach
     void wire() {
         jdbc.sql("DELETE FROM fiscal.fiscal_documents").update();
+        jdbc.sql("DELETE FROM fiscal.fiscal_terminals").update();
+        jdbc.sql("DELETE FROM payments.payment_attempts").update();
         jdbc.sql("DELETE FROM payments.merchant_bindings").update();
         jdbc.sql("DELETE FROM tenant.location_fiscal_assignments").update();
         jdbc.sql("DELETE FROM tenant.legal_entities").update();
@@ -214,8 +227,8 @@ class PartnerFiscalizationBridgeTests {
             }
         };
 
-        PartnerFiscalizationBridge bridge = new PartnerFiscalizationBridge(
-                fiscalService, refusingResolver, intents, orders, binding -> true, CLOCK);
+        PartnerFiscalizationBridge bridge =
+                new PartnerFiscalizationBridge(fiscalService, refusingResolver, world.builder(fiscalService), CLOCK);
 
         Outcome outcome = bridge.retry(TENANT, documentId, "idem-2");
 
@@ -337,70 +350,57 @@ class PartnerFiscalizationBridgeTests {
     }
 
     // -----------------------------------------------------------------------
-    // ADR 0166, Decision 6: the placeholder line is a sandbox tool, not a fallback
+    // ADR 0166, Decisions 6 and 9: every order is filed as the lines it was sold as
     // -----------------------------------------------------------------------
 
     @Test
     @DisplayName(
-            "a production environment never files the placeholder, whatever the platform's flag says, and sends nothing")
-    void aProductionEnvironmentRefusesThePlaceholder() {
-        seedClickBinding();
-        jdbc.sql("UPDATE integration.provider_environments SET is_production = true"
-                        + " WHERE code = 'click-bridge-tests'")
-                .update();
-        InMemoryPlatformPolicies policies = platformAllowsPlaceholders(true);
-        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
-        ScriptedClick click = new ScriptedClick();
-
-        Outcome outcome = realGateBridge(policies, click).retry(TENANT, documentId, "idem-prod");
-
-        assertThat(outcome).isEqualTo(Outcome.LINES_NOT_BUILT);
-        assertThat(click.submitted)
-                .as("nothing is sent to a tax authority that cannot be told it was a stand-in")
-                .isEmpty();
-        assertThat(sentEvidenceOf(documentId).get("protected_request_reference"))
-                .isNull();
-        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
-                .isEqualTo(FiscalStatus.PENDING);
-    }
-
-    @Test
-    @DisplayName("a sandbox environment still refuses until the platform has allowed the placeholder")
-    void aSandboxNeedsThePlatformsPermission() {
+            "an order is filed as its own lines: the dish, the option, and the delivery fee as an ordinary item line of its own kind")
+    void anOrderIsFiledAsItsOwnLines() {
         seedClickBinding();
         UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
-        ScriptedClick click = new ScriptedClick();
+        world.dishWithCheeseAndDeliveryFee();
+        CapturingClickPort click = new CapturingClickPort();
 
-        // Nothing authored: the built-in default is no.
-        assertThat(realGateBridge(new InMemoryPlatformPolicies(), click).retry(TENANT, documentId, "idem-default"))
-                .isEqualTo(Outcome.LINES_NOT_BUILT);
-        // Authored false: no.
-        assertThat(realGateBridge(platformAllowsPlaceholders(false), click).retry(TENANT, documentId, "idem-false"))
-                .isEqualTo(Outcome.LINES_NOT_BUILT);
-        assertThat(click.submitted).isEmpty();
+        Outcome outcome = capturingBridge(click).retry(TENANT, documentId, "idem-lines");
+
+        assertThat(outcome).isEqualTo(Outcome.ISSUED);
+        List<FiscalReceiptLine> lines = click.sent.get(0).lines();
+        assertThat(lines).extracting(FiscalReceiptLine::fiscalName).containsExactly("Plov", "Extra cheese", "Delivery");
+        assertThat(lines)
+                .extracting(FiscalReceiptLine::mxikCode)
+                .as("each line carries its own node's classification, and none is a placeholder")
+                .containsExactly("10901001001000000", "04001001001000000", "10701001001000000");
+        assertThat(lines)
+                .extracting(FiscalReceiptLine::kind)
+                .containsExactly(
+                        FiscalReceiptLine.Kind.ITEM, FiscalReceiptLine.Kind.ITEM, FiscalReceiptLine.Kind.DELIVERY_FEE);
+        assertThat(lines)
+                .extracting(line -> line.netTotal().value())
+                .as("the receipt equals the payment to the minor unit")
+                .containsExactly(10_000L, 3_000L, 2_000L);
+        assertThat(lines.get(2).vatPercent())
+                .as("the quote recorded no tax on the delivery fee, and the receipt does not invent one")
+                .isZero();
+        assertThat(lines.get(0).vatPercent()).isEqualTo(12);
+        assertThat(lines).extracting(FiscalReceiptLine::commissionTin).containsOnly(taxpayerNumberOf(CLICK_ENTITY));
     }
 
     @Test
     @DisplayName(
-            "a sandbox with the platform's permission files exactly one placeholder line, says so, and keeps what it sent")
-    void aPermittedSandboxFilesOnePlaceholderLineAndRecordsIt() {
+            "what was filed is kept as filed: the delivery fee is recorded as its own kind and the stand-in flag is false")
+    void theFiledLinesAreKeptWithTheirKind() {
         seedClickBinding();
         UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        world.dishWithCheeseAndDeliveryFee();
         ScriptedClick click = new ScriptedClick();
 
-        Outcome outcome =
-                realGateBridge(platformAllowsPlaceholders(true), click).retry(TENANT, documentId, "idem-ok");
+        Outcome outcome = realBridge(click).retry(TENANT, documentId, "idem-kept");
 
         assertThat(outcome).isEqualTo(Outcome.UNCERTAIN);
-        assertThat(click.submitted).singleElement().satisfies(sent -> {
-            assertThat(sent.lines()).hasSize(1);
-            assertThat(sent.lines().getFirst().mxikCode()).isEqualTo("00000000000000000");
-        });
-
         Map<String, Object> row = sentEvidenceOf(documentId);
-        assertThat(row.get("lines_synthetic")).isEqualTo(true);
+        assertThat(row.get("lines_synthetic")).isEqualTo(false);
         assertThat(row.get("merchant_binding_id")).isNotNull();
-
         String lines = TestProtection.envelope()
                 .reveal(
                         TENANT,
@@ -409,10 +409,12 @@ class PartnerFiscalizationBridgeTests {
                         SentReceiptEvidence.requestRecord(documentId),
                         "test");
         assertThat(lines)
-                .contains("\"synthetic\":true")
-                .contains("\"kind\":\"SYNTHETIC\"")
-                .contains("\"markingCodeCount\":0")
-                .contains("\"unitPriceMinor\":15000");
+                .contains("\"synthetic\":false")
+                .contains("\"kind\":\"DELIVERY_FEE\"")
+                .contains("\"ikpu\":\"10701001001000000\"")
+                .contains("\"packageCode\":\"7000001\"")
+                .doesNotContain("00000000000000000")
+                .doesNotContain("SYNTHETIC");
         String split = TestProtection.envelope()
                 .reveal(
                         TENANT,
@@ -425,6 +427,203 @@ class PartnerFiscalizationBridgeTests {
 
     @Test
     @DisplayName(
+            "a weighed line is filed with its decimal count, the weighed total and the unit in the name, and is kept as filed")
+    void aWeighedLineIsFiledWithItsDecimalCount() throws Exception {
+        seedClickBinding();
+        // 1.040 kg of lamb weighed at the scale: 83 199, which is what Click is asked to collect.
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY, 83_199L));
+        world.classes.put(
+                World.PLOV_VARIANT,
+                new FiscalClassificationFacts("10101001001000000", "1500321", 166, "Lamb", null, false));
+        world.lines = List.of(new OrderReceiptSource.Line(
+                World.LINE,
+                1,
+                World.PLOV_VARIANT,
+                "Lamb",
+                BigDecimal.valueOf(2),
+                83_199,
+                83_199,
+                8_914,
+                new OrderReceiptSource.Catchweight(1_040),
+                List.of(),
+                0));
+        ScriptedClick click = new ScriptedClick();
+
+        realBridge(click).retry(TENANT, documentId, "idem-weighed");
+
+        FiscalReceiptLine sent = click.submitted.getFirst().lines().getFirst();
+        assertThat(sent.quantity()).isEqualByComparingTo("1.04");
+        assertThat(sent.fiscalName()).isEqualTo("Lamb, kg");
+        assertThat(sent.netTotal().value()).isEqualTo(83_199);
+
+        List<Map<String, Object>> kept = sentRequestsOf(documentId);
+        String plain = protection.reveal(
+                TENANT,
+                ProtectedValue.deserialize(java.util.Objects.requireNonNull(
+                        (String) kept.getFirst().get("protected_request_reference"))),
+                SentReceiptEvidence.requestRecord(documentId),
+                "bridge-test");
+        assertThat(plain).contains("\"quantity\":1.04").contains("\"discountMinor\":1");
+        SentReceiptEvidence.Line read = tools.jackson.databind.json.JsonMapper.builder()
+                .build()
+                .readValue(plain, SentReceiptEvidence.Lines.class)
+                .lines()
+                .getFirst();
+        assertThat(read.quantity()).isEqualByComparingTo("1.04");
+        assertThat(read.unitPriceMinor()).isEqualTo(80_000);
+    }
+
+    @Test
+    @DisplayName(
+            "the paper receipt prints the lines as filed, with their VAT, and the one aggregate line only when nothing was kept")
+    void thePaperReceiptPrintsTheLinesAsFiled() {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        world.dishWithCheeseAndDeliveryFee();
+        ScriptedClick click = new ScriptedClick();
+        realBridge(click).retry(TENANT, documentId, "idem-paper");
+        fiscalService.attachEvidence(
+                TENANT,
+                documentId,
+                new FiscalDocument.FiscalEvidence(
+                        "R-P", "SIGN-P", "TERM-P", "R-P", CLOCK.instant(), "https://ofd.soliq.uz/epi?r=p", null, null),
+                "protected-response-p",
+                CLOCK.instant());
+        uz.horecaos.platform.payments.api.FiscalReceiptSource paper =
+                uz.horecaos.platform.payments.application.FiscalReceiptReaderFactory.create(
+                        fiscalService,
+                        documents,
+                        intents,
+                        orders,
+                        TestProtection.envelope(),
+                        tools.jackson.databind.json.JsonMapper.builder().build());
+
+        var printed = paper.find(TENANT, documentId).orElseThrow();
+
+        assertThat(printed.lines())
+                .extracting(uz.horecaos.platform.payments.api.FiscalReceiptSource.Line::name)
+                .containsExactly("Plov", "Extra cheese", "Delivery");
+        assertThat(printed.totalMinor()).as("the paper equals the payment").isEqualTo(15_000);
+        assertThat(printed.vatMinor())
+                .as("and states the VAT the receipt was filed with, which the stand-in line never did")
+                .isEqualTo(1_393);
+
+        // Nothing kept of what was sent (a request that left and could not be recorded): the paper says less,
+        // one line for the payment, and states no tax because none was kept to state.
+        jdbc.sql("UPDATE fiscal.fiscal_documents SET protected_request_reference = NULL WHERE id = :id")
+                .param("id", documentId)
+                .update();
+        var fallback = paper.find(TENANT, documentId).orElseThrow();
+        assertThat(fallback.lines())
+                .singleElement()
+                .satisfies(line -> assertThat(line.name()).isEqualTo("Order BR-1"));
+        assertThat(fallback.vatMinor()).isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "a node with no complete classification files nothing: BLOCKED_CLASSIFICATION, never a placeholder code")
+    void anUnclassifiedNodeBlocksTheDocumentAndSendsNothing() {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        world.dishWithCheeseAndDeliveryFee();
+        world.classes.remove(World.CHEESE_OPTION);
+        CapturingClickPort click = new CapturingClickPort();
+
+        Outcome outcome = capturingBridge(click).retry(TENANT, documentId, "idem-unclassified");
+
+        assertThat(outcome).isEqualTo(Outcome.BLOCKED_CLASSIFICATION);
+        assertThat(click.sent).as("the provider was never asked").isEmpty();
+        assertThat(sentEvidenceOf(documentId).get("protected_request_reference"))
+                .isNull();
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .as("still owed, and recoverable once the node is classified")
+                .isEqualTo(FiscalStatus.PENDING);
+    }
+
+    @Test
+    @DisplayName(
+            "a classification missing one of its four fields is as good as none, and so is an unclassified delivery fee")
+    void anIncompleteClassificationAndAnUnclassifiedFeeBlockToo() {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        world.dishWithCheeseAndDeliveryFee();
+        CapturingClickPort click = new CapturingClickPort();
+
+        world.classes.put(
+                World.PLOV_VARIANT,
+                new FiscalClassificationFacts("10901001001000000", "1500123", null, "Plov", null, false));
+        assertThat(capturingBridge(click).retry(TENANT, documentId, "idem-no-unit"))
+                .as("no unit code: Click demands the unit and a platform without one cannot build a line")
+                .isEqualTo(Outcome.BLOCKED_CLASSIFICATION);
+
+        world.dishWithCheeseAndDeliveryFee();
+        world.feeClassification = Optional.empty();
+        assertThat(capturingBridge(click).retry(TENANT, documentId, "idem-no-fee-class"))
+                .isEqualTo(Outcome.BLOCKED_CLASSIFICATION);
+        assertThat(click.sent).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "a rate that is not a whole percent, or prices that were not VAT-inclusive, are BLOCKED_TAX: no rounding")
+    void aTaxRuleThatCannotBeStatedBlocks() {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        CapturingClickPort click = new CapturingClickPort();
+
+        world.tax = new OrderReceiptSource.Tax(1250, true);
+        assertThat(capturingBridge(click).retry(TENANT, documentId, "idem-12-5"))
+                .isEqualTo(Outcome.BLOCKED_TAX);
+        world.tax = new OrderReceiptSource.Tax(1200, false);
+        assertThat(capturingBridge(click).retry(TENANT, documentId, "idem-exclusive"))
+                .isEqualTo(Outcome.BLOCKED_TAX);
+        world.tax = null;
+        assertThat(capturingBridge(click).retry(TENANT, documentId, "idem-unrecorded"))
+                .as("a quote that recorded no tax rule: a rate is never guessed")
+                .isEqualTo(Outcome.BLOCKED_TAX);
+        assertThat(click.sent).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "lines that do not add up to what the provider was asked to collect are BLOCKED_RECONCILIATION, and no line absorbs the gap")
+    void aReceiptThatDoesNotEqualThePaymentBlocks() {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        world.plovGross = 14_000; // the payment is 15 000
+        CapturingClickPort click = new CapturingClickPort();
+
+        Outcome outcome = capturingBridge(click).retry(TENANT, documentId, "idem-mismatch");
+
+        assertThat(outcome).isEqualTo(Outcome.BLOCKED_RECONCILIATION);
+        assertThat(click.sent).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "points redeemed on the order are a per-line discount: the receipt equals the money tender and the VAT follows")
+    void aPointsRedemptionIsADiscountOnTheLines() {
+        seedClickBinding();
+        // 20 000 of food, 5 000 of it paid in points: Click is asked for 15 000.
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY, 15_000L));
+        world.plovGross = 20_000;
+        world.redeemed = 5_000;
+        CapturingClickPort click = new CapturingClickPort();
+
+        Outcome outcome = capturingBridge(click).retry(TENANT, documentId, "idem-points");
+
+        assertThat(outcome).isEqualTo(Outcome.ISSUED);
+        FiscalReceiptLine line = click.sent.get(0).lines().getFirst();
+        assertThat(line.netTotal().value()).isEqualTo(15_000);
+        assertThat(java.util.Objects.requireNonNull(line.discount()).value()).isEqualTo(5_000);
+        assertThat(line.taxAmount().value())
+                .as("extracted again from what was paid: round(15 000 x 1200 / 11 200), not the quote's 2 143")
+                .isEqualTo(1_607);
+    }
+
+    @Test
+    @DisplayName(
             "a request that never left is not recorded as sent: a deferred submission keeps no evidence of a request")
     void aRequestThatNeverLeftIsNotRecorded() {
         seedClickBinding();
@@ -432,7 +631,7 @@ class PartnerFiscalizationBridgeTests {
         ScriptedClick click = new ScriptedClick();
         click.sends = false;
 
-        realGateBridge(platformAllowsPlaceholders(true), click).retry(TENANT, documentId, "idem-deferred");
+        realBridge(click).retry(TENANT, documentId, "idem-deferred");
 
         assertThat(click.submitted).hasSize(1);
         assertThat(sentEvidenceOf(documentId).get("protected_request_reference"))
@@ -447,7 +646,7 @@ class PartnerFiscalizationBridgeTests {
         seedClickBinding();
         UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
         ScriptedClick click = new ScriptedClick();
-        realGateBridge(platformAllowsPlaceholders(true), click).retry(TENANT, documentId, "idem-first");
+        realBridge(click).retry(TENANT, documentId, "idem-first");
         String first = (String) sentEvidenceOf(documentId).get("protected_request_reference");
         fiscalService.attachEvidence(
                 TENANT,
@@ -458,7 +657,7 @@ class PartnerFiscalizationBridgeTests {
                 CLOCK.instant());
 
         boolean rewritten = documents.recordSentEvidence(
-                TENANT, documentId, INTEGRATION_BINDING, false, "other", "other", CLOCK.instant());
+                TENANT, documentId, INTEGRATION_BINDING, "other", "other", CLOCK.instant());
 
         assertThat(rewritten).isFalse();
         assertThat(sentEvidenceOf(documentId).get("protected_request_reference"))
@@ -475,29 +674,100 @@ class PartnerFiscalizationBridgeTests {
         seedClickBinding();
         UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
         ScriptedClick click = new ScriptedClick();
-        InMemoryPlatformPolicies allowed = platformAllowsPlaceholders(true);
 
-        realGateBridge(allowed, click).retry(TENANT, documentId, "idem-lost-1");
+        realBridge(click).retry(TENANT, documentId, "idem-lost-1");
         assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
                 .as("asked, and no answer: the request may well have arrived")
                 .isEqualTo(FiscalStatus.SUBMITTED);
-        // The order is known by another number when the document is asked again, so the second request is not
-        // the first.
-        orders = (tenantId, orderId) -> Optional.of(new OrderDirectory.OrderSummary(
-                orderId, TENANT, BRAND, LOCATION, "BR-1-REVISED", null, "guest-hash", "COMPLETED", "UZS", 15_000L, 1));
-        realGateBridge(allowed, click).retry(TENANT, documentId, "idem-lost-2");
+        // The tenant corrects the dish's fiscal name before the document is asked again, so the second
+        // request is not the first.
+        world.classes.put(
+                World.PLOV_VARIANT,
+                new FiscalClassificationFacts("10901001001000000", "1500123", 796, "Plov (revised)", null, false));
+        realBridge(click).retry(TENANT, documentId, "idem-lost-2");
 
         List<Map<String, Object>> kept = sentRequestsOf(documentId);
         assertThat(kept).extracting(row -> row.get("attempt")).containsExactly(1, 2);
         assertThat(sentLineNames(documentId, kept.get(0)))
                 .as("the first request is what Click may hold, and it is still here")
-                .containsExactly("Order BR-1");
-        assertThat(sentLineNames(documentId, kept.get(1))).containsExactly("Order BR-1-REVISED");
+                .containsExactly("Plov");
+        assertThat(sentLineNames(documentId, kept.get(1))).containsExactly("Plov (revised)");
         assertThat(sentEvidenceOf(documentId).get("protected_request_reference"))
                 .as("the document's own column keeps meaning the latest request")
                 .isEqualTo(kept.get(1).get("protected_request_reference"));
         assertThat(kept.get(0).get("protected_request_reference"))
                 .isNotEqualTo(kept.get(1).get("protected_request_reference"));
+    }
+
+    // -----------------------------------------------------------------------
+    // A request that may have left is looked for before the receipt is rebuilt (ADR 0166 Decision 6, ADR 0038)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+            "a document blocked as overdue is read back before its receipt is rebuilt: what Click already holds is found even when the order can no longer be built")
+    void aReceiptClickHoldsIsFoundBeforeTheLinesAreRebuilt() {
+        seedClickBinding();
+        UUID intentId = seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY);
+        UUID documentId = seedPendingDocument(intentId);
+        capturedClickAttempt(intentId, "777");
+        blockedAsOverdue(documentId);
+        // The tenant edited a classification after the request left: the builder now refuses this order.
+        world.dishWithCheeseAndDeliveryFee();
+        world.classes.remove(World.CHEESE_OPTION);
+        ScriptedOfdData ofd =
+                new ScriptedOfdData("https://ofd.soliq.uz/check?t=EZ20221028&r=1234&c=20221028171340&s=SIGN");
+
+        Outcome outcome = clickBridge(ofd).retry(TENANT, documentId, "idem-overdue-held");
+
+        assertThat(outcome)
+                .as("Click filed the receipt; the reply that would have said so was lost. Restating this as "
+                        + "'nothing was sent' leaves the tax authority holding a receipt the platform never records")
+                .isEqualTo(Outcome.ALREADY_ISSUED);
+        FiscalDocument after = fiscalService.find(TENANT, documentId).orElseThrow();
+        assertThat(after.status()).isEqualTo(FiscalStatus.ISSUED);
+        assertThat(after.evidence()).isNotNull();
+        assertThat(ofd.reads).as("one read-back, and nothing was submitted").isEqualTo(1);
+        assertThat(ofd.submits).isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "when Click holds nothing the obstacle is reported as before: BLOCKED_CLASSIFICATION, nothing submitted")
+    void aDocumentClickHoldsNothingForIsStillBlockedByTheObstacle() {
+        seedClickBinding();
+        UUID intentId = seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY);
+        UUID documentId = seedPendingDocument(intentId);
+        capturedClickAttempt(intentId, "777");
+        blockedAsOverdue(documentId);
+        world.dishWithCheeseAndDeliveryFee();
+        world.classes.remove(World.CHEESE_OPTION);
+        ScriptedOfdData ofd = new ScriptedOfdData(null);
+
+        Outcome outcome = clickBridge(ofd).retry(TENANT, documentId, "idem-overdue-empty");
+
+        assertThat(outcome).isEqualTo(Outcome.BLOCKED_CLASSIFICATION);
+        assertThat(ofd.reads).isEqualTo(1);
+        assertThat(ofd.submits).isZero();
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .isEqualTo(FiscalStatus.BLOCKED);
+    }
+
+    @Test
+    @DisplayName("a document that was never sent is not read back: the provider cannot hold what it was never asked")
+    void aDocumentNeverSentIsNotReadBack() {
+        seedClickBinding();
+        UUID intentId = seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY);
+        UUID documentId = seedPendingDocument(intentId);
+        capturedClickAttempt(intentId, "777");
+        world.dishWithCheeseAndDeliveryFee();
+        world.classes.remove(World.CHEESE_OPTION);
+        ScriptedOfdData ofd = new ScriptedOfdData(null);
+
+        Outcome outcome = clickBridge(ofd).retry(TENANT, documentId, "idem-pending");
+
+        assertThat(outcome).isEqualTo(Outcome.BLOCKED_CLASSIFICATION);
+        assertThat(ofd.reads).isZero();
     }
 
     // -----------------------------------------------------------------------
@@ -546,7 +816,7 @@ class PartnerFiscalizationBridgeTests {
         FiscalDocument sent = click.sent.get(0);
         assertThat(sent.lines()).hasSize(1);
         assertThat(sent.lines().get(0).fiscalName()).isEqualTo("Vodka");
-        assertThat(sent.lines().get(0).quantity()).isEqualTo(2);
+        assertThat(sent.lines().get(0).quantity()).isEqualByComparingTo("2");
         assertThat(sent.lines().get(0).markingCodes()).containsExactly(MARK_CODE_1, MARK_CODE_2);
         assertThat(sent.lines().get(0).mxikCode())
                 .as("a real classification, not the synthetic placeholder")
@@ -579,26 +849,28 @@ class PartnerFiscalizationBridgeTests {
 
         Outcome outcome = bridge.retry(TENANT, documentId, "idem-marked-3");
 
-        assertThat(outcome).isEqualTo(Outcome.REJECTED);
+        assertThat(outcome)
+                .as("nothing was asked of Payme: not a refusal by it, which would leave the claimed document SUBMITTED")
+                .isEqualTo(Outcome.NOT_SENDABLE);
         assertThat(fiscalService.find(TENANT, documentId).orElseThrow().lines())
                 .as("no synthetic line was written for the marked good either")
                 .isEmpty();
     }
 
     @Test
-    @DisplayName("an order with no marked line still takes the synthetic aggregate line when marked goods are wired")
-    void anOrdinaryOrderIsUnchangedByTheProjection() {
+    @DisplayName(
+            "an order with no marked line is filed as its real lines when marked goods are wired, codes and all absent")
+    void anOrdinaryOrderIsUnchangedByTheMarkingPath() {
         seedClickBinding();
         UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
         CapturingClickPort click = new CapturingClickPort();
-        PartnerFiscalizationBridge bridge = markedBridge(click, ordinaryOnly());
 
-        Outcome outcome = bridge.retry(TENANT, documentId, "idem-marked-4");
+        Outcome outcome = capturingBridge(click).retry(TENANT, documentId, "idem-marked-4");
 
         assertThat(outcome).isEqualTo(Outcome.ISSUED);
         assertThat(click.sent.get(0).lines()).hasSize(1);
         assertThat(click.sent.get(0).lines().get(0).markingCodes()).isEmpty();
-        assertThat(click.sent.get(0).lines().get(0).mxikCode()).isEqualTo("00000000000000000");
+        assertThat(click.sent.get(0).lines().get(0).mxikCode()).isEqualTo("10901001001000000");
     }
 
     // -----------------------------------------------------------------------
@@ -657,27 +929,42 @@ class PartnerFiscalizationBridgeTests {
 
         Outcome outcome = markedBridge(click, completeVodka(2)).retry(TENANT, documentId, "idem-no-snapshot");
 
-        assertThat(outcome).isEqualTo(Outcome.REJECTED);
+        assertThat(outcome).isEqualTo(Outcome.NOT_SENDABLE);
         assertThat(click.sent)
                 .as("a real receipt with real codes is never filed under a TIN of zeros")
                 .isEmpty();
     }
 
     @Test
-    @DisplayName("the sandbox placeholder carries the snapshot seller's TIN too, after the branch changed hands")
-    void thePlaceholderCarriesTheSnapshotSellersTin() {
+    @DisplayName("an ordinary order is filed under the snapshot seller too, after the branch changed hands")
+    void anOrdinaryOrderIsFiledUnderTheSnapshotSellerToo() {
         seedClickBinding();
         UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
         String openedUnder = taxpayerNumberOf(CLICK_ENTITY);
         handTheBranchOverTo(SUCCESSOR_ENTITY, "SUCCESSOR");
-        ScriptedClick click = new ScriptedClick();
+        CapturingClickPort click = new CapturingClickPort();
 
-        realGateBridge(platformAllowsPlaceholders(true), click).retry(TENANT, documentId, "idem-placeholder-tin");
+        capturingBridge(click).retry(TENANT, documentId, "idem-ordinary-tin");
 
-        assertThat(click.submitted)
+        assertThat(click.sent)
                 .singleElement()
-                .satisfies(sent ->
-                        assertThat(sent.lines().getFirst().commissionTin()).isEqualTo(openedUnder));
+                .satisfies(sent -> assertThat(sent.lines())
+                        .extracting(FiscalReceiptLine::commissionTin)
+                        .containsOnly(openedUnder));
+    }
+
+    @Test
+    @DisplayName("an order whose document holds no seller snapshot sends nothing, rather than filing zeros")
+    void anOrderWithNoSellerSnapshotIsNotFiledUnderZeros() {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        withoutSellerSnapshot(documentId);
+        CapturingClickPort click = new CapturingClickPort();
+
+        Outcome outcome = capturingBridge(click).retry(TENANT, documentId, "idem-ordinary-no-snapshot");
+
+        assertThat(outcome).isEqualTo(Outcome.NOT_SENDABLE);
+        assertThat(click.sent).isEmpty();
     }
 
     private static final UUID SUCCESSOR_ENTITY = UUID.randomUUID();
@@ -807,33 +1094,25 @@ class PartnerFiscalizationBridgeTests {
         return new OrderMarksPort.MarkRef(id, sequence, "04600000000015", envelope);
     }
 
-    /** A bridge whose marked-goods projection reads {@code source} and whose Click port records what it is sent. */
+    /** A bridge whose marking source is {@code source}, over an order made of the same lines. */
     private PartnerFiscalizationBridge markedBridge(CapturingClickPort click, OrderMarksPort.ReceiptSource source) {
+        world.marks = source;
+        world.orderFromMarks(source);
+        world.classes.put(
+                VODKA_VARIANT,
+                new FiscalClassificationFacts("22030000000000000", "123456", 796, "Vodka", "4600000000015", true));
+        return capturingBridge(click);
+    }
+
+    /** A bridge over {@code click}, which says it can carry codes and remembers every document it is sent. */
+    private PartnerFiscalizationBridge capturingBridge(CapturingClickPort click) {
         PaymentFiscalService service = new PaymentFiscalService(
                 documents,
                 List.of(click, new PaymeFiscalAdapter(intents, CLOCK)),
                 event -> {},
                 new RecordingProviderActivityRecorder());
         fiscalService = service;
-        OrderMarksPort marks = new OrderMarksPort() {
-            @Override
-            public List<LineMarkCount> markCounts(UUID tenantId, UUID orderId) {
-                return List.of();
-            }
-
-            @Override
-            public ReceiptSource receiptSource(UUID tenantId, UUID orderId) {
-                return source;
-            }
-        };
-        uz.horecaos.platform.catalog.api.FiscalClassificationLookup classifications =
-                (tenantId, brandId, ids) -> Map.of(
-                        VODKA_VARIANT,
-                        new uz.horecaos.platform.catalog.api.FiscalClassificationLookup.FiscalClassificationFacts(
-                                "22030000000000000", "123456", 796, "Vodka", "4600000000015", true));
-        MarkedOrderReceiptProjection projection =
-                new MarkedOrderReceiptProjection(marks, classifications, service, protection, fact -> {}, CLOCK);
-        return new PartnerFiscalizationBridge(service, bindings, intents, orders, binding -> true, CLOCK, projection);
+        return new PartnerFiscalizationBridge(service, bindings, world.builder(service), CLOCK);
     }
 
     /** A Click port that says it can carry codes and remembers every document it is asked to send. */
@@ -862,25 +1141,537 @@ class PartnerFiscalizationBridgeTests {
         }
     }
 
-    // ------------------------------------------------------------------- helpers
+    // -----------------------------------------------------------------------
+    // Payme: the lines go with the checkout, and the filing sends exactly those (ADR 0166 Decisions 6 and 9)
+    // -----------------------------------------------------------------------
 
-    private InMemoryPlatformPolicies platformAllowsPlaceholders(boolean allowed) {
-        InMemoryPlatformPolicies policies = new InMemoryPlatformPolicies();
-        policies.author(
-                FiscalEvidencePolicies.SYNTHETIC_LINES_ALLOWED,
-                ResourceScope.platform(),
-                new FiscalEvidencePolicies.SyntheticLines(allowed),
-                ActorRef.user("platform-admin", "Platform"),
-                "bridge test");
-        return policies;
+    @Test
+    @DisplayName(
+            "a Payme checkout keeps the lines it carried behind a protected reference, and a rebuild is not what is filed")
+    void aPaymeCheckoutKeepsItsLinesAndTheFilingSendsThoseAsSent() throws Exception {
+        seedPaymeBinding();
+        UUID intentId = seedIntent(PaymentProviderType.PAYME, PAYME_ENTITY);
+        PaymentFiscalService service = paymeService();
+        ProtectedPresentedReceipts presented = presented(service);
+        PaymentAttempt attempt = seedPaymeAttempt(intentId);
+
+        // 1. The checkout is presented: the lines are built from the order and kept on the attempt.
+        var prepared = presented.prepare(attempt, ORDER);
+        assertThat(prepared).isInstanceOf(PresentedReceipts.Prepared.Ready.class);
+        String reference = new JdbcPaymentAttemptStore(jdbc)
+                .presentedReceiptReference(TENANT, attempt.id())
+                .orElseThrow();
+        assertThat(reference)
+                .as("a protected reference, not the lines")
+                .doesNotContain("Plov")
+                .doesNotContain("10901001001000000");
+
+        // 2. The catalogue moves before the order completes, as it can: a rebuild would now say something else.
+        world.classes.put(
+                World.PLOV_VARIANT,
+                new FiscalClassificationFacts("99999999999999999", "9999999", 796, "Renamed plov", null, false));
+        UUID documentId = seedPendingDocument(intentId);
+        PartnerFiscalizationBridge bridge =
+                new PartnerFiscalizationBridge(service, bindings, world.builder(service), presented, CLOCK);
+
+        Outcome outcome = bridge.retry(TENANT, documentId, "idem-payme");
+
+        // 3. What was filed is what Payme was given: the document keeps those lines as its sent request.
+        assertThat(outcome).isEqualTo(Outcome.UNCERTAIN);
+        List<Map<String, Object>> sent = sentRequestsOf(documentId);
+        assertThat(sent).hasSize(1);
+        assertThat(sentLineNames(documentId, sent.get(0))).containsExactly("Plov");
+        assertThat(sentEvidenceOf(documentId).get("sent_tender_split_reference"))
+                .as("the whole charge went through the provider as one payment")
+                .isNotNull();
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .isEqualTo(FiscalStatus.SUBMITTED);
     }
 
+    @Test
+    @DisplayName("a re-presentation of a Payme checkout carries the lines the first one fixed, not a rebuild")
+    void aRePresentationCarriesTheFirstLines() {
+        seedPaymeBinding();
+        UUID intentId = seedIntent(PaymentProviderType.PAYME, PAYME_ENTITY);
+        ProtectedPresentedReceipts presented = presented(paymeService());
+        PaymentAttempt attempt = seedPaymeAttempt(intentId);
+        presented.prepare(attempt, ORDER);
+
+        world.classes.put(
+                World.PLOV_VARIANT,
+                new FiscalClassificationFacts("99999999999999999", "9999999", 796, "Renamed plov", null, false));
+        var again = presented.prepare(attempt, ORDER);
+
+        assertThat(again).isInstanceOfSatisfying(PresentedReceipts.Prepared.Ready.class, ready -> {
+            assertThat(ready.lines()).hasSize(1);
+            assertThat(ready.lines().get(0).fiscalName()).isEqualTo("Plov");
+            assertThat(ready.lines().get(0).mxikCode()).isEqualTo("10901001001000000");
+        });
+        assertThat(presented.lines(TENANT, attempt.id()).orElseThrow().get(0).fiscalName())
+                .isEqualTo("Plov");
+    }
+
+    @Test
+    @DisplayName("a Payme checkout whose order has an unclassified node is refused with the obstacle and keeps nothing")
+    void anUnbuildablePaymeReceiptKeepsNothing() {
+        seedPaymeBinding();
+        UUID intentId = seedIntent(PaymentProviderType.PAYME, PAYME_ENTITY);
+        ProtectedPresentedReceipts presented = presented(paymeService());
+        PaymentAttempt attempt = seedPaymeAttempt(intentId);
+        world.classes.clear();
+
+        var prepared = presented.prepare(attempt, ORDER);
+
+        assertThat(prepared)
+                .isInstanceOfSatisfying(
+                        PresentedReceipts.Prepared.Refused.class,
+                        refused -> assertThat(refused.code()).isEqualTo("CLASSIFICATION:CLASSIFICATION_MISSING"));
+        assertThat(new JdbcPaymentAttemptStore(jdbc).presentedReceiptReference(TENANT, attempt.id()))
+                .isEmpty();
+        assertThat(presented.lines(TENANT, attempt.id())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("the kept lines are bound to their attempt: the same ciphertext does not open under another")
+    void theKeptLinesAreBoundToTheirAttempt() {
+        seedPaymeBinding();
+        UUID intentId = seedIntent(PaymentProviderType.PAYME, PAYME_ENTITY);
+        ProtectedPresentedReceipts presented = presented(paymeService());
+        PaymentAttempt attempt = seedPaymeAttempt(intentId);
+        presented.prepare(attempt, ORDER);
+        String reference = new JdbcPaymentAttemptStore(jdbc)
+                .presentedReceiptReference(TENANT, attempt.id())
+                .orElseThrow();
+
+        assertThatThrownBy(() -> protection.reveal(
+                        TENANT,
+                        ProtectedValue.deserialize(reference),
+                        ProtectedPresentedReceipts.recordOf(UUID.randomUUID()),
+                        "test"))
+                .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    @DisplayName(
+            "a Click document is built from the order as before: Payme's presented lines are never consulted for it")
+    void clickIsUntouchedByPresentedLines() {
+        seedClickBinding();
+        UUID intentId = seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY);
+        UUID documentId = seedPendingDocument(intentId);
+        ScriptedClick click = new ScriptedClick();
+        PaymentFiscalService service = new PaymentFiscalService(
+                documents, List.of(click), event -> {}, new RecordingProviderActivityRecorder());
+        fiscalService = service;
+        PresentedReceipts neverAsked = new PresentedReceipts() {
+            @Override
+            public Prepared prepare(PaymentAttempt attempt, UUID orderId) {
+                throw new AssertionError("Click never prepares Payme lines");
+            }
+
+            @Override
+            public Optional<List<FiscalReceiptLine>> lines(UUID tenantId, UUID attemptId) {
+                throw new AssertionError("not for Click");
+            }
+
+            @Override
+            public Optional<List<FiscalReceiptLine>> linesOfIntent(UUID tenantId, UUID intentId) {
+                throw new AssertionError("not for Click");
+            }
+        };
+
+        Outcome outcome = new PartnerFiscalizationBridge(service, bindings, world.builder(service), neverAsked, CLOCK)
+                .retry(TENANT, documentId, "idem-click");
+
+        assertThat(outcome).isNotEqualTo(Outcome.NO_PROVIDER_PATH);
+        assertThat(click.submitted).hasSize(1);
+        assertThat(click.submitted.get(0).lines()).hasSize(1);
+    }
+
+    private PaymentFiscalService paymeService() {
+        PaymentFiscalService service = new PaymentFiscalService(
+                documents,
+                List.of(new PaymeFiscalAdapter(intents, CLOCK)),
+                event -> {},
+                new RecordingProviderActivityRecorder(),
+                new ProtectedSentEvidenceRecorder(
+                        TestProtection.envelope(),
+                        documents,
+                        tools.jackson.databind.json.JsonMapper.builder().build()));
+        fiscalService = service;
+        return service;
+    }
+
+    private ProtectedPresentedReceipts presented(PaymentFiscalService service) {
+        return new ProtectedPresentedReceipts(
+                world.builder(service),
+                service,
+                protection,
+                new JdbcPaymentAttemptStore(jdbc),
+                tools.jackson.databind.json.JsonMapper.builder().build(),
+                CLOCK);
+    }
+
+    private PaymentAttempt seedPaymeAttempt(UUID intentId) {
+        UUID merchantBinding = jdbc.sql("SELECT id FROM payments.merchant_bindings WHERE provider_type = 'PAYME'")
+                .query(UUID.class)
+                .single();
+        PaymentAttempt attempt = new PaymentAttempt(
+                UUID.randomUUID(),
+                TENANT,
+                intentId,
+                PaymentProviderType.PAYME,
+                merchantBinding,
+                "mtid-" + UUID.randomUUID(),
+                java.time.LocalDate.of(2026, 8, 24),
+                null,
+                null,
+                new SomAmount(15_000L, "UZS"),
+                PaymentAttemptStatus.INITIATED,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                1,
+                CLOCK.instant(),
+                null);
+        new JdbcPaymentAttemptStore(jdbc).insert(attempt);
+        return attempt;
+    }
+
+    // -----------------------------------------------------------------------
+    // TERMINAL: a cash sale's receipt, asked of the tenant's own equipment (ADR 0166 «Providers», ADR 0007)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+            "a cash document is issued by the tenant's terminal: its receipt is the evidence, the lines are kept as sent, and the whole amount is cash")
+    void aCashDocumentIsIssuedByTheTenantsTerminal() throws Exception {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+
+        Outcome outcome = terminalBridge(terminal, true).retry(TENANT, documentId, "idem-cash");
+
+        assertThat(outcome).isEqualTo(Outcome.ISSUED);
+        FiscalDocument document = fiscalService.find(TENANT, documentId).orElseThrow();
+        assertThat(document.status()).isEqualTo(FiscalStatus.ISSUED);
+        assertThat(document.reasonCode()).isEqualTo("TERMINAL_FISCALIZED");
+        Map<String, Object> row = jdbc.sql("""
+                        SELECT fiscal_sign, external_receipt_id, terminal_id, receipt_url, merchant_binding_id,
+                               provider_type
+                          FROM fiscal.fiscal_documents WHERE id = :id
+                        """).param("id", documentId).query().singleRow();
+        assertThat(row.get("fiscal_sign")).isNotNull();
+        assertThat(row.get("external_receipt_id")).isNotNull();
+        assertThat(row.get("terminal_id")).isEqualTo("FAKE-Kassa 2");
+        assertThat(row.get("merchant_binding_id"))
+                .as("no merchant account issued this")
+                .isNull();
+        assertThat(row.get("provider_type")).isNull();
+
+        // What went to the terminal: one request, keyed by the document, for what was paid in cash.
+        assertThat(terminal.requests()).singleElement().satisfies(request -> {
+            assertThat(request.idempotencyKey()).isEqualTo("terminal-issue:" + documentId);
+            assertThat(request.terminalReference()).isEqualTo("Kassa 2");
+            assertThat(request.paidMinor()).isEqualTo(15_000L);
+            assertThat(request.lines()).singleElement().satisfies(line -> {
+                assertThat(line.name()).isEqualTo("Plov");
+                assertThat(line.ikpu()).isEqualTo("10901001001000000");
+            });
+        });
+
+        // And what was kept: the lines as sent, and a split that says cash, not card.
+        List<Map<String, Object>> sent = sentRequestsOf(documentId);
+        assertThat(sent).hasSize(1);
+        assertThat(sentLineNames(documentId, sent.get(0))).containsExactly("Plov");
+        String split = protection.reveal(
+                TENANT,
+                ProtectedValue.deserialize(java.util.Objects.requireNonNull(
+                        (String) sentEvidenceOf(documentId).get("sent_tender_split_reference"))),
+                SentReceiptEvidence.splitRecord(documentId),
+                "bridge-test");
+        SentReceiptEvidence.TenderSplit tender = tools.jackson.databind.json.JsonMapper.builder()
+                .build()
+                .readValue(split, SentReceiptEvidence.TenderSplit.class);
+        assertThat(tender.receivedCashMinor()).isEqualTo(15_000L);
+        assertThat(tender.receivedCardMinor()).isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "an accepted-then-lost reply is uncertain, nothing is issued again, and the next ask finds the receipt by looking")
+    void aLostReplyIsResolvedByLookingAndNeverByIssuingTwice() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+        PartnerFiscalizationBridge bridge = terminalBridge(terminal, true);
+        terminal.next(FiscalTerminalPortContract.Scenario.ACCEPT_THEN_LOSE_THE_REPLY);
+
+        assertThat(bridge.retry(TENANT, documentId, "idem-1")).isEqualTo(Outcome.UNCERTAIN);
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .as("a request that left is never returned to the queue")
+                .isEqualTo(FiscalStatus.SUBMITTED);
+        assertThat(sentRequestsOf(documentId))
+                .as("the request that left is kept")
+                .hasSize(1);
+
+        assertThat(bridge.retry(TENANT, documentId, "idem-2")).isEqualTo(Outcome.ALREADY_ISSUED);
+
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .isEqualTo(FiscalStatus.ISSUED);
+        assertThat(terminal.issueCalls())
+                .as("issuing was asked once, however many times the document was asked about")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a timeout after the request left is uncertain: kept SUBMITTED, never refused")
+    void aTimeoutIsUncertain() {
+        assertUncertain(FiscalTerminalPortContract.Scenario.TIME_OUT_AFTER_SENDING);
+    }
+
+    @Test
+    @DisplayName("a malformed body after the request left is uncertain too, because the terminal may have issued")
+    void aMalformedBodyIsUncertain() {
+        assertUncertain(FiscalTerminalPortContract.Scenario.MALFORMED_BODY);
+    }
+
+    private void assertUncertain(FiscalTerminalPortContract.Scenario scenario) {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+        terminal.next(scenario);
+
+        assertThat(terminalBridge(terminal, true).retry(TENANT, documentId, "idem-" + scenario))
+                .isEqualTo(Outcome.UNCERTAIN);
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .isEqualTo(FiscalStatus.SUBMITTED);
+        assertThat(terminal.issueCalls()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("an offline terminal leaves nothing recorded as sent, and the same document is issued when it is back")
+    void anOfflineTerminalIsAskedAgainLater() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+        PartnerFiscalizationBridge bridge = terminalBridge(terminal, true);
+        terminal.next(FiscalTerminalPortContract.Scenario.OFFLINE);
+
+        assertThat(bridge.retry(TENANT, documentId, "idem-1")).isEqualTo(Outcome.TERMINAL_UNREACHABLE);
+        assertThat(sentRequestsOf(documentId))
+                .as("nothing left, so nothing is evidence of a request")
+                .isEmpty();
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .isEqualTo(FiscalStatus.PENDING);
+
+        assertThat(bridge.retry(TENANT, documentId, "idem-2")).isEqualTo(Outcome.ISSUED);
+        assertThat(terminal.issueCalls()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("a terminal that cannot be read from is not issued to blind")
+    void aTerminalThatCannotBeLookedUpIsNotIssuedToBlind() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+        terminal.lookupsFail(true);
+
+        assertThat(terminalBridge(terminal, true).retry(TENANT, documentId, "idem-1"))
+                .isEqualTo(Outcome.TERMINAL_UNREACHABLE);
+        assertThat(terminal.issueCalls())
+                .as("read before write: a receipt may already exist and the read could not say")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "a cash document that holds no seller snapshot is not issued under zeros, and is not reported as the terminal's refusal")
+    void aCashDocumentWithNoSellerSnapshotIsNotSendable() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        withoutSellerSnapshot(documentId);
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+
+        assertThat(terminalBridge(terminal, true).retry(TENANT, documentId, "idem-no-seller"))
+                .as("REJECTED would say the terminal refused, and leave the claimed document SUBMITTED to be "
+                        + "blocked an hour later as 'the provider did not report' about a terminal nobody asked")
+                .isEqualTo(Outcome.NOT_SENDABLE);
+
+        assertThat(terminal.issueCalls()).isZero();
+        assertThat(sentRequestsOf(documentId)).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "a marked good paid in cash at a branch with a terminal is not sendable: no terminal carries a code yet")
+    void aMarkedGoodThroughATerminalIsNotSendable() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        world.marks = completeVodka(1);
+        world.orderFromMarks(world.marks);
+        world.classes.put(
+                VODKA_VARIANT,
+                new FiscalClassificationFacts("22030000000000000", "123456", 796, "Vodka", "4600000000015", true));
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+
+        assertThat(terminalBridge(terminal, true).retry(TENANT, documentId, "idem-marked-terminal"))
+                .isEqualTo(Outcome.NOT_SENDABLE);
+
+        assertThat(terminal.issueCalls()).isZero();
+    }
+
+    @Test
+    @DisplayName("a refusal from the terminal fails the document with the refusal recorded")
+    void aRefusalFailsTheDocument() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+        terminal.next(FiscalTerminalPortContract.Scenario.REFUSE);
+
+        assertThat(terminalBridge(terminal, true).retry(TENANT, documentId, "idem-1"))
+                .isEqualTo(Outcome.REJECTED);
+
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .isEqualTo(FiscalStatus.FAILED);
+    }
+
+    @Test
+    @DisplayName("no capable terminal of the seller at the location, or no adapter wired, issues nothing")
+    void noTerminalOrNoAdapterIssuesNothing() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+
+        assertThat(terminalBridge(terminal, false).retry(TENANT, documentId, "idem-1"))
+                .as("a terminal registered under another company, or none, is not an answer")
+                .isEqualTo(Outcome.NO_TERMINAL);
+        assertThat(terminalBridgeWithoutAdapter().retry(TENANT, documentId, "idem-2"))
+                .isEqualTo(Outcome.NOT_WIRED);
+        assertThat(terminal.issueCalls()).isZero();
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .isEqualTo(FiscalStatus.PENDING);
+    }
+
+    @Test
+    @DisplayName(
+            "an unclassified node blocks the terminal receipt too: nothing is issued and no placeholder is invented")
+    void anUnclassifiedNodeNeverReachesTheTerminal() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        world.classes.clear();
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+
+        assertThat(terminalBridge(terminal, true).retry(TENANT, documentId, "idem-1"))
+                .isEqualTo(Outcome.BLOCKED_CLASSIFICATION);
+        assertThat(terminal.issueCalls()).isZero();
+    }
+
+    @Test
+    @DisplayName("a document with no provider and no terminal issuer is still NO_PROVIDER_PATH, as before terminals")
+    void withoutAnIssuerAProviderlessDocumentHasNoPath() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+
+        assertThat(bridge().retry(TENANT, documentId, "idem-1")).isEqualTo(Outcome.NO_PROVIDER_PATH);
+    }
+
+    /** A cash sale awaiting its receipt: the cash intent is never captured by anyone, and the document is pending. */
+    private UUID cashDocument(UUID legalEntityId) {
+        UUID intentId = UUID.randomUUID();
+        intents.insert(new PaymentIntent(
+                intentId,
+                TENANT,
+                ORDER,
+                BRAND,
+                LOCATION,
+                null,
+                legalEntityId,
+                PaymentTender.CASH,
+                PaymentMethod.CASH,
+                null,
+                new SomAmount(15_000L, "UZS"),
+                PaymentIntentStatus.PENDING,
+                CaptureTiming.ON_HANDOVER,
+                UUID.randomUUID().toString(),
+                1,
+                CLOCK.instant(),
+                null));
+        return seedPendingDocument(intentId);
+    }
+
+    /** The bridge as production wires it, over a terminal that is bound to the seller at the location (or is not). */
+    private PartnerFiscalizationBridge terminalBridge(ControlledFiscalTerminal terminal, boolean bound) {
+        org.springframework.beans.factory.support.StaticListableBeanFactory beans =
+                new org.springframework.beans.factory.support.StaticListableBeanFactory();
+        beans.addBean("terminal", terminal);
+        return terminalBridge(beans.getBeanProvider(FiscalTerminalPort.class), bound);
+    }
+
+    private PartnerFiscalizationBridge terminalBridgeWithoutAdapter() {
+        return terminalBridge(
+                new org.springframework.beans.factory.support.StaticListableBeanFactory()
+                        .getBeanProvider(FiscalTerminalPort.class),
+                true);
+    }
+
+    private PartnerFiscalizationBridge terminalBridge(
+            org.springframework.beans.factory.ObjectProvider<FiscalTerminalPort> port, boolean bound) {
+        PaymentFiscalService service = new PaymentFiscalService(
+                documents,
+                List.of(),
+                event -> {},
+                new RecordingProviderActivityRecorder(),
+                new ProtectedSentEvidenceRecorder(
+                        TestProtection.envelope(),
+                        documents,
+                        tools.jackson.databind.json.JsonMapper.builder().build()));
+        fiscalService = service;
+        // The registry row the document will name as the terminal it was asked of (V0688). Not capable on its own
+        // (no binding), which is all a foreign key needs; the directory below is what says it can issue.
+        UUID terminalId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO fiscal.fiscal_terminals (id, tenant_id, brand_id, location_id, legal_entity_id,
+                    terminal_kind, terminal_reference, capability_snapshot, status)
+                VALUES (:id, :t, :b, :l, :e, 'POS', :ref, '{}'::jsonb, 'ACTIVE')
+                ON CONFLICT DO NOTHING
+                """)
+                .param("id", terminalId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("l", LOCATION)
+                .param("e", CLICK_ENTITY)
+                .param("ref", "Kassa 2 " + terminalId)
+                .update();
+        FiscalTerminalDirectory directory = new FiscalTerminalDirectory() {
+            @Override
+            public boolean hasCapableTerminal(UUID tenantId, UUID locationId) {
+                return bound;
+            }
+
+            @Override
+            public Optional<CapableTerminal> capableTerminal(UUID tenantId, UUID locationId, UUID legalEntityId) {
+                return bound && LOCATION.equals(locationId) && CLICK_ENTITY.equals(legalEntityId)
+                        ? Optional.of(new CapableTerminal(terminalId, "Kassa 2", legalEntityId, null))
+                        : Optional.empty();
+            }
+        };
+        TerminalFiscalizationBridge terminal =
+                new TerminalFiscalizationBridge(service, intents, world.builder(service), directory, port, CLOCK);
+        return new PartnerFiscalizationBridge(
+                service, bindings, world.builder(service), PresentedReceipts.NONE, terminal, CLOCK);
+    }
+
+    // ------------------------------------------------------------------- helpers
+
     /**
-     * The bridge as production wires it: the real gate (the environment row and the platform policy)
-     * and the real recorder behind the real envelope protection, over a Click port that records what
-     * it is asked to send and answers like the real adapter does for a request that left.
+     * The bridge as production wires it: the real builder reading the world's order, and the real recorder
+     * behind the real envelope protection, over a Click port that records what it is asked to send and
+     * answers like the real adapter does for a request that left.
      */
-    private PartnerFiscalizationBridge realGateBridge(InMemoryPlatformPolicies policies, ScriptedClick click) {
+    private PartnerFiscalizationBridge realBridge(ScriptedClick click) {
         PaymentFiscalService service = new PaymentFiscalService(
                 documents,
                 List.of(click),
@@ -890,8 +1681,8 @@ class PartnerFiscalizationBridgeTests {
                         TestProtection.envelope(),
                         documents,
                         tools.jackson.databind.json.JsonMapper.builder().build()));
-        return new PartnerFiscalizationBridge(
-                service, bindings, intents, orders, new JdbcSyntheticLineGate(jdbc, policies), CLOCK);
+        fiscalService = service;
+        return new PartnerFiscalizationBridge(service, bindings, world.builder(service), CLOCK);
     }
 
     /** Every request that left for the document, oldest first (V0643). */
@@ -935,7 +1726,10 @@ class PartnerFiscalizationBridgeTests {
         @Override
         public FiscalSubmission submit(
                 FiscalDocument document, uz.horecaos.platform.payments.domain.ProviderBinding binding) {
-            SomAmount total = document.lines().getFirst().lineTotal();
+            SomAmount total = document.lines().stream()
+                    .map(FiscalReceiptLine::netTotal)
+                    .reduce(SomAmount::plus)
+                    .orElseThrow();
             SentReceipt wire = new SentReceipt(
                     document.lines(), total, new SomAmount(0, total.currency()), new SomAmount(0, total.currency()));
             submitted.add(wire);
@@ -949,8 +1743,97 @@ class PartnerFiscalizationBridgeTests {
         }
     }
 
+    /** Click's {@code ofd_data} as a script: it holds a receipt at {@code qrCodeUrl}, or none when that is null. */
+    private static final class ScriptedOfdData implements MerchantApiTransport {
+
+        private final @Nullable String qrCodeUrl;
+        int reads;
+        int submits;
+
+        ScriptedOfdData(@Nullable String qrCodeUrl) {
+            this.qrCodeUrl = qrCodeUrl;
+        }
+
+        @Override
+        public uz.horecaos.platform.integration.api.provider.ProviderOutcome exchange(MerchantApiCall call) {
+            if ("ofd.read".equals(call.operation())) {
+                reads++;
+                return uz.horecaos.platform.integration.api.provider.ProviderOutcome.success(
+                        qrCodeUrl == null ? Map.of("error_code", 0) : Map.of("error_code", 0, "qrCodeURL", qrCodeUrl),
+                        null);
+            }
+            if (call.mutating()) {
+                submits++;
+            }
+            throw new AssertionError("this test only reads ofd_data: " + call.operation());
+        }
+    }
+
+    /** The bridge over the real Click adapter, whose transport is {@code ofd}. */
+    private PartnerFiscalizationBridge clickBridge(ScriptedOfdData ofd) {
+        ClickFiscalAdapter click =
+                new ClickFiscalAdapter(new ClickMerchantApi(ofd, CLOCK), new JdbcPaymentAttemptStore(jdbc), CLOCK);
+        PaymentFiscalService service = new PaymentFiscalService(
+                documents, List.of(click), event -> {}, new RecordingProviderActivityRecorder());
+        fiscalService = service;
+        return new PartnerFiscalizationBridge(service, bindings, world.builder(service), CLOCK);
+    }
+
+    /** A captured Click attempt whose payment id is stored, so the adapter does not have to resolve it. */
+    private void capturedClickAttempt(UUID intentId, String externalPaymentId) {
+        UUID merchantBinding = jdbc.sql("SELECT id FROM payments.merchant_bindings WHERE provider_type = 'CLICK'")
+                .query(UUID.class)
+                .single();
+        UUID attemptId = UUID.randomUUID();
+        new JdbcPaymentAttemptStore(jdbc)
+                .insert(new PaymentAttempt(
+                        attemptId,
+                        TENANT,
+                        intentId,
+                        PaymentProviderType.CLICK,
+                        merchantBinding,
+                        "mtid-" + UUID.randomUUID(),
+                        java.time.LocalDate.of(2026, 8, 24),
+                        null,
+                        null,
+                        new SomAmount(15_000L, "UZS"),
+                        PaymentAttemptStatus.INITIATED,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        1,
+                        CLOCK.instant(),
+                        null));
+        jdbc.sql("""
+                UPDATE payments.payment_attempts
+                   SET status = 'CAPTURED', external_payment_id = :payment, settled_at = :now
+                 WHERE id = :id
+                """)
+                .param("payment", externalPaymentId)
+                .param("now", CLOCK.instant().atOffset(ZoneOffset.UTC))
+                .param("id", attemptId)
+                .update();
+    }
+
+    /** The state the reporting sweep leaves a document in when the provider never reported: asked, and overdue. */
+    private static void blockedAsOverdue(UUID documentId) {
+        jdbc.sql("""
+                UPDATE fiscal.fiscal_documents
+                   SET status = 'BLOCKED', reason_code = 'PROVIDER_REPORT_OVERDUE',
+                       reason_note = 'the provider did not report', submitted_at = :at, blocked_at = :now
+                 WHERE id = :id
+                """)
+                .param("at", CLOCK.instant().minusSeconds(7_200).atOffset(ZoneOffset.UTC))
+                .param("now", CLOCK.instant().atOffset(ZoneOffset.UTC))
+                .param("id", documentId)
+                .update();
+    }
+
     private PartnerFiscalizationBridge bridge() {
-        return new PartnerFiscalizationBridge(fiscalService, bindings, intents, orders, syntheticLines, CLOCK);
+        return new PartnerFiscalizationBridge(fiscalService, bindings, world.builder(fiscalService), CLOCK);
     }
 
     /** Fails the test if the fake provider transport is ever reached. */
@@ -968,6 +1851,10 @@ class PartnerFiscalizationBridgeTests {
     }
 
     private UUID seedIntent(PaymentProviderType providerType, UUID legalEntityId) {
+        return seedIntent(providerType, legalEntityId, 15_000L);
+    }
+
+    private UUID seedIntent(PaymentProviderType providerType, UUID legalEntityId, long amountMinor) {
         UUID intentId = UUID.randomUUID();
         intents.insert(new PaymentIntent(
                 intentId,
@@ -980,7 +1867,7 @@ class PartnerFiscalizationBridgeTests {
                 PaymentTender.PROVIDER,
                 providerType == PaymentProviderType.CLICK ? PaymentMethod.CLICK : PaymentMethod.PAYME,
                 providerType,
-                new SomAmount(15_000L, "UZS"),
+                new SomAmount(amountMinor, "UZS"),
                 PaymentIntentStatus.PENDING,
                 CaptureTiming.BEFORE_CONFIRMATION,
                 UUID.randomUUID().toString(),
@@ -1209,5 +2096,125 @@ class PartnerFiscalizationBridgeTests {
                 .param("installationId", installationId)
                 .param("brandId", BRAND)
                 .update();
+    }
+    // ------------------------------------------------------------------ the order under test
+
+    /**
+     * The order the builder reads, its classifications and its settlement, stated in one place and changed
+     * by the test that needs a different order. The default is one dish for the whole payment of 15 000, at
+     * 12 percent, classified.
+     */
+    private final class World {
+
+        static final UUID PLOV_VARIANT = UUID.randomUUID();
+        static final UUID CHEESE_OPTION = UUID.randomUUID();
+        static final UUID LINE = UUID.randomUUID();
+
+        /** The line's gross, modifier options included. */
+        long plovGross = 15_000;
+
+        List<OrderReceiptSource.Option> options = List.of();
+        long fee = 0;
+        long redeemed = 0;
+        OrderReceiptSource.@Nullable Tax tax = new OrderReceiptSource.Tax(1200, true);
+        Map<UUID, FiscalClassificationFacts> classes = new java.util.HashMap<>();
+        Optional<FiscalClassificationFacts> feeClassification = Optional.empty();
+        OrderMarksPort.ReceiptSource marks = new OrderMarksPort.ReceiptSource(BRAND, "UZS", List.of());
+
+        @Nullable
+        List<OrderReceiptSource.Line> lines = null;
+
+        World() {
+            classes.put(
+                    PLOV_VARIANT,
+                    new FiscalClassificationFacts("10901001001000000", "1500123", 796, "Plov", null, false));
+            classes.put(
+                    CHEESE_OPTION,
+                    new FiscalClassificationFacts("04001001001000000", "1500456", 796, "Extra cheese", null, false));
+        }
+
+        /** Plov 10 000 with 3 000 of extra cheese and 2 000 of delivery: the whole payment of 15 000. */
+        void dishWithCheeseAndDeliveryFee() {
+            plovGross = 13_000;
+            options = List.of(new OrderReceiptSource.Option(CHEESE_OPTION, "Extra cheese", 3_000, false));
+            fee = 2_000;
+            feeClassification = Optional.of(
+                    new FiscalClassificationFacts("10701001001000000", "7000001", 796, "Delivery", null, false));
+        }
+
+        void orderFromMarks(OrderMarksPort.ReceiptSource source) {
+            lines = source.lines().stream()
+                    .map(line -> new OrderReceiptSource.Line(
+                            line.lineId(),
+                            1,
+                            line.variantId(),
+                            line.productName(),
+                            line.quantity(),
+                            line.finalAmountMinor(),
+                            line.finalAmountMinor(),
+                            line.taxAmountMinor(),
+                            null,
+                            List.of(),
+                            0))
+                    .toList();
+        }
+
+        OrderReceiptSource.ReceiptOrder order() {
+            List<OrderReceiptSource.Line> built = lines != null
+                    ? lines
+                    : List.of(new OrderReceiptSource.Line(
+                            LINE,
+                            1,
+                            PLOV_VARIANT,
+                            "Plov",
+                            java.math.BigDecimal.ONE,
+                            plovGross,
+                            plovGross,
+                            Math.round(plovGross * 12 / 112.0),
+                            null,
+                            options,
+                            0));
+            long goods = built.stream()
+                    .mapToLong(OrderReceiptSource.Line::finalMinor)
+                    .sum();
+            long taxMinor =
+                    built.stream().mapToLong(OrderReceiptSource.Line::taxMinor).sum();
+            return new OrderReceiptSource.ReceiptOrder(
+                    ORDER, BRAND, LOCATION, "UZS", goods + fee, taxMinor, 0, fee, UUID.randomUUID(), tax, built);
+        }
+
+        ReceiptLineBuilder builder(PaymentFiscalService service) {
+            OrderReceiptSource source = (tenantId, orderId) -> Optional.of(order());
+            OrderMarksPort marksPort = new OrderMarksPort() {
+                @Override
+                public List<LineMarkCount> markCounts(UUID tenantId, UUID orderId) {
+                    return List.of();
+                }
+
+                @Override
+                public ReceiptSource receiptSource(UUID tenantId, UUID orderId) {
+                    return marks;
+                }
+            };
+            FiscalClassificationLookup lookup = new FiscalClassificationLookup() {
+                @Override
+                public Map<UUID, FiscalClassificationFacts> classifications(
+                        UUID tenantId, UUID brandId, java.util.Set<UUID> priceableIds) {
+                    return classes;
+                }
+
+                @Override
+                public Optional<FiscalClassificationFacts> deliveryFee(UUID tenantId, UUID brandId) {
+                    return feeClassification;
+                }
+            };
+            JdbcReceiptPaymentFacts payments = new JdbcReceiptPaymentFacts(intents, new JdbcSettlementStore(jdbc)) {
+                @Override
+                public long pointsRedeemedMinor(UUID tenantId, UUID orderId) {
+                    return redeemed;
+                }
+            };
+            return new ReceiptLineBuilder(source, marksPort, lookup, payments, service, protection, fact -> {}, CLOCK);
+        }
     }
 }

@@ -52,6 +52,9 @@ export const kitchenEn = {
   'kitchen.item.column.quantity': 'Qty',
   'kitchen.item.column.status': 'Status',
   'kitchen.item.lineUnresolved': 'Line —',
+  'kitchen.item.intake.stopped': 'Stopped here: accepted, check before cooking',
+  'kitchen.item.intake.unmapped': 'Not in the catalogue: confirm the item with the aggregator',
+  'kitchen.item.intake.reference': 'Aggregator item {reference}',
   'kitchen.item.combo': 'Combo',
   'kitchen.item.comboCaption': 'each part goes to its own station',
   'kitchen.item.status.QUEUED': 'Queued',
@@ -157,6 +160,51 @@ export const kitchenEn = {
   'kitchen.stopList.scope.brand': 'Whole brand',
   'kitchen.stopList.scope.menu': 'A menu',
   'kitchen.stopList.scope.channel': 'One channel',
+  'kitchen.stopList.decommission.title': 'Switching stops off',
+  'kitchen.stopList.decommission.lead':
+    'Switching stops off puts every stopped dish back on sale. Before a platform administrator does that, run the materialisation: it writes each stop onto the dish’s own position wherever that is exact, and lists the stops it could not carry. Read the report, accept it, and tell the administrator.',
+  'kitchen.stopList.decommission.start': 'Run materialisation',
+  'kitchen.stopList.decommission.starting': 'Running…',
+  'kitchen.stopList.decommission.startHint':
+    'Repeatable. A stopped dish stays stopped; the run only writes the stop onto the dish’s own position.',
+  'kitchen.stopList.decommission.loading': 'Loading the latest run…',
+  'kitchen.stopList.decommission.none': 'No run yet.',
+  'kitchen.stopList.decommission.status.running': 'Running',
+  'kitchen.stopList.decommission.status.completed': 'Finished, not yet accepted',
+  'kitchen.stopList.decommission.status.acknowledged': 'Accepted',
+  'kitchen.stopList.decommission.status.failed': 'Failed',
+  'kitchen.stopList.decommission.started': 'started {when}',
+  'kitchen.stopList.decommission.completed': 'finished {when}',
+  'kitchen.stopList.decommission.count.seen': '{count} stops looked at',
+  'kitchen.stopList.decommission.count.written': '{count} written onto a position',
+  'kitchen.stopList.decommission.count.already': '{count} already unavailable there',
+  'kitchen.stopList.decommission.count.notCarried': '{count} not carried',
+  'kitchen.stopList.decommission.failed':
+    '{count} stops could not be written. They keep the switch blocked until a later run carries them: run again.',
+  'kitchen.stopList.decommission.column.dish': 'Dish',
+  'kitchen.stopList.decommission.column.scope': 'Stop reaches',
+  'kitchen.stopList.decommission.column.branch': 'Branch',
+  'kitchen.stopList.decommission.column.reason': 'Why it was not carried',
+  'kitchen.stopList.decommission.everyBranch': 'Every branch',
+  'kitchen.stopList.decommission.more': 'Show more',
+  'kitchen.stopList.decommission.nothingLost':
+    'Nothing was left out: every stop in force now sits on its position too.',
+  'kitchen.stopList.decommission.accept':
+    'I have read the report and accept that the dishes in it will be on sale again once stops are switched off.',
+  'kitchen.stopList.decommission.acknowledge': 'Accept the report',
+  'kitchen.stopList.decommission.acknowledging': 'Saving…',
+  'kitchen.stopList.decommission.acknowledged':
+    'Accepted {when}. A platform administrator can now switch stops off. A stop made after this run blocks the switch until a new run is accepted.',
+  'kitchen.stopList.decommission.reason.UNTRACKED_ITEM':
+    'The dish does not track stock, so there is no position to write: it sells again',
+  'kitchen.stopList.decommission.reason.QUANTITY_ITEM':
+    'A counted dish has no stopped state to write: it sells again',
+  'kitchen.stopList.decommission.reason.CHANNEL_SCOPE':
+    'A stop for one channel: writing it would stop the dish on channels it never covered',
+  'kitchen.stopList.decommission.reason.MENU_NOT_EVERY_CHANNEL':
+    'The menu is published to only some channels here: writing it would stop the dish on the others',
+  'kitchen.stopList.decommission.reason.WRITE_FAILED':
+    'The write failed: the switch stays blocked until a run carries this stop',
   'kitchen.stopList.stop.until': 'until {when}',
   'kitchen.stopList.stop.indefinite': 'until lifted',
   'kitchen.stopList.stop.lift': 'Lift this stop',
@@ -184,6 +232,22 @@ export const kitchenEn = {
   'kitchen.stopList.propagation.pending':
     '{name}: {count} items not confirmed since {since} — update in the partner portal',
   'kitchen.stopList.propagation.inSync': '{name}: in sync',
+  'kitchen.stopList.propagation.dryRun':
+    '{name}: dry run — {count} items would be sent, nothing has been sent. Compare with the partner portal before going live',
+  'kitchen.stopList.propagation.dryRun.show': 'Show the {count} dishes',
+  'kitchen.stopList.propagation.dryRun.hide': 'Hide the list of {count} dishes',
+  'kitchen.stopList.propagation.dryRun.loading': 'Loading…',
+  'kitchen.stopList.propagation.dryRun.more': 'Show more',
+  'kitchen.stopList.propagation.dryRun.failed': 'Could not load the list. Try again.',
+  'kitchen.stopList.propagation.dryRun.available': 'would be set to available',
+  'kitchen.stopList.propagation.dryRun.stopped': 'would be set to stopped',
+  'kitchen.stopList.propagation.dryRun.unnamed': 'A dish that is no longer in the menu',
+  'kitchen.stopList.propagation.dryRun.reference': 'Partner item {reference}',
+  'kitchen.stopList.propagation.dryRun.partnerUnknown': 'what the partner holds is not known',
+  'kitchen.stopList.propagation.dryRun.partnerAvailable': 'last known at the partner: available',
+  'kitchen.stopList.propagation.dryRun.partnerStopped': 'last known at the partner: stopped',
+  'kitchen.stopList.propagation.incident':
+    '{name}: the partner has not confirmed since {since}. This stays open until it does, and closes by itself.',
 
   // Capacity & buffer settings (2.6) — wave 43
   'kitchen.capacity.title': 'Capacity & buffer settings',

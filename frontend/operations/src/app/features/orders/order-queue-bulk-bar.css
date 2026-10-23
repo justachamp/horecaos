@@ -38,7 +38,7 @@
 
 .order-queue__bulk-note {
   color: var(--q-ink-subtle);
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .order-queue__bulk-clear {

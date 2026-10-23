@@ -1,0 +1,135 @@
+<q-modal
+  [title]="text('dialog.title', { name: name() })"
+  [dismissible]="!busy()"
+  (dismiss)="close()"
+  data-testid="branch-state-dialog"
+>
+  <div class="branch-state__body" (keydown.enter)="onEnter($event)">
+    @if (summary(); as current) {
+      @if (current.effectiveMode === 'FORCE_CLOSED') {
+        <p class="q-body-sm branch-state__note" data-testid="branch-state-closed-now">
+          {{ text('dialog.closedNow', { reason: closedReason() }) }}
+        </p>
+      } @else if (outsideHours()) {
+        <p class="q-body-sm branch-state__note" data-testid="branch-state-outside-hours">
+          {{ text('dialog.outsideHours') }}
+        </p>
+      }
+      @if (current.effectiveMode !== 'FORCE_CLOSED' && current.openOrderCount > 0) {
+        <p class="q-body-sm branch-state__note" data-testid="branch-state-in-flight">
+          {{ text('dialog.inFlight', { count: current.openOrderCount }) }}
+        </p>
+      }
+
+      <fieldset class="branch-state__field">
+        <legend class="q-caption">{{ text('dialog.mode') }}</legend>
+        <div class="branch-state__modes" role="radiogroup">
+          @for (option of modes; track option) {
+            <label class="branch-state__mode q-body-sm">
+              <input
+                type="radio"
+                name="branch-state-mode"
+                [checked]="mode() === option"
+                [disabled]="busy()"
+                (change)="pickMode(option)"
+                [attr.data-testid]="'branch-state-mode-' + option"
+              />
+              {{ modeLabel(option) }}
+            </label>
+          }
+        </div>
+      </fieldset>
+
+      @if (mode() !== 'FOLLOW_SCHEDULE') {
+        <label class="branch-state__field">
+          <span class="q-caption">{{ text('dialog.reason') }}</span>
+          <select
+            class="branch-state__select q-body-sm"
+            [disabled]="busy()"
+            (change)="reason.set($any($event.target).value)"
+            data-testid="branch-state-reason"
+          >
+            <option value="" [selected]="reason() === ''" disabled>
+              {{ text('dialog.reasonPick') }}
+            </option>
+            @for (code of reasons(); track code; let position = $index) {
+              <option [value]="code" [selected]="reason() === code">
+                {{ position < 3 ? position + 1 + '. ' : '' }}{{ reasonLabel(code) }}
+              </option>
+            }
+          </select>
+        </label>
+
+        <label class="branch-state__field">
+          <span class="q-caption">{{ text('dialog.note') }}</span>
+          <textarea
+            class="branch-state__textarea q-body-sm"
+            rows="2"
+            [attr.maxlength]="noteMax"
+            [value]="note()"
+            [disabled]="busy()"
+            [attr.aria-invalid]="noteRequired() && note().trim() === '' ? 'true' : null"
+            (input)="note.set($any($event.target).value)"
+            data-testid="branch-state-note"
+          ></textarea>
+          @if (noteRequired() && note().trim() === '') {
+            <span class="q-caption branch-state__error" data-testid="branch-state-note-required">{{
+              text('dialog.noteRequired')
+            }}</span>
+          }
+        </label>
+
+        <fieldset class="branch-state__field">
+          <legend class="q-caption">{{ text('dialog.until') }}</legend>
+          <div class="branch-state__chips">
+            @for (choice of untilChoices(); track choice) {
+              <button
+                type="button"
+                class="branch-state__chip q-body-sm"
+                [class.branch-state__chip--on]="until() === choice"
+                [class.branch-state__chip--danger]="choice === 'cancelled'"
+                [attr.aria-pressed]="until() === choice"
+                [disabled]="busy()"
+                (click)="until.set(choice)"
+                [attr.data-testid]="'branch-state-until-' + choice"
+              >
+                {{ untilLabel(choice) }}
+              </button>
+            }
+          </div>
+        </fieldset>
+      }
+    } @else if (!failure()) {
+      <p class="q-body-sm branch-state__note" data-testid="branch-state-loading">
+        {{ text('dialog.loading') }}
+      </p>
+    }
+
+    @if (failure(); as message) {
+      <p class="q-body-sm branch-state__error" role="alert" data-testid="branch-state-error">
+        {{ message }}
+      </p>
+    }
+  </div>
+
+  <ng-container qModalActions>
+    <button
+      type="button"
+      class="branch-state__dismiss q-body-sm"
+      [disabled]="busy()"
+      (click)="close()"
+      data-testid="branch-state-cancel"
+    >
+      {{ text('dialog.cancel') }}
+    </button>
+    <button
+      type="button"
+      class="branch-state__confirm q-body-sm"
+      [disabled]="!valid() || busy() || summary() === null"
+      (click)="submit()"
+      data-testid="branch-state-submit"
+    >
+      {{ submitLabel() }}
+    </button>
+  </ng-container>
+</q-modal>

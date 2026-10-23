@@ -71,6 +71,57 @@ public class JdbcOrderDirectory implements OrderDirectory {
                 .optional();
     }
 
+    /**
+     * The facts a customer message may name. The brand's name and the location's zone are read the way
+     * {@link #notificationContext} reads the channel: straight from tenancy's tables, because the rule
+     * needs one column of each and not a tenancy type.
+     *
+     * <p>The lines are the live set, so an item an operator removed after confirmation is not in the
+     * message. A combo is several ordinary lines sharing one grouping key (ADR 0136: never a parent
+     * line), so its components are listed as the items they are.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<NotificationFacts> notificationFacts(UUID tenantId, UUID orderId) {
+        return orders.find(tenantId, orderId).map(order -> {
+            String brandName = jdbc.sql("""
+                            SELECT display_name FROM tenant.brands
+                             WHERE tenant_id = :tenantId AND id = :brandId
+                            """)
+                    .param("tenantId", tenantId)
+                    .param("brandId", order.brandId())
+                    .query(String.class)
+                    .optional()
+                    .orElse("");
+            String timezone = jdbc.sql("""
+                            SELECT timezone FROM tenant.locations
+                             WHERE tenant_id = :tenantId AND id = :locationId
+                            """)
+                    .param("tenantId", tenantId)
+                    .param("locationId", order.locationId())
+                    .query(String.class)
+                    .optional()
+                    .orElse("UTC");
+            List<NotificationLine> lines = orders.lines(tenantId, orderId).stream()
+                    .map(line -> new NotificationLine(
+                            line.variantName() == null || line.variantName().isBlank()
+                                    ? line.productName()
+                                    : line.productName() + " (" + line.variantName() + ")",
+                            line.quantity(),
+                            line.finalAmountMinor()))
+                    .toList();
+            return new NotificationFacts(
+                    brandName,
+                    timezone,
+                    order.promise().promisedAt(),
+                    order.promise().prepMinutes(),
+                    order.currency(),
+                    order.discountMinor(),
+                    order.feeMinor(),
+                    lines);
+        });
+    }
+
     @Override
     @Transactional(readOnly = true)
     public List<ApprovalDeadlineWarning> ordersNearingApprovalDeadline(Instant now, Duration within, int limit) {

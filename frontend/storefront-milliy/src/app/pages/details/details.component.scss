@@ -14,7 +14,7 @@
 .hero__back {
   position: absolute;
   top: 16px;
-  left: 16px;
+  inset-inline-start: 16px;
   z-index: 2;
   width: 40px;
   height: 40px;

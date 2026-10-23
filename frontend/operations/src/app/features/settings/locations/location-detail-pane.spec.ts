@@ -11,6 +11,7 @@ import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { NullMapProvider, provideNullMapProvider } from '../../../shared/ui/map/null-map-provider';
 import { MapRegionService } from '../../delivery/map-region';
 import { StaffMembersApi } from '../../staff/staff-members-api';
+import { ShortcutRegistry, modifierCap } from '../../../shared/keyboard/shortcut-registry';
 import { LocationContactsApi } from './location-contacts-api';
 import { LocationDetailPane } from './location-detail-pane';
 import {
@@ -1060,5 +1061,143 @@ describe('LocationDetailPane', () => {
         coordinateSource: 'MERCHANT_PIN',
       }),
     );
+  });
+
+  // ------------------------------------------------- the keys (brands-and-locations.md §4.7)
+
+  describe('the keys', () => {
+    function key(value: string, init: KeyboardEventInit = {}, target?: HTMLElement): boolean {
+      const event = new KeyboardEvent('keydown', {
+        key: value,
+        bubbles: true,
+        cancelable: true,
+        ...init,
+      });
+      Object.defineProperty(event, 'target', {
+        value: target ?? document.activeElement ?? document.body,
+      });
+      return TestBed.inject(ShortcutRegistry).dispatch(event);
+    }
+
+    const tabs = (): HTMLElement[] => [...fixture.nativeElement.querySelectorAll('.tab')];
+
+    it('is on the cheat-sheet with the tab keys, the save chord and the editor’s two', () => {
+      const scope = TestBed.inject(ShortcutRegistry)
+        .scopes()
+        .find((candidate) => candidate.id === 'location-detail')!;
+
+      expect(scope.title()).toBe('Branch');
+      expect(scope.shortcuts.flatMap((shortcut) => shortcut.caps)).toEqual([
+        '1–7',
+        `${modifierCap()}+S`,
+        'Alt+↓',
+        '1000 → 10:00',
+      ]);
+    });
+
+    it('1 to 7 switch the tab, in the tab strip’s order, and a number beyond the strip does nothing', () => {
+      expect(key('2', {}, document.body)).toBe(true);
+      fixture.detectChanges();
+      expect(tabs()[1].classList.contains('tab--on')).toBe(true);
+
+      key('7', {}, document.body);
+      fixture.detectChanges();
+      expect(tabs()[6].classList.contains('tab--on')).toBe(true);
+
+      key('1', {}, document.body);
+      fixture.detectChanges();
+      expect(tabs()[0].classList.contains('tab--on')).toBe(true);
+    });
+
+    it('Cmd/Ctrl+S saves the hours from inside a time field, and the browser’s save never opens', async () => {
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      key('2', {}, document.body);
+      fixture.detectChanges();
+      (
+        fixture.nativeElement.querySelector(
+          '[data-testid="edit-hours-DELIVERY"]',
+        ) as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+      (
+        fixture.nativeElement.querySelector(
+          '[data-testid="q-schedule-grid-add-window-2"]',
+        ) as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+      const field = fixture.nativeElement.querySelector(
+        '[data-testid="q-schedule-grid-row-2"] [data-testid="q-time-input"]',
+      ) as HTMLInputElement;
+      field.focus();
+      expect(document.activeElement).toBe(field);
+
+      const event = new KeyboardEvent('keydown', {
+        key: 's',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      Object.defineProperty(event, 'target', { value: field });
+      expect(TestBed.inject(ShortcutRegistry).dispatch(event)).toBe(true);
+      await flushMicrotasks();
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(api.replaceScheduleRules).toHaveBeenCalledWith(
+        SCOPE,
+        'schedule-1',
+        expect.arrayContaining([expect.objectContaining({ dayOfWeek: 2 })]),
+      );
+      confirmSpy.mockRestore();
+    });
+
+    it('Cmd/Ctrl+S does nothing when the cursor is in no form that has something to save', () => {
+      key('2', {}, document.body);
+      fixture.detectChanges();
+      (document.activeElement as HTMLElement | null)?.blur();
+
+      expect(key('s', { ctrlKey: true }, document.body)).toBe(false);
+      expect(api.replaceScheduleRules).not.toHaveBeenCalled();
+    });
+
+    it('Alt+Down in the hours editor copies the day to the next, and typing 1000 in a time field makes 10:00', async () => {
+      key('2', {}, document.body);
+      fixture.detectChanges();
+      (
+        fixture.nativeElement.querySelector(
+          '[data-testid="edit-hours-DELIVERY"]',
+        ) as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+      const mondayField = (): HTMLInputElement =>
+        fixture.nativeElement.querySelector(
+          '[data-testid="q-schedule-grid-row-1"] [data-testid="q-time-input"]',
+        ) as HTMLInputElement;
+
+      const typed = mondayField();
+      typed.value = '1000';
+      typed.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      // The new window is a new object, so the grid draws a fresh field: ask the screen again.
+      expect(mondayField().value).toBe('10:00');
+
+      mondayField().dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'ArrowDown',
+          altKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      fixture.detectChanges();
+      expect(
+        fixture.nativeElement.querySelectorAll(
+          '[data-testid="q-schedule-grid-row-2"] [data-testid="q-schedule-grid-window"]',
+        ).length,
+      ).toBe(1);
+      const tuesdayOpens = fixture.nativeElement.querySelector(
+        '[data-testid="q-schedule-grid-row-2"] [data-testid="q-time-input"]',
+      ) as HTMLInputElement;
+      expect(tuesdayOpens.value, 'the copy carries the 10:00 just typed').toBe('10:00');
+    });
   });
 });

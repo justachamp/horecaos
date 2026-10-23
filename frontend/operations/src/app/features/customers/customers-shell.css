@@ -12,7 +12,7 @@
 .shell__tab {
   display: inline-block;
   padding: 8px 4px;
-  margin-right: 16px;
+  margin-inline-end: 16px;
   color: var(--q-ink-muted);
   text-decoration: none;
   border-bottom: 2px solid transparent;

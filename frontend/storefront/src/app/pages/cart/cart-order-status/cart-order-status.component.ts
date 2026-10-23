@@ -4,12 +4,14 @@ import { Router, ActivatedRoute } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import { OrdersService } from '../../../services/orders.service';
+import { type PaymentSplit, PointsService } from '../../../services/points.service';
+import { PaymentSplitComponent } from '../../../shared/payment-split/payment-split.component';
 import { TranslateService } from '../../../services/translate.service';
 import { MenuService } from '../../../services/menu.service';
 import { AnalyticsInjector } from '../../../core/analytics/analytics-injector';
 import { pushEcommerceEvent } from '../../../core/analytics/ecommerce-events';
 import { money, toMajorUnits } from '../../../core/money/money';
-import { LangService } from '../../../services/lang.service';
+import { LangService, platformTag } from '../../../services/lang.service';
 import {
   discountRowsFor,
   noteRowsFor,
@@ -82,7 +84,7 @@ const STATUS_I18N_KEY: Readonly<Record<string, string>> = {
   standalone: true,
   templateUrl: './cart-order-status.component.html',
   styleUrl: './cart-order-status.component.scss',
-  imports: [CommonModule, TranslatePipe],
+  imports: [CommonModule, TranslatePipe, PaymentSplitComponent],
 })
 export class CartOrderStatusComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
@@ -92,11 +94,15 @@ export class CartOrderStatusComponent implements OnInit, OnDestroy {
   private readonly lang = inject(LangService);
   private readonly menuService = inject(MenuService);
   private readonly analytics = inject(AnalyticsInjector);
+  private readonly points = inject(PointsService);
 
   /** Order ID from route */
   readonly orderId = signal<string | null>(null);
 
   readonly order = signal<ApiOrderDetail | null>(null);
+
+  /** How the order is being paid when points and money share it (ADR 0185); null when there is nothing to show. */
+  readonly split = signal<PaymentSplit | null>(null);
   readonly loading = signal(true);
   readonly loadError = signal<string | null>(null);
   readonly lastUpdated = signal<Date | null>(null);
@@ -124,6 +130,7 @@ export class CartOrderStatusComponent implements OnInit, OnDestroy {
         this.order.set(order);
         this.lastUpdated.set(new Date());
         this.trackPurchaseOnce(id, order);
+        void this.loadSplit(id);
       },
       error: (err) => {
         this.loading.set(false);
@@ -137,7 +144,22 @@ export class CartOrderStatusComponent implements OnInit, OnDestroy {
       .subscribe((order) => {
         this.order.set(order);
         this.lastUpdated.set(new Date());
+        void this.loadSplit(id);
       });
+  }
+
+  /**
+   * Reads how the order is paid. A tender's status moves while the page is open (the money leg is
+   * paid, a hold is released), so it is read again with each refresh of the order. The split is a
+   * convenience on top of the order, so a failure leaves the last answer standing rather than
+   * disturbing a page that works without it.
+   */
+  private async loadSplit(orderId: string): Promise<void> {
+    try {
+      this.split.set(await this.points.paymentSplit(orderId));
+    } catch {
+      // Keep what is on screen.
+    }
   }
 
   ngOnDestroy(): void {
@@ -234,8 +256,11 @@ export class CartOrderStatusComponent implements OnInit, OnDestroy {
   /** ADR 0140: one row per kind of discount, with the platform's own amount. */
   discountRows(): readonly PromotionRow[] {
     const order = this.order();
-    return discountRowsFor(order?.promotions, this.priceOf(order?.discount), (minor) =>
-      this.formatPrice(minor),
+    return discountRowsFor(
+      order?.promotions,
+      this.priceOf(order?.discount),
+      (minor) => this.formatPrice(minor),
+      platformTag(this.lang.langId()),
     );
   }
 

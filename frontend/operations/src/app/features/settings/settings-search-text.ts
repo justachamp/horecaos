@@ -1,0 +1,307 @@
+import { localMessages } from '../../core/i18n/local-messages';
+import { PolicyCode, SettingKeyCode } from './settings-search-index';
+
+/**
+ * The words of «Find a setting» results (settings.md §10.0): each key's and each policy's operator-facing name,
+ * the breadcrumb of the screens outside Settings that carry one, and the phrases of the third column.
+ *
+ * They travel with the settings chunk, not the shared catalogues. A key's name is the label its own screen
+ * prints, written once more here because a result must be findable by the words the operator uses and the
+ * registry's `description` is a developer's sentence in English.
+ */
+type KeyLabel = `key.${SettingKeyCode}`;
+type PolicyLabel = `policy.${PolicyCode}`;
+type Destination =
+  | 'dest./staff'
+  | 'dest./staff/shifts'
+  | 'dest./customers/feedback-settings'
+  | 'dest./delivery/dispatch-rules'
+  | 'dest./kitchen/buffer'
+  | 'dest./kitchen/capacity'
+  | 'dest./marketing/content';
+
+type Phrase =
+  | 'level.tenant'
+  | 'level.brand'
+  | 'level.location'
+  | 'detail.set'
+  | 'detail.unsetHere'
+  | 'detail.more'
+  | 'detail.notSet'
+  | 'detail.notSetDefault'
+  | 'detail.unknown'
+  | 'detail.unknownDefault'
+  | 'detail.onlyBrandUp'
+  | 'detail.onlyTenant'
+  | 'detail.locked'
+  | 'detail.policy'
+  | 'detail.policyNone'
+  | 'value.on'
+  | 'value.off'
+  | 'unit.minutes'
+  | 'unit.days'
+  | 'unit.months'
+  | 'breadcrumb.arrow'
+  | 'destination.level';
+
+type Key = KeyLabel | PolicyLabel | Destination | Phrase;
+
+export const settingsSearchText = localMessages<Key>({
+  ru: {
+    'key.ordering.late_order_threshold_minutes': 'Порог опоздания заказа',
+    'key.ordering.at_risk_before_minutes': 'Заказ под риском за',
+    'key.ordering.late_colour': 'Цвет опоздавших заказов',
+    'key.ordering.minimum_order_amount_minor': 'Минимальная сумма заказа',
+    'key.ordering.preorder_branch_resolution': 'Выбор филиала для предзаказа',
+    'key.ordering.operator_promo_code_allowed': 'Промокод в заказе оператора',
+    'key.ordering.operator_callback_flag_allowed':
+      'Пометка «Перезвонить клиенту» в заказе оператора',
+    'key.ordering.operator_change_due_allowed': 'Сумма «Сдача» в заказе оператора',
+    'key.ordering.auto_accept_eligible_channels': 'Каналы автоприёма',
+    'key.ordering.auto_accept_min_prior_orders': 'Автоприём: нужно прошлых заказов',
+    'key.catalog.use_stock_logic': 'Учёт остатков в меню',
+    'key.catalog.qr_kiosk_price_plane': 'Цены для QR и киоска',
+    'key.assistant.enabled': 'Ассистент отвечает клиентам',
+    'key.assistant.disclosure_text_ru': 'Раскрытие ассистента: русский текст',
+    'key.assistant.disclosure_text_uz': 'Раскрытие ассистента: узбекский текст',
+    'key.assistant.disclosure_text_en': 'Раскрытие ассистента: английский текст',
+    'key.notifications.payment_link_auto_send': 'Автоотправка ссылки на оплату',
+    'key.notifications.aggregator_shift_notifications_enabled':
+      'Уведомления об открытии и закрытии смены агрегатора',
+    'key.delivery.out_of_zone_policy': 'Адреса вне зоны доставки',
+    'key.ordering.cart_retention_days': 'Хранение корзин',
+    'key.telemetry.track_retention_days': 'Хранение треков курьеров',
+    'key.courier.applicant_retention_months': 'Хранение анкет кандидатов в курьеры',
+    'key.feature.support_visits': 'Визиты поддержки',
+    'key.feature.printing': 'Печать на кассе',
+    'key.printing.document_locale': 'Язык печатных документов',
+    'key.printing.kitchen_ticket.expire_minutes': 'Срок жизни кухонного тикета',
+    'key.printing.late_marker_minutes': 'Отметка опоздания на тикете',
+    'key.pricing.promotion.approval.percentage_over_bp': 'Согласование скидок: порог в процентах',
+    'key.pricing.promotion.approval.amount_over_minor': 'Согласование скидок: порог по сумме',
+    'key.pricing.promotion.approval.always_for_markup': 'Согласование наценок',
+    'key.customers.pii_export_approval_threshold_rows':
+      'Согласование выгрузки персональных данных: от скольких строк',
+    'key.feature.kiosk_devices': 'Киоски',
+    'key.iam.staff_mfa_requirement': 'Двухфакторная защита сотрудников',
+    'key.workforce.attendance.enabled': 'Учёт посещаемости сотрудников',
+    'key.feature.service_recovery': 'Восстановление сервиса после плохого отзыва',
+    'key.feature.feedback_settings': 'Настройки отзывов',
+    'key.feedback.public_visibility': 'Публичные отзывы: кому видны',
+    'key.feedback.public_minimum_reviews': 'Публичные отзывы: минимум отзывов',
+    'key.feedback.comments_require_approval': 'Комментарии к отзывам: нужно одобрение',
+    'policy.ordering.acceptance': 'Приём заказов',
+    'policy.ordering.lateness': 'Опоздание заказов',
+    'policy.ordering.payment_window': 'Окно оплаты заказа',
+    'policy.fulfillment.sourcing': 'Подбор курьера: тайминги',
+    'policy.fulfillment.dispatch_rules': 'Правила диспетчеризации',
+    'policy.courier.compensation': 'Компенсация курьеров',
+    'policy.kitchen.paid_hold': 'Удержание оплаченных заказов на кухне',
+    'policy.kitchen.station_productivity': 'Производительность станций',
+    'policy.content.publishing': 'Публикация контента',
+    'policy.content.editorial': 'Редакционные правила контента',
+    'policy.storefront.layout': 'Вид витрины: обычная или маркетплейс',
+    'policy.reviews.feedback_prompt': 'Когда просить оценку заказа',
+    'policy.reviews.recovery': 'Восстановление после плохого отзыва',
+    'dest./staff': 'Сотрудники → Люди',
+    'dest./staff/shifts': 'Сотрудники → Смены',
+    'dest./customers/feedback-settings': 'Клиенты → Настройки отзывов',
+    'dest./delivery/dispatch-rules': 'Доставка → Правила диспетчеризации',
+    'dest./kitchen/buffer': 'Кухня → Буфер',
+    'dest./kitchen/capacity': 'Кухня → Мощность',
+    'dest./marketing/content': 'Маркетинг → Контент',
+    'level.tenant': 'компания',
+    'level.brand': 'бренд «{name}»',
+    'level.location': 'филиал «{name}»',
+    'detail.set': 'задано: {where} ({value})',
+    'detail.unsetHere': 'снято: {where}',
+    'detail.more': 'ещё {count}',
+    'detail.notSet': 'не задано',
+    'detail.notSetDefault': 'не задано · по умолчанию {value}',
+    'detail.unknown': 'где задано — неизвестно',
+    'detail.unknownDefault': 'где задано — неизвестно · по умолчанию {value}',
+    'detail.onlyBrandUp': 'только бренд и выше',
+    'detail.onlyTenant': 'только компания',
+    'detail.locked': 'закрыто тарифом: {feature}',
+    'detail.policy': 'версия {version}: {where}{by}',
+    'detail.policyNone': 'не опубликовано',
+    'value.on': 'включено',
+    'value.off': 'выключено',
+    'unit.minutes': '{n} мин',
+    'unit.days': '{n} дн.',
+    'unit.months': '{n} мес.',
+    'breadcrumb.arrow': ' → ',
+    'destination.level': 'уровень: {level}',
+  },
+  'uz-Latn': {
+    'key.ordering.late_order_threshold_minutes': 'Buyurtma kechikish chegarasi',
+    'key.ordering.at_risk_before_minutes': 'Buyurtma xavf ostida: oldindan',
+    'key.ordering.late_colour': 'Kechikkan buyurtmalar rangi',
+    'key.ordering.minimum_order_amount_minor': 'Buyurtmaning minimal summasi',
+    'key.ordering.preorder_branch_resolution': 'Oldindan buyurtma uchun filial tanlash',
+    'key.ordering.operator_promo_code_allowed': 'Operator buyurtmasida promokod',
+    'key.ordering.operator_callback_flag_allowed':
+      'Operator buyurtmasida «Mijozga qayta qoʻngʻiroq qilish» belgisi',
+    'key.ordering.operator_change_due_allowed': 'Operator buyurtmasida «Qaytim» summasi',
+    'key.ordering.auto_accept_eligible_channels': 'Avto-qabul kanallari',
+    'key.ordering.auto_accept_min_prior_orders': 'Avto-qabul: kerakli oldingi buyurtmalar',
+    'key.catalog.use_stock_logic': 'Menyuda qoldiq hisobi',
+    'key.catalog.qr_kiosk_price_plane': 'QR va kiosk narxlari',
+    'key.assistant.enabled': 'Assistent mijozlarga javob beradi',
+    'key.assistant.disclosure_text_ru': 'Assistent ogohlantirishi: ruscha matn',
+    'key.assistant.disclosure_text_uz': 'Assistent ogohlantirishi: oʻzbekcha matn',
+    'key.assistant.disclosure_text_en': 'Assistent ogohlantirishi: inglizcha matn',
+    'key.notifications.payment_link_auto_send': 'Toʻlov havolasini avto-yuborish',
+    'key.notifications.aggregator_shift_notifications_enabled':
+      'Agregator smenasi ochilishi va yopilishi haqida xabarlar',
+    'key.delivery.out_of_zone_policy': 'Yetkazish hududidan tashqari manzillar',
+    'key.ordering.cart_retention_days': 'Savatlarni saqlash',
+    'key.telemetry.track_retention_days': 'Kuryer treklarini saqlash',
+    'key.courier.applicant_retention_months': 'Kuryer nomzodlari anketalarini saqlash',
+    'key.feature.support_visits': 'Qoʻllab-quvvatlash tashriflari',
+    'key.feature.printing': 'Kassada chop etish',
+    'key.printing.document_locale': 'Chop etiladigan hujjatlar tili',
+    'key.printing.kitchen_ticket.expire_minutes': 'Oshxona tiketining amal qilish muddati',
+    'key.printing.late_marker_minutes': 'Tiketdagi kechikish belgisi',
+    'key.pricing.promotion.approval.percentage_over_bp': 'Chegirmalarni tasdiqlash: foiz chegarasi',
+    'key.pricing.promotion.approval.amount_over_minor': 'Chegirmalarni tasdiqlash: summa chegarasi',
+    'key.pricing.promotion.approval.always_for_markup': 'Ustamalarni tasdiqlash',
+    'key.customers.pii_export_approval_threshold_rows':
+      'Shaxsiy maʼlumotlarni yuklashni tasdiqlash: nechta qatordan',
+    'key.feature.kiosk_devices': 'Kiosklar',
+    'key.iam.staff_mfa_requirement': 'Xodimlar uchun ikki bosqichli himoya',
+    'key.workforce.attendance.enabled': 'Xodimlar davomatini hisobga olish',
+    'key.feature.service_recovery': 'Yomon sharhdan keyin xizmatni tiklash',
+    'key.feature.feedback_settings': 'Sharhlar sozlamalari',
+    'key.feedback.public_visibility': 'Ommaviy sharhlar: kimga koʻrinadi',
+    'key.feedback.public_minimum_reviews': 'Ommaviy sharhlar: minimal sharhlar soni',
+    'key.feedback.comments_require_approval': 'Sharhlarga izohlar: tasdiq kerak',
+    'policy.ordering.acceptance': 'Buyurtmalarni qabul qilish',
+    'policy.ordering.lateness': 'Buyurtmalar kechikishi',
+    'policy.ordering.payment_window': 'Buyurtma toʻlov oynasi',
+    'policy.fulfillment.sourcing': 'Kuryer tanlash: vaqtlar',
+    'policy.fulfillment.dispatch_rules': 'Dispetcherlik qoidalari',
+    'policy.courier.compensation': 'Kuryerlar kompensatsiyasi',
+    'policy.kitchen.paid_hold': 'Toʻlangan buyurtmalarni oshxonada ushlab turish',
+    'policy.kitchen.station_productivity': 'Stansiyalar unumdorligi',
+    'policy.content.publishing': 'Kontent chop etish',
+    'policy.content.editorial': 'Kontent tahririyat qoidalari',
+    'policy.storefront.layout': 'Vitrina koʻrinishi: oddiy yoki marketpleys',
+    'policy.reviews.feedback_prompt': 'Buyurtma bahosini qachon soʻrash',
+    'policy.reviews.recovery': 'Yomon sharhdan keyin tiklash',
+    'dest./staff': 'Xodimlar → Odamlar',
+    'dest./staff/shifts': 'Xodimlar → Smenalar',
+    'dest./customers/feedback-settings': 'Mijozlar → Sharhlar sozlamalari',
+    'dest./delivery/dispatch-rules': 'Yetkazish → Dispetcherlik qoidalari',
+    'dest./kitchen/buffer': 'Oshxona → Bufer',
+    'dest./kitchen/capacity': 'Oshxona → Quvvat',
+    'dest./marketing/content': 'Marketing → Kontent',
+    'level.tenant': 'kompaniya',
+    'level.brand': 'brend «{name}»',
+    'level.location': 'filial «{name}»',
+    'detail.set': 'belgilangan: {where} ({value})',
+    'detail.unsetHere': 'olib tashlangan: {where}',
+    'detail.more': 'yana {count}',
+    'detail.notSet': 'belgilanmagan',
+    'detail.notSetDefault': 'belgilanmagan · odatiy {value}',
+    'detail.unknown': 'qayerda belgilangani nomaʻlum',
+    'detail.unknownDefault': 'qayerda belgilangani nomaʻlum · odatiy {value}',
+    'detail.onlyBrandUp': 'faqat brend va yuqori',
+    'detail.onlyTenant': 'faqat kompaniya',
+    'detail.locked': 'tarif yopgan: {feature}',
+    'detail.policy': 'versiya {version}: {where}{by}',
+    'detail.policyNone': 'chop etilmagan',
+    'value.on': 'yoqilgan',
+    'value.off': 'oʻchirilgan',
+    'unit.minutes': '{n} daq.',
+    'unit.days': '{n} kun',
+    'unit.months': '{n} oy',
+    'breadcrumb.arrow': ' → ',
+    'destination.level': 'daraja: {level}',
+  },
+  en: {
+    'key.ordering.late_order_threshold_minutes': 'Late-order threshold',
+    'key.ordering.at_risk_before_minutes': 'Order at risk before the promise',
+    'key.ordering.late_colour': 'Late-order colour',
+    'key.ordering.minimum_order_amount_minor': 'Minimum order amount',
+    'key.ordering.preorder_branch_resolution': 'Pre-order branch choice',
+    'key.ordering.operator_promo_code_allowed': 'Promo code on operator orders',
+    'key.ordering.operator_callback_flag_allowed': 'Call-back flag on operator orders',
+    'key.ordering.operator_change_due_allowed': 'Change due on operator orders',
+    'key.ordering.auto_accept_eligible_channels': 'Auto-accept channels',
+    'key.ordering.auto_accept_min_prior_orders': 'Auto-accept: prior orders needed',
+    'key.catalog.use_stock_logic': 'Stock logic in the menu',
+    'key.catalog.qr_kiosk_price_plane': 'QR and kiosk price plane',
+    'key.assistant.enabled': 'Assistant answers customers',
+    'key.assistant.disclosure_text_ru': 'Assistant disclosure: Russian text',
+    'key.assistant.disclosure_text_uz': 'Assistant disclosure: Uzbek text',
+    'key.assistant.disclosure_text_en': 'Assistant disclosure: English text',
+    'key.notifications.payment_link_auto_send': 'Auto-send the payment link',
+    'key.notifications.aggregator_shift_notifications_enabled':
+      'Aggregator shift open and close notices',
+    'key.delivery.out_of_zone_policy': 'Out-of-zone addresses',
+    'key.ordering.cart_retention_days': 'Cart retention',
+    'key.telemetry.track_retention_days': 'Courier track retention',
+    'key.courier.applicant_retention_months': 'Courier applicant retention',
+    'key.feature.support_visits': 'Support visits',
+    'key.feature.printing': 'POS printing',
+    'key.printing.document_locale': 'Printed documents language',
+    'key.printing.kitchen_ticket.expire_minutes': 'Kitchen ticket lifetime',
+    'key.printing.late_marker_minutes': 'Late marker on the ticket',
+    'key.pricing.promotion.approval.percentage_over_bp': 'Discount approval: percentage limit',
+    'key.pricing.promotion.approval.amount_over_minor': 'Discount approval: amount limit',
+    'key.pricing.promotion.approval.always_for_markup': 'Markup approval',
+    'key.customers.pii_export_approval_threshold_rows':
+      'Personal-data export approval: from how many rows',
+    'key.feature.kiosk_devices': 'Kiosks',
+    'key.iam.staff_mfa_requirement': 'Staff two-step sign-in',
+    'key.workforce.attendance.enabled': 'Staff attendance tracking',
+    'key.feature.service_recovery': 'Service recovery after a bad review',
+    'key.feature.feedback_settings': 'Feedback settings',
+    'key.feedback.public_visibility': 'Public reviews: who sees them',
+    'key.feedback.public_minimum_reviews': 'Public reviews: minimum reviews',
+    'key.feedback.comments_require_approval': 'Review comments: approval needed',
+    'policy.ordering.acceptance': 'Order acceptance',
+    'policy.ordering.lateness': 'Order lateness',
+    'policy.ordering.payment_window': 'Order payment window',
+    'policy.fulfillment.sourcing': 'Courier sourcing timings',
+    'policy.fulfillment.dispatch_rules': 'Dispatch rules',
+    'policy.courier.compensation': 'Courier compensation',
+    'policy.kitchen.paid_hold': 'Paid orders held at the kitchen',
+    'policy.kitchen.station_productivity': 'Station productivity',
+    'policy.content.publishing': 'Content publishing',
+    'policy.content.editorial': 'Content editorial rules',
+    'policy.storefront.layout': 'Storefront layout: standard or marketplace',
+    'policy.reviews.feedback_prompt': 'When to ask for a rating',
+    'policy.reviews.recovery': 'Recovery after a bad review',
+    'dest./staff': 'Staff → People',
+    'dest./staff/shifts': 'Staff → Shifts',
+    'dest./customers/feedback-settings': 'Customers → Feedback settings',
+    'dest./delivery/dispatch-rules': 'Delivery → Dispatch rules',
+    'dest./kitchen/buffer': 'Kitchen → Buffer',
+    'dest./kitchen/capacity': 'Kitchen → Capacity',
+    'dest./marketing/content': 'Marketing → Content',
+    'level.tenant': 'company',
+    'level.brand': 'brand “{name}”',
+    'level.location': 'branch “{name}”',
+    'detail.set': 'set: {where} ({value})',
+    'detail.unsetHere': 'unset: {where}',
+    'detail.more': '{count} more',
+    'detail.notSet': 'not set',
+    'detail.notSetDefault': 'not set · default {value}',
+    'detail.unknown': 'where it is set: unknown',
+    'detail.unknownDefault': 'where it is set: unknown · default {value}',
+    'detail.onlyBrandUp': 'brand and above only',
+    'detail.onlyTenant': 'company only',
+    'detail.locked': 'locked by plan: {feature}',
+    'detail.policy': 'version {version}: {where}{by}',
+    'detail.policyNone': 'not published',
+    'value.on': 'on',
+    'value.off': 'off',
+    'unit.minutes': '{n} min',
+    'unit.days': '{n} d',
+    'unit.months': '{n} mo',
+    'breadcrumb.arrow': ' → ',
+    'destination.level': 'level: {level}',
+  },
+});

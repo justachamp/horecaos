@@ -81,6 +81,15 @@ export const routes: Routes = [
       import('./features/auth/reset-password-page').then((m) => m.ResetPasswordPage),
   },
   {
+    // ADR 0178: a courier choosing their own password from the link they were texted. Outside the guard for
+    // the reason /invite and /reset-password are: somebody with no password has no session to present. The
+    // token rides in the fragment. This moves to the courier client with a change of the link's origin.
+    path: 'courier-access',
+    canActivate: [messagesGuard('auth')],
+    loadComponent: () =>
+      import('./features/auth/courier-access-page').then((m) => m.CourierAccessPage),
+  },
+  {
     // Row `X/X.2` (ADR 0079, ADR 0119, wave P17) — the KDS fullscreen shell.
     // Outside `authGuard` and declared *before* the console `Shell` route
     // below, on purpose, the same placement as `/login`/`/invite` above and
@@ -109,13 +118,17 @@ export const routes: Routes = [
       // that bought the deliveries-console module. An unreadable profile is `/today`, as it always was.
       { path: '', pathMatch: 'full', canActivate: [landingGuard], children: [] },
       {
-        // ADR 0164, slice one: `/deliveries` is the landing route of the deliveries profile and is the
-        // dispatch board, which already shows a delivery (a plan with its courier, its non-PII
-        // destination, its promise and its state) as the record. Not a rail entry and not a second
-        // screen: slice two, the history list, waits for the first courier-service tenant.
+        // ADR 0164, slice two: `/deliveries` is the landing route of the deliveries profile and is the
+        // list of every delivery the tenant has had (a plan with its courier, its non-PII destination, its
+        // promise, its state, its cost at a basis and the cash to collect), filterable and paged. A row opens
+        // the order's own detail pane; there is no second detail screen. The dispatch board stays where it
+        // was, at `/delivery/dispatch`: it is the open work, and this is the record behind it. Not a rail
+        // entry: the profile lands here, and the Delivery section links to it.
         path: 'deliveries',
         pathMatch: 'full',
-        redirectTo: 'delivery/dispatch',
+        canActivate: [messagesGuard('delivery', 'couriers')],
+        loadComponent: () =>
+          import('./features/delivery/deliveries-page').then((m) => m.DeliveriesPage),
       },
       {
         // operations IA §9.1c: where `capabilityGuard` sends a direct URL
@@ -271,6 +284,15 @@ export const routes: Routes = [
                 loadComponent: () =>
                   import('./features/customers/reviews/recovery-worklist-page').then(
                     (m) => m.RecoveryWorklistPage,
+                  ),
+              },
+              {
+                path: 'report',
+                // The provenance banner reads the `reports` messages; the section's own area is `customers`.
+                canActivate: [messagesGuard('reports')],
+                loadComponent: () =>
+                  import('./features/customers/reviews/review-report-page').then(
+                    (m) => m.ReviewReportPage,
                   ),
               },
               {
@@ -593,6 +615,16 @@ export const routes: Routes = [
         canActivate: [messagesGuard('staff')],
         loadComponent: () => import('./features/staff/staff-shell').then((m) => m.StaffShell),
         children: [
+          {
+            // «Таблица прав» (ADR 0186, row 9.1b): the whole vocabulary against every job, and the editor for
+            // the company's own jobs. Lazy, so the initial bundle does not carry the matrix, the editor or the
+            // catalogue helpers; `roles` below is the job library it hangs off.
+            path: 'roles/grid',
+            loadComponent: () =>
+              import('./features/staff/staff-capability-grid-page').then(
+                (m) => m.StaffCapabilityGridPage,
+              ),
+          },
           {
             path: 'roles',
             loadComponent: () =>
@@ -1170,8 +1202,10 @@ export const routes: Routes = [
           },
           {
             // IA §3.6b. Tenant-scoped, not brand-scoped: a region's bounding
-            // box constrains the geocoder for every brand (ADR 0104).
+            // box constrains the geocoder for every brand (ADR 0104). `map` for the
+            // box editor (row X.4, ADR 0145).
             path: 'regions',
+            canActivate: [messagesGuard('map')],
             loadComponent: () =>
               import('./features/delivery/regions-page').then((m) => m.RegionsPage),
           },

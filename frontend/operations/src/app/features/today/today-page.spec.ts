@@ -4,7 +4,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { I18n } from '../../core/i18n/i18n';
+import { LocationServiceStateView, LocationsApi } from '../settings/locations/locations-api';
 import { LiveBoard, LiveBoardSnapshot } from './live-board';
 import { LiveOperators, LiveOperatorsBand } from './live-operators';
 import { TodayPage } from './today-page';
@@ -46,6 +48,7 @@ function configure(options: {
   load?: ReturnType<typeof vi.fn>;
   operators?: ReturnType<typeof vi.fn>;
   scope?: typeof FAKE_SCOPE | null;
+  branchStates?: readonly LocationServiceStateView[];
 }): void {
   TestBed.configureTestingModule({
     providers: [
@@ -55,9 +58,18 @@ function configure(options: {
         useValue: {
           scope: () => (options.scope === undefined ? FAKE_SCOPE : options.scope),
           denied: () => options.scope === null,
+          options: () => [{ id: 'l1', displayName: 'Chilonzor', status: 'ACTIVE' }],
           ensureLoaded: () => Promise.resolve(),
         },
       },
+      {
+        provide: LocationsApi,
+        useValue: {
+          serviceStates: () => Promise.resolve(options.branchStates ?? []),
+          list: () => Promise.resolve([]),
+        },
+      },
+      { provide: SessionCapabilities, useValue: { has: () => false } },
       {
         provide: LiveBoard,
         useValue: { load: options.load ?? vi.fn().mockResolvedValue(snapshot()) },
@@ -338,5 +350,36 @@ describe('TodayPage: manual refresh', () => {
     await flushMicrotasks();
 
     expect(load).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('TodayPage: the closed-branch strip (brands-and-locations.md §6.2)', () => {
+  const strip = (fixture: { nativeElement: HTMLElement }): HTMLElement | null =>
+    fixture.nativeElement.querySelector('[data-testid="closed-branch-strip"]');
+
+  it('names a branch shut by hand at the top of the live board, with no way to dismiss it', async () => {
+    configure({
+      branchStates: [
+        {
+          locationId: 'l1',
+          mode: 'FORCE_CLOSED',
+          effectiveMode: 'FORCE_CLOSED',
+          reasonCode: 'EQUIPMENT_FAILURE',
+          effectiveUntil: null,
+        },
+      ],
+    });
+    const fixture = await render();
+
+    expect(strip(fixture)?.textContent).toContain('Chilonzor');
+    expect(strip(fixture)?.querySelectorAll('button')).toHaveLength(0);
+    expect(strip(fixture)?.textContent).toContain('until cancelled');
+  });
+
+  it('draws nothing while every branch is open', async () => {
+    configure({});
+    const fixture = await render();
+
+    expect(strip(fixture)).toBeNull();
   });
 });

@@ -16,11 +16,16 @@
   tenant scope, and the existing `POST .../payment/re-presentations` writes an
   audit fact before the checkout is opened and another after it. Console: «Все филиалы»
   with a Филиал column and filter, the binding select, the toggles, the fiscal
-  select and the header/row «Выставить счёт». Not built: bulk actions across
-  branches (the selection column is withheld on «Все филиалы»), a `BRAND`-scoped
-  realtime channel for the brand board (it polls every ten seconds), a branch
-  subset for a principal whose grants are scattered branch by branch (they keep
-  the branch board), and a per-row fiscal chip.
+  select and the header/row «Выставить счёт». Built in batch 21 (`w1-board-shell`,
+  row `1.1`): the per-row fiscal chip, as the optional `fiscal` column a person
+  switches on (`include=fiscal` on the board read; the status of each order's sale document
+  (its newest document, when it has no sale one) in one batched read through `ordering.api.OrderFiscalStatusPort`,
+  which `fiscal` implements, so `ordering` does not depend on it), drawn on the branch
+  board and on «Все филиалы» alike. Not built: bulk actions across branches (the
+  selection column is withheld on «Все филиалы»), a `BRAND`-scoped realtime channel
+  for the brand board (it polls every ten seconds), and a branch subset for a
+  principal whose grants are scattered branch by branch (they keep the branch
+  board).
 - Date proposed: 2026-09-30
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude and built on the platform owner's instruction of

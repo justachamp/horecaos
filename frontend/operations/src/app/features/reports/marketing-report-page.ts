@@ -15,7 +15,13 @@ import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
 import { DateRange, DateRangePicker } from '../../shared/ui/date-range-picker';
 import { CustomerSummary, CustomersApi } from '../customers/customers-api';
 import { customerStatusLabel } from '../customers/customer-status';
-import { CampaignView, MarketingApi, RecipientCountsView } from '../marketing/marketing-api';
+import { DeliveryCounts } from '../marketing/campaigns/delivery-counts';
+import {
+  CampaignView,
+  DeliveryCountsView,
+  MarketingApi,
+  RecipientCountsView,
+} from '../marketing/marketing-api';
 import { orderStatusLabel } from '../orders/order-status';
 import {
   CustomerDiscountHistory,
@@ -92,7 +98,15 @@ const TAB_DEFINITIONS: readonly { readonly id: Tab; readonly labelKey: MessageKe
  */
 @Component({
   selector: 'q-marketing-report-page',
-  imports: [TPipe, PromotionTextPipe, Combobox, DateRangePicker, ProvenanceBanner, RouterLink],
+  imports: [
+    TPipe,
+    PromotionTextPipe,
+    Combobox,
+    DateRangePicker,
+    ProvenanceBanner,
+    RouterLink,
+    DeliveryCounts,
+  ],
   templateUrl: './marketing-report-page.html',
   styleUrl: './marketing-report-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -106,6 +120,7 @@ export class MarketingReportPage {
   protected readonly i18n = inject(I18n);
 
   protected readonly tabs = TAB_DEFINITIONS;
+  protected readonly comparisonFigures = ['total', 'delivered', 'failed', 'withheld'] as const;
   protected readonly activeTab = signal<Tab>('discounts');
 
   /**
@@ -144,6 +159,12 @@ export class MarketingReportPage {
   protected readonly selectedCampaign = signal<CampaignView | null>(null);
   protected readonly countsState = signal<LoadState>('idle');
   protected readonly counts = signal<RecipientCountsView | null>(null);
+  /**
+   * Each recent campaign's delivery counts, by campaign id, for the columns the list is compared by
+   * (ADR 0182). One read for the list; a campaign missing from it (older than the hundred newest, or a
+   * failed read) shows «not reported» rather than a zero.
+   */
+  protected readonly deliveryByCampaign = signal<Readonly<Record<string, DeliveryCountsView>>>({});
 
   // ---------------------------------------------------- 7.9 promotion report
 
@@ -283,6 +304,16 @@ export class MarketingReportPage {
       const list = await this.marketingApi.listCampaigns(scope);
       this.campaigns.set(list);
       this.campaignsState.set('ready');
+      // The comparison columns are an addition to the list, not a condition of it: a failed read leaves
+      // them empty and the list stands.
+      try {
+        const deliveries = await this.marketingApi.campaignDeliveryCounts(scope);
+        this.deliveryByCampaign.set(
+          Object.fromEntries(deliveries.map((row) => [row.campaignId, row.delivery])),
+        );
+      } catch {
+        this.deliveryByCampaign.set({});
+      }
     } catch {
       this.campaignsState.set('error');
     }
@@ -314,6 +345,24 @@ export class MarketingReportPage {
     if (campaign) {
       void this.selectCampaign(campaign);
     }
+  }
+
+  /**
+   * One cell of the comparison: a number, or null when the figure is unknown for this campaign (the
+   * channel cannot report it, or the campaign is not among those read).
+   */
+  protected comparison(
+    campaign: CampaignView,
+    figure: 'total' | 'delivered' | 'failed' | 'withheld',
+  ): number | null {
+    const delivery = this.deliveryByCampaign()[campaign.campaignId];
+    if (!delivery) {
+      return null;
+    }
+    if (figure === 'delivered' && !delivery.reportsDelivery && delivery.delivered === 0) {
+      return null;
+    }
+    return delivery[figure];
   }
 
   protected campaignStatusLabelKey(status: string): MessageKey {
@@ -398,6 +447,9 @@ export class MarketingReportPage {
    * tenant, and the lookup is authorized where the redemption happened.
    */
   protected async showCustomer(row: PromotionRedemptionRow): Promise<void> {
+    if (row.promotionId === null) {
+      return;
+    }
     const current = this.revealOf(row);
     if (current?.kind === 'loading' || current?.kind === 'account' || current?.kind === 'guest') {
       return;
@@ -436,12 +488,26 @@ export class MarketingReportPage {
   }
 
   protected selectPromotion(row: PromotionSummaryRow | null): void {
+    if (row !== null && row.promotionId === null) {
+      // A customer's one-off code has no promotion to filter the log by.
+      return;
+    }
     this.promoSelected.set(row);
     void this.loadPromotionLog();
   }
 
   protected retryPromotions(): void {
     void this.loadPromotions();
+  }
+
+  /** Whether the rows span more than one legal entity, which is when a row has to say whose money it is. */
+  protected showsEntities(): boolean {
+    return new Set(this.promoSummary().map((row) => row.legalEntityId ?? null)).size > 1;
+  }
+
+  /** A short reference to the entity: the platform's id, never a name this report was not given. */
+  protected entityRef(id: string | null | undefined): string {
+    return id ? id.slice(0, 8) : '—';
   }
 
   protected sourceLabelKey(kind: string): PromotionTextKey {

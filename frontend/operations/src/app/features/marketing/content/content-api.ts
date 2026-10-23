@@ -226,7 +226,12 @@ export interface ContentPolicies {
   readonly editorialEntitled: boolean;
   /** Whether the plan lets a video be uploaded (`content.video.enabled`). */
   readonly videoEntitled: boolean;
+  /** `storefront.layout` (ADR 0183 D17): `STANDARD`, or `MARKETPLACE`. */
+  readonly layout: StorefrontLayout;
+  readonly layoutVersion: number;
 }
+
+export type StorefrontLayout = 'STANDARD' | 'MARKETPLACE';
 
 export interface ContentStatsRow {
   readonly revisionNo: number;
@@ -518,6 +523,21 @@ export class ContentApi {
       this.api.put<{ requireAllBrandLocales: boolean; reason?: string }, ContentPolicies>(
         contentPaths.publishingPolicy(scope),
         command({ requireAllBrandLocales, ...(reason ? { reason } : {}) }),
+        { expectedVersion: version },
+      ),
+    );
+  }
+
+  setLayoutPolicy(
+    scope: BrandScope,
+    version: number,
+    layout: StorefrontLayout,
+    reason?: string,
+  ): Promise<ContentPolicies> {
+    return firstValueFrom(
+      this.api.put<{ layout: StorefrontLayout; reason?: string }, ContentPolicies>(
+        contentPaths.layoutPolicy(scope),
+        command({ layout, ...(reason ? { reason } : {}) }),
         { expectedVersion: version },
       ),
     );

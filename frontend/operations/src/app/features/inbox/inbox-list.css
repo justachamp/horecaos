@@ -78,7 +78,7 @@
 }
 
 .inbox-list__error-ref {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .inbox-list__error-retry {
@@ -122,7 +122,7 @@
   top: 0;
   background: var(--q-surface-1);
   color: var(--q-ink-subtle);
-  text-align: left;
+  text-align: start;
   font-size: var(--q-type-caption);
   font-weight: 400;
   letter-spacing: 0.32px;

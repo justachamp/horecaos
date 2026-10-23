@@ -394,6 +394,15 @@ public class OrderSettlementService implements CashDueLookupPort {
      * it would leave the tenders summing to a different figure than the intent the provider
      * was asked to collect.
      *
+     * <p><strong>The intent test is a guard for later.</strong> Nothing writes {@code
+     * payments.tenders.payment_intent_id} yet (a payment intent is tied to its order, not to a
+     * tender), so {@code paymentIntentId() != null} is always false today and does not by itself
+     * keep this from running under an open provider intent. Today's protection is the callers':
+     * the catchweight reconciliation ({@code PAYMENT_ALREADY_TAKEN}) and the amendment's cash-due
+     * restatement both act only on an order whose payment projection is {@code NOT_REQUIRED}, so a
+     * caller other than those must establish the same before it calls this (see ADR 0185's
+     * implementation status).
+     *
      * @return true when the settlement now sums to {@code newTotalMinor} or there is none
      */
     @Transactional
@@ -431,6 +440,93 @@ public class OrderSettlementService implements CashDueLookupPort {
                 money.get(0).id(),
                 newMoney,
                 clock.instant());
+    }
+
+    /**
+     * Re-plans a not-yet-paid settlement's money leg onto another payment method and, when the order was repriced in the
+     * same amendment, onto its new total (ADR 0039 {@code CHANGE_PAYMENT_METHOD}, ADR 0185).
+     *
+     * <p>The balance tender is left exactly as it is: the customer's redemption was taken at checkout and an
+     * amendment does not take or give back points. What moves is the money tender, to {@code newTotalMinor} less
+     * the balance tender, and to the registry row of the new method, so the tenders still sum to the order total,
+     * at least one is money, and {@code payment[]} names the method the customer will actually pay with.
+     *
+     * <p>Only a settlement that is still {@code PLANNED} with nothing settled and exactly one money tender that is
+     * still {@code PLANNED} with no payment intent: the shape of an order whose money has not moved. Anything else
+     * has money in motion, and the answer is empty, which refuses the amendment.
+     *
+     * <p><strong>The intent test is a guard for later.</strong> Nothing writes {@code
+     * payments.tenders.payment_intent_id} yet (a payment intent is tied to its order, not to a tender), so the
+     * {@code paymentIntentId() != null} check, and the {@code payment_intent_id IS NULL} predicate of the store's
+     * update, never refuse today. What keeps a re-plan from running under an open provider intent is the
+     * amendment: {@code OrderAmendmentService.propose} refuses a method change on an order whose payment
+     * projection is not {@code NOT_REQUIRED}, a projection that only an amendment's own revision can move, and
+     * this method's own {@code PLANNED} and nothing-settled guards (ADR 0185's implementation status). A caller
+     * other than that amendment must establish the same before it calls this.
+     *
+     * @param newMethodId the tenant's registry row for the new method, registered by the planner on first use
+     * @return the new money figure, or empty when the settlement cannot be re-planned; nothing is written then
+     */
+    @Transactional
+    public OptionalLong replanMoneyLeg(
+            UUID tenantId, UUID orderId, long newTotalMinor, UUID newMethodId, String actor) {
+        Optional<SettlementRow> found = store.findSettlement(tenantId, orderId);
+        if (found.isEmpty()) {
+            return OptionalLong.empty();
+        }
+        SettlementRow settlement = found.get();
+        if (settlement.status() != SettlementStatus.PLANNED || settlement.settledMinor() != 0L) {
+            return OptionalLong.empty();
+        }
+        List<TenderRow> tenders = store.tendersOf(tenantId, settlement.id());
+        List<TenderRow> money =
+                tenders.stream().filter(tender -> !tender.settlesFromBalance()).toList();
+        if (money.size() != 1
+                || money.get(0).status() != TenderStatus.PLANNED
+                || money.get(0).paymentIntentId() != null) {
+            return OptionalLong.empty();
+        }
+        MethodRow method = store.findMethod(tenantId, newMethodId).orElse(null);
+        if (method == null || method.settlesFromBalance() || !"ACTIVE".equals(method.status())) {
+            return OptionalLong.empty();
+        }
+        long balance = tenders.stream()
+                .filter(TenderRow::settlesFromBalance)
+                .mapToLong(TenderRow::amountMinor)
+                .reduce(0L, Math::addExact);
+        long newMoney = Math.subtractExact(newTotalMinor, balance);
+        if (newMoney <= 0) {
+            // ADR 0046: an order settles at least one som in money. A change that would leave only points
+            // paying for it is refused, not rounded up.
+            return OptionalLong.empty();
+        }
+        boolean moved = store.replanMoneyTender(
+                tenantId,
+                settlement.id(),
+                settlement.version(),
+                newTotalMinor,
+                money.get(0).id(),
+                newMoney,
+                newMethodId,
+                clock.instant());
+        return moved ? OptionalLong.of(newMoney) : OptionalLong.empty();
+    }
+
+    /**
+     * The points held or settled against the order (ADR 0185): the same tenders {@link #cashDueMinor(UUID, UUID,
+     * String)} subtracts from the total, so the cash a courier is told to collect and the change an operator reads
+     * back are the same money. Zero when the order has no settlement.
+     */
+    @Transactional(readOnly = true)
+    public long balanceHeldMinor(UUID tenantId, UUID orderId) {
+        return store.findSettlement(tenantId, orderId)
+                .map(settlement -> store.tendersOf(tenantId, settlement.id()).stream()
+                        .filter(TenderRow::settlesFromBalance)
+                        .filter(tender ->
+                                tender.status() == TenderStatus.RESERVED || tender.status() == TenderStatus.SETTLED)
+                        .mapToLong(TenderRow::amountMinor)
+                        .reduce(0L, Math::addExact))
+                .orElse(0L);
     }
 
     /** The figure the courier app is shown, snapshotted onto the ADR 0014 assignment. */

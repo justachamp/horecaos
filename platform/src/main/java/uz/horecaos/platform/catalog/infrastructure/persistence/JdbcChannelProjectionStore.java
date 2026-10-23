@@ -114,6 +114,66 @@ public class JdbcChannelProjectionStore {
     }
 
     /**
+     * A marketplace binding of one installation, with the version a writer must quote.
+     *
+     * @return empty when the binding is not a binding of that installation of that tenant, or the
+     *     installation is not a {@code MARKETPLACE} one: one answer for "does not exist" and "is
+     *     somebody else's"
+     */
+    public Optional<BindingVersion> bindingOfInstallation(UUID tenantId, UUID installationId, UUID bindingId) {
+        return jdbc.sql("""
+                SELECT b.id, b.brand_id, b.location_id, b.version, b.marketplace_ruleset_code
+                FROM integration.bindings b
+                JOIN integration.installations i
+                  ON i.tenant_id = b.tenant_id AND i.id = b.installation_id
+                WHERE b.tenant_id = :tenantId AND b.installation_id = :installationId AND b.id = :bindingId
+                  AND i.provider_category = 'MARKETPLACE'
+                """)
+                .param("tenantId", tenantId)
+                .param("installationId", installationId)
+                .param("bindingId", bindingId)
+                .query((row, number) -> new BindingVersion(
+                        row.getObject("id", UUID.class),
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getLong("version"),
+                        row.getString("marketplace_ruleset_code")))
+                .optional();
+    }
+
+    /**
+     * Writes the ruleset code a marketplace binding names (null clears it) when the binding is still at the
+     * version the caller read; the version moves by one.
+     *
+     * @return the new version, or empty when the binding is no longer at {@code expectedVersion}
+     */
+    public Optional<Long> setRulesetCode(
+            UUID tenantId, UUID installationId, UUID bindingId, @Nullable String code, long expectedVersion) {
+        return jdbc.sql("""
+                UPDATE integration.bindings
+                   SET marketplace_ruleset_code = :code, version = version + 1, updated_at = now()
+                 WHERE tenant_id = :tenantId AND installation_id = :installationId AND id = :bindingId
+                   AND version = :expectedVersion
+                RETURNING version
+                """)
+                .param("code", code)
+                .param("tenantId", tenantId)
+                .param("installationId", installationId)
+                .param("bindingId", bindingId)
+                .param("expectedVersion", expectedVersion)
+                .query(Long.class)
+                .optional();
+    }
+
+    /** A marketplace binding and the version a writer must quote. */
+    public record BindingVersion(
+            UUID bindingId,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId,
+            long version,
+            @Nullable String rulesetCode) {}
+
+    /**
      * The binding of this channel's installation that covers a branch: the
      * branch's own binding if it has one, else the brand-wide one, preferring an
      * {@code ACTIVE} binding over a draft or suspended one — the same

@@ -5,7 +5,7 @@
 }
 
 .q-kpi-tile--provisional {
-  border-left: 3px solid var(--q-warning);
+  border-inline-start: 3px solid var(--q-warning);
 }
 
 .q-kpi-tile__label-row {

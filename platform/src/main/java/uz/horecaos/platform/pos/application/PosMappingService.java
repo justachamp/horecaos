@@ -15,6 +15,7 @@ import uz.horecaos.platform.iam.api.staff.StaffMemberCards;
 import uz.horecaos.platform.integration.api.provider.BindingRef;
 import uz.horecaos.platform.integration.api.provider.MappingEntityType;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
+import uz.horecaos.platform.pos.api.PosCapability;
 import uz.horecaos.platform.pos.application.port.PosAdapter;
 import uz.horecaos.platform.pos.application.port.PosAdapter.PosContext;
 import uz.horecaos.platform.pos.application.port.PosAdapter.ReferenceListRead;
@@ -38,6 +39,10 @@ import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosMappingStore.N
  * than silently returning an empty list an operator would read as "everything
  * is mapped"; creating an {@code OPERATOR} mapping by typing the provider's
  * own code works regardless of whether the right-hand side could be sourced.
+ * The till's operators, unlike those, <em>are</em> listed by Clopos ({@link
+ * PosAdapter#discoverOperators}), so the pairing is chosen from the till's own
+ * list; and {@code receivedByProvider} says whether the till's order API takes
+ * the pairing at all.
  */
 @Service
 public class PosMappingService {
@@ -97,11 +102,11 @@ public class PosMappingService {
     public UnmappedBothSides listUnmapped(UUID tenantId, UUID bindingId, MappingEntityType type) {
         Optional<BindingRef> binding = configuration.bindingRef(tenantId, bindingId);
         if (binding.isEmpty()) {
-            return new UnmappedBothSides(new UnmappedResult(false, "No such binding", List.of()), List.of());
+            return new UnmappedBothSides(new UnmappedResult(false, "No such binding", List.of()), List.of(), null);
         }
         UnmappedResult external = externalCandidates(tenantId, binding.get(), type);
         List<NamedCandidate> horecaos = horecaosCandidates(tenantId, binding.get(), type);
-        return new UnmappedBothSides(external, horecaos);
+        return new UnmappedBothSides(external, horecaos, receivedByProvider(binding.get(), type));
     }
 
     /**
@@ -238,6 +243,23 @@ public class PosMappingService {
 
     // ------------------------------------------------------------------
 
+    /**
+     * Whether the till actually receives a pairing of this type - asked only of {@code OPERATOR}
+     * (gap-map row 9.2c), because it is the one pairing that is written for the sake of an order
+     * the platform sends. True only when the binding's adapter declares {@link
+     * PosCapability#ORDER_OPERATOR_ATTRIBUTION}; a till that lists its users and cannot receive one
+     * on an order is false, and the pane says so instead of inviting a pairing that goes nowhere.
+     * Null for every other type, for which the question does not arise.
+     */
+    private @Nullable Boolean receivedByProvider(BindingRef binding, MappingEntityType type) {
+        if (type != MappingEntityType.OPERATOR) {
+            return null;
+        }
+        return adapters.forProvider(binding.providerType())
+                .map(adapter -> adapter.declaredCapabilities().contains(PosCapability.ORDER_OPERATOR_ATTRIBUTION))
+                .orElse(false);
+    }
+
     private UnmappedResult externalCandidates(UUID tenantId, BindingRef binding, MappingEntityType type) {
         return switch (type) {
             case PRODUCT ->
@@ -261,9 +283,7 @@ public class PosMappingService {
             case MODIFIER ->
                 notSourced("No provider in this build discovers a modifier list; add the mapping by typing the "
                         + "provider's own modifier code.");
-            case OPERATOR ->
-                notSourced("No provider in this build discovers a till-operator list; add the mapping by typing "
-                        + "the till's own operator id.");
+            case OPERATOR -> fromAdapterCall(tenantId, binding, PosAdapter::discoverOperators);
             case LOYALTY_CUSTOMER ->
                 notSourced("Till customers are matched to points accounts by the loyalty sync, by the phone the "
                         + "till returns; they are never typed.");
@@ -394,8 +414,16 @@ public class PosMappingService {
 
     public record UnmappedResult(boolean sourced, @Nullable String detail, List<ExternalCandidate> entities) {}
 
-    /** Both sides of the mapping pane's dual list for one binding and entity type. */
-    public record UnmappedBothSides(UnmappedResult external, List<NamedCandidate> horecaos) {}
+    /**
+     * Both sides of the mapping pane's dual list for one binding and entity type.
+     *
+     * @param receivedByProvider asked only for {@code OPERATOR}: whether the till's order API receives the pairing
+     *                           (see {@link #receivedByProvider}); null for any other type
+     */
+    public record UnmappedBothSides(
+            UnmappedResult external,
+            List<NamedCandidate> horecaos,
+            @Nullable Boolean receivedByProvider) {}
 
     public record CreateOutcome(
             Kind kind, @Nullable UUID mappingId, @Nullable String detail) {

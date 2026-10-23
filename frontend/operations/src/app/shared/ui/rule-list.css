@@ -33,7 +33,7 @@
 
 .rule-list__priority {
   min-width: 20px;
-  text-align: right;
+  text-align: end;
   color: var(--q-ink-subtle);
 }
 

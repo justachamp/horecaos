@@ -7,8 +7,8 @@
 /* The order bar rides above the tab bar, like the delivery basket's call to action. */
 .order {
   position: fixed;
-  left: 0;
-  right: 0;
+  inset-inline-start: 0;
+  inset-inline-end: 0;
   bottom: 96px;
   padding: 14px 24px 0;
   background: linear-gradient(rgba(255, 255, 255, 0), var(--surface-page) 34%);

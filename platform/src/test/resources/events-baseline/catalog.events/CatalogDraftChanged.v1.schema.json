@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/catalog.events/CatalogDraftChanged.v1.schema.json",
+  "title": "CatalogDraftChanged v1 payload",
+  "description": "A brand's draft menu changed (ADR 0016, ADR 0137, ADR 0138): which entity and how, never what it became. The draft moved; nothing a customer is served did until it is published. Identifiers, an entity kind and a change code only: no name, no price, no URL, no personal data (ADR 0029). Several writes to one entity in one transaction are one fact.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "brandId",
+    "entityType",
+    "change"
+  ],
+  "properties": {
+    "brandId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "entityType": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]*$",
+      "maxLength": 48,
+      "description": "The kind of entity that changed: PRODUCT, VARIANT, CATEGORY, CATALOG, MODIFIER_GROUP, MODIFIER_OPTION, ... A stable code, not a class name."
+    },
+    "entityId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid",
+      "description": "The entity, or null for a batch that spans many (a bulk classification)."
+    },
+    "change": {
+      "type": "string",
+      "enum": [
+        "CREATED",
+        "UPDATED",
+        "ARCHIVED",
+        "TRANSLATED",
+        "MEDIA_CHANGED",
+        "CLASSIFIED",
+        "PHYSICAL_ATTRIBUTES_CHANGED",
+        "COMPOSITE_CHANGED",
+        "CHANNEL_MEDIA_REPLACED",
+        "CHANNEL_OFFERING_CHANGED"
+      ]
+    },
+    "channelId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid",
+      "description": "The sales channel the change is scoped to (a channel override or offering), or null when it is the draft's own."
+    }
+  }
+}

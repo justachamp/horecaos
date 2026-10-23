@@ -28,7 +28,7 @@
 }
 
 .menus__table th {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
@@ -42,7 +42,7 @@
 }
 
 .menus__num-col {
-  text-align: right;
+  text-align: end;
 }
 
 .menus__cell {
@@ -114,7 +114,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .menus__bulk-button {
@@ -208,14 +208,14 @@
 
 .menus__price-input {
   width: 90px;
-  margin-left: 8px;
+  margin-inline-start: 8px;
   padding: 4px 6px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
 }
 
 .menus__price-save {
-  margin-left: 4px;
+  margin-inline-start: 4px;
   padding: 4px 8px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);

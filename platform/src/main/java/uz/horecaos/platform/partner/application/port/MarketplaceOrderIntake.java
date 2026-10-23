@@ -100,6 +100,11 @@ public interface MarketplaceOrderIntake {
      *                  refusing the order, because refusing it means a customer
      *                  who has already paid the aggregator gets nothing over a
      *                  menu-sync lag on one item.
+     * @param stopped   true when the variant is mapped but could not be sold on this
+     *                  channel at this branch when the order arrived (a stop, sold
+     *                  out, not offered). The order is accepted for the same reason
+     *                  and the line is flagged {@code STOPPED} for the pass (ADR 0141
+     *                  Decision 6, ADR 0180 Decision 4). Never true on an unmapped line
      */
     record IntakeLine(
             @Nullable UUID productId,
@@ -109,10 +114,58 @@ public interface MarketplaceOrderIntake {
             int quantity,
             long unitAmountMinor,
             long lineAmountMinor,
-            long taxAmountMinor) {
+            long taxAmountMinor,
+            boolean stopped) {
+
+        public IntakeLine {
+            if (stopped && variantId == null) {
+                throw new IllegalArgumentException("A line with no variant cannot be stopped; it is unmapped");
+            }
+        }
+
+        /** A line that was sellable when it arrived, which is every line there was before ADR 0180. */
+        public IntakeLine(
+                @Nullable UUID productId,
+                @Nullable UUID variantId,
+                String externalItemReference,
+                String nameSnapshot,
+                int quantity,
+                long unitAmountMinor,
+                long lineAmountMinor,
+                long taxAmountMinor) {
+            this(
+                    productId,
+                    variantId,
+                    externalItemReference,
+                    nameSnapshot,
+                    quantity,
+                    unitAmountMinor,
+                    lineAmountMinor,
+                    taxAmountMinor,
+                    false);
+        }
 
         public boolean unmapped() {
             return variantId == null;
+        }
+
+        /** The value {@code ordering.order_lines.external_mapping_status} takes for this line. */
+        public String mappingStatus() {
+            return unmapped() ? "UNMAPPED" : stopped ? "STOPPED" : "MAPPED";
+        }
+
+        /** This line, flagged stopped. */
+        public IntakeLine asStopped() {
+            return new IntakeLine(
+                    productId,
+                    variantId,
+                    externalItemReference,
+                    nameSnapshot,
+                    quantity,
+                    unitAmountMinor,
+                    lineAmountMinor,
+                    taxAmountMinor,
+                    true);
         }
     }
 }

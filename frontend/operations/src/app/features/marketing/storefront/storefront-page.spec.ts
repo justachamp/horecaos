@@ -11,7 +11,9 @@ import { ContentApi, ContentKind, ContentPlacement, ContentPolicies } from '../c
 import { ContentPreview } from '../content/content-preview';
 import { ContentReferences } from '../content/content-references';
 import { ContentWorkbench } from '../content/content-workbench';
+import { StorefrontBranchOrder } from './storefront-branch-order';
 import { StorefrontPage } from './storefront-page';
+import { StorefrontSwitcher } from './storefront-switcher';
 
 @Component({ selector: 'q-content-workbench', template: '' })
 class StubWorkbench {
@@ -22,6 +24,13 @@ class StubWorkbench {
   readonly canCreate = input(true);
   readonly changed = output<void>();
 }
+@Component({ selector: 'q-storefront-switcher', template: '<p data-testid="stub-switcher"></p>' })
+class StubSwitcher {}
+@Component({
+  selector: 'q-storefront-branch-order',
+  template: '<p data-testid="stub-branches"></p>',
+})
+class StubBranches {}
 @Component({ selector: 'q-content-preview', template: '' })
 class StubPreview {
   readonly locales = input<readonly string[]>([]);
@@ -58,8 +67,10 @@ async function setup(
     ],
   });
   TestBed.overrideComponent(StorefrontPage, {
-    remove: { imports: [ContentWorkbench, ContentPreview] },
-    add: { imports: [StubWorkbench, StubPreview] },
+    remove: {
+      imports: [ContentWorkbench, ContentPreview, StorefrontSwitcher, StorefrontBranchOrder],
+    },
+    add: { imports: [StubWorkbench, StubPreview, StubSwitcher, StubBranches] },
   });
   TestBed.overrideComponent(StorefrontPage, {
     set: {
@@ -133,16 +144,25 @@ describe('StorefrontPage (gap-map row 6.8; ADR 0157, Decisions 5 and 12)', () =>
     expect(preview.highlightId()).toBeNull();
   });
 
-  it('says plainly that the brand switcher and the marketplace layout are not built, and why', async () => {
+  it('opens the brand switcher and layout on its own tab, no longer a placeholder', async () => {
     const { fixture, root } = await setup();
 
     click(root, 'storefront-tab-switcher');
     fixture.detectChanges();
 
-    const text = root.querySelector('[data-testid="storefront-switcher"]')?.textContent ?? '';
-    expect(text).toContain('not built');
-    expect(text).toContain('two brands on one storefront');
+    expect(root.querySelector('[data-testid="stub-switcher"]')).not.toBeNull();
+    expect(root.textContent).not.toContain('not built');
     expect(fixture.debugElement.query(By.directive(StubWorkbench))).toBeNull();
+  });
+
+  it('opens the order of branches on its own tab', async () => {
+    const { fixture, root } = await setup();
+
+    click(root, 'storefront-tab-branches');
+    fixture.detectChanges();
+
+    expect(root.querySelector('[data-testid="stub-branches"]')).not.toBeNull();
+    expect(root.querySelector('[data-testid="stub-switcher"]')).toBeNull();
   });
 
   it('does not offer video when the plan does not include it, or cannot be read', async () => {

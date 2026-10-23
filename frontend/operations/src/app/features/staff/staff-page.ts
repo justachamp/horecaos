@@ -3,6 +3,7 @@ import { ActivatedRoute, Router, RouterOutlet } from '@angular/router';
 
 import { Auth } from '../../core/auth/auth';
 import { CurrentTenant } from '../../core/auth/current-tenant';
+import { PhonePipe } from '../../core/format/phone.pipe';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
@@ -43,6 +44,8 @@ import {
   sortByAttention,
   statusOf,
 } from './staff-row';
+import { registerStaffListKeys } from './staff-keys';
+import { StaffJobNames } from './staff-job-names';
 
 type StatusFilter = 'all' | 'active' | 'suspended';
 type ViewMode = 'flat' | 'byBranch';
@@ -75,6 +78,7 @@ interface GroupRow {
   selector: 'q-staff-page',
   imports: [
     TPipe,
+    PhonePipe,
     RouterOutlet,
     StaffJobDialog,
     StaffAccessDialog,
@@ -86,6 +90,8 @@ interface GroupRow {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class StaffPage {
+  /** staff-and-access.md §2: the people list's keys. */
+  private readonly keys = registerStaffListKeys();
   private readonly api = inject(StaffApi);
   private readonly membersApi = inject(StaffMembersApi);
   private readonly reach = inject(StaffReach);
@@ -95,6 +101,7 @@ export class StaffPage {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   protected readonly i18n = inject(I18n);
+  private readonly jobNames = inject(StaffJobNames);
 
   /** ADR 0103: her `iam.grant.manage` stops at a branch or brand, so this is that place's team and not the company's. */
   protected readonly scoped = this.reach.scoped;
@@ -386,7 +393,7 @@ export class StaffPage {
   }
 
   protected roleLabel(code: string): string {
-    return roleLabel(code, (key) => this.i18n.t(key));
+    return roleLabel(code, (key) => this.i18n.t(key), this.jobNames.nameOf(code));
   }
 
   protected scopeLevelLabel(scopeType: GrantView['scopeType']): string {

@@ -28,15 +28,11 @@ import { ECOMMERCE_CONTRACT_VERSION } from '../../core/analytics/ecommerce-event
 
 const NO_ONIONS = {
   code: 'NO_ONIONS',
-  labelRu: 'Без лука',
-  labelUz: 'Piyozsiz',
-  labelEn: 'No onions',
+  labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions' },
 };
 const EXTRA_SPICY = {
   code: 'EXTRA_SPICY',
-  labelRu: 'Поострее',
-  labelUz: 'Achchiqroq',
-  labelEn: 'Extra spicy',
+  labels: { ru: 'Поострее', 'uz-Latn': 'Achchiqroq', en: 'Extra spicy' },
 };
 
 function menuItem(overrides: Partial<MenuItem> = {}): MenuItem {
@@ -79,6 +75,7 @@ function cartLine(overrides: Partial<CartResponseItem> = {}): CartResponseItem {
 
 class FakeMenuService {
   currency = vi.fn(() => 'UZS');
+  nutritionAccuracyNotice = vi.fn(() => false);
   item = vi.fn((_id: string, _lang: string) => Promise.resolve<MenuItem | null>(menuItem()));
   home = vi.fn(() => Promise.resolve({ menu: { category_items: [] } }));
 }
@@ -646,8 +643,10 @@ describe('ProductComponent: portions and weighed items (ADR 0137)', () => {
     variant: ReturnType<typeof onSaleVariant>,
     lines: readonly CartResponseItem[] = [],
     configureCart: (cart: FakeUiCartService) => void = () => undefined,
+    accuracyNotice = false,
   ) {
     const menuService = new FakeMenuService();
+    menuService.nutritionAccuracyNotice.mockReturnValue(accuracyNotice);
     menuService.item.mockResolvedValue(menuItem({ variants: [variant] }));
     const cartService = new FakeUiCartService();
     cartService.cartData.mockReturnValue({});
@@ -676,6 +675,32 @@ describe('ProductComponent: portions and weighed items (ADR 0137)', () => {
       `350${NBSP}g`,
     );
     expect(host.querySelector('[data-testid="physical-nutrition"]')).not.toBeNull();
+  });
+
+  it('draws the accuracy line under the nutrition table only when the menu asks for it (row 4.2c)', async () => {
+    const withNutrition = onSaleVariant({
+      physical: {
+        catchweight: false,
+        splittable: false,
+        netWeightGrams: 350,
+        nutrition: { caloriesKcalPer100: 215 },
+      },
+    });
+    const off = await open(withNutrition);
+    expect(
+      (off.fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="physical-nutrition-accuracy"]',
+      ),
+    ).toBeNull();
+    TestBed.resetTestingModule();
+
+    const on = await open(withNutrition, [], () => undefined, true);
+
+    expect(
+      (on.fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="physical-nutrition-accuracy"]',
+      )?.textContent,
+    ).toContain('physical.nutritionAccuracy');
   });
 
   it('shows nothing physical for a fixed unit', async () => {

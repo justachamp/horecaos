@@ -71,7 +71,7 @@ public class JdbcPosLoyaltyBindingStore {
 
     private static final String SELECT_WITH_TENANT = """
             SELECT b.id AS binding_id, b.tenant_id, b.brand_id, b.installation_id, i.provider_type, b.location_id,
-                   b.status AS binding_status,
+                   b.status AS binding_status, b.version AS binding_version,
                    c.support_level, c.limits::text AS limits,
                    EXISTS (SELECT 1 FROM integration.binding_capabilities bc
                             WHERE bc.tenant_id = b.tenant_id AND bc.binding_id = b.id
@@ -85,7 +85,7 @@ public class JdbcPosLoyaltyBindingStore {
 
     private static final String SELECT = """
             SELECT b.id AS binding_id, b.installation_id, i.provider_type, b.location_id,
-                   b.status AS binding_status,
+                   b.status AS binding_status, b.version AS binding_version,
                    c.support_level, c.limits::text AS limits,
                    EXISTS (SELECT 1 FROM integration.binding_capabilities bc
                             WHERE bc.tenant_id = b.tenant_id AND bc.binding_id = b.id
@@ -108,9 +108,42 @@ public class JdbcPosLoyaltyBindingStore {
                 row.getString("provider_type"),
                 row.getObject("location_id", UUID.class),
                 row.getString("binding_status"),
+                row.getLong("binding_version"),
                 row.getString("support_level"),
                 row.getBoolean("enabled"),
                 parsed);
+    }
+
+    /**
+     * Writes {@code key} into the binding's own configuration override against its version, and moves the version. The
+     * override is the narrower of the two configuration rows a POS call merges (the installation's, then the binding's), so
+     * this wins over a value the installation carries.
+     *
+     * @return the new version, or empty when the binding is not this tenant's POS binding or has moved on
+     */
+    public java.util.OptionalLong setConfigurationValue(
+            UUID tenantId, UUID bindingId, String key, String value, long expectedVersion) {
+        return jdbc.sql("""
+                        UPDATE integration.bindings b
+                           SET configuration_override =
+                                   jsonb_set(b.configuration_override, ARRAY[CAST(:key AS text)], to_jsonb(CAST(:value AS text)), true),
+                               version = b.version + 1,
+                               updated_at = now()
+                         WHERE b.tenant_id = :tenantId AND b.id = :bindingId AND b.version = :expected
+                           AND EXISTS (SELECT 1 FROM integration.installations i
+                                        WHERE i.tenant_id = b.tenant_id AND i.id = b.installation_id
+                                          AND i.provider_category = 'POS')
+                        RETURNING b.version
+                        """)
+                .param("key", key)
+                .param("value", value)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .param("expected", expectedVersion)
+                .query(Long.class)
+                .optional()
+                .map(java.util.OptionalLong::of)
+                .orElse(java.util.OptionalLong.empty());
     }
 
     public record TenantRow(UUID tenantId, UUID brandId, Row row) {}
@@ -122,6 +155,7 @@ public class JdbcPosLoyaltyBindingStore {
             String providerType,
             @Nullable UUID locationId,
             String bindingStatus,
+            long version,
             @Nullable String supportLevel,
             boolean enabled,
             Map<String, Object> limits) {}

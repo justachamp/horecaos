@@ -72,6 +72,16 @@ public interface NotificationTransport {
     }
 
     /**
+     * The provider type that carries {@code channel} for this brand, found without calling
+     * out (ADR 0182): what the report needs to ask whether that gateway has a receipt source.
+     * Empty when the brand has no account for it. Defaulted to empty for a transport with no
+     * scoped notion of an account.
+     */
+    default java.util.Optional<String> boundProviderType(UUID tenantId, UUID brandId, String channel) {
+        return java.util.Optional.empty();
+    }
+
+    /**
      * Whether a real adapter is present for a channel.
      *
      * <p>Asked by eligibility, so a message on an unwired channel is suppressed

@@ -87,6 +87,34 @@ code reaching a deployment would be a full authentication bypass, not a weakened
 control. Every other number on this profile still draws a random code and still
 needs a real transport, so the preset cannot hide a broken SMS path.
 
+### Seeding a local fake aggregator
+
+```bash
+make run             # starts the fake aggregator on :18090 under the local profile
+make seed-marketplace
+```
+
+Gives the [local-fixtures](local-fixtures.md) demo tenant an `AGGREGATOR` channel
+backed by a `FAKE_AGGREGATOR` installation, so a stop (ADR 0141) can be walked from the
+console to a "partner" on your laptop: the binding reads `AUTOMATIC`, the reconciler's
+push runs through the real route, gateway and secret resolution, and ends on
+`FakeAggregatorHttpProvider`. `tools/seed-marketplace` is dev-only tooling in the same way
+`tools/seed-payments` is: fixed local addresses, no environment variable that could repoint
+it. The fake's wire format is its own invention, because no real aggregator's availability
+API is known to this build; replacing it is the "connect later" step in
+`docs/runbooks/external-connections/w5-catalog-stops-fiscal.md`.
+
+```bash
+curl -s  http://localhost:18090/_fake/state                       # what the "partner" holds
+curl -sX POST 'http://localhost:18090/_fake/outage?on=true'       # the partner is down
+curl -sX POST 'http://localhost:18090/_fake/outage?on=false'      # and back up
+```
+
+Stale alert: leave the outage on past the binding's stale threshold and one alert reaches
+the tenant queue; end it and the incident closes itself (ADR 0180). Dry run: set
+`marketplace.availability.dry_run` for the location, stop a dish, and the fake receives
+nothing while the propagation read lists what would have been sent.
+
 ### Seeding a local payment setup
 
 ```bash

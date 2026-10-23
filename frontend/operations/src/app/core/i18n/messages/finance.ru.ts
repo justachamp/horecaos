@@ -431,6 +431,17 @@ export const financeRu: AreaMessages<typeof financeEn> = {
   'finance.subscription.statements.total': 'Итого',
   'finance.subscription.statements.status': 'Статус',
   'finance.subscription.statements.download': 'Скачать CSV',
+  'finance.subscription.einvoice.label': 'Электронная счёт-фактура',
+  'finance.subscription.einvoice.state.DRAFT':
+    'подготовлена в {operator}; HorecaOS ещё не отправила её вам',
+  'finance.subscription.einvoice.state.SENT': 'отправлена вам через {operator}; ждёт вашей подписи',
+  'finance.subscription.einvoice.state.SIGNED': 'подписана вами в {operator}',
+  'finance.subscription.einvoice.state.REFUSED': 'отклонена в {operator}',
+  'finance.subscription.einvoice.state.CANCELLED': 'отменена в {operator}',
+  'finance.subscription.einvoice.state.UNKNOWN': '{operator} сообщает: «{status}»',
+  'finance.subscription.einvoice.state.UNCONFIRMED': 'отправлена в {operator}; ждём подтверждения',
+  'finance.subscription.einvoice.checked': 'проверено {time}',
+  'finance.subscription.einvoice.sign': 'Откройте {operator}, чтобы подписать или отклонить.',
   'finance.subscription.statements.empty': 'Выписки ещё не выставлялись.',
   'finance.subscription.statements.status.DRAFT': 'Предпросмотр',
   'finance.subscription.statements.status.ISSUED': 'Выставлена',
@@ -602,6 +613,29 @@ export const financeRu: AreaMessages<typeof financeEn> = {
     'HorecaOS больше не сможет с неё списывать, а сейчас оплата идёт картой — поэтому дальше она будет счётом и банковским переводом. Деньги, которые вы уже добавили, остаются в кошельке.',
   'finance.wallet.card.remove.confirm': 'Удалить карту',
   'finance.wallet.card.remove.cancel': 'Оставить',
+  'finance.wallet.enrol.browser.lead':
+    'Введите номер карты и срок действия ниже. Они уходят напрямую платёжному провайдеру, а не в HorecaOS, и стираются с этой страницы, как только провайдер ответит. Затем провайдер отправит код на ваш телефон.',
+  'finance.wallet.enrol.browser.number': 'Номер карты',
+  'finance.wallet.enrol.browser.expiry': 'Срок действия (ММ/ГГ)',
+  'finance.wallet.enrol.browser.send': 'Отправить код',
+  'finance.wallet.enrol.browser.sent': 'Провайдер отправил код на {phone}.',
+  'finance.wallet.enrol.browser.sentNoPhone':
+    'Провайдер отправил код на телефон, привязанный к этой карте.',
+  'finance.wallet.enrol.browser.unreachable':
+    'Не удалось связаться с платёжным провайдером. В HorecaOS ничего не отправлено. Попробуйте ещё раз.',
+  'finance.wallet.enrol.browser.refused':
+    'Платёжный провайдер не принял эту карту. Проверьте номер и срок действия.',
+  'finance.wallet.enrol.browser.unreadable':
+    'Ответ платёжного провайдера не удалось прочитать. Попробуйте ещё раз.',
+  'finance.wallet.reason.CARD_EXPIRED': 'Срок действия этой карты истёк.',
+  'finance.wallet.reason.CARD_EXPIRY_REQUIRED': 'Укажите срок действия карты: месяц и год.',
+  'finance.wallet.reason.PROVIDER_UNAVAILABLE':
+    'Платёжный провайдер не отвечает. Попробуйте через несколько минут.',
+  'finance.wallet.reason.PROVIDER_NOT_CONNECTED': 'Оплата картой сейчас не подключена.',
+  'finance.wallet.reason.PROVIDER_REFUSED': 'Платёжный провайдер этого не принял.',
+  'finance.wallet.decline.PROVIDER_ERROR': 'отклонено платёжным провайдером',
+  'finance.wallet.decline.PAYMENT_DECLINED': 'отклонено',
+  'finance.wallet.decline.PROVIDER_REJECTED': 'отказ платёжного провайдера',
   'finance.wallet.enrol.title': 'Добавьте карту',
   'finance.wallet.enrol.lead':
     'Введите карту в собственной форме платёжного провайдера, затем укажите здесь код, который выдаст форма, и код из SMS от вашего банка.',
@@ -770,6 +804,7 @@ export const financeRu: AreaMessages<typeof financeEn> = {
   'finance.fiscalEvidence.seller.source.UNRESOLVED':
     'В документе не указано юрлицо, поэтому ИНН назвать нельзя.',
   'finance.fiscalEvidence.field.merchantAccount': 'Мерчант-аккаунт',
+  'finance.fiscalEvidence.field.businessDate': 'Операционный день, по которому определён продавец',
   'finance.fiscalEvidence.field.fiscalSign': 'Фискальный признак',
   'finance.fiscalEvidence.field.receiptNumber': 'Номер чека',
   'finance.fiscalEvidence.field.terminalId': 'Терминал',
@@ -793,7 +828,7 @@ export const financeRu: AreaMessages<typeof financeEn> = {
   'finance.fiscalEvidence.lines.kind.DELIVERY_FEE': 'Доставка',
   'finance.fiscalEvidence.lines.kind.SYNTHETIC': 'Заглушка',
   'finance.fiscalEvidence.lines.synthetic':
-    'Это однострочная заглушка, которую песочница отправляет, чтобы проверить соединение. Её нули — не продажа.',
+    'Это однострочная заглушка, которую песочница отправляла до того, как чеки стали строиться по заказу, чтобы проверить соединение. Её нули — не продажа.',
   'finance.fiscalEvidence.lines.notSent':
     'Строки по этому чеку не записаны: либо ещё ничего не отправлено, либо отправленное не сохранилось. Вместо них ничего не показывается.',
   'finance.fiscalEvidence.lines.notReadable':
@@ -824,6 +859,8 @@ export const financeRu: AreaMessages<typeof financeEn> = {
   'finance.fiscalEvidence.correction.reason.DUPLICATE_RECEIPT': 'Дубликат чека',
   'finance.fiscalEvidence.correction.reason.CUSTOMER_REFUND': 'Возврат клиенту',
   'finance.fiscalEvidence.correction.reason.OTHER': 'Другое',
+  'finance.fiscalEvidence.correction.reason.AMENDED_AFTER_ISSUE':
+    'Заказ изменён после пробития чека',
   'finance.fiscalEvidence.correction.note.label': 'Что не так (до 255 символов)',
   'finance.fiscalEvidence.correction.submit': 'Отправить запрос',
   'finance.fiscalEvidence.correction.submitting': 'Отправляем…',

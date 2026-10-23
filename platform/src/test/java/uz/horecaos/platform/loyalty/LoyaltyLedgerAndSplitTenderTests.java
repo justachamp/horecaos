@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -44,6 +45,7 @@ import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.loyalty.api.HeldTenderPort;
 import uz.horecaos.platform.loyalty.api.LoyaltyBalanceChanged;
 import uz.horecaos.platform.loyalty.api.LoyaltyExpiryWarningPort;
+import uz.horecaos.platform.loyalty.api.LoyaltyExpiryWarningPort.ExpiringLot;
 import uz.horecaos.platform.loyalty.api.PointsRedemptionPort;
 import uz.horecaos.platform.loyalty.application.AdjustmentReasonPolicyService;
 import uz.horecaos.platform.loyalty.application.LoyaltyAccrualService;
@@ -125,7 +127,7 @@ class LoyaltyLedgerAndSplitTenderTests {
      * #NOTHING_AWAITS}/{@link #SETTLEMENT_STILL_COMING} already use.
      */
     private static final LoyaltyExpiryWarningPort NO_WARNINGS_RECORDED =
-            (tenantId, accountId, lotId, expiresAt, remainingMinor, daysRemaining) -> {};
+            (tenantId, brandId, customerAccountId, accountId, currency, lots, now) -> true;
 
     /**
      * Past {@code PointsRedemptionService.HOLD_LIFETIME}, which is
@@ -533,114 +535,305 @@ class LoyaltyLedgerAndSplitTenderTests {
     }
 
     /**
-     * T18: {@code expiryWarningDays} has been authorable, validated, and
-     * persisted on the accrual rule since V0042, and this is the first test
-     * that anything ever reads it. The seeded BRAND rule (see
-     * {@link #seedPolicies}) carries {@code expiry_warning_days = 14} and
-     * {@code lot_lifetime_days = 180}, so a lot advanced to day 170 is nine
-     * days from expiry — inside the window — and a lot left at day 0 is not.
+     * T18, then row 6.3 (ADR 0181): {@code expiryWarningDays} has been authorable, validated, and persisted on the
+     * accrual rule since V0042. The seeded BRAND rule carries {@code expiry_warning_days = 14} and {@code
+     * lot_lifetime_days = 180}, so a lot advanced to day 170 is nine days from expiry (eleven with the earn delay)
+     * -- inside the window -- and a lot left at day 0 is not.
      */
     @Test
-    @DisplayName("warnExpiringLots sends exactly one warning per lot, and only inside its window")
+    @DisplayName("warnExpiringLots sends one warning for a customer's due lot, only inside its window, and only once")
     void warnExpiringLotsSendsExactlyOneWarningPerLot() {
         UUID order = completedOrder("C-1", 100_000L, 0L);
         transactions.executeWithoutResult(status -> accrual.accrue(completion(order, 100_000L, 0L)));
         UUID accountId = accountId();
         UUID lotId = store.openLots(TENANT, accountId).getFirst().id();
 
-        record Warning(UUID accountId, UUID lotId, long remainingMinor, long daysRemaining) {}
-        List<Warning> warned = new CopyOnWriteArrayList<>();
-        LoyaltyExpiryWarningPort recording =
-                (tenantId, warnedAccountId, warnedLotId, expiresAt, remainingMinor, daysRemaining) ->
-                        warned.add(new Warning(warnedAccountId, warnedLotId, remainingMinor, daysRemaining));
+        RecordingWarnings warned = new RecordingWarnings();
         LoyaltyMaintenanceService sweep =
-                new LoyaltyMaintenanceService(store, redemption, NOTHING_AWAITS, recording, transactions, clock);
+                new LoyaltyMaintenanceService(store, redemption, NOTHING_AWAITS, warned, transactions, clock);
 
-        // Day 0: earns_at is still in the future (earn_delay_hours = 24), so the
-        // lot is not even ACTIVE yet — lotsNeedingExpiryWarning requires ACTIVE —
-        // and the sweep must find nothing.
+        // Day 0: earns_at is still in the future (earn_delay_hours = 24), so the lot is not even ACTIVE yet --
+        // lotsNeedingExpiryWarning requires ACTIVE -- and the sweep must find nothing.
         int touchedBeforeMaturity = transactions.execute(status -> sweep.warnExpiringLots());
         assertThat(touchedBeforeMaturity)
                 .as("a PENDING lot is not yet warned about")
                 .isZero();
 
-        // Day 170: expiresAt is 180 days past earns_at, itself 24h past order
-        // completion, so 170 days in leaves 11 days to expiry — inside the
-        // 14-day window.
+        // Day 170: expiresAt is 180 days past earns_at, itself 24h past order completion, so 170 days in leaves
+        // 11 days to expiry -- inside the 14-day window.
         clock.advance(Duration.ofDays(170));
         transactions.executeWithoutResult(status -> maintenance.matureLots());
 
         int firstPass = transactions.execute(status -> sweep.warnExpiringLots());
         assertThat(firstPass).isOne();
-        assertThat(warned).hasSize(1);
-        Warning warning = warned.getFirst();
+        assertThat(warned.calls).hasSize(1);
+        Warning warning = warned.calls.getFirst();
         assertThat(warning.accountId()).isEqualTo(accountId);
-        assertThat(warning.lotId()).isEqualTo(lotId);
-        assertThat(warning.remainingMinor()).isEqualTo(3_000L);
-        // expiresAt = (NOW + 24h earn delay) + 180d lifetime; the clock sits at
-        // NOW + 170d, so the remainder is exactly 10d + 24h = 11 whole days.
-        assertThat(warning.daysRemaining()).isEqualTo(11L);
+        assertThat(warning.customerAccountId()).isEqualTo(customerId);
+        assertThat(warning.brandId()).isEqualTo(BRAND);
+        assertThat(warning.currency()).isEqualTo("UZS");
+        assertThat(warning.lots()).extracting(ExpiringLot::lotId).containsExactly(lotId);
+        assertThat(warning.lots().getFirst().remainingMinor()).isEqualTo(3_000L);
+        // expiresAt = (NOW + 24h earn delay) + 180d lifetime; the clock sits at NOW + 170d.
+        assertThat(Duration.between(warning.now(), warning.lots().getFirst().expiresAt())
+                        .toDays())
+                .isEqualTo(11L);
 
-        // A second pass, before the next tick would naturally run, must not send
-        // a second message for the same lot — the sweep's own idempotency key.
+        // A second pass, before the next tick would naturally run, must not send a second message for the same
+        // lot -- the sweep's own idempotency key.
         int secondPass = transactions.execute(status -> sweep.warnExpiringLots());
         assertThat(secondPass).as("one warning per lot, ever").isZero();
-        assertThat(warned).hasSize(1);
+        assertThat(warned.calls).hasSize(1);
     }
 
     /**
-     * T18: before this fix, {@code warnExpiringLots} was one {@code
-     * @Transactional} method — every lot's own commit and every lot's own
-     * port call shared one database transaction. A later lot's port failure
-     * rolled back the whole pass, including the marks already committed for
-     * lots warned earlier in it, so the next sweep sent the same warning to
-     * the same customer a second time. This proves lot A's own commit
-     * survives lot B's later failure. Not wrapped in {@code
-     * transactions.execute(...)} here, deliberately: the real {@code
-     * LoyaltySweeper} calls {@code warnExpiringLots} directly, and an outer
-     * transaction here would hide exactly the bug this is proving fixed.
+     * The adapter answers false while the customer cannot be sent anything yet (the tenant has not activated the
+     * wording, ADR 0181). The one warning a lot gets must not be spent on that: the lot stays due, and the pass
+     * that follows the activation sends it.
      */
     @Test
-    @DisplayName("a lot's own warning commits even when a later lot's send fails, and the batch does not roll back")
-    void warnExpiringLotsCommitsEachLotIndependentlyOfALaterFailure() {
-        UUID orderA = completedOrder("C-A", 100_000L, 0L);
-        transactions.executeWithoutResult(status -> accrual.accrue(completion(orderA, 100_000L, 0L)));
-        UUID lotA = store.openLots(TENANT, accountId()).getFirst().id();
+    @DisplayName("a warning the adapter could not deliver leaves the lot due, and the pass after it can send it")
+    void aLotIsNotMarkedWarnedWhileNothingCouldBeDelivered() {
+        UUID lotId = earnALot("C-DARK", 100_000L);
+        clock.advance(Duration.ofDays(170));
+        transactions.executeWithoutResult(status -> maintenance.matureLots());
 
-        // Minted a little later so its own expiry sorts after lot A's —
-        // lotsNeedingExpiryWarning's own ORDER BY expires_at is what decides
-        // which lot the throwing port below sees first.
+        RecordingWarnings warned = new RecordingWarnings();
+        warned.handsOver = false;
+        LoyaltyMaintenanceService sweep =
+                new LoyaltyMaintenanceService(store, redemption, NOTHING_AWAITS, warned, transactions, clock);
+
+        assertThat(warnedBy(sweep)).as("nothing was handed over").isZero();
+        assertThat(warned.calls).as("the adapter was asked").hasSize(1);
+        assertThat(store.lotsNeedingExpiryWarning(clock.instant(), 10))
+                .as("the lot is still due: its only warning has not been spent")
+                .extracting(LotRow::id)
+                .containsExactly(lotId);
+
+        // A later tick, still dark: asked again, still due, still nothing marked.
+        clock.advance(Duration.ofHours(1));
+        assertThat(warnedBy(sweep)).isZero();
+        assertThat(warned.calls).hasSize(2);
+        assertThat(store.lotsNeedingExpiryWarning(clock.instant(), 10)).hasSize(1);
+
+        // The tenant activates the wording: the next tick sends it, and only then is the lot marked.
+        warned.handsOver = true;
+        clock.advance(Duration.ofHours(1));
+        assertThat(warnedBy(sweep)).isOne();
+        assertThat(warned.calls).hasSize(3);
+        assertThat(store.lotsNeedingExpiryWarning(clock.instant(), 10))
+                .as("handed over, so marked, once")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("one customer with nothing deliverable does not hold back another customer's warning")
+    void aCustomerWhoCannotBeReachedDoesNotBlockTheNext() {
+        UUID darkLot = earnALot("C-A", 100_000L);
         clock.advance(Duration.ofHours(2));
-        UUID orderB = completedOrder("C-B", 100_000L, 0L);
-        transactions.executeWithoutResult(status -> accrual.accrue(completion(orderB, 100_000L, 0L)));
-        UUID lotB = store.openLots(TENANT, accountId()).stream()
-                .map(LotRow::id)
-                .filter(id -> !id.equals(lotA))
-                .findFirst()
-                .orElseThrow();
+        UUID reachableLot = earnALotFor(otherCustomerId, "C-B", 100_000L);
+        clock.advance(Duration.ofDays(170));
+        transactions.executeWithoutResult(status -> maintenance.matureLots());
 
+        List<UUID> asked = new ArrayList<>();
+        LoyaltyExpiryWarningPort onlyTheSecondIsReachable =
+                (tenantId, brandId, customerAccountId, accountId, currency, lots, now) -> {
+                    asked.add(lots.getFirst().lotId());
+                    return !lots.getFirst().lotId().equals(darkLot);
+                };
+        LoyaltyMaintenanceService sweep = new LoyaltyMaintenanceService(
+                store, redemption, NOTHING_AWAITS, onlyTheSecondIsReachable, transactions, clock);
+
+        assertThat(warnedBy(sweep)).as("one message handed over").isOne();
+
+        assertThat(asked).containsExactly(darkLot, reachableLot);
+        assertThat(store.lotsNeedingExpiryWarning(clock.instant(), 10))
+                .extracting(LotRow::id)
+                .as("only the lot nobody could be told about is still due")
+                .containsExactly(darkLot);
+    }
+
+    /**
+     * The worklist is {@code LIMIT 500}: lots nobody could be told about stay at its head, so a pass that always
+     * started from the beginning would never reach the customers behind them. The sweep walks the worklist by
+     * keyset instead, which this proves one lot at a time.
+     */
+    @Test
+    @DisplayName("the warning worklist can be read past the lots at its head")
+    void theWorklistPagesByKeyset() {
+        UUID first = earnALot("C-1", 100_000L);
+        clock.advance(Duration.ofHours(2));
+        UUID second = earnALotFor(otherCustomerId, "C-2", 100_000L);
+        clock.advance(Duration.ofDays(170));
+        transactions.executeWithoutResult(status -> maintenance.matureLots());
+
+        List<LotRow> head = store.lotsNeedingExpiryWarning(clock.instant(), 1);
+        assertThat(head).extracting(LotRow::id).containsExactly(first);
+
+        List<LotRow> behind = store.lotsNeedingExpiryWarning(clock.instant(), 1, head.getFirst());
+        assertThat(behind).extracting(LotRow::id).containsExactly(second);
+
+        assertThat(store.lotsNeedingExpiryWarning(clock.instant(), 1, behind.getFirst()))
+                .as("nothing behind the last lot")
+                .isEmpty();
+    }
+
+    /** Three lots in one customer's window are one message, not three (ADR 0046: at most one a day). */
+    @Test
+    @DisplayName("a customer's due lots are one message carrying all of them, earliest expiry first")
+    void aCustomersDueLotsCoalesceIntoOneMessage() {
+        UUID lotA = earnALot("C-A", 100_000L);
+        clock.advance(Duration.ofHours(2));
+        UUID lotB = earnALot("C-B", 50_000L);
+        clock.advance(Duration.ofHours(2));
+        UUID lotC = earnALot("C-C", 20_000L);
+        clock.advance(Duration.ofDays(170));
+        transactions.executeWithoutResult(status -> maintenance.matureLots());
+
+        RecordingWarnings warned = new RecordingWarnings();
+        LoyaltyMaintenanceService sweep =
+                new LoyaltyMaintenanceService(store, redemption, NOTHING_AWAITS, warned, transactions, clock);
+
+        int messages = transactions.execute(status -> sweep.warnExpiringLots());
+
+        assertThat(messages).as("one message handed over, for three lots").isOne();
+        assertThat(warned.calls).hasSize(1);
+        assertThat(warned.calls.getFirst().lots())
+                .extracting(ExpiringLot::lotId)
+                .as("the lot that lapses first leads")
+                .containsExactly(lotA, lotB, lotC);
+        assertThat(store.lotsNeedingExpiryWarning(clock.instant(), 10))
+                .as("all three are marked once the message is handed over")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("two customers are two messages, each carrying only its own lots")
+    void twoCustomersAreTwoMessages() {
+        UUID mine = earnALot("C-M", 100_000L);
+        UUID theirs = earnALotFor(otherCustomerId, "C-T", 100_000L);
+        clock.advance(Duration.ofDays(170));
+        transactions.executeWithoutResult(status -> maintenance.matureLots());
+
+        RecordingWarnings warned = new RecordingWarnings();
+        LoyaltyMaintenanceService sweep =
+                new LoyaltyMaintenanceService(store, redemption, NOTHING_AWAITS, warned, transactions, clock);
+
+        assertThat(warnedBy(sweep)).isEqualTo(2);
+
+        assertThat(warned.calls).hasSize(2);
+        assertThat(warned.calls)
+                .extracting(w -> w.customerAccountId())
+                .containsExactlyInAnyOrder(customerId, otherCustomerId);
+        warned.calls.forEach(w -> assertThat(w.lots()).hasSize(1));
+        assertThat(warned.calls.stream().flatMap(w -> w.lots().stream()).map(ExpiringLot::lotId))
+                .containsExactlyInAnyOrder(mine, theirs);
+    }
+
+    /**
+     * The per-day half of the rule. A lot that comes into its window after the customer was warned this morning
+     * waits for tomorrow's message instead of making a second one today -- and is not lost.
+     */
+    @Test
+    @DisplayName("a lot that comes due the afternoon after a warning waits until the day has passed, then is warned")
+    void atMostOneMessagePerCustomerPerDay() {
+        UUID early = earnALot("C-E", 100_000L);
+        // A second lot earned 20 days later lapses 20 days later: outside the 14-day window when the first is warned.
+        clock.advance(Duration.ofDays(20));
+        UUID late = earnALot("C-L", 50_000L);
+        // Day 170: the early lot (expiring on day 181) is eleven days away, the late one (day 201) thirty-one.
+        clock.advance(Duration.ofDays(150));
+        transactions.executeWithoutResult(status -> maintenance.matureLots());
+
+        RecordingWarnings warned = new RecordingWarnings();
+        LoyaltyMaintenanceService sweep =
+                new LoyaltyMaintenanceService(store, redemption, NOTHING_AWAITS, warned, transactions, clock);
+
+        assertThat(warnedBy(sweep)).isOne();
+        assertThat(warned.calls.getFirst().lots())
+                .extracting(ExpiringLot::lotId)
+                .containsExactly(early);
+
+        // Eighteen days on, the late lot (expiring on day 201) is thirteen days away: inside its own window. The
+        // customer was last told six hours ago -- posed directly, because the sweep itself cannot be run twice in
+        // one afternoon without also moving the clock past the day.
+        clock.advance(Duration.ofDays(18));
+        jdbc.sql("UPDATE loyalty.lots SET expiry_warning_sent_at = :at WHERE tenant_id = :t AND id = :id")
+                .param("at", clock.instant().minus(Duration.ofHours(6)).atOffset(java.time.ZoneOffset.UTC))
+                .param("t", TENANT)
+                .param("id", early)
+                .update();
+        assertThat(warnedBy(sweep))
+                .as("the customer was told six hours ago: not a second message today")
+                .isZero();
+        assertThat(store.lotsNeedingExpiryWarning(clock.instant(), 10))
+                .as("the late lot is held back by the day rule, not by the window")
+                .isEmpty();
+
+        clock.advance(Duration.ofHours(19));
+        assertThat(warnedBy(sweep))
+                .as("a day later it is warned, and is not lost")
+                .isOne();
+        assertThat(warned.calls).hasSize(2);
+        assertThat(warned.calls.get(1).lots()).extracting(ExpiringLot::lotId).containsExactly(late);
+    }
+
+    @Test
+    @DisplayName("a lot already past its expiry is not warned about: the expiry sweep closes it")
+    void anExpiredLotIsNeverWarnedAbout() {
+        earnALot("C-X", 100_000L);
+        clock.advance(Duration.ofDays(185));
+        transactions.executeWithoutResult(status -> maintenance.matureLots());
+
+        RecordingWarnings warned = new RecordingWarnings();
+        LoyaltyMaintenanceService sweep =
+                new LoyaltyMaintenanceService(store, redemption, NOTHING_AWAITS, warned, transactions, clock);
+
+        assertThat(warnedBy(sweep))
+                .as("telling someone their points expire in minus days is worse than telling them nothing")
+                .isZero();
+        assertThat(warned.calls).isEmpty();
+    }
+
+    /**
+     * T18: before that fix, {@code warnExpiringLots} was one {@code @Transactional} method, so a later send's
+     * failure rolled back the marks already committed for earlier ones and the next sweep sent the same warning
+     * again. Proves customer A's own commit survives customer B's later failure. Not wrapped in {@code
+     * transactions.execute(...)}, deliberately: the real {@code LoyaltySweeper} calls it directly, and an outer
+     * transaction would hide exactly the bug this proves fixed.
+     */
+    @Test
+    @DisplayName(
+            "a customer's own warning commits even when a later customer's send fails, and the batch does not roll back")
+    void warnExpiringLotsCommitsEachCustomerIndependentlyOfALaterFailure() {
+        UUID lotA = earnALot("C-A", 100_000L);
+        // Earned a little later, so its expiry sorts after customer A's: lotsNeedingExpiryWarning's ORDER BY
+        // expires_at decides which customer the throwing port sees first.
+        clock.advance(Duration.ofHours(2));
+        UUID lotB = earnALotFor(otherCustomerId, "C-B", 100_000L);
         clock.advance(Duration.ofDays(170));
         transactions.executeWithoutResult(status -> maintenance.matureLots());
 
         List<UUID> attempted = new ArrayList<>();
-        LoyaltyExpiryWarningPort failsOnSecondLot =
-                (tenantId, warnedAccountId, warnedLotId, expiresAt, remainingMinor, daysRemaining) -> {
-                    attempted.add(warnedLotId);
+        LoyaltyExpiryWarningPort failsOnSecondCustomer =
+                (tenantId, brandId, customerAccountId, accountId, currency, lots, now) -> {
+                    attempted.add(lots.getFirst().lotId());
                     if (attempted.size() == 2) {
                         throw new RuntimeException("simulated ADR 0020 adapter failure");
                     }
+                    return true;
                 };
-        LoyaltyMaintenanceService sweep =
-                new LoyaltyMaintenanceService(store, redemption, NOTHING_AWAITS, failsOnSecondLot, transactions, clock);
+        LoyaltyMaintenanceService sweep = new LoyaltyMaintenanceService(
+                store, redemption, NOTHING_AWAITS, failsOnSecondCustomer, transactions, clock);
 
         assertThatThrownBy(sweep::warnExpiringLots).isInstanceOf(RuntimeException.class);
 
         assertThat(attempted)
-                .as("lot A sorts first by expires_at; lot B's send is the one that fails")
+                .as("customer A's lot sorts first by expires_at; customer B's send is the one that fails")
                 .containsExactly(lotA, lotB);
         assertThat(store.lotsNeedingExpiryWarning(clock.instant(), 10))
-                .as("lot A's own mark already committed and is not undone by lot B's later "
-                        + "failure — only lot B, whose send never even reached its own mark, is still due")
+                .as("customer A's mark already committed and is not undone by B's later failure -- only B, whose "
+                        + "send never reached its own mark, is still due")
                 .extracting(LotRow::id)
                 .containsExactly(lotB);
     }
@@ -1321,6 +1514,131 @@ class LoyaltyLedgerAndSplitTenderTests {
                 .isEqualTo(versionBefore);
     }
 
+    // ------------------------------------ ADR 0185: the money leg follows a payment-method change
+
+    @Test
+    @DisplayName("the money leg moves to the new method and the points leg is left exactly as it was")
+    void theMoneyLegMovesAndThePointsStay() {
+        UUID order = completedOrder("M-1", 94_000L, 0L);
+        seedBalance(12_000L);
+        planPointsAndCash(order, 94_000L, 12_000L, 82_000L, "k-replan-1");
+        UUID settlementId =
+                settlementStore.findSettlement(TENANT, order).orElseThrow().id();
+        var before = settlementStore.tendersOf(TENANT, settlementId);
+
+        var due = replan(order, 94_000L, clickMethod);
+
+        assertThat(due).hasValue(82_000L);
+        var after = settlementStore.tendersOf(TENANT, settlementId);
+        assertThat(after)
+                .extracting(
+                        JdbcSettlementStore.TenderRow::settlesFromBalance,
+                        JdbcSettlementStore.TenderRow::paymentMethodId,
+                        JdbcSettlementStore.TenderRow::amountMinor,
+                        JdbcSettlementStore.TenderRow::status)
+                .containsExactly(
+                        org.assertj.core.api.Assertions.tuple(true, pointsMethod, 12_000L, TenderStatus.RESERVED),
+                        org.assertj.core.api.Assertions.tuple(false, clickMethod, 82_000L, TenderStatus.PLANNED));
+        assertThat(after.get(0).loyaltyReservationId())
+                .as("the hold on the points is the same hold")
+                .isEqualTo(before.get(0).loyaltyReservationId());
+        assertThat(settlementStore.findSettlement(TENANT, order).orElseThrow().totalDueMinor())
+                .isEqualTo(94_000L);
+        assertThat(after.stream().filter(tender -> tender.paymentMethodId().equals(cashMethod)))
+                .as("no tender names cash any more: the customer is not paying the courier")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("the money leg follows an amended total too, points untouched")
+    void theMoneyLegFollowsAnAmendedTotal() {
+        UUID order = completedOrder("M-2", 94_000L, 0L);
+        seedBalance(12_000L);
+        planPointsAndCash(order, 94_000L, 12_000L, 82_000L, "k-replan-2");
+
+        assertThat(replan(order, 120_000L, clickMethod)).hasValue(108_000L);
+
+        var settlement = settlementStore.findSettlement(TENANT, order).orElseThrow();
+        assertThat(settlement.totalDueMinor()).isEqualTo(120_000L);
+        assertThat(settlementStore.tendersOf(TENANT, settlement.id()))
+                .extracting(JdbcSettlementStore.TenderRow::amountMinor)
+                .containsExactly(12_000L, 108_000L);
+    }
+
+    @Test
+    @DisplayName("a move that would leave nothing to collect in money is refused and changes nothing")
+    void aReplanCannotLeaveTheMoneyLegEmpty() {
+        UUID order = completedOrder("M-3", 94_000L, 0L);
+        seedBalance(12_000L);
+        planPointsAndCash(order, 94_000L, 12_000L, 82_000L, "k-replan-3");
+        UUID settlementId =
+                settlementStore.findSettlement(TENANT, order).orElseThrow().id();
+
+        assertThat(replan(order, 12_000L, clickMethod)).isEmpty();
+
+        assertThat(settlementStore.tendersOf(TENANT, settlementId))
+                .extracting(JdbcSettlementStore.TenderRow::paymentMethodId, JdbcSettlementStore.TenderRow::amountMinor)
+                .containsExactly(
+                        org.assertj.core.api.Assertions.tuple(pointsMethod, 12_000L),
+                        org.assertj.core.api.Assertions.tuple(cashMethod, 82_000L));
+    }
+
+    @Test
+    @DisplayName("once a leg has settled the plan is not moved, and a balance method is never a target")
+    void aSettledPlanAndABalanceTargetAreNotReplanned() {
+        UUID order = completedOrder("M-4", 94_000L, 0L);
+        seedBalance(12_000L);
+        planPointsAndCash(order, 94_000L, 12_000L, 82_000L, "k-replan-4");
+        UUID settlementId =
+                settlementStore.findSettlement(TENANT, order).orElseThrow().id();
+
+        assertThat(replan(order, 94_000L, pointsMethod))
+                .as("points can never be the method a provider is asked to collect")
+                .isEmpty();
+
+        UUID pointsTender = settlementStore.tendersOf(TENANT, settlementId).stream()
+                .filter(JdbcSettlementStore.TenderRow::settlesFromBalance)
+                .findFirst()
+                .orElseThrow()
+                .id();
+        transactions.executeWithoutResult(
+                status -> settlements.recordTenderSettled(TENANT, order, pointsTender, "test"));
+        assertThat(replan(order, 94_000L, clickMethod)).isEmpty();
+        assertThat(settlementStore.tendersOf(TENANT, settlementId).get(1).paymentMethodId())
+                .isEqualTo(cashMethod);
+    }
+
+    @Test
+    @DisplayName("an order with no settlement, and a settlement with two money tenders, have nothing to move")
+    void nothingToReplan() {
+        assertThat(replan(completedOrder("M-5", 50_000L, 0L), 50_000L, clickMethod))
+                .isEmpty();
+
+        UUID order = completedOrder("M-6", 130_000L, 0L);
+        seedBalance(10_000L);
+        transactions.execute(status -> settlements.plan(new SettlementPlan(
+                TENANT,
+                BRAND,
+                order,
+                customerId,
+                "UZS",
+                130_000L,
+                List.of(
+                        new PlannedTender(pointsMethod, 10_000L),
+                        new PlannedTender(clickMethod, 50_000L),
+                        new PlannedTender(cashMethod, 70_000L)),
+                "k-replan-6",
+                "test")));
+        assertThat(replan(order, 130_000L, clickMethod))
+                .as("which of two money tenders would the new method replace?")
+                .isEmpty();
+    }
+
+    private java.util.OptionalLong replan(UUID order, long totalMinor, UUID methodId) {
+        return Objects.requireNonNull(transactions.execute(
+                status -> settlements.replanMoneyLeg(TENANT, order, totalMinor, methodId, "operator")));
+    }
+
     private boolean restate(UUID order, long totalMinor) {
         return Boolean.TRUE.equals(
                 transactions.execute(status -> settlements.restateTotal(TENANT, order, totalMinor, "scale")));
@@ -1816,6 +2134,65 @@ class LoyaltyLedgerAndSplitTenderTests {
                 .param("tenantId", TENANT)
                 .param("id", accountId)
                 .update();
+    }
+
+    /** One pass of the expiry-warning sweep as the scheduler runs it, and how many messages it handed over. */
+    private int warnedBy(LoyaltyMaintenanceService sweep) {
+        Integer handedOver = transactions.execute(status -> sweep.warnExpiringLots());
+        return Objects.requireNonNull(handedOver);
+    }
+
+    /** One completed order's lot for the default customer; the lot's id. */
+    private UUID earnALot(String number, long totalMinor) {
+        return earnALotFor(customerId, number, totalMinor);
+    }
+
+    private UUID earnALotFor(UUID customer, String number, long totalMinor) {
+        UUID order = orderFor(customer, number, totalMinor, 0L, BRAND, locationId);
+        Set<UUID> before = openLotIds(customer);
+        transactions.executeWithoutResult(status -> accrual.accrue(new LoyaltyAccrualService.CompletedOrder(
+                TENANT, BRAND, locationId, channelId, customer, order, "UZS", totalMinor, 0L, clock.instant())));
+        Set<UUID> after = openLotIds(customer);
+        after.removeAll(before);
+        return after.iterator().next();
+    }
+
+    private Set<UUID> openLotIds(UUID customer) {
+        return store.findAccount(TENANT, BRAND, customer)
+                .map(account -> store.openLots(TENANT, account.id()).stream()
+                        .map(LotRow::id)
+                        .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new)))
+                .orElseGet(java.util.LinkedHashSet::new);
+    }
+
+    /** What the warning port was handed, in order. */
+    private record Warning(
+            UUID brandId,
+            UUID customerAccountId,
+            UUID accountId,
+            String currency,
+            List<ExpiringLot> lots,
+            Instant now) {}
+
+    private static final class RecordingWarnings implements LoyaltyExpiryWarningPort {
+
+        final List<Warning> calls = new CopyOnWriteArrayList<>();
+
+        /** What the adapter answers: true once a deliverable message exists, false while there is no wording. */
+        volatile boolean handsOver = true;
+
+        @Override
+        public boolean lotsExpiring(
+                UUID tenantId,
+                UUID brandId,
+                UUID customerAccountId,
+                UUID accountId,
+                String currency,
+                List<ExpiringLot> lots,
+                Instant now) {
+            calls.add(new Warning(brandId, customerAccountId, accountId, currency, lots, now));
+            return handsOver;
+        }
     }
 
     private long lotRemaining(UUID lotId) {

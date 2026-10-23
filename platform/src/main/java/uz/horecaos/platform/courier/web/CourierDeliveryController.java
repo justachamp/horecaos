@@ -27,6 +27,7 @@ import uz.horecaos.platform.courier.application.CourierDeliveryService.DeliveryV
 import uz.horecaos.platform.courier.application.CourierDeliveryService.OfferView;
 import uz.horecaos.platform.courier.application.CourierDeliveryService.Position;
 import uz.horecaos.platform.courier.application.CourierDeliveryService.Where;
+import uz.horecaos.platform.courier.domain.StepCheck;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
 import uz.horecaos.platform.fulfillment.api.CourierJobsPort.Job;
 import uz.horecaos.platform.fulfillment.api.CourierJobsPort.Offer;
@@ -219,7 +220,11 @@ public class CourierDeliveryController {
                     + "GPS_ACCURACY_INSUFFICIENT, TOO_FAR_FROM_PICKUP, TOO_FAR_FROM_DROPOFF. "
                     + "DELIVERED is also refused (PAYMENT_CONFIRMATION_REQUIRED) while the tenant "
                     + "requires the cash to be confirmed and cash is due and unconfirmed. The "
-                    + "position is measured and discarded.")
+                    + "position is measured and discarded. PICKED_UP and DELIVERED are the older door "
+                    + "to the steps POST .../pickup and .../handover take, held to the same pickup and "
+                    + "handover mode: a position check that fails under HARD is refused here with 422 and "
+                    + "the reason, where those answer 409 GATE_FAILED; under SOFT it is recorded and the "
+                    + "step goes ahead.")
     public ResponseEntity<CourierDeliveryResponse> advance(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -236,6 +241,70 @@ public class CourierDeliveryController {
                 expected,
                 body.step(),
                 position(body.position()),
+                actor()));
+    }
+
+    @PostMapping("/deliveries/{shipmentId}/pickup")
+    @CourierSelfAuthorized(Capability.COURIER_DELIVERY_ADVANCE)
+    @Idempotent
+    @Operation(
+            operationId = "courierPickUpDelivery",
+            summary = "I have the bag: pick up my delivery",
+            description = "Requires If-Match with the delivery's version; the body may be empty or carry the "
+                    + "courier's own position. Held to the location's pickup mode (courier policy "
+                    + "pickupHandoverGate): SOFT, the default, takes the step whatever the position check "
+                    + "came to and answers 200 with checks, [{kind, outcome}] for each check the location asks "
+                    + "for (GEO while the GPS switch is on), so a check that failed is told to the courier and "
+                    + "recorded for the accrual; HARD refuses a failed check with 409 GATE_FAILED whose detail "
+                    + "is the failed check kinds, and nothing changes. Also refused (422) with reason "
+                    + "STEP_NOT_ALLOWED when the delivery is not waiting at the pickup. The position is "
+                    + "measured and discarded.")
+    public ResponseEntity<CourierDeliveryResponse> pickUp(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID shipmentId,
+            @Valid @RequestBody(required = false) @Nullable CourierGateStepRequest body,
+            HttpServletRequest request) {
+
+        long expected = AggregateVersion.requireIfMatch(request);
+        return respond(deliveries.pickUp(
+                new Where(tenantId, brandId, locationId),
+                me(tenantId),
+                shipmentId,
+                expected,
+                position(body == null ? null : body.position()),
+                actor()));
+    }
+
+    @PostMapping("/deliveries/{shipmentId}/handover")
+    @CourierSelfAuthorized(Capability.COURIER_DELIVERY_ADVANCE)
+    @Idempotent
+    @Operation(
+            operationId = "courierHandOverDelivery",
+            summary = "I have given it to the customer: hand over my delivery",
+            description = "Requires If-Match with the delivery's version; the body may be empty or carry the "
+                    + "courier's own position, measured against the customer's door. Held to the location's "
+                    + "handover mode exactly as the pickup is (SOFT records and proceeds with checks; HARD "
+                    + "refuses a failed position check with 409 GATE_FAILED). The cash step never softens: "
+                    + "while the tenant requires the cash to be confirmed and cash is due and unconfirmed the "
+                    + "handover is refused (422, PAYMENT_CONFIRMATION_REQUIRED), and a confirmed one reports "
+                    + "PAYMENT PASSED in checks.")
+    public ResponseEntity<CourierDeliveryResponse> handOver(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID shipmentId,
+            @Valid @RequestBody(required = false) @Nullable CourierGateStepRequest body,
+            HttpServletRequest request) {
+
+        long expected = AggregateVersion.requireIfMatch(request);
+        return respond(deliveries.handOver(
+                new Where(tenantId, brandId, locationId),
+                me(tenantId),
+                shipmentId,
+                expected,
+                position(body == null ? null : body.position()),
                 actor()));
     }
 
@@ -336,6 +405,9 @@ public class CourierDeliveryController {
     }
 
     record CourierAcceptOfferRequest(@Valid @Nullable CourierPositionBody position) {}
+
+    /** The body of a pickup or a handover: the courier's position when the phone has one, and nothing else. */
+    record CourierGateStepRequest(@Valid @Nullable CourierPositionBody position) {}
 
     record CourierAdvanceDeliveryRequest(
             @NotNull Step step, @Valid @Nullable CourierPositionBody position) {}
@@ -460,7 +532,8 @@ public class CourierDeliveryController {
             Instant pickupWindowEnd,
             @Nullable Instant promisedDeliveryEnd,
             CourierPickupResponse pickup,
-            boolean paymentConfirmationRequired) {
+            boolean paymentConfirmationRequired,
+            @Nullable List<CheckResponse> checks) {
 
         static CourierDeliveryResponse of(DeliveryView view) {
             Job job = view.job();
@@ -485,7 +558,25 @@ public class CourierDeliveryController {
                     job.pickupWindowEnd(),
                     job.promisedDeliveryEnd(),
                     CourierPickupResponse.of(job.pickup()),
-                    view.paymentConfirmationRequired());
+                    view.paymentConfirmationRequired(),
+                    view.checks() == null
+                            ? null
+                            : view.checks().stream().map(CheckResponse::of).toList());
+        }
+    }
+
+    /**
+     * One check a pickup or a handover ran (ADR 0042, ADR 0178).
+     *
+     * @param kind    {@code GEO}, {@code PHOTO} or {@code PAYMENT}
+     * @param outcome {@code PASSED}, {@code FAILED} or {@code SKIPPED}. A check the location does not
+     *                ask for is absent from the list rather than reported skipped, so a non-passed entry
+     *                always means «this was asked for and was not confirmed»
+     */
+    record CheckResponse(String kind, String outcome) {
+
+        static CheckResponse of(StepCheck check) {
+            return new CheckResponse(check.kind().name(), check.outcome().name());
         }
     }
 

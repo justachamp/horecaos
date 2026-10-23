@@ -259,6 +259,7 @@ public class DispatchRulesAuthoringService {
         return new Options(
                 store.deliveryInstallations(tenantId),
                 store.deliveryZones(tenantId, scope.brandId()),
+                store.zoneNames(tenantId),
                 store.channels(tenantId),
                 store.locationsInScope(tenantId, scope.brandId(), scope.locationId()),
                 groupingAllowed);
@@ -439,6 +440,7 @@ public class DispatchRulesAuthoringService {
     public record Options(
             List<InstallationRow> installations,
             List<ZoneRow> zones,
+            Map<UUID, Map<String, String>> zoneNames,
             List<ChannelRow> channels,
             List<LocationRow> locations,
             boolean groupingAllowed) {}

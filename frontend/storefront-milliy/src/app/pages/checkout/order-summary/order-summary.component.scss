@@ -59,3 +59,9 @@
 .summary__hidden-title {
   margin: 0;
 }
+
+/* X.1 (ADR 0185): what is left to pay in money once the points are out of the total. */
+.summary__row--cash {
+  font-weight: 700;
+  color: var(--text-primary);
+}

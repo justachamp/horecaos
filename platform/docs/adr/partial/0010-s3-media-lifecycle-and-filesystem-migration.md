@@ -143,6 +143,7 @@
   changes — ADR 0135 is a runtime swap underneath this record, verified
   against the same presigned-PUT/GET and path-style behavior this record
   already requires.
+  2026-10-14 ([ADR 0187](../built/0187-kiosk-idle-media-and-the-channel-forms-the-console-does-not-owe.md)): `media.assets` gains the `purpose` column this record's idle-media note asked for (V0695; `KIOSK_IDLE`, always a `PUBLIC`, tenant-owned still image, `ck_media_asset_purpose_shape`); `MediaPurpose` and `PurposedImages` lend a module whose managers hold a capability of their own the upload lifecycle and the attach check for one purpose; verification rejects a purposed picture of the wrong shape (`PURPOSE_ASPECT_RATIO`) and the request refuses one over its cap; the tenancy usage probe and `MediaAssetReferenceCatalogTests` cover `tenant.kiosk_idle_media.asset_id`.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture)

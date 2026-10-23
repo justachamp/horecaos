@@ -152,7 +152,9 @@ public class OperationsOrderController {
             // Gap map row 1.1e: OrderActionsPolicy's ASSIGN_COURIER branch reads
             // this the same way — the exact capability DispatchController.assign
             // itself declares.
-            Capability.DELIVERY_MANUAL_ASSIGN);
+            Capability.DELIVERY_MANUAL_ASSIGN,
+            // ADR 0154: OrderActionsPolicy's REPRINT branch reads the capability POST .../print-jobs declares.
+            Capability.PRINT_REPRINT);
 
     private final @Nullable OrderMarkService marks;
 
@@ -396,7 +398,10 @@ public class OperationsOrderController {
                     + "awaiting retry), `callbackRequested` (Требуется звонок — the flag "
                     + "the callback amendment raises and clears) and `fiscalStatus` (Фискализация "
                     + "— any fiscal document of the order in one of the given statuses, ADR "
-                    + "0038). Keyset-paginated "
+                    + "0038). `include` names the optional facts the board's picker columns draw "
+                    + "(`courierEta`, `source`, `fiscal`, `distance`, `externalNumber`), each read in one "
+                    + "batch for the page and only when asked for; the payment method and the item summary "
+                    + "are always on the row. Keyset-paginated "
                     + "(ADR 0031): pass the previous page's `nextCursor` back as `cursor`. "
                     + "Changing a filter invalidates the cursor — start the list again — because "
                     + "a window cut for one filter set says nothing about another. The same board "
@@ -423,6 +428,7 @@ public class OperationsOrderController {
             @RequestParam(required = false) @Nullable Boolean problem,
             @RequestParam(required = false) @Nullable Boolean callbackRequested,
             @RequestParam(required = false) @Nullable List<String> fiscalStatus,
+            @RequestParam(required = false) @Nullable List<String> include,
             @RequestParam(required = false) @Nullable String cursor,
             @RequestParam(required = false) @Nullable Integer limit) {
 
@@ -448,7 +454,8 @@ public class OperationsOrderController {
                 fiscalStatus);
 
         Set<Capability> granted = grantedRowCapabilities(tenantId, brandId, locationId);
-        return OrderBoardFilters.page(orderQuery, query, cursor, limit, ignored -> granted);
+        return OrderBoardFilters.page(
+                orderQuery, query, cursor, limit, OrderBoardFilters.facts(include), ignored -> granted);
     }
 
     @GetMapping("/marketplace-bindings")
@@ -524,8 +531,8 @@ public class OperationsOrderController {
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @Valid @RequestBody BranchResolutionRequest body) {
-        BranchResolution resolution =
-                branchResolution.resolve(tenantId, brandId, body.fulfillmentMode(), body.point(), body.channelCode());
+        BranchResolution resolution = branchResolution.resolve(
+                tenantId, brandId, body.fulfillmentMode(), body.point(), body.channelCode(), body.requestedFor());
         return ResponseEntity.ok(BranchResolutionResponse.of(resolution));
     }
 
@@ -582,28 +589,12 @@ public class OperationsOrderController {
                     ResourceScope.location(tenantId, brandId, locationId));
         }
         try {
-            var result = operatorOrdering.place(new OperatorOrderingService.PlaceOrderCommand(
+            var result = operatorOrdering.place(body.toCommand(
                     tenantId,
                     brandId,
                     locationId,
-                    body.customerAccountId(),
-                    body.channelCode(),
-                    body.fulfillmentMode(),
-                    body.lines().stream().map(OrderLineRequest::toLine).toList(),
-                    body.destination() == null ? null : body.destination().toDestination(),
-                    body.paymentMethodCode(),
-                    body.promoCode(),
                     idempotencyKey,
-                    currentActor.get().subject(),
-                    null,
-                    body.requestedFor(),
-                    Boolean.TRUE.equals(body.overrideOutOfHours()),
-                    body.proposedLocationId(),
-                    body.overrideReasonCode(),
-                    body.overrideNote(),
-                    body.dineInSessionId(),
-                    body.cashTenderedMinor(),
-                    body.declinedAutoAddRuleIds() == null ? List.of() : body.declinedAutoAddRuleIds()));
+                    currentActor.get().subject()));
 
             if (result.outcome() == CheckoutService.CheckoutResult.Outcome.REJECTED) {
                 String rejectionCode =
@@ -666,29 +657,12 @@ public class OperationsOrderController {
             @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
             @Valid @RequestBody PlaceOrderRequest body) {
         try {
-            var quote = operatorQuotes.quote(new OperatorOrderingService.PlaceOrderCommand(
+            var quote = operatorQuotes.quote(body.toPricingCommand(
                     tenantId,
                     brandId,
                     locationId,
-                    body.customerAccountId(),
-                    body.channelCode(),
-                    body.fulfillmentMode(),
-                    body.lines().stream().map(OrderLineRequest::toLine).toList(),
-                    body.destination() == null ? null : body.destination().toDestination(),
-                    body.paymentMethodCode(),
-                    body.promoCode(),
-                    // Never reaches checkout, so the key names nothing; the command wants one.
                     idempotencyKey,
-                    currentActor.get().subject(),
-                    null,
-                    body.requestedFor(),
-                    Boolean.TRUE.equals(body.overrideOutOfHours()),
-                    body.proposedLocationId(),
-                    body.overrideReasonCode(),
-                    body.overrideNote(),
-                    body.dineInSessionId(),
-                    body.cashTenderedMinor(),
-                    body.declinedAutoAddRuleIds() == null ? List.of() : body.declinedAutoAddRuleIds()));
+                    currentActor.get().subject()));
             return ResponseEntity.ok(OrderQuoteResponse.of(quote));
         } catch (CartService.CartRefusedException refused) {
             throw StorefrontOrderingController.refusal(refused);
@@ -927,6 +901,7 @@ public class OperationsOrderController {
         UUID courierId = orderQuery.courierIdFor(tenantId, orderId);
         boolean amendmentAwaitingOperator = orderQuery.amendmentAwaitingOperatorFor(tenantId, orderId);
         boolean presentablePayment = orderQuery.presentablePaymentFor(tenantId, detail.order());
+        boolean reprintAvailable = orderQuery.reprintAvailableFor(tenantId, brandId, locationId);
         // ADR 0137: the step a line may be amended in, asked only of an order that can still be
         // amended -- a finished order has no use for it and the read costs a query on the menu.
         Map<UUID, BigDecimal> portionSteps = detail.order().status().terminal()
@@ -956,6 +931,7 @@ public class OperationsOrderController {
                         courierId,
                         amendmentAwaitingOperator,
                         presentablePayment,
+                        reprintAvailable,
                         table,
                         staffDirectory,
                         portionSteps,
@@ -963,7 +939,9 @@ public class OperationsOrderController {
                         // ADR 0169: whether this brand has the removal path on, so the console offers "remove a
                         // line" and a lowered quantity only where the server will carry them out. Asked only of
                         // an order that can still be amended.
-                        !detail.order().status().terminal() && amendments.lineRemovalEnabled(detail.order())));
+                        !detail.order().status().terminal() && amendments.lineRemovalEnabled(detail.order()),
+                        // ADR 0185: «Сдача» is reckoned against the cash still owed after the points, not the total.
+                        orderQuery.cashToCollectFor(tenantId, detail.order())));
     }
 
     @GetMapping("/{orderId}/revisions")
@@ -2011,7 +1989,132 @@ public class OperationsOrderController {
             @Nullable @PositiveOrZero Long cashTenderedMinor,
             // ADR 0158: the rules whose lines the operator took off the basket the last quote showed,
             // each by the ruleId that quote named. The cart never evaluates them into this order.
-            @Nullable @Size(max = 50) List<UUID> declinedAutoAddRuleIds) {
+            @Nullable @Size(max = 50) List<UUID> declinedAutoAddRuleIds,
+            // ADR 0185: points the customer agreed, on the call, to pay part of the order with. Boxed -- Jackson 3
+            // refuses a missing primitive -- and optional; zero or absent redeems nothing.
+            @Nullable @PositiveOrZero Long redeemFromBalanceMinor,
+            // The operator's confirmation that the customer agreed. Required when points are to be spent.
+            @Nullable Boolean operatorAttestsCustomerAgreement,
+            // ADR 0177: «Перезвонить клиенту» raised while the order is keyed in, boxed (Jackson 3 refuses a
+            // missing primitive) and refused with OPERATOR_CALLBACK_NOT_ALLOWED where the location turned it off.
+            @Nullable Boolean callbackRequested) {
+
+        /** A request that redeems nothing and raises no callback flag: every client that predates ADR 0185. */
+        public PlaceOrderRequest(
+                UUID customerAccountId,
+                String channelCode,
+                FulfillmentMode fulfillmentMode,
+                List<OrderLineRequest> lines,
+                @Nullable DestinationRequest destination,
+                String paymentMethodCode,
+                @Nullable String promoCode,
+                @Nullable Instant requestedFor,
+                Boolean overrideOutOfHours,
+                @Nullable UUID proposedLocationId,
+                @Nullable String overrideReasonCode,
+                @Nullable String overrideNote,
+                @Nullable UUID dineInSessionId,
+                @Nullable Long cashTenderedMinor,
+                @Nullable List<UUID> declinedAutoAddRuleIds) {
+            this(
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines,
+                    destination,
+                    paymentMethodCode,
+                    promoCode,
+                    requestedFor,
+                    overrideOutOfHours,
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    cashTenderedMinor,
+                    declinedAutoAddRuleIds,
+                    null,
+                    null,
+                    null);
+        }
+
+        /** A request that raises no callback flag: every client that predates ADR 0177. */
+        public PlaceOrderRequest(
+                UUID customerAccountId,
+                String channelCode,
+                FulfillmentMode fulfillmentMode,
+                List<OrderLineRequest> lines,
+                @Nullable DestinationRequest destination,
+                String paymentMethodCode,
+                @Nullable String promoCode,
+                @Nullable Instant requestedFor,
+                Boolean overrideOutOfHours,
+                @Nullable UUID proposedLocationId,
+                @Nullable String overrideReasonCode,
+                @Nullable String overrideNote,
+                @Nullable UUID dineInSessionId,
+                @Nullable Long cashTenderedMinor,
+                @Nullable List<UUID> declinedAutoAddRuleIds,
+                @Nullable Long redeemFromBalanceMinor,
+                @Nullable Boolean operatorAttestsCustomerAgreement) {
+            this(
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines,
+                    destination,
+                    paymentMethodCode,
+                    promoCode,
+                    requestedFor,
+                    overrideOutOfHours,
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    cashTenderedMinor,
+                    declinedAutoAddRuleIds,
+                    redeemFromBalanceMinor,
+                    operatorAttestsCustomerAgreement,
+                    null);
+        }
+
+        /** A request that redeems nothing but may raise the callback flag: every client that predates ADR 0185. */
+        public PlaceOrderRequest(
+                UUID customerAccountId,
+                String channelCode,
+                FulfillmentMode fulfillmentMode,
+                List<OrderLineRequest> lines,
+                @Nullable DestinationRequest destination,
+                String paymentMethodCode,
+                @Nullable String promoCode,
+                @Nullable Instant requestedFor,
+                Boolean overrideOutOfHours,
+                @Nullable UUID proposedLocationId,
+                @Nullable String overrideReasonCode,
+                @Nullable String overrideNote,
+                @Nullable UUID dineInSessionId,
+                @Nullable Long cashTenderedMinor,
+                @Nullable List<UUID> declinedAutoAddRuleIds,
+                @Nullable Boolean callbackRequested) {
+            this(
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines,
+                    destination,
+                    paymentMethodCode,
+                    promoCode,
+                    requestedFor,
+                    overrideOutOfHours,
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    cashTenderedMinor,
+                    declinedAutoAddRuleIds,
+                    null,
+                    null,
+                    callbackRequested);
+        }
 
         /** A request that declines no auto-add rule: every client that predates ADR 0158. */
         public PlaceOrderRequest(
@@ -2044,7 +2147,76 @@ public class OperationsOrderController {
                     overrideNote,
                     dineInSessionId,
                     cashTenderedMinor,
+                    null,
                     null);
+        }
+
+        /**
+         * The command a price is asked for: the basket as entered, without the points. A redemption changes what
+         * is collected, not what the basket costs, so pricing never sees it and a screen that keeps the field filled
+         * while it re-prices is not refused for the attestation it has not asked for yet.
+         */
+        OperatorOrderingService.PlaceOrderCommand toPricingCommand(
+                UUID tenantId, UUID brandId, UUID locationId, String idempotencyKey, String operatorSubject) {
+            return build(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    idempotencyKey,
+                    operatorSubject,
+                    0L,
+                    false,
+                    Boolean.TRUE.equals(callbackRequested));
+        }
+
+        /** The command this request is, with the operator and the key the endpoint knows and the body does not. */
+        OperatorOrderingService.PlaceOrderCommand toCommand(
+                UUID tenantId, UUID brandId, UUID locationId, String idempotencyKey, String operatorSubject) {
+            return build(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    idempotencyKey,
+                    operatorSubject,
+                    redeemFromBalanceMinor == null ? 0L : redeemFromBalanceMinor,
+                    Boolean.TRUE.equals(operatorAttestsCustomerAgreement),
+                    Boolean.TRUE.equals(callbackRequested));
+        }
+
+        private OperatorOrderingService.PlaceOrderCommand build(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                String idempotencyKey,
+                String operatorSubject,
+                long redeemMinor,
+                boolean attested,
+                boolean callback) {
+            return new OperatorOrderingService.PlaceOrderCommand(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines.stream().map(OrderLineRequest::toLine).toList(),
+                    destination == null ? null : destination.toDestination(),
+                    paymentMethodCode,
+                    promoCode,
+                    idempotencyKey,
+                    operatorSubject,
+                    null,
+                    requestedFor,
+                    Boolean.TRUE.equals(overrideOutOfHours),
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    cashTenderedMinor,
+                    declinedAutoAddRuleIds == null ? List.of() : declinedAutoAddRuleIds,
+                    redeemMinor,
+                    attested,
+                    callback);
         }
     }
 
@@ -3022,11 +3194,22 @@ public class OperationsOrderController {
      * @param point null for PICKUP, required for DELIVERY — refused
      *              (VALIDATION_FAILED) by {@code BranchResolutionQueryService}
      *              when absent on a DELIVERY request
+     * @param requestedFor ADR 0177: the «Позже» time of a pre-order, or absent for an order for now.
+     *              The branches are asked whether they are open, and whether a zone binds, at that
+     *              instant, and when none is open then {@code ordering.preorder_branch_resolution}
+     *              ranks the closed ones
      */
     public record BranchResolutionRequest(
             @NotNull FulfillmentMode fulfillmentMode,
             @Nullable @Valid GeoPoint point,
-            @NotBlank String channelCode) {}
+            @NotBlank String channelCode,
+            @Nullable Instant requestedFor) {
+
+        /** A resolution for now: every client that predates the pre-order reader (ADR 0177). */
+        public BranchResolutionRequest(FulfillmentMode fulfillmentMode, @Nullable GeoPoint point, String channelCode) {
+            this(fulfillmentMode, point, channelCode, null);
+        }
+    }
 
     /**
      * One candidate branch — ranked by zone match for DELIVERY, by current
@@ -3048,7 +3231,10 @@ public class OperationsOrderController {
             long activeOrderCount,
             @Nullable UUID zoneId,
             @Nullable Integer zonePriority,
-            @Nullable Double zoneAreaSquareMeters) {
+            @Nullable Double zoneAreaSquareMeters,
+            @Nullable Instant nextAvailableAt,
+            boolean acceptsScheduledOrders,
+            @Nullable Double distanceMeters) {
 
         static BranchCandidateResponse of(BranchCandidate candidate) {
             return new BranchCandidateResponse(
@@ -3060,7 +3246,10 @@ public class OperationsOrderController {
                     candidate.activeOrderCount(),
                     candidate.zoneId(),
                     candidate.zonePriority(),
-                    candidate.zoneAreaSquareMeters());
+                    candidate.zoneAreaSquareMeters(),
+                    candidate.nextAvailableAt(),
+                    candidate.acceptsScheduledOrders(),
+                    candidate.distanceMeters());
         }
     }
 
@@ -3162,6 +3351,30 @@ public class OperationsOrderController {
      *                   order.read} already admits, and never carries the raw
      *                   subject (the console draws a dash instead)
      * @param acceptedByDisplayName the same resolution for {@code acceptedByActorId}
+     * @param origin     how the order arrived (gap map row {@code 1.1}'s source column): {@code HORECAOS} for
+     *                   the tenant's own channels, {@code MARKETPLACE} for anything an aggregator pushed
+     *                   (ADR 0040). Always sent on a board read; null on a summary read outside the board
+     * @param courierEtaAt the ETA fulfilment captured for the order's partner-quoted delivery plan
+     *                   ({@link uz.horecaos.platform.fulfillment.api.CourierEtaPort}), a snapshot of the
+     *                   winning quote and not a live feed. Null for an order carried by a house courier, for
+     *                   a plan whose quote named no ETA, and whenever the board read was not asked for
+     *                   {@code include=courierEta}
+     * @param channelSystemType the order's channel's {@code SalesChannelSystemType} name, resolved on the
+     *                   server because the roles that work the board do not hold {@code CHANNEL_READ}; null
+     *                   unless {@code include=source}, and for a channel the tenant no longer lists
+     * @param channelIcon the channel's own free-text icon; the console draws a generic one for a value it
+     *                   does not know. Same availability as {@code channelSystemType}
+     * @param channelDisplayName the tenant's name for the channel, the icon's title. Same availability
+     * @param paymentMethodCode the method of the order's payment intent (the platform's {@code
+     *                   PaymentMethod} codes), always on a board row; null for an order with no intent. The
+     *                   console draws its icon from a set it owns
+     * @param itemCount  how many positions the order holds now, always on a board row (a combo is one
+     *                   position); null off the board
+     * @param firstItemName the first position's name as it was sold
+     * @param fiscalStatus the status of the order's sale fiscal document, only for {@code include=fiscal}
+     * @param distanceMeters the delivery plan's route distance, only for {@code include=distance}
+     * @param externalNumber the number the partner or POS knows the order by, only for {@code
+     *                   include=externalNumber}
      */
     public record OrderSummaryResponse(
             UUID orderId,
@@ -3191,7 +3404,18 @@ public class OperationsOrderController {
             @Nullable UUID courierId,
             OrderTablesPort.@Nullable OrderTable table,
             @Nullable String createdByDisplayName,
-            @Nullable String acceptedByDisplayName) {
+            @Nullable String acceptedByDisplayName,
+            @Nullable String origin,
+            @Nullable Instant courierEtaAt,
+            @Nullable String channelSystemType,
+            @Nullable String channelIcon,
+            @Nullable String channelDisplayName,
+            @Nullable String paymentMethodCode,
+            @Nullable Integer itemCount,
+            @Nullable String firstItemName,
+            @Nullable String fiscalStatus,
+            @Nullable Integer distanceMeters,
+            @Nullable String externalNumber) {
 
         /**
          * The summary of an order read outside the board — the detail read's own
@@ -3209,6 +3433,9 @@ public class OperationsOrderController {
          *                   OrderQueryService#presentablePaymentFor}), the
          *                   {@code ISSUE_INVOICE} counterpart to {@code courierId}
          *                   above (gap map row 1.1e)
+         * @param reprintAvailable resolved separately by the caller ({@link
+         *                   OrderQueryService#reprintAvailableFor}), the {@code REPRINT}
+         *                   counterpart: the order's branch has printing on and a printer
          * @param table      resolved separately by the caller ({@link
          *                   OrderQueryService#tableFor}), the single-order
          *                   counterpart to the board's batched lookup
@@ -3222,19 +3449,21 @@ public class OperationsOrderController {
                 @Nullable UUID courierId,
                 boolean amendmentAwaitingOperator,
                 boolean presentablePayment,
+                boolean reprintAvailable,
                 OrderTablesPort.@Nullable OrderTable table,
                 @Nullable String createdByDisplayName,
                 @Nullable String acceptedByDisplayName) {
             return of(
                     new JdbcOrderStore.OrderBoardRow(
-                            order,
-                            null,
-                            courierId,
-                            amendmentAwaitingOperator,
-                            presentablePayment,
-                            table,
-                            createdByDisplayName,
-                            acceptedByDisplayName),
+                                    order,
+                                    null,
+                                    courierId,
+                                    amendmentAwaitingOperator,
+                                    presentablePayment,
+                                    table,
+                                    createdByDisplayName,
+                                    acceptedByDisplayName)
+                            .withFacts(JdbcOrderStore.OrderBoardFacts.NONE.withReprintAvailable(reprintAvailable)),
                     grantedCapabilities);
         }
 
@@ -3259,7 +3488,8 @@ public class OperationsOrderController {
                             row.courierId(),
                             row.amendmentAwaitingOperator(),
                             order.paymentStatusProjection(),
-                            row.presentablePayment()),
+                            row.presentablePayment(),
+                            row.facts().reprintAvailable()),
                     order.promise().promisedAt(),
                     order.promise().basis().name(),
                     order.paymentStatusProjection(),
@@ -3275,7 +3505,18 @@ public class OperationsOrderController {
                     row.courierId(),
                     row.table(),
                     row.createdByDisplayName(),
-                    row.acceptedByDisplayName());
+                    row.acceptedByDisplayName(),
+                    row.origin(),
+                    row.facts().courierEtaAt(),
+                    row.facts().channelSystemType(),
+                    row.facts().channelIcon(),
+                    row.facts().channelDisplayName(),
+                    row.facts().paymentMethodCode(),
+                    row.facts().itemCount(),
+                    row.facts().firstItemName(),
+                    row.facts().fiscalStatus(),
+                    row.facts().distanceMeters(),
+                    row.facts().externalNumber());
         }
     }
 
@@ -3299,14 +3540,16 @@ public class OperationsOrderController {
                 @Nullable UUID courierId,
                 boolean amendmentAwaitingOperator,
                 String paymentStatusProjection,
-                boolean presentablePayment) {
+                boolean presentablePayment,
+                boolean reprintAvailable) {
             return OrderActionsPolicy.availableFor(
                             status,
                             mode,
                             grantedCapabilities,
                             courierId == null,
                             amendmentAwaitingOperator,
-                            OrderActionsPolicy.awaitsOnlinePayment(paymentStatusProjection, presentablePayment))
+                            OrderActionsPolicy.awaitsOnlinePayment(paymentStatusProjection, presentablePayment),
+                            reprintAvailable)
                     .stream()
                     .map(OrderActionResponse::of)
                     .toList();
@@ -3322,10 +3565,13 @@ public class OperationsOrderController {
     /**
      * One order in full, as the branch's detail screen renders it.
      *
-     * @param changeDueMinor {@code tendered − total}, recomputed on every read and
-     *                       never stored. It is an operational hint: no money has
-     *                       moved, and storing it would make a figure that is only
-     *                       true until the next amendment look like a payment
+     * @param changeDueMinor {@code tendered − cash still owed}, recomputed on every read and
+     *                       never stored. The cash still owed is the order total less
+     *                       the points the customer spent (ADR 0185), so on an order
+     *                       paid part in points it is not the total. It is an
+     *                       operational hint: no money has moved, and storing it
+     *                       would make a figure that is only true until the next
+     *                       amendment look like a payment
      * @param outcome        present only once the order has ended
      * @param customer       orders.md §3.7-§3.8: name in full, phone masked,
      *                       guest-vs-account, and presence flags for the
@@ -3382,11 +3628,13 @@ public class OperationsOrderController {
                 @Nullable UUID courierId,
                 boolean amendmentAwaitingOperator,
                 boolean presentablePayment,
+                boolean reprintAvailable,
                 OrderTablesPort.@Nullable OrderTable table,
                 StaffDirectory staffDirectory,
                 Map<UUID, BigDecimal> portionSteps,
                 Map<UUID, OrderMarkService.LineMarking> marking,
-                boolean lineRemovalEnabled) {
+                boolean lineRemovalEnabled,
+                long cashToCollectMinor) {
             var order = detail.order();
             String createdByName = displayNameOf(
                     staffDirectory, order.tenantId(), order.createdByActorType(), order.createdByActorId());
@@ -3399,6 +3647,7 @@ public class OperationsOrderController {
                             courierId,
                             amendmentAwaitingOperator,
                             presentablePayment,
+                            reprintAvailable,
                             table,
                             createdByName,
                             acceptedByName),
@@ -3421,7 +3670,7 @@ public class OperationsOrderController {
                     order.cashTenderedExpectedMinor(),
                     order.cashTenderedExpectedMinor() == null
                             ? null
-                            : order.cashTenderedExpectedMinor() - order.totalMinor(),
+                            : order.cashTenderedExpectedMinor() - cashToCollectMinor,
                     outcomeRow == null ? null : OutcomeResponse.of(outcomeRow),
                     CustomerResponse.of(detail.customer()),
                     lineRemovalEnabled);
@@ -3471,8 +3720,7 @@ public class OperationsOrderController {
                             line.line().finalAmountMinor(),
                             line.modifiers().stream().map(m -> m.optionName()).toList(),
                             line.commentPresets().stream()
-                                    .map(p -> new CommentPresetChip(
-                                            p.code(), p.labelRu(), p.labelUz(), p.labelEn(), p.labels()))
+                                    .map(p -> new CommentPresetChip(p.code(), p.labels()))
                                     .toList(),
                             line.line().lineId(),
                             line.line().hasNote(),
@@ -3492,7 +3740,8 @@ public class OperationsOrderController {
                                     : portionSteps.get(line.line().sourceVariantId()),
                             line.line().origin(),
                             line.line().autoAddMandatory(),
-                            LineMarkingResponse.of(marking.get(line.line().lineId()))))
+                            LineMarkingResponse.of(marking.get(line.line().lineId())),
+                            LineIntakeResponse.of(line.intakeFlag())))
                     .toList();
         }
     }
@@ -3751,7 +4000,26 @@ public class OperationsOrderController {
             boolean autoAddMandatory,
             // ADR 0161: present on a marked line while marked-goods capture is on -- how many units must be
             // scanned and how many are. Counts and nothing else: no screen shows a code.
-            @Nullable LineMarkingResponse marking) {}
+            @Nullable LineMarkingResponse marking,
+            // ADR 0040 / ADR 0141: present only on an aggregator line that arrived needing a person -- the
+            // catalogue does not carry the item (UNMAPPED) or the dish was stopped on this channel at this
+            // branch (STOPPED). The order was accepted either way; this is the flag for the pass.
+            @Nullable LineIntakeResponse intake) {}
+
+    /**
+     * Why an aggregator line needs a person before the food is cooked.
+     *
+     * @param status                {@code UNMAPPED} or {@code STOPPED}
+     * @param externalItemReference the partner's own identifier for the item, so the branch can name the SKU
+     *                              to fix or to stop on the aggregator's side
+     */
+    public record LineIntakeResponse(
+            String status, @Nullable String externalItemReference) {
+
+        static @Nullable LineIntakeResponse of(JdbcOrderStore.@Nullable LineIntakeFlag flag) {
+            return flag == null ? null : new LineIntakeResponse(flag.status(), flag.externalItemReference());
+        }
+    }
 
     /**
      * ADR 0161: the marking progress of one order line.
@@ -3809,11 +4077,10 @@ public class OperationsOrderController {
     /**
      * Row 2.1b. Matches {@code CommentPresetController.PresetResponse}'s own locale shape.
      *
-     * @param labels every wording the line's snapshot holds, keyed by locale -- the triple above
-     *               plus any locale a tenant's brands support beyond it (row 10.12, V0433)
+     * @param labels every wording the line's snapshot holds, keyed by locale, the platform triple
+     *               first (row 10.12, V0433; the only shape of it since V0678)
      */
-    public record CommentPresetChip(
-            String code, String labelRu, String labelUz, String labelEn, java.util.Map<String, String> labels) {}
+    public record CommentPresetChip(String code, java.util.Map<String, String> labels) {}
 
     public record NoteResponse(UUID lineId, @Nullable String note) {}
 

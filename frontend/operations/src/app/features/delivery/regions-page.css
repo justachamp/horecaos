@@ -34,7 +34,7 @@
 }
 
 .regions__table th {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
@@ -55,12 +55,12 @@
 }
 
 .regions__action-col {
-  text-align: right;
+  text-align: end;
   white-space: nowrap;
 }
 
 .regions__action-col button {
-  margin-left: 6px;
+  margin-inline-start: 6px;
   padding: 4px 10px;
   border: 1px solid var(--q-hairline);
   background: var(--q-canvas);
@@ -117,7 +117,7 @@
 .dialog {
   background: var(--q-canvas);
   padding: 20px;
-  width: 460px;
+  width: 560px;
   max-width: 90vw;
   max-height: 90vh;
   overflow: auto;
@@ -155,7 +155,7 @@
 
 .dialog__problems {
   margin: 0 0 8px;
-  padding-left: 18px;
+  padding-inline-start: 18px;
   color: var(--q-error-text);
 }
 
@@ -186,4 +186,9 @@
   background: var(--q-surface-1);
   border-color: var(--q-hairline);
   color: var(--q-ink-muted);
+}
+
+.regions__bbox {
+  display: block;
+  margin-bottom: 12px;
 }

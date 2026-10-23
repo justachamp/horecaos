@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   computed,
   effect,
   inject,
@@ -61,6 +62,14 @@ const REASON_KEYS: Readonly<Record<PrintReason, MessageKey>> = {
  *
  * Every print here is a manual print: it asks why, writes a `printing.job.reprinted` fact naming the person, and
  * is marked as a copy on paper when it is not the first. Hidden while `feature.printing` is off for the tenant.
+ *
+ * **Drawn from the server's offer as well as from the flag.** The flag read is `tenant.read` at the tenant, which
+ * a cashier or a branch manager does not hold: for them it is refused and every flag reads off. The server,
+ * which resolves printing for the order's own branch, puts `REPRINT` in the order's `actions[]` for exactly the
+ * people who hold `print.reprint` there when printing is on and a printer exists. That action opens this
+ * section, so the pane hands it in as {@link reprintOffered} and it is drawn on that alone; the flag still draws
+ * it for a manager who can read it, where no printer may be registered yet and the section says so.
+ *
  * A browser printer's job comes back handed off, and the picture is printed through this workstation's dialog.
  */
 @Component({
@@ -74,10 +83,13 @@ export class OrderPrintPanel {
   private readonly api = inject(PrintingApi);
   private readonly flags = inject(FeatureFlags);
   private readonly browser = inject(BrowserPrinter);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly i18n = inject(I18n);
 
   readonly scope = input.required<LocationScope>();
   readonly orderId = input.required<string>();
+  /** The order's `actions[]` carries `REPRINT`: the server's own answer that this person may print here, now. */
+  readonly reprintOffered = input(false);
 
   protected readonly documents = ORDER_DOCUMENTS;
   protected readonly documentKeys = DOCUMENT_KEYS;
@@ -95,7 +107,7 @@ export class OrderPrintPanel {
   protected readonly flagsLoaded = signal(false);
 
   protected readonly visible = computed(
-    () => this.flagsLoaded() && this.flags.isOn('feature.printing'),
+    () => this.reprintOffered() || (this.flagsLoaded() && this.flags.isOn('feature.printing')),
   );
   protected readonly activePrinters = computed(() =>
     this.printers().filter((printer) => printer.status === 'ACTIVE'),
@@ -120,6 +132,20 @@ export class OrderPrintPanel {
         untracked(() => void this.loadPrinters(scope));
       }
     });
+  }
+
+  /**
+   * Brings the panel into view and puts the cursor on its first control -- what the row's «Печать» (orders.md
+   * §2.12's `p`) and the pane's header action both ask for. Does nothing while the panel is hidden (printing
+   * off): the action that calls this is absent then, and a stale click must not scroll to nothing.
+   */
+  reveal(): void {
+    if (!this.visible()) {
+      return;
+    }
+    const host = this.host.nativeElement;
+    host.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    host.querySelector<HTMLElement>('[data-testid="order-print-document"]')?.focus();
   }
 
   protected async print(): Promise<void> {

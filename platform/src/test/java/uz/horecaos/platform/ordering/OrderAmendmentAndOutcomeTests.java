@@ -10,10 +10,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
@@ -102,6 +104,7 @@ import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingCon
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
 import uz.horecaos.platform.support.FakeConfigurationResolver;
+import uz.horecaos.platform.support.LocaleNames;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.application.ServiceabilityService;
@@ -147,6 +150,7 @@ class OrderAmendmentAndOutcomeTests {
     private CheckoutService checkout;
     private OrderStateService orderState;
     private uz.horecaos.platform.payments.settlement.CheckoutSettlementPlanner settlementPlanner;
+    private uz.horecaos.platform.payments.settlement.OrderSettlementService settlementService;
     private OrderQueryService orderQuery;
     private OrderAmendmentService amendments;
     /** ADR 0169: the same service with {@code ordering.amendment_line_removal_enabled} on. */
@@ -185,6 +189,11 @@ class OrderAmendmentAndOutcomeTests {
     private UUID burgerVariant;
     private UUID catalogId;
     private UUID storefrontChannel;
+
+    /** The amendment service's payments port, which keeps what the provider was asked to collect (ADR 0185). */
+    private final RecordingPayments recordingPayments = new RecordingPayments();
+
+    private uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService loyaltyAdjustments;
 
     @BeforeAll
     static void startDatabase() {
@@ -316,17 +325,30 @@ class OrderAmendmentAndOutcomeTests {
                 auditRecorder,
                 clock);
 
-        // ADR 0046's real planner. No checkout in this suite names a payment
-        // method, so none of them plans a settlement — which is precisely why the
-        // real class belongs here rather than a stub: if that ever changes, these
-        // tests meet the production behaviour rather than a stand-in's opinion of
-        // it. The redemption port throws because nothing here may redeem; a call
-        // would be a change nobody meant to make.
+        // ADR 0046's real planner, over the real points ledger. An order here that names a method plans a
+        // settlement, and one that redeems takes a real hold, because the amendments below move that money:
+        // a stand-in ledger would let a re-planned money leg agree with itself about what the points were.
+        var loyaltyStore = new uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore(jdbc);
+        var redemption = new uz.horecaos.platform.loyalty.application.PointsRedemptionService(
+                loyaltyStore,
+                new uz.horecaos.platform.loyalty.application.LoyaltyPolicyService(loyaltyStore),
+                event -> {},
+                clock);
+        var reasonPolicies = new uz.horecaos.platform.support.InMemoryPlatformPolicies();
+        loyaltyAdjustments = new uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService(
+                loyaltyStore,
+                ALWAYS_APPROVES,
+                new JdbcAuditRecorder(jdbc, objectMapper),
+                clock,
+                new uz.horecaos.platform.loyalty.application.AdjustmentReasonPolicyService(
+                        reasonPolicies, reasonPolicies, new SimpleMeterRegistry()),
+                100_000L);
         var settlementStore = new uz.horecaos.platform.payments.settlement.JdbcSettlementStore(jdbc);
+        settlementService =
+                new uz.horecaos.platform.payments.settlement.OrderSettlementService(settlementStore, redemption, clock);
         settlementPlanner = new uz.horecaos.platform.payments.settlement.CheckoutSettlementPlanner(
                 settlementStore,
-                new uz.horecaos.platform.payments.settlement.OrderSettlementService(
-                        settlementStore, NO_REDEMPTION, clock),
+                settlementService,
                 clock,
                 new uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalTerminalStore(jdbc, objectMapper));
 
@@ -383,7 +405,15 @@ class OrderAmendmentAndOutcomeTests {
                         org.mockito.Mockito.mock(OrderLatenessPolicyService.class),
                         org.mockito.Mockito.mock(uz.horecaos.platform.ordering.api.MarketplaceBindingLookup.class),
                         clock),
-                org.mockito.Mockito.mock(uz.horecaos.platform.iam.api.staff.StaffDirectory.class));
+                org.mockito.Mockito.mock(uz.horecaos.platform.iam.api.staff.StaffDirectory.class),
+                new uz.horecaos.platform.ordering.application.OrderBoardEnrichment(
+                        orderStore,
+                        UNWIRED_PAYMENTS,
+                        org.mockito.Mockito.mock(uz.horecaos.platform.fulfillment.api.CourierEtaPort.class),
+                        org.mockito.Mockito.mock(uz.horecaos.platform.tenancy.api.SalesChannelLookup.class),
+                        org.mockito.Mockito.mock(uz.horecaos.platform.ordering.api.OrderFiscalStatusPort.class),
+                        org.mockito.Mockito.mock(uz.horecaos.platform.fulfillment.api.DeliveryDistancePort.class),
+                        org.mockito.Mockito.mock(uz.horecaos.platform.ordering.api.OrderReprintPort.class)));
         reasons = new OrderOutcomeReasonService(reasonStore, auditRecorder, clock);
         rejectReasons = new RejectReasonQueryService(new JdbcRejectReasonStore(jdbc));
         outcomes = new OrderOutcomeService(orderState, reasons, rejectReasons, orderStore, protection, objectMapper);
@@ -405,7 +435,7 @@ class OrderAmendmentAndOutcomeTests {
                 inventory,
                 new uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService(
                         jdbc, auditRecorder, clock, new SimpleMeterRegistry(), objectMapper),
-                UNWIRED_PAYMENTS,
+                recordingPayments,
                 protection,
                 configuration,
                 new PromoCodeRedemptionService(promoCodeStore, clock),
@@ -419,13 +449,10 @@ class OrderAmendmentAndOutcomeTests {
                 new uz.horecaos.platform.ordering.infrastructure.catalog.JdbcCartMenuRules(jdbc, objectMapper),
                 // ADR 0169: the real inventory, the real settlement planner, and a kitchen the test can set.
                 new LineRemovalCoordinator(
-                        configuration,
-                        reasons,
-                        lineProduction,
-                        inventory,
-                        settlementPlanner,
-                        orderStore,
-                        objectMapper));
+                        configuration, reasons, lineProduction, inventory, settlementPlanner, orderStore, objectMapper),
+                // ADR 0166 Decision 7: the rule a test sets (nothing is marked unless it says so).
+                (tenantId, brandId, orderId, paymentMethodCode, addedVariants) ->
+                        markedPaymentRule.refusalOf(tenantId, brandId, orderId, paymentMethodCode, addedVariants));
         amendments = amendmentService.apply(new FakeConfigurationResolver());
         // The same service with the brand's removal gate on, for the tests that take a line off an order.
         removalAmendments = amendmentService.apply(
@@ -1349,6 +1376,246 @@ class OrderAmendmentAndOutcomeTests {
                 .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
                         .isEqualTo("PAYMENT_METHOD_CHANGE_REQUIRES_VOID_REFUND"));
         assertThat(orderQuery.revisions(TENANT, orderId)).hasSize(1);
+    }
+
+    // ------------------------------------------------ ADR 0185: the money follows the method
+
+    @Test
+    @DisplayName("moving a points-plus-cash order to a provider asks the provider for the money leg only, and the "
+            + "settlement names the new method")
+    void movingASplitTenderOrderToAProviderAsksForTheMoneyLegOnly() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+        UUID orderId = orderIdOf(placeOrderRedeeming("idem-split-click", 10_000L));
+        assertThat(tenderRows(orderId))
+                .as("the premise: a real checkout planned points and cash, in that sequence")
+                .extracting(row -> row.get("code"), row -> row.get("amount_minor"), row -> row.get("status"))
+                .containsExactly(
+                        org.assertj.core.api.Assertions.tuple("LOYALTY_POINTS", 10_000L, "RESERVED"),
+                        org.assertj.core.api.Assertions.tuple("CASH", 90_000L, "PLANNED"));
+
+        var result = amend("k-split-click", OrderAmendmentService.AmendmentCommand.changePaymentMethod("CLICK"));
+
+        assertThat(result.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+        assertThat(recordingPayments.intents())
+                .as("Click is asked for what the money leg collects, not for the points the customer already spent")
+                .singleElement()
+                .satisfies(intent -> {
+                    assertThat(intent.orderId()).isEqualTo(orderId);
+                    assertThat(intent.methodCode()).isEqualTo("CLICK");
+                    assertThat(intent.amountMinor()).isEqualTo(90_000L);
+                });
+        assertThat(tenderRows(orderId))
+                .as("payment[] now says what is true: the points are untouched and the money leg is Click's")
+                .extracting(row -> row.get("code"), row -> row.get("amount_minor"), row -> row.get("status"))
+                .containsExactly(
+                        org.assertj.core.api.Assertions.tuple("LOYALTY_POINTS", 10_000L, "RESERVED"),
+                        org.assertj.core.api.Assertions.tuple("CLICK", 90_000L, "PLANNED"));
+        assertThat(settlementTotal(orderId)).isEqualTo(100_000L);
+        assertThat(tenderSum(orderId))
+                .as("the tenders still sum to the order total")
+                .isEqualTo(100_000L);
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().paymentStatusProjection())
+                .isEqualTo("PENDING");
+    }
+
+    @Test
+    @DisplayName("an amendment that reprices the order and moves it to a provider in one step follows the new total, "
+            + "points and all")
+    void repricingAndMovingToAProviderFollowsTheNewTotal() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+        UUID orderId = orderIdOf(placeOrderRedeeming("idem-split-reprice-click", 10_000L));
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        // A repricing that raises the total needs the customer's recorded agreement before it commits, so
+        // it is proposed, attested and applied, as the operator console does.
+        var proposed = tx(() -> amendments.propose(
+                TENANT,
+                orderId,
+                new OrderAmendmentService.ProposeCommand(
+                        version,
+                        List.of(oneMoreBurger(), OrderAmendmentService.AmendmentCommand.changePaymentMethod("CLICK")),
+                        false,
+                        "k-split-reprice-click",
+                        "OPERATOR_EDIT",
+                        "USER",
+                        "sharif",
+                        null)));
+        assertThat(recordingPayments.intents())
+                .as("nothing is asked of the provider until the amendment applies")
+                .isEmpty();
+        var result = confirmAndApply(orderId, proposed.amendment().id());
+
+        assertThat(result.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().totalMinor()).isEqualTo(150_000L);
+        assertThat(recordingPayments.intents())
+                .singleElement()
+                .satisfies(intent -> assertThat(intent.amountMinor())
+                        .as("the amended total less the points: not the old total, not the new one in full")
+                        .isEqualTo(140_000L));
+        assertThat(tenderRows(orderId))
+                .extracting(row -> row.get("code"), row -> row.get("amount_minor"), row -> row.get("status"))
+                .containsExactly(
+                        org.assertj.core.api.Assertions.tuple("LOYALTY_POINTS", 10_000L, "RESERVED"),
+                        org.assertj.core.api.Assertions.tuple("CLICK", 140_000L, "PLANNED"));
+        assertThat(settlementTotal(orderId)).isEqualTo(150_000L);
+        assertThat(tenderSum(orderId)).isEqualTo(150_000L);
+    }
+
+    @Test
+    @DisplayName("an amendment that reprices a cash order and names CASH restates the cash a courier collects, as "
+            + "one that names no method does")
+    void repricingWhileNamingCashRestatesTheCashDue() {
+        UUID orderId = orderIdOf(placeOrder("idem-reprice-name-cash"));
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        var proposed = tx(() -> amendments.propose(
+                TENANT,
+                orderId,
+                new OrderAmendmentService.ProposeCommand(
+                        version,
+                        List.of(oneMoreBurger(), OrderAmendmentService.AmendmentCommand.changePaymentMethod("CASH")),
+                        false,
+                        "k-reprice-name-cash",
+                        "OPERATOR_EDIT",
+                        "USER",
+                        "sharif",
+                        null)));
+        var result = confirmAndApply(orderId, proposed.amendment().id());
+
+        assertThat(result.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().totalMinor()).isEqualTo(150_000L);
+        assertThat(settlementTotal(orderId))
+                .as("the settlement follows the amended total, or the courier is told to collect the old one")
+                .isEqualTo(150_000L);
+        assertThat(tenderRows(orderId))
+                .extracting(row -> row.get("code"), row -> row.get("amount_minor"), row -> row.get("status"))
+                .containsExactly(org.assertj.core.api.Assertions.tuple("CASH", 150_000L, "PLANNED"));
+        assertThat(tenderSum(orderId)).isEqualTo(150_000L);
+    }
+
+    @Test
+    @DisplayName("the same on a points-plus-cash order: the cash leg follows the new total and the points stay")
+    void repricingWhileNamingCashKeepsThePointsAndMovesTheCashLeg() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+        UUID orderId = orderIdOf(placeOrderRedeeming("idem-split-reprice-name-cash", 10_000L));
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        var proposed = tx(() -> amendments.propose(
+                TENANT,
+                orderId,
+                new OrderAmendmentService.ProposeCommand(
+                        version,
+                        List.of(oneMoreBurger(), OrderAmendmentService.AmendmentCommand.changePaymentMethod("CASH")),
+                        false,
+                        "k-split-reprice-name-cash",
+                        "OPERATOR_EDIT",
+                        "USER",
+                        "sharif",
+                        null)));
+        confirmAndApply(orderId, proposed.amendment().id());
+
+        assertThat(settlementTotal(orderId)).isEqualTo(150_000L);
+        assertThat(tenderRows(orderId))
+                .extracting(row -> row.get("code"), row -> row.get("amount_minor"), row -> row.get("status"))
+                .containsExactly(
+                        org.assertj.core.api.Assertions.tuple("LOYALTY_POINTS", 10_000L, "RESERVED"),
+                        org.assertj.core.api.Assertions.tuple("CASH", 140_000L, "PLANNED"));
+    }
+
+    @Test
+    @DisplayName("a cash order with no points moved to a provider is asked for the whole total, as it always was")
+    void aCashOnlyOrderMovedToAProviderIsAskedForTheWholeTotal() {
+        UUID orderId = orderIdOf(placeOrder("idem-cash-click"));
+
+        amend("k-cash-click", OrderAmendmentService.AmendmentCommand.changePaymentMethod("CLICK"));
+
+        assertThat(recordingPayments.intents())
+                .singleElement()
+                .satisfies(intent -> assertThat(intent.amountMinor()).isEqualTo(100_000L));
+        assertThat(tenderRows(orderId))
+                .extracting(row -> row.get("code"), row -> row.get("amount_minor"))
+                .containsExactly(org.assertj.core.api.Assertions.tuple("CLICK", 100_000L));
+    }
+
+    @Test
+    @DisplayName("an order whose settlement has begun to settle cannot be moved to a provider: the amendment is "
+            + "refused whole, the provider is never asked and payment[] is unchanged")
+    void aSettlementThatHasBegunToSettleRefusesAMethodChange() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+        UUID orderId = orderIdOf(placeOrderRedeeming("idem-split-refused", 10_000L));
+        UUID pointsTender = jdbc.sql("""
+                        SELECT t.id FROM payments.tenders t
+                          JOIN payments.order_settlements s ON s.id = t.settlement_id AND s.tenant_id = t.tenant_id
+                         WHERE s.order_id = :id AND t.settles_from_balance
+                        """).param("id", orderId).query(UUID.class).single();
+        tx(() -> settlementService.recordTenderSettled(TENANT, orderId, pointsTender, "test"));
+
+        assertThatThrownBy(() ->
+                        amend("k-split-refused", OrderAmendmentService.AmendmentCommand.changePaymentMethod("CLICK")))
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class)
+                .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
+                        .isEqualTo("SETTLEMENT_NOT_REPLANNABLE"));
+
+        assertThat(recordingPayments.intents())
+                .as("a settlement that cannot be moved is refused before the provider is asked for anything")
+                .isEmpty();
+        assertThat(tenderRows(orderId))
+                .as("the rollback leaves payment[] exactly as it was")
+                .extracting(row -> row.get("code"), row -> row.get("amount_minor"))
+                .containsExactly(
+                        org.assertj.core.api.Assertions.tuple("LOYALTY_POINTS", 10_000L),
+                        org.assertj.core.api.Assertions.tuple("CASH", 90_000L));
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0166 Decision 7: an order holding a marked good is not switched to a method whose receipt cannot carry the code")
+    void changePaymentMethodIsRefusedWhenTheMethodCannotCarryTheMarkedCode() {
+        UUID orderId = orderIdOf(placeOrder("idem-pay-marked"));
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+        List<Set<UUID>> asked = new ArrayList<>();
+        markedPaymentRule = (tenantId, brandId, order, method, added) -> {
+            asked.add(added);
+            return "TERMINAL".equals(method)
+                    ? Optional.of("This order has a marked item, whose receipt must carry its code")
+                    : Optional.empty();
+        };
+
+        assertThatThrownBy(() -> tx(() -> amendments.propose(
+                        TENANT,
+                        orderId,
+                        propose(
+                                "k-pay-marked",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.changePaymentMethod("TERMINAL")))))
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class)
+                .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
+                        .isEqualTo("MARKED_GOODS_NEED_MARKING_CAPABLE_PAYMENT"));
+        assertThat(orderQuery.revisions(TENANT, orderId))
+                .as("a refused amendment writes no revision")
+                .hasSize(1);
+        assertThat(asked).as("the rule was asked, once").hasSize(1);
+
+        // The same order may still go to a method the rule has nothing against.
+        var toCash = amend("k-pay-marked-cash", OrderAmendmentService.AmendmentCommand.changePaymentMethod("CASH"));
+        assertThat(toCash.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+    }
+
+    @Test
+    @DisplayName("an amendment that does not change the method never asks the marked-goods rule")
+    void anAmendmentThatKeepsTheMethodDoesNotAskTheMarkedRule() {
+        orderIdOf(placeOrder("idem-pay-marked-none"));
+        markedPaymentRule = (tenantId, brandId, order, method, added) -> {
+            throw new AssertionError("no method was named, so there is nothing to ask");
+        };
+
+        var result = amend("k-no-method", OrderAmendmentService.AmendmentCommand.kitchenNote("Без лука"));
+
+        assertThat(result.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
     }
 
     @Test
@@ -2905,6 +3172,25 @@ class OrderAmendmentAndOutcomeTests {
     }
 
     @Test
+    @DisplayName("an amended cash tender is compared with the cash still owed after the points, not with the total")
+    void anAmendedCashTenderIsComparedWithTheMoneyLeg() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+        UUID orderId = orderIdOf(placeOrderRedeeming("idem-tender-amend", 10_000L));
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().totalMinor())
+                .as("the premise: 100 000 on the order, 10 000 of it points, so 90 000 is owed in cash")
+                .isEqualTo(100_000L);
+
+        var enough = amend("k-tender-enough", OrderAmendmentService.AmendmentCommand.cashTendered(90_000L));
+        var shortOfTheCash = amend("k-tender-short", OrderAmendmentService.AmendmentCommand.cashTendered(89_999L));
+
+        assertThat(enough.warnings())
+                .as("90 000 covers the 90 000 still owed, though it is short of the 100 000 total")
+                .doesNotContain("CASH_TENDERED_INSUFFICIENT");
+        assertThat(shortOfTheCash.warnings()).contains("CASH_TENDERED_INSUFFICIENT");
+    }
+
+    @Test
     @DisplayName("the callback flag is raised and resolved by the same command, recording who cleared it")
     void theCallbackFlagRecordsWhoResolvedIt() {
         UUID orderId = orderIdOf(placeOrder("idem-1"));
@@ -3651,6 +3937,27 @@ class OrderAmendmentAndOutcomeTests {
     }
 
     @Test
+    @DisplayName(
+            "a compensating override says nothing: the customer is not told twice, and not told falsely (ADR 0184)")
+    void aCompensatingOverridePublishesNoMilestone() {
+        UUID reasonId = operatorErrorReason();
+        UUID orderId = seedFulfillingOrder("idem-quiet-override");
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+        published.events.clear();
+
+        tx(() -> outcomes.override(
+                TENANT,
+                orderId,
+                OrderStatus.READY,
+                version,
+                new OrderOutcomeService.OverrideCommand(reasonId, "USER", "sharif", null)));
+
+        assertThat(published.events)
+                .as("FULFILLING back to READY is a correction through override(), not a forward edge")
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("overriding FULFILLING back to READY is refused once the branch has since filled up, "
             + "and leaves the order exactly as it was")
     void overridingFulfillingToReadyRefusesWhenTheBranchIsAtCapacity() {
@@ -3827,9 +4134,7 @@ class OrderAmendmentAndOutcomeTests {
                 BRAND,
                 uz.horecaos.platform.fulfillment.domain.zone.ZoneRole.DELIVERY,
                 "AMEND-ZONE",
-                "Zone",
-                "Zone",
-                "Zone");
+                LocaleNames.triple("Zone", "Zone", "Zone"));
         var draftedZone = zoneService.draftCircleVersion(
                 new uz.horecaos.platform.fulfillment.application.ServiceZoneService.NewVersion(
                         TENANT,
@@ -4832,41 +5137,61 @@ class OrderAmendmentAndOutcomeTests {
         inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, burgerVariant, TrackingMode.BINARY);
     }
 
-    /**
-     * A points ledger nothing in this suite is allowed to touch.
-     *
-     * <p>Throwing rather than returning a plausible hold: an order here that
-     * quietly reserved points would be a redemption no test asked for, and a
-     * silent stub is how that goes unnoticed.
-     */
-    private static final uz.horecaos.platform.loyalty.api.PointsRedemptionPort NO_REDEMPTION =
-            new uz.horecaos.platform.loyalty.api.PointsRedemptionPort() {
+    /** An approval that always passes, for the balance adjustment a test seeds points with (ADR 0027). */
+    private static final uz.horecaos.platform.audit.api.ApprovalService ALWAYS_APPROVES =
+            new uz.horecaos.platform.audit.api.ApprovalService() {
 
                 @Override
-                public RedemptionOffer quote(RedemptionQuery query) {
-                    throw new UnsupportedOperationException("No order here redeems points");
+                public uz.horecaos.platform.audit.api.ApprovalOutcome requireApproval(
+                        uz.horecaos.platform.audit.api.ApprovalRequestCommand command) {
+                    return new uz.horecaos.platform.audit.api.ApprovalOutcome.Approved(
+                            UUID.randomUUID(), "maker-1", "checker-1", () -> {});
                 }
 
                 @Override
-                public PointsHold reserve(ReserveCommand command) {
-                    throw new UnsupportedOperationException("No order here redeems points");
-                }
+                public void decide(
+                        UUID requestId,
+                        Decision decision,
+                        uz.horecaos.platform.audit.api.ActorRef approver,
+                        String reason) {}
 
                 @Override
-                public void settle(UUID tenantId, UUID tenderId) {
-                    throw new UnsupportedOperationException("No order here redeems points");
-                }
-
-                @Override
-                public void release(UUID tenantId, UUID tenderId, String reasonCode, String actor) {
-                    throw new UnsupportedOperationException("No order here redeems points");
-                }
-
-                @Override
-                public void reverse(UUID tenantId, UUID tenderId, long amountMinor, String reasonCode, String actor) {
-                    throw new UnsupportedOperationException("No order here redeems points");
+                public int expireOverdue() {
+                    return 0;
                 }
             };
+
+    /**
+     * The payments port the amendment service meets: a provider that accepts every method and keeps what it was
+     * asked to collect. The amount is the whole point of the tests that read it (ADR 0185).
+     */
+    private static final class RecordingPayments implements PaymentIntentPort {
+
+        private final List<Intent> intents = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+        record Intent(UUID orderId, long amountMinor, String currency, String methodCode) {}
+
+        @Override
+        public boolean paymentRequiredBeforeConfirmation(UUID tenantId, UUID orderId, String paymentMethodCode) {
+            return !"CASH".equals(paymentMethodCode);
+        }
+
+        @Override
+        public @Nullable UUID createIntent(
+                UUID tenantId,
+                UUID orderId,
+                long amountMinor,
+                String currency,
+                String paymentMethodCode,
+                String idempotencyKey) {
+            intents.add(new Intent(orderId, amountMinor, currency, paymentMethodCode));
+            return UUID.randomUUID();
+        }
+
+        List<Intent> intents() {
+            return List.copyOf(intents);
+        }
+    }
 
     /** No order in this suite has a courier assigned; nothing here exercises the board's Курьер column. */
     private static final ActiveCourierAssignmentsPort NO_COURIER_ASSIGNMENTS = (tenantId, orderIds) -> Map.of();
@@ -4950,6 +5275,80 @@ class OrderAmendmentAndOutcomeTests {
                 null,
                 null,
                 false)));
+    }
+
+    /** A brand that lets points pay for up to half of an order of at least 50 000, delivery fee excluded. */
+    private void seedRedemptionPolicy() {
+        jdbc.sql("""
+                INSERT INTO loyalty.redemption_policies (id, tenant_id, brand_id,
+                    max_share_basis_points, min_order_minor, excludes_delivery_fee,
+                    allowed_channels, status, version, valid_from)
+                VALUES (:id, :tenantId, :brandId, 5000, 50000, true, '{}', 'ACTIVE', 1, :validFrom)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("validFrom", java.time.OffsetDateTime.ofInstant(NOW.minus(Duration.ofDays(1)), ZoneOffset.UTC))
+                .update();
+    }
+
+    /** Gives the customer a spendable balance the way an operator would: an adjustment with a reason. */
+    private void seedBalance(long amountMinor) {
+        tx(() -> loyaltyAdjustments.adjust(
+                new uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService.AdjustmentCommand(
+                        TENANT,
+                        BRAND,
+                        CUSTOMER,
+                        amountMinor,
+                        "UZS",
+                        uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService.REASON_LEGACY_OPENING_BALANCE,
+                        "Seeded for the test",
+                        uz.horecaos.platform.audit.api.ActorRef.user("seed-operator", "Seed"),
+                        "seed-" + UUID.randomUUID(),
+                        "corr-seed")));
+    }
+
+    /** Two burgers, paid in cash, with part of the total taken from the customer's points at checkout. */
+    private CheckoutService.CheckoutResult placeOrderRedeeming(String idempotencyKey, long redeemFromBalanceMinor) {
+        UUID cart = openCart();
+        tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "a", burgerVariant, 2, List.of(), null));
+        tx(() -> carts.setPaymentMethod(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "CASH"));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        var row = cartStore.find(TENANT, BRAND, cart).orElseThrow();
+        return tx(() -> checkout.checkout(new CheckoutService.CheckoutCommand(
+                TENANT,
+                BRAND,
+                cart,
+                row.version(),
+                Objects.requireNonNull(row.pricingQuoteId()),
+                Objects.requireNonNull(row.pricingContextHash()),
+                idempotencyKey,
+                "CASH",
+                redeemFromBalanceMinor,
+                "CUSTOMER",
+                CUSTOMER.toString(),
+                null,
+                null,
+                false)));
+    }
+
+    /** The order's tenders in their settlement sequence, with the registry code of each tender's method. */
+    private List<Map<String, Object>> tenderRows(UUID orderId) {
+        return jdbc.sql("""
+                SELECT t.sequence, m.code, t.settles_from_balance, t.amount_minor, t.status
+                  FROM payments.tenders t
+                  JOIN payments.order_settlements s ON s.id = t.settlement_id AND s.tenant_id = t.tenant_id
+                  JOIN payments.payment_methods m ON m.id = t.payment_method_id AND m.tenant_id = t.tenant_id
+                 WHERE s.order_id = :id
+                 ORDER BY t.sequence
+                """).param("id", orderId).query().listOfRows();
+    }
+
+    private long tenderSum(UUID orderId) {
+        return tenderRows(orderId).stream()
+                .mapToLong(row -> ((Number) Objects.requireNonNull(row.get("amount_minor"))).longValue())
+                .sum();
     }
 
     private OrderAmendmentService.AmendmentCommand oneMoreBurger() {
@@ -5523,6 +5922,10 @@ class OrderAmendmentAndOutcomeTests {
                 .query(Integer.class)
                 .single();
     }
+
+    /** What the amendment service asks about marked goods; a test replaces it, and nothing is marked by default. */
+    private volatile uz.horecaos.platform.ordering.application.MarkedOrderPayment markedPaymentRule =
+            uz.horecaos.platform.ordering.application.MarkedOrderPayment.NONE;
 
     private static final PaymentIntentPort UNWIRED_PAYMENTS = new PaymentIntentPort() {
         @Override

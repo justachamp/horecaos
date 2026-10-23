@@ -381,6 +381,38 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.channelSetup.status.notConfigured': 'Не настроено',
   'settings.channelSetup.noFacets': 'Для этого типа канала нет настроек.',
   'settings.channelSetup.telegram.title': 'Telegram-бот',
+  'settings.telegram.title': 'Кнопка меню, Mini App и приветствие',
+  'settings.telegram.loading': 'Загружаем настройки Telegram…',
+  'settings.telegram.denied': 'Нет доступа к настройкам Telegram этого канала.',
+  'settings.telegram.error': 'Не удалось загрузить настройки Telegram.',
+  'settings.telegram.lead':
+    'Эти настройки относятся к этому Telegram-каналу. Mini App открывает вашу витрину, поэтому адрес вводить не нужно: это подтверждённый адрес витрины рабочего бренда.',
+  'settings.telegram.miniApp.enabled': 'Кнопка меню открывает Mini App',
+  'settings.telegram.miniApp.address': 'Адрес Mini App',
+  'settings.telegram.miniApp.unavailable.BRAND_NOT_CHOSEN':
+    'Сохраните с включённым Mini App, чтобы выбрать витрину рабочего бренда.',
+  'settings.telegram.miniApp.unavailable.HOSTNAME_NOT_CLAIMED':
+    'Филиалы этого бренда пока не продают ни через один сайт-канал с адресом. Задайте адрес в настройке сайт-канала.',
+  'settings.telegram.miniApp.unavailable.HOSTNAME_NOT_VERIFIED':
+    'Адрес сайт-канала ещё не подтверждён, поэтому использовать его нельзя. Опубликуйте DNS-запись и подтвердите адрес.',
+  'settings.telegram.miniApp.unavailable.HOSTNAME_AMBIGUOUS':
+    'В филиалах этого бренда продают через два подтверждённых адреса, и платформа не гадает, какой из них витрина. Оставьте один.',
+  'settings.telegram.shortName': 'Короткое имя Mini App',
+  'settings.telegram.shortName.hint':
+    'Короткое имя, которое BotFather дал вашему Mini App (/newapp): буквы, цифры и подчёркивания. Нужно для ссылок на Mini App.',
+  'settings.telegram.menuButton.title': 'Подпись кнопки меню',
+  'settings.telegram.menuButton.hint':
+    'До 64 символов на язык. Telegram хранит одну подпись на бота: пошаговая настройка применяет подпись на языке бренда по умолчанию, а клиент видит подпись на своём языке, когда запускает бота.',
+  'settings.telegram.welcome.title': 'Приветствие',
+  'settings.telegram.welcome.hint':
+    'Что бот отвечает, когда клиент его запускает. Пусто — стандартное приветствие платформы.',
+  'settings.telegram.offer':
+    'Предлагать мои условия использования как публичную оферту в приветствии',
+  'settings.telegram.save': 'Сохранить',
+  'settings.telegram.saved': 'Сохранено.',
+  'settings.telegram.stale':
+    'Канал изменили в другом окне, данные загружены заново. Повторите изменение.',
+  'settings.telegram.guided': 'Пошаговая настройка Mini App',
   'settings.channelSetup.hostname.title': 'Адрес сайта',
   'settings.channelSetup.hostname.verified': 'подтверждён',
   'settings.channelSetup.hostname.unverified': 'не подтверждён',
@@ -414,6 +446,27 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.channelSetup.pages.slug.privacyOffer': 'Конфиденциальность / оферта',
   'settings.channelSetup.dineIn.title': 'Режим QR-заказа',
   'settings.channelSetup.dineIn.edit': 'Открыть филиал →',
+  // ------------------------------------------------------------------- the rest of the hub (ADR 0187, D28; settings.md §10.5)
+  'settings.channelSetup.installationFailed.title': 'Не удалось подключиться по этому каналу',
+  'settings.channelSetup.installationFailed.body':
+    'Последняя проверка подключения «{name}» не прошла, поэтому заказы или сообщения по этому каналу могут не доходить. Откройте «Интеграции», чтобы подключить заново.',
+  'settings.channelSetup.integrations': 'Открыть «Интеграции»',
+  'settings.channelSetup.preview': 'Предпросмотр',
+  'settings.channelSetup.aggregator.title': 'Агрегатор',
+  'settings.channelSetup.aggregator.body':
+    'Канал агрегатора — это подключение с сопоставлениями, а не витрина. Он настраивается в «Интеграциях»; здесь только просмотр.',
+  'settings.channelSetup.aggregator.installation': 'Подключение: {name} ({status})',
+  'settings.channelSetup.aggregator.noInstallation': 'К этому каналу ещё не привязано подключение.',
+  'settings.channelSetup.callCentre.title': 'Колл-центр',
+  'settings.channelSetup.callCentre.body':
+    'Здесь только просмотр. Правила для заказов, которые вводит оператор, заданы на экране «Правила заказа», карточка 5.',
+  'settings.channelSetup.callCentre.unreadable': 'Не удалось прочитать текущее значение.',
+  'settings.channelSetup.callCentre.yes': 'да',
+  'settings.channelSetup.callCentre.no': 'нет',
+  'settings.channelSetup.callCentre.link': 'Открыть «Правила заказа»',
+  'settings.channelSetup.mobile.title': 'Настройка мобильного приложения пока недоступна',
+  'settings.channelSetup.mobile.body':
+    'Мобильное приложение для гостей приостановлено, поэтому ссылкам на магазины, ограничению версий и push-ключам нечего настраивать. Эта форма появится вместе с возвращением приложения. Языки остаются настройкой бренда.',
   'settings.channelSetup.kiosk.title': 'Подключение киоска',
   'settings.channelSetup.kiosk.locked': 'Пока не реализовано.',
 
@@ -461,7 +514,7 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.field.notifyCustomer': 'Сообщать клиенту, пока заказ ждёт',
   'settings.orderPolicy.mode.AUTO_CONFIRM': 'Автоподтверждение',
   'settings.orderPolicy.mode.RESTAURANT_APPROVAL': 'Подтверждение рестораном',
-  'settings.orderPolicy.approvalChannel.NONE': 'Никто (не используется при автоподтверждении)',
+  'settings.orderPolicy.approvalChannel.NONE': 'Никто (каждый заказ подтверждается автоматически)',
   'settings.orderPolicy.approvalChannel.HORECAOS_OPERATIONS': 'Операции HorecaOS',
   'settings.orderPolicy.approvalChannel.POS': 'POS',
   'settings.orderPolicy.approvalChannel.EITHER': 'Любой из них',
@@ -480,11 +533,6 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.dispatchSummary.link': 'Открыть правила диспетчеризации',
   'settings.orderPolicy.card4.title': 'Условия',
   'settings.orderPolicy.card5.title': 'Оформление заказа оператором',
-  'settings.orderPolicy.field.businessDayStartHour': 'Начало торгового дня (час)',
-  'settings.orderPolicy.field.averageOrderMinutes': 'Среднее время заказа (минуты)',
-  'settings.orderPolicy.field.maximumOrderMinutes': 'Максимальное время заказа (минуты)',
-  'settings.orderPolicy.notApplied.hint':
-    'Пока не применяется: это значение нигде не используется, поэтому его изменение ничего не меняет.',
   'settings.orderPolicy.field.lateOrderThresholdMinutes':
     'Заказ без обещанного времени опаздывает через (минуты)',
   'settings.orderPolicy.lateOrderThresholdMinutes.hint':
@@ -502,17 +550,75 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.field.minimumOrderAmount': 'Минимальная сумма заказа',
   'settings.orderPolicy.minimumOrderAmount.hint':
     'Только самовывоз и зал — у доставки свой минимум, задаётся в зоне обслуживания.',
-  'settings.orderPolicy.field.vatRatePercent': 'Ставка НДС (%)',
-  'settings.orderPolicy.field.routingPollIntervalMinutes': 'Интервал опроса маршрутизации (минуты)',
   'settings.orderPolicy.field.autoAcceptEligibleChannels': 'Каналы, доступные для автоприёма',
   'settings.orderPolicy.autoAcceptEligibleChannels.hint':
-    '«ALL» либо список кодов каналов продаж через запятую. Пока не применяется.',
+    '«ALL» либо коды каналов продаж через запятую. Заказ с любого другого канала сам не подтверждается: он ждёт по пути, заданному выше в «Приёме заказа».',
   'settings.orderPolicy.field.autoAcceptMinPriorOrders': 'Минимум предыдущих успешных заказов',
   'settings.orderPolicy.field.preorderBranchResolution': 'Подбор филиала для предзаказа',
   'settings.orderPolicy.preorderBranchResolution.BY_DISTANCE': 'Ближайший филиал',
   'settings.orderPolicy.preorderBranchResolution.BY_OPENING_TIME': 'Скорее всех откроется',
   'settings.orderPolicy.field.operatorPromoCodeAllowed': 'Оператор может вводить промокод',
   'settings.orderPolicy.revertReason': 'Возврат к унаследованному значению',
+  'settings.orderPolicy.holdBack.title': 'Заказы, которые задерживает ворота автоприёма',
+  'settings.orderPolicy.holdBack.hint':
+    'При автоподтверждении заказ, который задерживает ворота из «Автоматизации» ниже (канал не из списка или клиент с малым числом завершённых заказов), ждёт этого человека столько времени, а потом срабатывает действие по тайм-ауту. Оставьте «Кто подтверждает» — «Никто», и ворота ничего не задержат.',
+  'settings.orderPolicy.holdBack.none':
+    'Пути для задержанных заказов нет: ворота в «Автоматизации» ниже не могут задержать заказ.',
+  'settings.orderPolicy.autoAcceptMinPriorOrders.hint':
+    'Клиент с меньшим числом завершённых заказов в этом бренде ждёт решения; гость считается клиентом без заказов. 0 — без ограничения.',
+  'settings.orderPolicy.gates.noPath':
+    'В «Приёме заказа» выше некому подтверждать задержанный заказ, поэтому эти ворота ничего не задержат: такой заказ всё равно подтверждается. Сначала выберите там, кто подтверждает.',
+  'settings.orderPolicy.preorderBranchResolution.hint':
+    'Применяется, когда предзаказ оформлен на время, в которое не открыт ни один подходящий филиал. У самовывоза нет адреса клиента, от которого можно мерить, поэтому «ближайший» для него заменяется на «скорее всех откроется». Правило задаётся для всего бренда: у отдельного филиала своего значения нет.',
+  'settings.orderPolicy.field.operatorCallbackFlagAllowed':
+    'Оператор может пометить заказ «перезвонить клиенту»',
+  'settings.orderPolicy.field.operatorChangeDueAllowed':
+    'Оператор может записать, сколько наличных передаст клиент',
+  'settings.orderPolicy.operatorPromoCodeAllowed.hint':
+    'Если выключено, промокод в заказе оператора отклоняется — и при расчёте цены, и при оформлении.',
+  'settings.orderPolicy.operatorCallbackFlagAllowed.hint':
+    'Если выключено, экран «Новый заказ» скрывает флажок, а сервер отклоняет пометку.',
+  'settings.orderPolicy.operatorChangeDueAllowed.hint':
+    'Если выключено, экран «Новый заказ» скрывает расчёт сдачи, а сервер отклоняет сумму наличных.',
+  'settings.orderPolicy.neighbours.title': 'Настройки, которые живут в других местах',
+  'settings.orderPolicy.neighbours.lead':
+    'Они тоже влияют на заказ, но у каждой свой экран. Показано то, что действует сейчас; чтобы изменить, откройте экран.',
+  'settings.orderPolicy.neighbours.open': 'Открыть',
+  'settings.orderPolicy.neighbours.loading': 'Загрузка…',
+  'settings.orderPolicy.neighbours.unreadable': 'Не показано: вашей роли недоступно чтение',
+  'settings.orderPolicy.neighbours.distanceMode.label': 'Как измеряется доставка',
+  'settings.orderPolicy.neighbours.distanceMode.RADIUS': 'По прямой (стандартный тариф)',
+  'settings.orderPolicy.neighbours.distanceMode.ROAD': 'По дороге (стандартный тариф)',
+  'settings.orderPolicy.neighbours.distanceMode.none':
+    'Для этого бренда нет действующего стандартного тарифа',
+  'settings.orderPolicy.neighbours.branchLimit.label':
+    'Сколько заказов филиал принимает одновременно',
+  'settings.orderPolicy.neighbours.branchLimit.value': '{count}',
+  'settings.orderPolicy.neighbours.branchLimit.none': 'Без ограничения',
+  'settings.orderPolicy.neighbours.branchLimit.perBranch':
+    'Задаётся для каждого филиала отдельно — выберите филиал в панели выше, чтобы увидеть его предел.',
+  'settings.orderPolicy.neighbours.outOfZone.label': 'Адрес вне всех зон доставки',
+  'settings.orderPolicy.neighbours.outOfZone.REJECT': 'Отклонить',
+  'settings.orderPolicy.neighbours.outOfZone.OFFER_PICKUP': 'Предложить самовывоз',
+  'settings.orderPolicy.neighbours.outOfZone.MANUAL_REVIEW': 'Передать на ручную проверку',
+  'settings.orderPolicy.neighbours.outOfZone.notApplied':
+    'Пока не применяется: расчёт стоимости доставки по-прежнему отклоняет такой адрес, что бы тут ни было выбрано.',
+  'settings.orderPolicy.neighbours.courierVisibility.label': 'Что видит курьер',
+  'settings.orderPolicy.neighbours.courierVisibility.READY_ONLY':
+    'Только заказы, которые кухня уже приготовила',
+  'settings.orderPolicy.neighbours.courierVisibility.ANY': 'Также заказы, которые ещё готовятся',
+  'settings.orderPolicy.neighbours.paidHold.label': 'Кухня ждёт оплаты',
+  'settings.orderPolicy.neighbours.paidHold.SHADOW':
+    'Пробный режим: только считает, что задержала бы',
+  'settings.orderPolicy.neighbours.paidHold.HOLD_UNTIL_PAID': 'Задерживает неоплаченный заказ',
+  'settings.orderPolicy.neighbours.paidHold.OFF': 'Выключено',
+  'settings.orderPolicy.neighbours.callCentre.label': 'Канал колл-центра',
+  'settings.orderPolicy.neighbours.callCentre.none': 'Активного канала колл-центра нет',
+  'settings.orderPolicy.neighbours.callCentre.value':
+    'Способов оплаты: {payments} · типы заказа: {modes}',
+  'settings.orderPolicy.neighbours.mode.PICKUP': 'Самовывоз',
+  'settings.orderPolicy.neighbours.mode.DELIVERY': 'Доставка',
+  'settings.orderPolicy.neighbours.mode.DINE_IN': 'В зале',
 
   // Rows X.39 / 10.3b — редактор документа ordering.lateness
   'settings.latenessPolicy.title': 'Когда заказ считается опаздывающим',
@@ -659,6 +765,8 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.terminals.retire': 'Списать',
 
   'settings.fiscalization.classification.title': 'Классификация товаров',
+  'settings.fiscalization.classification.receiptLines':
+    'Чек строится из строк самого заказа: блюдо, каждая платная опция и доставка, каждая со своей классификацией. Позиция без полной классификации (ИКПУ, код упаковки, код единицы и фискальное название) блокирует чек этого заказа: ничего не отправляется, и код-заглушка не подставляется никогда.',
   'settings.fiscalization.classification.headline':
     'Не классифицировано: {unclassified} из {total} позиций',
   'settings.fiscalization.classification.empty': 'Всё классифицировано.',
@@ -701,7 +809,7 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.backfill.lead':
     'У {count} позиций не хватает ИКПУ или кода упаковки. Введите коды вручную или скопируйте столбец из таблицы и вставьте в первую ячейку — значения встанут вниз по списку. Уже заданный у позиции код показан как есть и здесь не меняется; измените его в редакторе товаров.',
   'settings.fiscalization.backfill.referenceNote':
-    'Официальный справочник ИКПУ ещё не загружен, поэтому код проверяется только по формату (17 цифр), а искать его по названию нельзя. Единицу измерения и фискальное название задают в фискальном верстаке каталога.',
+    'Официальный справочник ИКПУ ещё не загружен, поэтому код проверяется только по формату (17 цифр), а искать его по названию нельзя. Единицу измерения и фискальное название заполняют в разделе под таблицей или в фискальном верстаке каталога.',
   'settings.fiscalization.backfill.empty': 'У всех позиций есть ИКПУ и код упаковки.',
   'settings.fiscalization.backfill.column.mxik': 'ИКПУ (17 цифр)',
   'settings.fiscalization.backfill.column.packageCode': 'Код упаковки',
@@ -727,6 +835,40 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.backfill.status.conflict':
     'У позиции уже есть другой код; он не изменён. Список обновлён.',
   'settings.fiscalization.backfill.status.failed': 'Не сохранено. Повторите.',
+  'settings.fiscalization.gaps.title': 'Позиции без кода единицы или названия в чеке',
+  'settings.fiscalization.gaps.lead':
+    'У {count} позиций есть ИКПУ и код упаковки, но нет кода единицы или названия, которое печатается в строке чека. Они остаются в счётчике покрытия, и чек для них собрать нельзя. Заполните их здесь или откройте фискальный верстак каталога: он правит все четыре поля.',
+  'settings.fiscalization.gaps.workbench': 'Открыть фискальный верстак',
+  'settings.fiscalization.gaps.column.unit': 'Код единицы',
+  'settings.fiscalization.gaps.column.fiscalName': 'Название в чеке',
+  'settings.fiscalization.gaps.useReferenceUnit': 'Единица из списка ИКПУ',
+  'settings.fiscalization.gaps.fillUnits': 'Заполнить пустые единицы из списка ИКПУ ({count})',
+  'settings.fiscalization.gaps.useItemName': 'Взять название позиции',
+  'settings.fiscalization.gaps.fillNames':
+    'Взять названия позиций для пустых названий в чеке ({count})',
+  'settings.fiscalization.gaps.unitChoices': 'В списке несколько единиц:',
+  'settings.fiscalization.gaps.noReferenceUnit': 'В списке ИКПУ для этого кода единицы нет.',
+  'settings.fiscalization.gaps.referenceUnavailable': 'Список ИКПУ не удалось прочитать.',
+  'settings.fiscalization.gaps.fillSummary':
+    'Заполнено единиц из списка: {filled}; ещё {open} нужно выбрать или ввести.',
+  'settings.fiscalization.gaps.error.unit': 'Код единицы — целое положительное число.',
+  'settings.fiscalization.gaps.error.name': 'Название в чеке — от 1 до 63 символов.',
+  'settings.fiscalization.backfill.bulk.title': 'Массовое назначение',
+  'settings.fiscalization.backfill.bulk.lead':
+    'Отфильтруйте таблицу, отметьте строки, выберите один ИКПУ и один код упаковки и примените. Они попадут только в пустые ячейки отмеченных строк, как несохранённые правки: проверьте их ниже и отправьте кнопкой «Сохранить». Ячейка, в которой уже есть код, не заменяется.',
+  'settings.fiscalization.backfill.bulk.counts':
+    'Показано {shown} из {total}; отмечено {selected}.',
+  'settings.fiscalization.backfill.bulk.selectAll': 'Отметить все показанные строки',
+  'settings.fiscalization.backfill.bulk.selectRow': 'Отметить: {name}',
+  'settings.fiscalization.backfill.bulk.apply': 'Применить к отмеченным строкам ({count})',
+  'settings.fiscalization.backfill.bulk.applied':
+    'Заполнено пустых ячеек: {cells}, строк: {rows}; ячеек с уже заданным кодом: {kept}, их не трогали. Проверьте ниже и сохраните.',
+  'settings.fiscalization.backfill.filter.all': 'Все',
+  'settings.fiscalization.backfill.filter.noCategory': 'Без категории',
+  'settings.fiscalization.backfill.filter.name': 'Название содержит',
+  'settings.fiscalization.backfill.filter.locations': 'Продаётся не меньше чем в (филиалах)',
+  'settings.fiscalization.backfill.filter.clear': 'Сбросить фильтры',
+  'settings.fiscalization.backfill.filter.noMatch': 'Под фильтр ничего не подходит.',
 
   // 10.9 Уведомления
   'settings.notifications.title': 'Уведомления',
@@ -753,7 +895,7 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.notifications.field.status': 'Активен',
   'settings.notifications.field.activeVersion': 'Версия',
   'settings.notifications.field.channel.hint':
-    'Сегодня реально отправляют только SMS и Telegram. Email и Push объявлены в схеме и ключе шаблона, но ни один адаптер их не доставляет.',
+    'Сейчас реально отправляются SMS, Telegram, Email и Push. Email и Push — только для кампаний. Для Email в каждом языке нужна тема, для Push — заголовок. Push получают только клиенты, включившие его на витрине, и только после установки push-ключа платформы.',
   'settings.notifications.field.variant': 'Вариант',
   'settings.notifications.field.fulfilmentMode': 'Способ выполнения',
   'settings.notifications.field.channelSource': 'Источник канала',
@@ -780,6 +922,17 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.notifications.moderation.APPROVED': 'Одобрено',
   'settings.notifications.moderation.REJECTED': 'Отклонено шлюзом',
   'settings.notifications.editor.subject': 'Тема',
+  'settings.notifications.editor.title': 'Заголовок',
+  'settings.notifications.editor.push.target': 'Куда ведёт нажатие',
+  'settings.notifications.editor.push.target.hint':
+    'Путь на витрине, например /menu или /category/pizza. Если пусто, откроется главная страница.',
+  'settings.notifications.editor.push.target.invalid':
+    'Начните с одного слэша и без пробелов: /menu, а не menu и не //menu.',
+  'settings.notifications.editor.push.cover': 'Картинка-обложка',
+  'settings.notifications.editor.push.cover.hint':
+    'Необязательно. Картинка 3:1, которую клиент увидит под текстом. Перед сохранением обрежьте её до 3:1.',
+  'settings.notifications.editor.push.cover.set': 'Обложка задана',
+  'settings.notifications.editor.push.cover.remove': 'Убрать обложку',
   'settings.notifications.editor.body': 'Текст',
   'settings.notifications.editor.variables': 'Вставить переменную',
   'settings.notifications.editor.variables.empty':
@@ -832,6 +985,48 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.notifications.routing.topic.prompt':
     'ID темы форума — оставьте пустым для обычного чата',
   'settings.notifications.routing.topic.save': 'Сохранить',
+  'settings.notifications.field.notificationClass.hint':
+    'Сообщение с одноразовым кодом принадлежит платформе и здесь не редактируется; оно показано ниже только для чтения.',
+  'settings.notifications.field.consentPurpose': 'Цель согласия',
+  'settings.notifications.field.consentPurpose.hint':
+    'Цель, по которой проверяется согласие клиента перед отправкой. Необязательное сообщение без цели отклоняется. Для сообщений о ходе заказа используется ORDER_PROGRESS_UPDATES.',
+  'settings.notifications.marketing.notice': 'Отправляется только клиентам с согласием.',
+  'settings.notifications.marketing.evidence':
+    'Отписка меняет, кому можно писать дальше, и никогда не стирает следы уже доставленного.',
+  'settings.notifications.marketing.link': 'Согласие клиента смотрите в его карточке',
+  'settings.notifications.marketing.chip': 'только по согласию',
+  'settings.notifications.column.languages': 'Языки',
+  'settings.notifications.column.moderation': 'Модерация',
+  'settings.notifications.column.origin': 'Источник',
+  'settings.notifications.languages.missing': 'не хватает языка',
+  'settings.notifications.origin.BRAND': 'Бренд',
+  'settings.notifications.origin.TENANT': 'Организация',
+  'settings.notifications.origin.PLATFORM': 'Платформа',
+  'settings.notifications.defaults.title': 'Текст платформы по умолчанию',
+  'settings.notifications.defaults.lead':
+    'Что получает клиент по этим событиям, пока ни бренд, ни организация ничего не написали. Это последний уровень: активированный вами шаблон сразу его перекрывает. Менять его нельзя; «Настроить» копирует его в шаблон этого бренда.',
+  'settings.notifications.defaults.customise': 'Настроить',
+  'settings.notifications.defaults.editOwn': 'Открыть ваш шаблон',
+  'settings.notifications.defaults.overridden': 'перекрыт',
+  'settings.notifications.otp.title': 'Сообщение с одноразовым кодом',
+  'settings.notifications.otp.lead':
+    'Фраза, которую клиент читает вместе с кодом входа, принадлежит платформе: она короткая намеренно, чтобы укладываться в одно SMS, и это не шаблон, поэтому здесь нечего создавать и активировать.',
+  'settings.notifications.otp.gateway.GATEWAY_MODERATES':
+    'Ваш SMS-шлюз утверждает тексты: фразы платформы должны быть утверждены им, прежде чем коды дойдут до телефона',
+  'settings.notifications.otp.gateway.NOT_MODERATED': 'Ваш SMS-шлюз не модерирует тексты',
+  'settings.notifications.otp.characters': '{count} симв.',
+  'settings.notifications.testSend.chat': 'Привязанный чат',
+  'settings.notifications.testSend.chat.choose': 'Выберите один из чатов этого бренда…',
+  'settings.notifications.testSend.chat.none':
+    'Ни один чат ещё не привязан — привяжите его на вкладке «Маршрутизация».',
+  'settings.notifications.editor.copy.label': 'Начать другой язык с этого текста:',
+  'settings.notifications.editor.copy.into': 'Скопировать в {locale}',
+  'settings.notifications.editor.copy.replace': 'Заменить {locale} этим текстом',
+  'settings.notifications.editor.personal.note':
+    'Имя клиента и имя курьера подставляются при отправке сообщения и нигде не хранятся.',
+  'settings.notifications.editor.showItemPrices': 'Показывать цены товаров в списке',
+  'settings.notifications.editor.showItemPrices.unused':
+    'Ни один язык не использует {{productList}}, поэтому этот переключатель ничего не изменит.',
 
   // 10.10 Справочные данные
   'settings.referenceData.title': 'Справочные данные',
@@ -852,9 +1047,7 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.referenceData.empty': 'Пока нет.',
   'settings.referenceData.field.internalName': 'Внутреннее название',
   'settings.referenceData.field.customerText': 'Текст для клиента',
-  'settings.referenceData.field.customerTextRu': 'Текст для клиента (русский)',
-  'settings.referenceData.field.customerTextUz': 'Текст для клиента (узбекский)',
-  'settings.referenceData.field.customerTextEn': 'Текст для клиента (английский)',
+  'settings.referenceData.field.customerTextIn': 'Текст для клиента ({language})',
   'settings.referenceData.field.systemCategory': 'Платформенная категория',
   'settings.referenceData.field.stockDisposition': 'Что со списанием',
   'settings.referenceData.field.liabilityParty': 'Кто несёт затраты',
@@ -1166,7 +1359,7 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
     'В HorecaOS нет модели данных для найма или кандидатов — здесь нечего хранить.',
   'settings.dataPrivacy.retention.status.notApplicable': 'Не применимо',
   'settings.dataPrivacy.retention.lead':
-    'Задайте, как долго хранится каждый вид данных. Любое значение ниже можно только увеличить для всей платформы — более коротким значением очистка никогда не удалит данные другой компании раньше срока.',
+    'Задайте, как долго хранится каждый вид данных. Под значением показано, что платформа делает с ним для вашей компании: срок, по которому очистка работает сейчас, и нижний предел платформы, до которого поднимается слишком короткое значение. Брошенные корзины и непроверенные заявки курьеров очищаются по вашему сроку; история локации курьеров общая для всех компаний, поэтому очищается по самому длинному сроку из нужных им.',
   'settings.dataPrivacy.retention.column.value': 'Текущее значение',
   'settings.dataPrivacy.retention.column.enforcedBy': 'Кто исполняет',
   'settings.dataPrivacy.retention.unit.days': 'дней',
@@ -1182,6 +1375,14 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.dataPrivacy.retention.invalidValue': 'Введите целое число больше нуля',
   'settings.dataPrivacy.retention.staleVersion':
     'Кто-то уже изменил это значение — показано текущее значение; измените снова, если всё ещё нужно.',
+  'settings.dataPrivacy.retention.effective': 'Действует для вашей компании: {value} {unit}',
+  'settings.dataPrivacy.retention.floor':
+    'Нижний предел платформы: {value} {unit}. Меньшее значение поднимается до него.',
+  'settings.dataPrivacy.retention.scope.perTenant': 'Относится только к вашей компании.',
+  'settings.dataPrivacy.retention.scope.allTenants':
+    'Общий срок для всех компаний: история курьеров хранится в суточных разделах, где данные всех компаний вместе, поэтому раздел удаляется по самому длинному сроку из нужных. Более короткое значение здесь его не сокращает.',
+  'settings.dataPrivacy.retention.provisional':
+    'Предварительное значение — ждёт подтверждения юристов',
   'settings.dataPrivacy.consent.title': 'Согласие',
   'settings.dataPrivacy.consent.lead':
     'Что решение о согласии может фиксировать сегодня, на аккаунте клиента.',
@@ -1192,20 +1393,32 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.dataPrivacy.consent.channelSpecific.yes': 'Да',
   'settings.dataPrivacy.consent.channelSpecific.no': 'Нет',
   'settings.dataPrivacy.requests.title': 'Запросы субъектов данных',
-  'settings.dataPrivacy.erasure.title': 'Запросы на удаление',
-  'settings.dataPrivacy.erasure.lead':
-    'Все запросы на удаление персональных данных по всей компании. Подать, исполнить или отменить запрос можно на карточке клиента.',
-  'settings.dataPrivacy.erasure.filter.label': 'Статус',
-  'settings.dataPrivacy.erasure.filter.all': 'Все',
-  'settings.dataPrivacy.erasure.status.pending': 'Ожидает',
-  'settings.dataPrivacy.erasure.status.completed': 'Исполнен',
-  'settings.dataPrivacy.erasure.status.cancelled': 'Отменён',
-  'settings.dataPrivacy.erasure.column.status': 'Статус',
-  'settings.dataPrivacy.erasure.column.customer': 'Аккаунт клиента',
-  'settings.dataPrivacy.erasure.column.requestedVia': 'Откуда подан',
-  'settings.dataPrivacy.erasure.column.requestedAt': 'Дата запроса',
-  'settings.dataPrivacy.erasure.column.resolvedAt': 'Дата решения',
-  'settings.dataPrivacy.erasure.empty': 'В этой компании ещё не подавали запрос на удаление.',
+  'settings.dataPrivacy.requests.lead':
+    'Все запросы субъектов данных по всей организации, любого вида: удаление, копия данных и исправления. Создавайте, готовьте, исправляйте и выполняйте их в карточке клиента.',
+  'settings.dataPrivacy.requests.filter.kind': 'Вид',
+  'settings.dataPrivacy.requests.filter.status': 'Статус',
+  'settings.dataPrivacy.requests.filter.all': 'Все',
+  'settings.dataPrivacy.requests.kind.erasure': 'Удаление',
+  'settings.dataPrivacy.requests.kind.export': 'Копия данных',
+  'settings.dataPrivacy.requests.kind.correction': 'Исправление',
+  'settings.dataPrivacy.requests.status.pending': 'Ожидает',
+  'settings.dataPrivacy.requests.status.completed': 'Выполнен',
+  'settings.dataPrivacy.requests.status.cancelled': 'Отозван',
+  'settings.dataPrivacy.requests.via.storefront': 'Клиент сам',
+  'settings.dataPrivacy.requests.via.operations': 'Сотрудник',
+  'settings.dataPrivacy.requests.column.kind': 'Вид',
+  'settings.dataPrivacy.requests.column.status': 'Статус',
+  'settings.dataPrivacy.requests.column.customer': 'Аккаунт клиента',
+  'settings.dataPrivacy.requests.column.requestedVia': 'Источник',
+  'settings.dataPrivacy.requests.column.requestedAt': 'Запрошено',
+  'settings.dataPrivacy.requests.column.resolvedAt': 'Завершено',
+  'settings.dataPrivacy.requests.column.detail': 'Подробности',
+  'settings.dataPrivacy.requests.subject.DISPLAY_NAME': 'Имя',
+  'settings.dataPrivacy.requests.subject.DATE_OF_BIRTH': 'Дата рождения',
+  'settings.dataPrivacy.requests.subject.CONTACT_POINT': 'Контакт',
+  'settings.dataPrivacy.requests.subject.ADDRESS': 'Адрес',
+  'settings.dataPrivacy.requests.dueBy': 'Ответить до {date}',
+  'settings.dataPrivacy.requests.empty': 'В организации не было запросов субъектов данных.',
   'settings.dataPrivacy.egress.title': 'Журнал выгрузок и просмотров персональных данных',
   'settings.dataPrivacy.egress.lead':
     'Каждый случай, когда сотрудник открыл или выгрузил персональные данные клиента за последние 90 дней, из собственного журнала аудита платформы.',
@@ -1221,6 +1434,8 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.dataPrivacy.egress.action.dateOfBirthRevealed': 'Открыта дата рождения',
   'settings.dataPrivacy.egress.action.blacklistRevealed': 'Открыта причина блокировки',
   'settings.dataPrivacy.egress.action.listExported': 'Выгружен отфильтрованный список клиентов',
+  'settings.dataPrivacy.egress.action.dsarExported': 'Собрал данные клиента в копию для неё',
+  'settings.dataPrivacy.egress.action.dsarBundleRevealed': 'Открыл копию данных клиента',
   'settings.dataPrivacy.egress.action.audienceExported': 'Выгружена маркетинговая аудитория',
   'settings.dataPrivacy.egress.action.lineNoteRevealed': 'Открыт комментарий клиента к заказу',
   'settings.dataPrivacy.egress.action.orderPhoneRevealed': 'Открыт телефон клиента в заказе',
@@ -1288,6 +1503,14 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.integrations.detail.bindings.suspend.reasonPrompt':
     'Причина приостановки этой привязки:',
   'settings.integrations.detail.bindings.empty': 'Привязок пока нет.',
+  'settings.integrations.detail.ruleset.title': 'Правила содержимого маркетплейса',
+  'settings.integrations.detail.ruleset.lead':
+    'Правила, по которым меню филиала проверяется перед выдачей этому маркетплейсу. «Только общие правила» не проверяет ничего специфичного для маркетплейса.',
+  'settings.integrations.detail.ruleset.noneAuthored':
+    'Правил для маркетплейсов пока нет, поэтому каждая привязка проверяется только по общим правилам. Набор правил добавляется, когда согласованы требования маркетплейса к содержимому.',
+  'settings.integrations.detail.ruleset.label': 'Набор правил маркетплейса',
+  'settings.integrations.detail.ruleset.universalOnly': 'Только общие правила',
+  'settings.integrations.detail.ruleset.clear': 'Сбросить',
   'settings.integrations.detail.bindings.wholeTenant': 'Вся компания',
   'settings.integrations.detail.cloposSettings.title': 'Приём заказов',
   'settings.integrations.detail.cloposSettings.requireClerkApproval':
@@ -1316,6 +1539,8 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.integrations.detail.mapping.entityType.DISCOUNT': 'Скидки',
   'settings.integrations.detail.mapping.entityType.COURIER': 'Курьеры',
   'settings.integrations.detail.mapping.entityType.OPERATOR': 'Операторы',
+  'settings.integrations.detail.mapping.operatorNotReceived':
+    'Эта касса пока не получает оператора. Сопоставление можно записать, оно сохранится, но ни в один заказ не попадёт, пока интерфейс заказов кассы не умеет передавать оператора.',
   'settings.integrations.detail.mapping.entityType.CANCELLATION_REASON': 'Причины отмены',
   'settings.integrations.detail.mapping.entityType.CHANNEL_POS_CODE': 'Канал → код POS',
 
@@ -1363,6 +1588,27 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
     'Передвиньте точку к входу в филиал: щёлкните по карте, перетащите точку или введите координаты. Точка сохраняется, только если вы её сдвинули; точку филиала можно переносить, но нельзя удалить.',
   'settings.dataPrivacy.egress.action.orderMapPointsRevealed':
     'Открыты на карте точки доставки за день',
+  'settings.dataPrivacy.egress.action.leadRevealed':
+    'Показаны имя или номер звонившего из колл-центра',
+  'settings.dataPrivacy.egress.action.redemptionCustomerRevealed':
+    'Показано, кто воспользовался акцией',
+  'settings.dataPrivacy.egress.action.dropoffRevealed':
+    'Показаны адреса доставки сгруппированных заказов',
+  'settings.dataPrivacy.egress.action.courierCustomerLocationRevealed':
+    'Курьеру показано местоположение клиента',
+  'settings.dataPrivacy.egress.action.fiscalEvidenceRevealed':
+    'Показан сохранённый запрос или ответ фискального чека',
+  'settings.dataPrivacy.egress.action.reservationGuestRevealed':
+    'Показаны имя или номер гостя брони',
+  'settings.dataPrivacy.egress.action.callerNumberRevealed':
+    'Показан номер звонящего в карточке звонка',
+  'settings.dataPrivacy.egress.action.reportExported': 'Выгружен отчёт',
+  'settings.dataPrivacy.egress.action.courierTrackRevealed': 'Показан трек курьера',
+  'settings.dataPrivacy.egress.action.courierRegistrationRevealed':
+    'Показан регистрационный номер курьера',
+  'settings.dataPrivacy.egress.action.courierComplianceRevealed': 'Показаны документы курьера',
+  'settings.dataPrivacy.egress.action.invitationRecipientRevealed':
+    'Показано, кому отправлено приглашение',
 
   // Chat assistant (ADR 0069).
   'settings.nav.assistant': 'Помощник в чате',
@@ -1405,9 +1651,7 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
     'Перед первым ответом в чате помощник говорит это на языке клиента. Напишите текст для своих клиентов. Если оставить пустым, используется формулировка HorecaOS; отключить это сообщение нельзя.',
   'settings.assistant.disclosure.legal':
     'Формулировка HorecaOS по умолчанию не является юридической консультацией. Что именно вы обязаны сообщать клиентам об автоматических ответах и сторонних обработчиках, определяете вы сами.',
-  'settings.assistant.disclosure.field.ru': 'Говорит по-русски',
-  'settings.assistant.disclosure.field.uz': 'Говорит по-узбекски',
-  'settings.assistant.disclosure.field.en': 'Говорит по-английски',
+  'settings.assistant.disclosure.field': 'Сказано на языке: {language}',
   'settings.assistant.disclosure.blank': 'Формулировка HorecaOS по умолчанию',
   'settings.assistant.disclosure.default': 'Формулировка по умолчанию: {text}',
   'settings.assistant.disclosure.counter': '{count} из {max} знаков',
@@ -1445,9 +1689,6 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.assistant.notes.history.reason': 'Причина: {reason}',
   'settings.assistant.notes.version': 'версия {version}',
   'settings.assistant.notes.by': '{author}, {when}',
-  'settings.assistant.notes.locale.ru': 'Русский',
-  'settings.assistant.notes.locale.uz': 'Узбекский',
-  'settings.assistant.notes.locale.en': 'Английский',
   'settings.assistant.notes.scope.TENANT': 'Вся компания',
   'settings.assistant.notes.scope.BRAND': 'Весь бренд',
   'settings.assistant.notes.scope.LOCATION': 'Филиал «{name}»',
@@ -1532,6 +1773,51 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.kiosk.replace.hint':
     'Чтобы заменить киоск, отключите его и подключите новый. Киоск сам показывает код на экране, консоль кодов не выдаёт.',
   'settings.kiosk.revoked.title': 'Отключённые киоски',
+  // ------------------------------------------------------------------- kiosk idle media and the hardware block (ADR 0187)
+  'settings.kiosk.idle.title': 'Картинки экрана ожидания',
+  'settings.kiosk.idle.lead':
+    'Картинки, которые киоск показывает, пока никто не заказывает. До 8 штук, каждая 9:16 и не больше 1 МБ, в указанном порядке. Только изображения, без видео.',
+  'settings.kiosk.idle.shared':
+    'Один список на весь канал: эти картинки показывают все киоски канала во всех филиалах, где он продаёт.',
+  'settings.kiosk.idle.channel': 'Канал продаж',
+  'settings.kiosk.idle.noChannels':
+    'В этом филиале нет активного канала киоска, поэтому настраивать экран ожидания нечего.',
+  'settings.kiosk.idle.loading': 'Загружаем картинки',
+  'settings.kiosk.idle.denied': 'Нет доступа к картинкам этого канала',
+  'settings.kiosk.idle.error': 'Не удалось загрузить картинки. Повторите через минуту.',
+  'settings.kiosk.idle.preview': 'Первая картинка на экране киоска',
+  'settings.kiosk.idle.previewEmpty': 'Картинок пока нет. Киоск показывает экран состояния.',
+  'settings.kiosk.idle.count': '{count} из {max} картинок',
+  'settings.kiosk.idle.empty': 'Картинок пока нет.',
+  'settings.kiosk.idle.position': 'Картинка {n}',
+  'settings.kiosk.idle.up': 'Выше',
+  'settings.kiosk.idle.down': 'Ниже',
+  'settings.kiosk.idle.remove': 'Убрать',
+  'settings.kiosk.idle.full': 'В списке уже {max} картинок. Уберите одну, чтобы добавить другую.',
+  'settings.kiosk.idle.hint':
+    'Выберите JPEG, PNG или WebP и подгоните под кадр 9:16. После подгонки картинка должна быть не больше 1 МБ.',
+  'settings.kiosk.idle.uploading': 'Загружаем и проверяем картинку…',
+  'settings.kiosk.idle.added': 'Картинка добавлена в список.',
+  'settings.kiosk.idle.tooLarge':
+    'После подгонки картинка всё ещё больше 1 МБ. Выберите попроще или поменьше.',
+  'settings.kiosk.idle.rejected': 'Платформа не приняла эту картинку.',
+  'settings.kiosk.idle.timedOut':
+    'Платформа ещё не закончила проверку картинки. Повторите через минуту.',
+  'settings.kiosk.idle.stale':
+    'Список уже изменил кто-то другой. Он обновлён; повторите своё изменение.',
+  'settings.kiosk.idle.refused.WRONG_ASPECT_RATIO': 'Картинка не 9:16.',
+  'settings.kiosk.idle.refused.TOO_LARGE': 'Картинка больше 1 МБ.',
+  'settings.kiosk.idle.refused.NOT_A_RASTER_IMAGE':
+    'На экран киоска можно только JPEG, PNG и WebP.',
+  'settings.kiosk.idle.refused.NOT_AVAILABLE':
+    'Картинка ещё не проверена. Подождите немного и повторите.',
+  'settings.kiosk.idle.refused.UNKNOWN_ASSET': 'Эту картинку здесь использовать нельзя.',
+  'settings.kiosk.idle.refused.LIMIT': 'В списке уже 8 картинок.',
+  'settings.kiosk.idle.refused.DUPLICATE': 'Эта картинка уже в списке.',
+  'settings.kiosk.hardware.title':
+    'Принтер, банковский терминал и сканер маркировки: не реализовано',
+  'settings.kiosk.hardware.body':
+    'HorecaOS не поставляет, не сертифицирует и не обслуживает оборудование киосков. Чековый принтер в корпусе киоска настраивается как любой принтер филиала (Настройки, Печать); банковский терминал и сканер маркировки не подключаются, а сам киоск пока не принимает заказы.',
   'settings.kioskPairing.title': 'Подключение киоска',
   'settings.kioskPairing.lead':
     'Откройте эту страницу по QR на киоске или введите код, который он показывает. Пока вы не подтвердите ниже, ничего не подключится.',
@@ -1720,9 +2006,6 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.printing.profile.logo': 'Печатать логотип бренда сверху',
   'settings.printing.profile.logoNote':
     'Он превращается в чёрно-белые точки. Лучше всего печатается простой контрастный логотип.',
-  'settings.printing.profile.locale.ru': 'Русский',
-  'settings.printing.profile.locale.uzLatn': 'Узбекский (латиница)',
-  'settings.printing.profile.locale.en': 'Английский',
   'settings.printing.profile.footerLine': 'Строка подвала {n}',
   'settings.printing.profile.footerNote':
     'До трёх строк на язык, по {max} символов, чтобы строка помещалась на ленту 80 мм. Документ печатается на одном языке — филиала, а не клиента.',

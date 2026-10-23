@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 
 import {
   OrderMapPoint,
@@ -12,7 +20,7 @@ import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { boundsOf } from '../../shared/ui/map/geometry';
-import { MapArea, MapCanvas, MapMarker } from '../../shared/ui/map/map-canvas';
+import { MapArea, MapCanvas, MapLine, MapMarker } from '../../shared/ui/map/map-canvas';
 import { LatLng, MapBounds } from '../../shared/ui/map/map-provider';
 import { describeApiError } from '../orders/order-errors';
 
@@ -48,8 +56,11 @@ type LoadState = 'idle' | 'loading' | 'ready' | 'denied' | 'failed';
  * behind the per-order reveal, which is a different capability with its own purpose.
  *
  * **The host owns what else is on the map.** The dispatch board puts its couriers on the same map
- * (`extraMarkers`) and the geography report puts the zone outlines under it (`areas`); this
- * component owns only the orders and the act of opening them. A caller without
+ * (`extraMarkers`) and its route legs (`lines`, with `linesNote` saying what they are), and the
+ * geography report puts the zone outlines under it (`areas`); this component owns only the orders
+ * and the act of opening them. What the reveal answered is handed back once through
+ * {@link pointsRevealed}, so a host can draw what depends on the points (the board's legs) without
+ * opening the doorsteps a second time: a second open is a second audit fact. A caller without
  * `order.points.reveal` gets one honest sentence in place of the button's result, not an error.
  */
 @Component({
@@ -70,11 +81,18 @@ export class OrderPointsMap {
   readonly center = input.required<LatLng>();
   /** Pins that are not orders: the dispatch board's couriers. */
   readonly extraMarkers = input<readonly MapMarker[]>([]);
+  /** Display-only lines between points: the dispatch board's legs. */
+  readonly lines = input<readonly MapLine[]>([]);
+  /** Already translated: what the lines are, shown beside the legend while there are any. */
+  readonly linesNote = input<string | null>(null);
   /** Outlines drawn under the pins: the live delivery zones. */
   readonly areas = input<readonly MapArea[]>([]);
   /** Draw the map before anything has been revealed (the dispatch board has couriers to show). */
   readonly alwaysShowMap = input(false);
   readonly height = input(380);
+
+  /** The answer of each successful reveal, once, for a host that draws something that depends on the points. */
+  readonly pointsRevealed = output<OrderMapPointsResponse>();
 
   protected readonly state = signal<LoadState>('idle');
   protected readonly result = signal<OrderMapPointsResponse | null>(null);
@@ -134,6 +152,7 @@ export class OrderPointsMap {
       }
       this.result.set(result);
       this.state.set('ready');
+      this.pointsRevealed.emit(result);
     } catch (error) {
       if (generation !== this.generation) {
         return;

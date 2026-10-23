@@ -4,9 +4,8 @@
 - Implementation status: Partial — the evidence surface is built from the read to the screens
   (batch 20): the backend, the console's evidence card on the order detail and the payments page,
   the payments page's payment-types table, the fiscalization settings projection and the receipt
-  link on the storefront's order page; the real receipt line builder and the events are not, so
-  what the screens show of a filing is the Click path's lines, the INN and the identifiers, and
-  «not kept» elsewhere. Built: V0551 snapshots the
+  link on the storefront's order page; the receipt line builder and the events followed in batch 21 (below), so
+  what the screens show of a filing is its lines as filed, the INN and the identifiers. Built: V0551 snapshots the
   issuing INN and legal name onto each `fiscal.fiscal_documents` row at insert, by a trigger (so
   the cash decision written through the payments view has one too; rows that predate it are
   backfilled from the entity and marked `BACKFILL`; an UPDATE cannot rewrite a snapshot), widens
@@ -23,25 +22,75 @@
   .../fiscal/payment-types` (derived, not settable) and the correction requests (`POST
   .../fiscal/documents/{documentId}/correction-requests` under the seeded ADR 0027 policy
   `fiscal.correction.request`, `POST .../fiscal/correction-requests/{requestId}/attachments`,
-  `GET .../fiscal/correction-requests`). Decision 6 holds: the one-line placeholder is filed
-  only where the provider environment is a sandbox and the platform policy
-  `fiscal.synthetic_lines_allowed` says so; elsewhere `retry` answers 409 with reason code
-  `FISCAL_LINES_NOT_BUILT`, nothing is sent, and a swept claim is blocked as `LINES_NOT_BUILT`.
-  The policies `fiscal.evidence_retention_years` (seven years, provisional) and
-  `fiscal.synthetic_lines_allowed` are declared in `FiscalEvidencePolicies`. Not built: the real
-  line builder (so no delivery-line ИКПУ can be filed, and the `DELIVERY_FEE` line kind is
-  declared and written by nothing), `openPartnerObligation` driven at capture, the
-  `FiscalTerminalPort` and its fake adapter, the reader for `order_revisions.fiscal_correction_required`,
-  `FiscalCorrectionRequested.v1` and `FiscalCorrectionAttached.v1` on `fiscal.events`, the
-  `FiscalNodeFacts.requiresMarkingCapablePayment` call sites, the adapter from `OrderMarkCounts`
-  to ADR 0161's `OrderMarksPort` (until it exists the block reads «marks not built»).
+  `GET .../fiscal/correction-requests`). Decision 6 holds, and since batch 21 (2026-10-14, wave `w11-fiscal-evidence`) as written
+  rather than as a stopgap: the placeholder is **deleted**. `ReceiptLineBuilder` (with the pure
+  `ReceiptLineAllocator`) builds the receipt of every order from `ordering.api.OrderReceiptSource`:
+  one line per priced item, per priced modifier option (the pricing engine now itemises each chosen
+  option as its own `MODIFIER_OPTION` adjustment, carried onto an amended line too) and for the delivery
+  fee, each under its own classification with the whole-percent VAT of the rate the accepted quote
+  recorded (`pricing.api.QuoteTaxLookup`), the quote's recorded tax share split between the pieces, item
+  and order discounts and the points redemption as per-line discounts (ADR 0046's worked order, VAT
+  7 714), a decimal count and the weighed total for a catch-weight line, and the delivery fee as an
+  ordinary item line of kind `DELIVERY_FEE`, never Payme's `shipping`. An order it cannot build is
+  answered `BLOCKED_CLASSIFICATION`, `BLOCKED_TAX` or `BLOCKED_RECONCILIATION` (document reasons
+  `CLASSIFICATION_MISSING`, `VAT_NOT_EXPRESSIBLE`, `RECEIPT_DOES_NOT_RECONCILE`), nothing is sent, and a
+  retry restates the reason of a document blocked earlier; `LINES_NOT_BUILT` remains only as the
+  historical reason of rows blocked before the builder existed. The policy
+  `fiscal.synthetic_lines_allowed`, `SyntheticLineGate` and the 409 `FISCAL_LINES_NOT_BUILT` are gone;
+  `fiscal.evidence_retention_years` (seven years, provisional) is declared in `FiscalEvidencePolicies`.
+  V0685 snapshots the `tender_id` and `business_date` on the document at opening, and the evidence read returns both (the card draws the day).
+  Correction, 2026-10-23: the tender half of that sentence was not true outside fixtures. The opener derived `tender_id` from
+  `payments.tenders.payment_intent_id`, which no code writes (`OrderSettlementService.plan` inserts the tender with no intent and
+  `PaymentIntentService.createIntent` runs after it), so every real document kept NULL and the V0685 backfill matched no row.
+  `JdbcFiscalLifecycleStore.ordersOwingADocument` now takes the tender that names the intent when one does, and otherwise the
+  order's one money tender; an order with two money legs and no link to tell them apart keeps none
+  (`FiscalObligationTests.theTenderIsFoundThroughTheSettlementWhenNothingLinksItToTheIntent`). Documents opened before the
+  correction keep NULL and no backfill migration was added. The tender-to-intent link is still not written, deliberately:
+  `OrderSettlementService.restateTotal` and `replanMoneyLeg` refuse a money tender that names an intent, so writing it at
+  checkout would refuse every catch-weight restatement and every payment-method change.
+  Also 2026-10-23: a retry of a document that is not `PENDING` (a request may have left) asks the provider what it
+  already holds before it rebuilds the lines (`FiscalReceiptPort.heldReceipt`, Click's `ofd_data`), so an order that can no
+  longer be built does not hide a receipt Click filed; and a document blocked as `PROVIDER_REPORT_OVERDUE` keeps that reason
+  when a retry cannot rebuild its receipt, rather than being restated as «nothing was sent».
+  The two exits that send nothing and are neither a builder obstacle nor an answer (a document with no seller snapshot, and a
+  marked good through a path that cannot carry a code, which a terminal never can yet) return `NOT_SENDABLE` and are blocked at
+  once as `NO_FISCAL_PATH`; they used to return `REJECTED`, which left the claimed document `SUBMITTED` to be blocked an hour
+  later as «the provider did not report» about a provider or terminal nobody had asked. No vendor adapter for `FiscalTerminalPort`
+  is wired outside the local profile, so the terminal half cannot be reached in a deployed profile yet; the provider half is the same defect on a path that is wired.
+  `FiscalNodeFacts.requiresMarkingCapablePayment` is called from `CartPaymentOptions` and
+  `CheckoutEligibilityGuard` (while `feature.marked_goods` is on for the tenant), so Payme is neither
+  offered nor accepted for a basket holding a marked node, and `OrderAmendmentService` refuses
+  (`MARKED_GOODS_NEED_MARKING_CAPABLE_PAYMENT`, through `MarkedOrderPayment`) a `CHANGE_PAYMENT_METHOD`
+  that would move an order holding a marked line, or adding one in the same batch, to such a method. The paper receipt prints the lines as filed.
+  The Click `Amount` for a weighed count goes through an injected `ClickQuantityScale`
+  (`horecaos.payments.click.quantity-scale`, default 1, a fractional count refused until Click answers).
+  Since batch 21, step 2 (2026-10-23): Payme takes the receipt with the checkout. The lines are built when the
+  attempt is first presented (`ProtectedPresentedReceipts`, V0687), kept as sent behind an ADR 0029 reference, and
+  carried on the checkout form (`ProviderInvoice.PaymentForm`, which both storefronts POST) and on
+  `CheckPerformTransaction`'s `detail`, behind `horecaos.payments.payme.receipt-surface` (`FORM`, `CHECK` or `BOTH`,
+  default `BOTH` until Payme answers question U10); a presentation whose receipt cannot be built is refused
+  (`RECEIPT_NOT_BUILDABLE`) and the filing sends exactly those lines. An amendment after the receipt opens a correction
+  request on its own: `order_revisions.fiscal_correction_required` is read by `FiscalAmendmentCorrections` through
+  `ordering.api.FiscalCorrectionRevisionFeed` (reason `AMENDED_AFTER_ISSUE`, no approver, `source_revision`, V0686), and
+  attaching the agent's reference still needs the second person. `FiscalCorrectionRequested.v1` and
+  `FiscalCorrectionAttached.v1` are on `fiscal.events` through the outbox. `FiscalTerminalPort` (`issue`, `lookup`) has a
+  fake adapter (local profile only) and the contract suite every adapter extends (`FiscalTerminalPortContract`); a cash
+  sale at a branch with a registered, capable terminal is a `TERMINAL` receipt, opened when the order completes and issued
+  by that terminal, lookup first and never twice (`TerminalFiscalizationBridge`, V0688). `fiscal.evidence_retention_years` is
+  read by a report-only retention report and sweeper (`GET /api/v1/control-plane/fiscal/retention`) through
+  `FiscalEvidencePolicies.effectiveRetention`, the tenant's figure and never below the platform's. The OrderMarksPort count
+  adapter exists (`OrderMarksOrderMarkCounts`). The operator runbook is
+  `runbooks/refunds-fiscal-evidence-and-corrections.md`, never executed. Not built: `openPartnerObligation` driven at
+  capture; a vendor adapter for `FiscalTerminalPort` (an external fact: no vendor is chosen); Click `submit_qrcode` and
+  Payme `set_fiscal_data` recovery calls; the ADR 0029 startup guard that refuses a production profile while the retention
+  key is provisional; a marked good through a terminal; the Click quantity scale for a weighed line (an external fact).
   The console (`q-fiscal-evidence`) draws the read on the order detail's fiscal panel, under the
   tenders of the payments page, where each tender links to its document, and beneath the order
   lookup of the finance fiscal page, which also lists the open correction requests, aged in days
   and not alarmed; it masks identifiers until
   a role holding `fiscal.evidence.reveal` chooses a purpose, holds an opened read for two minutes at
   most, draws a link only for an `https` URL, names a delivery-fee line as its own row with its ИКПУ
-  and package code (nothing writes one until the line builder does), shows marking as a count, and raises correction and void requests and attaches
+  and package code (the line builder writes one whenever the order charged a fee, from the fee node's classification), shows marking as a count, and raises correction and void requests and attaches
   the agent's reference. The payments page's payment-types table and the fiscalization settings
   tab's responsibility projection read `GET .../fiscal/payment-types`. `GET
   /api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/receipts`
@@ -53,8 +102,8 @@
   `PartnerFiscalizationBridge` reads `seller_tin` through `payments.fiscal_documents` (V0640 appends
   the column to the compatibility view) and never resolves the order's location a second time, so a
   branch that has changed hands or an entity re-registered since the sale does not move the INN a
-  receipt is filed under; a marked order whose document holds no snapshot is not sent at all (nothing
-  is filed under a TIN of zeros), and only a sandbox placeholder may carry the visibly synthetic zero.
+  receipt is filed under; an order whose document holds no snapshot is not sent at all (nothing
+  is filed under a TIN of zeros, and the sandbox placeholder that once carried a visibly synthetic zero is deleted).
   Each line of the evidence read carries the INN it was filed under (`commissionTin`, as sent), and the
   console states it beside the INN the document was opened under and says so when the two differ.
   A correction or void request has an exit that files nothing: `POST
@@ -532,22 +581,23 @@ that is audited.
       resolve; `fiscal.fiscal_correction_requests` with grants (the mark store is ADR
       0161's migration, not this one). Check every active worktree's `db/migration/` for the
       next free number first.
-- [ ] `fiscal.evidence.reveal` capability, `fiscal.evidence_retention_years` and
-      `fiscal.synthetic_lines_allowed` keys; `fiscal.events` topic and its catalogue entries.
+- [x] `fiscal.evidence.reveal` capability, `fiscal.evidence_retention_years` and
+      `fiscal.synthetic_lines_allowed` keys (the last deleted with the placeholder); `fiscal.events` topic and its
+      catalogue entries (batch 21).
 - [ ] `GET .../orders/{orderId}/fiscal-evidence` and `GET .../fiscal/payment-types`, with
       masking and the audited reveal.
 - [ ] `PartnerFiscalizationBridge.retry` refuses a non-sandbox synthetic submission.
-- [ ] The real line builder from the accepted quote snapshot, delivery fee as an item line,
-      ИКПУ and package code stored as sent; then `PaymentFiscalService.openPartnerObligation`
+- [x] The real line builder from the accepted quote snapshot, delivery fee as an item line,
+      ИКПУ and package code stored as sent (batch 21). Still open: `PaymentFiscalService.openPartnerObligation`
       and `submit` driven at capture.
-- [ ] `FiscalNodeFacts.requiresMarkingCapablePayment` called from `CartPaymentOptions` and
-      `CheckoutEligibilityGuard`.
-- [ ] The evidence block's marks count reads ADR 0161's `OrderMarksPort.markCounts`; until
-      that port exists the block says "marks not built" and shows no count.
-- [ ] Correction and void requests, attachments, the four states, and a reader for
-      `order_revisions.fiscal_correction_required`.
-- [ ] `FiscalTerminalPort`, a fake adapter and its contract tests (not required for the
-      surface; required for `TERMINAL` evidence to exist).
+- [x] `FiscalNodeFacts.requiresMarkingCapablePayment` called from `CartPaymentOptions` and
+      `CheckoutEligibilityGuard` (batch 21).
+- [x] The evidence block's marks count reads ADR 0161's `OrderMarksPort.markCounts`
+      (`OrderMarksOrderMarkCounts`); where no mark store is wired the block still says "marks not built".
+- [x] Correction and void requests, attachments, the four states, and a reader for
+      `order_revisions.fiscal_correction_required` (batch 21).
+- [x] `FiscalTerminalPort`, a fake adapter and its contract tests (not required for the
+      surface; required for `TERMINAL` evidence to exist). A vendor adapter is an external fact.
 - [ ] Console: the evidence block, the payment-types table, the strings in three languages.
 - [ ] ADR 0038's status line updated to say its open input is closed, and the gap-map row
       `X.2` re-audited (this record does not edit either).

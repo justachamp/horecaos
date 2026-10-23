@@ -3,6 +3,7 @@ package uz.horecaos.platform.marketing.web;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import java.time.Duration;
@@ -172,7 +173,7 @@ class AttributionLinkAndCourierBroadcastControllerEndpointTests {
                         .with(tokenFor(UNGRANTED))
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "draft-refused-1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"targetKind\":\"ALL_ACTIVE\",\"message\":\"Shift change\"}"))
+                        .content("{\"targetKind\":\"ALL_ACTIVE\",\"templateKey\":\"COURIER_SHIFT_CHANGE\"}"))
                 .andReturn();
 
         assertThat(result.getResponse().getStatus()).isEqualTo(403);
@@ -195,6 +196,84 @@ class AttributionLinkAndCourierBroadcastControllerEndpointTests {
                         + "controller's own brandId check can be refusing this")
                 .isEqualTo(404);
         assertThat(result.getResponse().getContentAsString()).contains("RESOURCE_NOT_FOUND");
+    }
+
+    // ADR 0182, D15: a courier SMS says before anything is drafted whether it can leave, and a send
+    // answers per courier.
+
+    @Test
+    void readinessIsRefusedWithoutCourierBroadcastManage() throws Exception {
+        MvcResult result = mvc.perform(
+                        get(courierBroadcastsPath(BRAND) + "/readiness").with(tokenFor(UNGRANTED)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(403);
+        assertThat(result.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.COURIER_BROADCAST_MANAGE.code());
+    }
+
+    @Test
+    void readinessSaysWhyACourierSmsCannotLeaveForABrandWithNoAccount() throws Exception {
+        MvcResult result = mvc.perform(
+                        get(courierBroadcastsPath(BRAND) + "/readiness").with(tokenFor(FULL)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        var body = tools.jackson.databind.json.JsonMapper.builder()
+                .build()
+                .readTree(result.getResponse().getContentAsString());
+        assertThat(body.get("isWired").asBoolean()).isFalse();
+        assertThat(body.get("reason").asString())
+                .as("the stable code the console turns into a sentence, before a dispatcher drafts anything")
+                .isEqualTo("NO_PROVIDER_BINDING");
+        assertThat(body.get("templates").size()).isZero();
+    }
+
+    @Test
+    void aBroadcastDraftNamesAWordingAndFreeTextIsNotAccepted() throws Exception {
+        MvcResult noWording = mvc.perform(post(courierBroadcastsPath(BRAND))
+                        .with(tokenFor(FULL))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "draft-free-text-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetKind\":\"ALL_ACTIVE\",\"message\":\"Shift change\"}"))
+                .andReturn();
+        assertThat(noWording.getResponse().getStatus())
+                .as("the gateway approves wordings in advance, so text typed into a form is not a wording")
+                .isEqualTo(400);
+
+        MvcResult unknownWording = mvc.perform(post(courierBroadcastsPath(BRAND))
+                        .with(tokenFor(FULL))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "draft-unknown-wording-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetKind\":\"ALL_ACTIVE\",\"templateKey\":\"NOPE\",\"variables\":{}}"))
+                .andReturn();
+        assertThat(unknownWording.getResponse().getStatus()).isEqualTo(400);
+        assertThat(unknownWording.getResponse().getContentAsString()).contains("No active courier wording");
+    }
+
+    @Test
+    void recipientsOfABroadcastBelongingToAnotherBrandAre404() throws Exception {
+        UUID broadcastId = insertCourierBroadcast(BRAND);
+
+        MvcResult result = mvc.perform(get(courierBroadcastsPath(OTHER_BRAND) + "/" + broadcastId + "/recipients")
+                        .with(tokenFor(FULL)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(404);
+        assertThat(result.getResponse().getContentAsString()).contains("RESOURCE_NOT_FOUND");
+    }
+
+    @Test
+    void recipientsOfABroadcastNobodyWasAddressedForIsAnEmptyList() throws Exception {
+        UUID broadcastId = insertCourierBroadcast(BRAND);
+
+        MvcResult result = mvc.perform(get(courierBroadcastsPath(BRAND) + "/" + broadcastId + "/recipients")
+                        .with(tokenFor(FULL)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(result.getResponse().getContentAsString()).isEqualTo("[]");
     }
 
     // ------------------------------------------------------------------- fixtures

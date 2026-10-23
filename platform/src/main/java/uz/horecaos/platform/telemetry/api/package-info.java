@@ -1,7 +1,7 @@
 /**
  * What telemetry exposes to other modules (ADR 0045).
  *
- * <p>Two directions, and neither carries a coordinate.
+ * <p>Two directions, and the only coordinate that crosses is the courier's own, inward, once.
  *
  * <p>Outward: {@link uz.horecaos.platform.telemetry.api.RealtimeSignalPublisher} is
  * how ordering, catalog, fulfillment, and integration say that something in a
@@ -30,7 +30,17 @@
  * telemetry inventing a second query path onto data it does not own (wave
  * P08).
  *
- * <p>Nothing here exposes a position, a track, or a duty session row. Those are
+ * <p>One more, added by ADR 0179, and it is the courier's own handset talking to the
+ * module that owns every rule about it:
+ * {@link uz.horecaos.platform.telemetry.api.CourierDutyPort} opens and closes the caller's
+ * duty session and ingests the caller's batch of readings, and
+ * {@link uz.horecaos.platform.telemetry.api.DutySessionLifecyclePort} is how a shift tells its
+ * session that it ended or paused. A reading goes <em>in</em> through the first and no method
+ * on it returns one; the controller that calls it lives in {@code courier} only because the
+ * declaration it carries ({@code CourierSelfAuthorized}) is {@code courier}'s and a
+ * controller in this module importing it would close a cycle.
+ *
+ * <p>Nothing here exposes a position, a track, or a duty session row back out. Those are
  * read through capability-gated HTTP, which is what keeps every read of them
  * authorized at a location scope rather than at a module boundary.
  */

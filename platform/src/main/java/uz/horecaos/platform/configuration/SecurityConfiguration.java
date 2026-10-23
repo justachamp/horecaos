@@ -219,6 +219,13 @@ public class SecurityConfiguration {
                                 // thing a storefront paints. The staff surfaces' twins stay
                                 // behind a session.
                                 "/api/v1/storefront/locales",
+                                // ADR 0149, Decision 5: the languages ONE brand serves, default first.
+                                // The same standing as the registry read above and the brand's terms and
+                                // analytics beside it: a picker paints before an account exists and the
+                                // answer names nobody. A brand id that is not the tenant's answers as a
+                                // brand that chose nothing, so it reveals no brand. See
+                                // StorefrontBrandLocaleController's own doc.
+                                "/api/v1/storefront/tenants/*/brands/*/locales",
                                 // ADR 0159: the tags a customer is offered with a rating, a brand's rating
                                 // summary and its published comments. Off until the tenant switches them on
                                 // (an empty answer, not a refusal), cached and rate limited by the
@@ -264,6 +271,15 @@ public class SecurityConfiguration {
                         // delivery-fee preview above.
                         .requestMatchers(
                                 HttpMethod.POST, "/api/v1/storefront/tenants/*/brands/*/attribution-links/*/clicks")
+                        .permitAll()
+                        // ADR 0183 D18: whether the platform counts page loads (the same answer for everyone, naming
+                        // nobody) and the ping itself. Dark behind reporting.page_load_count_enabled; the ping can only
+                        // add one to a per-day counter, records no address, agent, cookie, session or path, answers 202
+                        // whether or not it counted, and is limited per visitor in the ADR 0033 limiter. Exactly these
+                        // two methods on exactly this path, as every exemption here.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/storefront/tenants/*/brands/*/page-loads")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/storefront/tenants/*/brands/*/page-loads")
                         .permitAll()
                         // ADR 0023: the on-box probe evaluates every alert
                         // threshold from this scrape, and it cannot hold a bearer
@@ -409,6 +425,24 @@ public class SecurityConfiguration {
                         // meet anyRequest().authenticated() and a bodyless 401.
                         .requestMatchers(HttpMethod.POST, "/providers/sms/*/receipts")
                         .permitAll()
+                        // ADR 0182, D13: the way out of a campaign email (RFC 8058). A customer's mail
+                        // client posts here with no session, and a person opening the link in a mail
+                        // reads the page with a GET that changes nothing. Authorised inside
+                        // EmailUnsubscribeController by possession of an opaque token, and every
+                        // unknown or expired token answers the same 404. Without these lines the
+                        // mail client's button would meet a bodyless 401, and the same click would
+                        // file a spam complaint against the one sender every tenant shares.
+                        .requestMatchers(HttpMethod.GET, "/providers/mail/unsubscribe/*")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.POST, "/providers/mail/unsubscribe/*")
+                        .permitAll()
+                        // ADR 0182, D14: a customer's tap on a promotional push notification, reported by the
+                        // storefront's service worker, which holds no session. Authorised inside
+                        // PushClickController by possession of an opaque token that only the browser that
+                        // received the notification can know. Without this line the worker's report would meet
+                        // a bodyless 401 and a tap would never be counted as a read.
+                        .requestMatchers(HttpMethod.POST, "/providers/push/clicks/*")
+                        .permitAll()
                         // ADR 0062: staff sign in on a first-party page instead of a
                         // Keycloak redirect, and the backend takes the credentials to
                         // Keycloak on the caller's behalf. Sign-in is unavoidably
@@ -483,6 +517,17 @@ public class SecurityConfiguration {
                                 "/api/v1/operations/auth/password-resets",
                                 "/api/v1/operations/auth/password-resets/inspect",
                                 "/api/v1/operations/auth/password-resets/accept")
+                        .permitAll()
+                        // ADR 0178: a courier setting their own password from the link they
+                        // were texted. Somebody with no password has no session to present,
+                        // so requiring one would refuse exactly the visitor this exists for.
+                        // What authorises both calls is the one-time token in the body,
+                        // checked against the hash the relay kept; CourierAccessController
+                        // rate-limits both per caller address.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/operations/courier-access/inspect",
+                                "/api/v1/operations/courier-access/accept")
                         .permitAll()
                         // ADR 0079: a kitchen display device with no credential of its
                         // own asking for one. Unauthenticated for the same reason the

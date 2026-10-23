@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -17,6 +18,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -63,6 +65,9 @@ class PlatformLocaleEndpointTests {
 
     @Autowired
     private MockMvc mvc;
+
+    @Autowired
+    private JdbcClient jdbc;
 
     @Test
     @DisplayName("a signed-in staff member with no grant at all reads the registry on both staff surfaces")
@@ -145,6 +150,74 @@ class PlatformLocaleEndpointTests {
                         .isEqualTo(locale.path("tag").asText()));
     }
 
+    // ------------------------------------------------------------ one brand's languages
+
+    @Test
+    @DisplayName(
+            "a visitor with no account reads the languages one brand serves, its own default first, and may cache the answer")
+    void aBrandsServedLanguagesAreReadableBeforeSignIn() throws Exception {
+        UUID tenant = seedTenant("served");
+        UUID brand = seedBrand(tenant, "SERVED");
+        seedBrandLocale(tenant, brand, "ru", false);
+        seedBrandLocale(tenant, brand, "uz-Latn", true);
+
+        MvcResult result = mvc.perform(get(brandLocalesPath(tenant, brand))).andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        JsonNode body = json(result);
+        assertThat(values(body.path("locales")).map(JsonNode::asText).toList())
+                .as("the brand's own set, its own default first, then the platform's order")
+                .containsExactly("uz-Latn", "ru");
+        assertThat(body.path("defaultLocale").asText()).isEqualTo("uz-Latn");
+        assertThat(body.path("configured").asBoolean()).isTrue();
+        assertThat(result.getResponse().getHeader("Cache-Control"))
+                .contains("public")
+                .contains("max-age=300");
+    }
+
+    @Test
+    @DisplayName(
+            "a language the brand stored but the registry has not made live is not offered, and cannot be the default")
+    void aDeclaredButInactiveLanguageIsNotOffered() throws Exception {
+        UUID tenant = seedTenant("declared");
+        UUID brand = seedBrand(tenant, "DECLARED");
+        seedBrandLocale(tenant, brand, "kk", true);
+        seedBrandLocale(tenant, brand, "ru", false);
+
+        JsonNode body = json(mvc.perform(get(brandLocalesPath(tenant, brand))).andReturn());
+
+        assertThat(values(body.path("locales")).map(JsonNode::asText).toList())
+                .as("kk is declared in the registry and live in no tier: a storefront must not offer it")
+                .containsExactly("ru");
+        assertThat(body.path("defaultLocale").asText())
+                .as("a default that is not live cannot be where a storefront starts")
+                .isEqualTo("ru");
+    }
+
+    @Test
+    @DisplayName(
+            "a brand that chose nothing, and a brand id that is not the tenant's, both answer with the platform's content languages")
+    void anUnconfiguredOrUnknownBrandAnswersTheSame() throws Exception {
+        UUID tenant = seedTenant("plain");
+        UUID plain = seedBrand(tenant, "PLAIN");
+        UUID otherTenant = seedTenant("other");
+        UUID foreign = seedBrand(otherTenant, "FOREIGN");
+        seedBrandLocale(otherTenant, foreign, "en", true);
+
+        for (UUID unknown : List.of(plain, foreign, UUID.randomUUID())) {
+            JsonNode body =
+                    json(mvc.perform(get(brandLocalesPath(tenant, unknown))).andReturn());
+
+            assertThat(values(body.path("locales")).map(JsonNode::asText).toList())
+                    .as("brand %s read under the tenant that does not own it", unknown)
+                    .containsExactly("ru", "uz-Latn", "en");
+            assertThat(body.path("defaultLocale").asText()).isEqualTo("ru");
+            assertThat(body.path("configured").asBoolean())
+                    .as("nothing is configured under this tenant for this id, and the answer does not say otherwise")
+                    .isFalse();
+        }
+    }
+
     @Test
     @DisplayName("it is a read: a POST to it is not an endpoint")
     void itIsOnlyARead() throws Exception {
@@ -154,6 +227,49 @@ class PlatformLocaleEndpointTests {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    private static String brandLocalesPath(UUID tenant, UUID brand) {
+        return "/api/v1/storefront/tenants/" + tenant + "/brands/" + brand + "/locales";
+    }
+
+    private UUID seedTenant(String slug) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.tenants
+                    (id, slug, legal_name, display_name, default_currency, default_timezone, status, version)
+                VALUES (:id, :slug, 'Legal', 'Display', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", id)
+                .param("slug", slug + "-" + id.toString().substring(0, 8))
+                .update();
+        return id;
+    }
+
+    private UUID seedBrand(UUID tenant, String code) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenant, :code, :slug, :code, 'ACTIVE', 0)
+                """)
+                .param("id", id)
+                .param("tenant", tenant)
+                .param("code", code)
+                .param("slug", code.toLowerCase() + "-" + id.toString().substring(0, 8))
+                .update();
+        return id;
+    }
+
+    private void seedBrandLocale(UUID tenant, UUID brand, String locale, boolean isDefault) {
+        jdbc.sql("""
+                INSERT INTO tenant.brand_locales (tenant_id, brand_id, locale, is_default)
+                VALUES (:tenant, :brand, :locale, :isDefault)
+                """)
+                .param("tenant", tenant)
+                .param("brand", brand)
+                .param("locale", locale)
+                .param("isDefault", isDefault)
+                .update();
+    }
 
     private static List<String> tags(JsonNode body) {
         return values(body.path("locales"))

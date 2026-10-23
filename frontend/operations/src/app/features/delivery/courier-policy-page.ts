@@ -24,6 +24,7 @@ import {
   CourierPolicyView,
   CourierPolicyWriteInput,
   CouriersApi,
+  PickupHandoverGate,
   RunPayMode,
 } from '../couriers/couriers-api';
 
@@ -31,7 +32,14 @@ import {
 export type PolicyResolutionScope = 'TENANT' | 'BRAND' | 'LOCATION';
 
 type PolicyFieldKind =
-  'shiftEnforcement' | 'money' | 'count' | 'boolean' | 'revealTiming' | 'gps' | 'runPayMode';
+  | 'shiftEnforcement'
+  | 'money'
+  | 'count'
+  | 'boolean'
+  | 'revealTiming'
+  | 'gps'
+  | 'runPayMode'
+  | 'gate';
 
 interface PolicyFieldSpec {
   readonly key: string;
@@ -144,6 +152,15 @@ const POLICY_FIELDS: readonly PolicyFieldSpec[] = [
     consequenceKey: 'delivery.policy.consequence.revealCustomerLocationTiming',
     kind: 'revealTiming',
     raw: (p) => p.revealCustomerLocationTiming,
+  },
+  {
+    // ADR 0042, ADR 0178. SOFT is a real value and the default: a position check that fails is
+    // recorded and the pickup or handover goes ahead; HARD refuses it.
+    key: 'pickupHandoverGate',
+    labelKey: 'delivery.policy.pickupHandoverGate',
+    consequenceKey: 'delivery.policy.consequence.pickupHandoverGate',
+    kind: 'gate',
+    raw: (p) => p.pickupHandoverGate ?? 'SOFT',
   },
   {
     key: 'postDeliveryPaymentCheckRequired',
@@ -315,6 +332,8 @@ export class CourierPolicyPage implements OnInit {
   protected readonly draftRevealTiming =
     signal<CourierPolicyView['revealCustomerLocationTiming']>('AFTER_ACCEPT');
   protected readonly draftPostDeliveryPaymentCheckRequired = signal(false);
+  /** ADR 0178: how firmly the pickup and the handover are held to the position check. */
+  protected readonly draftPickupHandoverGate = signal<PickupHandoverGate>('SOFT');
   /** ADR 0170: `UNDECIDED` is sent as null. */
   protected readonly draftRunPayMode = signal<'UNDECIDED' | RunPayMode>('UNDECIDED');
   protected readonly draftAcknowledgesEngagementTerms = signal(false);
@@ -458,7 +477,15 @@ export class CourierPolicyPage implements OnInit {
         return this.gpsLabel(String(raw));
       case 'runPayMode':
         return this.runPayModeLabel(String(raw));
+      case 'gate':
+        return this.gateLabel(String(raw));
     }
+  }
+
+  protected gateLabel(value: string): string {
+    return value === 'HARD'
+      ? this.i18n.t('delivery.policy.pickupHandoverGate.HARD')
+      : this.i18n.t('delivery.policy.pickupHandoverGate.SOFT');
   }
 
   /** "off", or "on — accept within 1 km, status change within 150 m" from the row's encoded raw value. */
@@ -553,6 +580,7 @@ export class CourierPolicyPage implements OnInit {
     this.draftRevealTiming.set(current.revealCustomerLocationTiming);
     this.draftPostDeliveryPaymentCheckRequired.set(current.postDeliveryPaymentCheckRequired);
     this.draftRunPayMode.set(current.runPayMode ?? 'UNDECIDED');
+    this.draftPickupHandoverGate.set(current.pickupHandoverGate ?? 'SOFT');
     this.draftAcknowledgesEngagementTerms.set(false);
     this.pendingApproval.set(null);
     this.draftReason.set('');
@@ -629,6 +657,7 @@ export class CourierPolicyPage implements OnInit {
         revealCustomerLocationTiming: this.draftRevealTiming(),
         postDeliveryPaymentCheckRequired: this.draftPostDeliveryPaymentCheckRequired(),
         runPayMode: this.runPayModeToSend(),
+        pickupHandoverGate: this.draftPickupHandoverGate(),
         acknowledgeEngagementTerms: this.needsAcknowledgement() ? true : null,
         reason: this.draftReason().trim(),
       };

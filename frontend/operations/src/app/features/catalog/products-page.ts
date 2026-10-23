@@ -6,7 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import { BrandScope } from '../../core/api/catalog-paths';
@@ -41,6 +41,7 @@ import {
 import { CreateProductDialog, CreateProductSubmission } from './create-product-dialog';
 import { FiscalWorkbenchPanel } from './fiscal-workbench-panel';
 import { describeApiError } from '../orders/order-errors';
+import { registerProductsKeys } from './products-keys';
 
 type StatusTab = 'ALL' | 'ACTIVE' | 'DRAFT' | 'ARCHIVED' | 'NO_MXIK';
 
@@ -107,10 +108,13 @@ interface ProductFilters {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ProductsPage implements OnInit {
+  /** The list's keys (catalog.md §4.1): they press the controls the table already draws. */
+  private readonly keys = registerProductsKeys();
   private readonly api = inject(CatalogApi);
   private readonly brand = inject(CurrentBrand);
   private readonly localeSet = inject(LocaleSet);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   protected readonly i18n = inject(I18n);
   private readonly registry = inject(PlatformLocales);
 
@@ -278,6 +282,11 @@ export class ProductsPage implements OnInit {
   private searchDebounceHandle: ReturnType<typeof setTimeout> | null = null;
 
   async ngOnInit(): Promise<void> {
+    // The fiscalization settings' hand-off (row 10.7c): a link with `?workbench=fiscal` opens the workbench
+    // over the list, where all four fiscal fields of a node are edited together.
+    if (this.route.snapshot.queryParamMap.get('workbench') === 'fiscal') {
+      this.workbenchOpen.set(true);
+    }
     await Promise.all([this.brand.ensureLoaded(), this.localeSet.ensureLoaded()]);
     await this.loadCatalogsAndProducts();
   }

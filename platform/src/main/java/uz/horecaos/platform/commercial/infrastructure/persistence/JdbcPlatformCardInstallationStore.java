@@ -111,6 +111,14 @@ public class JdbcPlatformCardInstallationStore {
         }
     }
 
+    /** The base URL the ADR 0026 catalogue gives an environment, or empty when it names none. */
+    public Optional<String> environmentBaseUrl(String environmentCode) {
+        return jdbc.sql("SELECT base_url FROM integration.provider_environments WHERE code = :code")
+                .param("code", environmentCode)
+                .query(String.class)
+                .optional();
+    }
+
     /** Whether the ADR 0026 catalogue approves this environment for a payment provider of this type. */
     public boolean approvedEnvironmentExists(String environmentCode, String providerType) {
         return jdbc.sql("""

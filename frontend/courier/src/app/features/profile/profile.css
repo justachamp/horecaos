@@ -1,0 +1,29 @@
+dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+dd {
+  margin: 0;
+}
+
+dt {
+  color: var(--q-ink-muted);
+}
+
+.languages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.languages .btn {
+  flex: 1 1 auto;
+}
+
+.languages .btn.selected {
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}

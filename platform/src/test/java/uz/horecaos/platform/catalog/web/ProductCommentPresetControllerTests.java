@@ -37,6 +37,7 @@ import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
+import uz.horecaos.platform.support.CommentPresetRows;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -143,11 +144,8 @@ class ProductCommentPresetControllerTests {
                 .productId();
 
         presetId = UUID.randomUUID();
-        jdbc.sql("""
-                        INSERT INTO catalog.comment_presets
-                            (id, tenant_id, code, label_ru, label_uz, label_en, sort_order, status, version)
-                        VALUES (:id, :t, 'NO_ONION', 'Без лука', 'Piyozsiz', 'No onion', 0, 'ACTIVE', 1)
-                        """).param("id", presetId).param("t", TENANT).update();
+        CommentPresetRows.insertPreset(
+                jdbc, presetId, TENANT, "NO_ONION", CommentPresetRows.triple("Без лука", "Piyozsiz", "No onion"));
 
         roleRegistry.synchronize();
         grant(READ_ONLY_STAFF, PlatformRole.LOCATION_STAFF);

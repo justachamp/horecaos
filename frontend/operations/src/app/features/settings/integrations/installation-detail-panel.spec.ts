@@ -82,6 +82,10 @@ class FakeCurrentLocation {
 
 class FakeIntegrationsApi {
   readonly listBindings = vi.fn().mockResolvedValue([]);
+  readonly listMarketplaceRulesets = vi.fn().mockResolvedValue([]);
+  readonly setMarketplaceRuleset = vi
+    .fn()
+    .mockResolvedValue({ bindingId: 'binding-2', rulesetCode: null, version: 8 });
   readonly activateBinding = vi.fn().mockResolvedValue({ changed: true, outcome: 'activated' });
   readonly suspendBinding = vi.fn().mockResolvedValue({ changed: true, outcome: 'suspended' });
   readonly reconcileCapabilities = vi.fn().mockResolvedValue({
@@ -188,6 +192,32 @@ describe('InstallationDetailPanel', () => {
 
   function host(): HTMLElement {
     return fixture.nativeElement as HTMLElement;
+  }
+
+  /** The panel over an installation whose bindings and known marketplace rulesets are given. */
+  async function createWithBindings(
+    installation: InstallationView,
+    bindings: readonly BindingView[],
+    knownRulesets: readonly string[],
+  ): Promise<void> {
+    api = new FakeIntegrationsApi();
+    mappingApi = new FakePosMappingApi();
+    api.listBindings.mockResolvedValue(bindings);
+    api.listMarketplaceRulesets.mockResolvedValue(knownRulesets);
+    await TestBed.configureTestingModule({
+      imports: [InstallationDetailPanel],
+      providers: [
+        { provide: IntegrationsApi, useValue: api },
+        { provide: PosMappingApi, useValue: mappingApi },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(InstallationDetailPanel);
+    fixture.componentRef.setInput('installation', installation);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
   }
 
   function buttonWithText(text: string): HTMLButtonElement {
@@ -463,6 +493,149 @@ describe('InstallationDetailPanel', () => {
     expect(host().textContent).toContain('Partner API clients');
   });
 
+  // ---------------------------------------------------------------- the marketplace ruleset (ADR 0138)
+
+  describe('the marketplace ruleset a binding is checked against', () => {
+    const NAMING_BINDING: BindingView = {
+      ...ACTIVE_BINDING,
+      version: 7,
+      marketplaceRulesetCode: null,
+    };
+
+    it('says no ruleset is authored while the registry is empty, and offers nothing to choose', async () => {
+      await createWithBindings(MARKETPLACE_INSTALLATION, [NAMING_BINDING], []);
+
+      expect(api.listMarketplaceRulesets).toHaveBeenCalledWith(SCOPE);
+      expect(
+        host().querySelector('[data-testid="marketplace-ruleset-lead"]')?.textContent,
+      ).toContain('No marketplace ruleset is authored yet');
+      expect(
+        host().querySelector('[data-testid="marketplace-ruleset-select-binding-2"]'),
+      ).toBeNull();
+      expect(
+        host().querySelector('[data-testid="marketplace-ruleset-value-binding-2"]')?.textContent,
+      ).toContain('Universal rules only');
+    });
+
+    it('offers the registry’s rulesets per binding and writes the choice under the binding’s version', async () => {
+      await createWithBindings(MARKETPLACE_INSTALLATION, [NAMING_BINDING], ['UZUM_V1', 'WOLT_V1']);
+
+      const select = host().querySelector<HTMLSelectElement>(
+        '[data-testid="marketplace-ruleset-select-binding-2"]',
+      )!;
+      expect(Array.from(select.options).map((option) => option.value)).toEqual([
+        '',
+        'UZUM_V1',
+        'WOLT_V1',
+      ]);
+      select.value = 'WOLT_V1';
+      select.dispatchEvent(new Event('change'));
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(api.setMarketplaceRuleset).toHaveBeenCalledWith(
+        SCOPE,
+        'inst-mp',
+        'binding-2',
+        'WOLT_V1',
+        7,
+      );
+      expect(api.listBindings).toHaveBeenCalledTimes(2);
+    });
+
+    it('clears a code with the universal-only choice, as null', async () => {
+      await createWithBindings(
+        MARKETPLACE_INSTALLATION,
+        [{ ...NAMING_BINDING, marketplaceRulesetCode: 'UZUM_V1' }],
+        ['UZUM_V1'],
+      );
+
+      const select = host().querySelector<HTMLSelectElement>(
+        '[data-testid="marketplace-ruleset-select-binding-2"]',
+      )!;
+      expect(select.value).toBe('UZUM_V1');
+      select.value = '';
+      select.dispatchEvent(new Event('change'));
+      await flushMicrotasks();
+
+      expect(api.setMarketplaceRuleset).toHaveBeenCalledWith(
+        SCOPE,
+        'inst-mp',
+        'binding-2',
+        null,
+        7,
+      );
+    });
+
+    it('lets a code the registry no longer holds be cleared, even though nothing can be chosen', async () => {
+      await createWithBindings(
+        MARKETPLACE_INSTALLATION,
+        [{ ...NAMING_BINDING, marketplaceRulesetCode: 'RETIRED_V1' }],
+        [],
+      );
+
+      expect(
+        host().querySelector('[data-testid="marketplace-ruleset-value-binding-2"]')?.textContent,
+      ).toContain('RETIRED_V1');
+      (
+        host().querySelector(
+          '[data-testid="marketplace-ruleset-clear-binding-2"]',
+        ) as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+
+      expect(api.setMarketplaceRuleset).toHaveBeenCalledWith(
+        SCOPE,
+        'inst-mp',
+        'binding-2',
+        null,
+        7,
+      );
+    });
+
+    it('shows the server’s refusal and leaves the list as it was when the binding changed under the editor', async () => {
+      await createWithBindings(MARKETPLACE_INSTALLATION, [NAMING_BINDING], ['UZUM_V1']);
+      api.setMarketplaceRuleset.mockRejectedValue(
+        new ApiError(ApiErrorCode.STALE_VERSION, 409, null, null),
+      );
+
+      const select = host().querySelector<HTMLSelectElement>(
+        '[data-testid="marketplace-ruleset-select-binding-2"]',
+      )!;
+      select.value = 'UZUM_V1';
+      select.dispatchEvent(new Event('change'));
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(host().querySelector('[data-testid="marketplace-ruleset-error"]')).not.toBeNull();
+      expect(api.listBindings).toHaveBeenCalledTimes(1);
+    });
+
+    it('never writes a binding an older server sent no version for', async () => {
+      await createWithBindings(
+        MARKETPLACE_INSTALLATION,
+        [{ ...ACTIVE_BINDING, marketplaceRulesetCode: null }],
+        ['UZUM_V1'],
+      );
+
+      const select = host().querySelector<HTMLSelectElement>(
+        '[data-testid="marketplace-ruleset-select-binding-2"]',
+      )!;
+      select.value = 'UZUM_V1';
+      select.dispatchEvent(new Event('change'));
+      await flushMicrotasks();
+
+      expect(api.setMarketplaceRuleset).not.toHaveBeenCalled();
+    });
+
+    it('shows nothing, and asks nothing, for an installation that is not a marketplace', async () => {
+      await createWithBindings(TELEGRAM_INSTALLATION, [ACTIVE_BINDING], ['UZUM_V1']);
+
+      expect(api.listMarketplaceRulesets).not.toHaveBeenCalled();
+      expect(host().querySelector('[data-testid="marketplace-ruleset"]')).toBeNull();
+    });
+  });
+
   it('does not show the partner API client section for a non-MARKETPLACE installation', async () => {
     await create(TELEGRAM_INSTALLATION);
 
@@ -720,7 +893,7 @@ describe('InstallationDetailPanel', () => {
         of(
           entityType === 'OPERATOR'
             ? {
-                // No adapter lists a POS's operators: the right side is typed by hand.
+                // This till does not list its operators: the right side is typed by hand.
                 sourced: false,
                 detail: 'The till’s operator ids are typed in',
                 entities: [],
@@ -779,6 +952,100 @@ describe('InstallationDetailPanel', () => {
       ),
     ).map((option) => option.textContent?.trim());
     expect(options).toEqual(['Aziza Karimova']);
+  });
+
+  async function openOperators(unmapped: UnmappedExternalResponse): Promise<void> {
+    api = new FakeIntegrationsApi();
+    mappingApi = new FakePosMappingApi();
+    api.listBindings.mockResolvedValue([ACTIVE_BINDING]);
+    mappingApi.unmapped.mockImplementation(
+      (_scope: TenantScope, _binding: string, entityType: MappingEntityType) =>
+        of(entityType === 'OPERATOR' ? unmapped : EMPTY_UNMAPPED),
+    );
+    await TestBed.configureTestingModule({
+      imports: [InstallationDetailPanel],
+      providers: [
+        { provide: IntegrationsApi, useValue: api },
+        { provide: PosMappingApi, useValue: mappingApi },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(InstallationDetailPanel);
+    fixture.componentRef.setInput('installation', CLOPOS_INSTALLATION);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    tabWithText('Соответствия').click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    (
+      Array.from(host().querySelectorAll('.mapping-entity-types button')).find((b) =>
+        b.textContent?.includes('Operators'),
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  }
+
+  it('chooses the till’s operator from the till’s own list, and says nothing when the till receives it (row 9.2c)', async () => {
+    await openOperators({
+      sourced: true,
+      detail: null,
+      entities: [
+        { externalId: '17', name: 'Aziza (till)', externalParentId: null },
+        { externalId: '18', name: 'Bobur (till)', externalParentId: null },
+      ],
+      horecaosCandidates: [{ id: 'member-1', name: 'Aziza Karimova' }],
+      receivedByProvider: true,
+    });
+
+    const rightInput = host().querySelector<HTMLInputElement>(
+      '[data-testid="q-mapping-pane-right"] [data-testid="q-combobox-input"]',
+    )!;
+    rightInput.value = '(till)';
+    rightInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const options = Array.from(
+      host().querySelectorAll(
+        '[data-testid="q-mapping-pane-right"] [data-testid="q-combobox-option"]',
+      ),
+    ).map((option) => option.textContent?.trim());
+    expect(options).toEqual(['Aziza (till)', 'Bobur (till)']);
+    expect(host().querySelector('[data-testid="mapping-operator-not-received"]')).toBeNull();
+  });
+
+  it('says “this till does not receive an operator yet” when it lists its users but its orders carry none, and still lets the pairing be made (row 9.2c)', async () => {
+    await openOperators({
+      sourced: true,
+      detail: null,
+      entities: [{ externalId: '17', name: 'Aziza (till)', externalParentId: null }],
+      horecaosCandidates: [{ id: 'member-1', name: 'Aziza Karimova' }],
+      receivedByProvider: false,
+    });
+
+    const note = host().querySelector('[data-testid="mapping-operator-not-received"]');
+    expect(note?.textContent).toContain('does not receive an operator yet');
+    expect(host().querySelector('[data-testid="q-mapping-pane-right"]')).not.toBeNull();
+  });
+
+  it('asks the question of operators only: another pairing never carries the note (row 9.2c)', async () => {
+    await openOperators({
+      sourced: false,
+      detail: 'typed in',
+      entities: [],
+      horecaosCandidates: [],
+      receivedByProvider: false,
+    });
+    (
+      Array.from(host().querySelectorAll('.mapping-entity-types button')).find((b) =>
+        b.textContent?.includes('Couriers'),
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host().querySelector('[data-testid="mapping-operator-not-received"]')).toBeNull();
   });
 
   it('links a pair through the pane, then reloads the mapping for the active entity type', async () => {

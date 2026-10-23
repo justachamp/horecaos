@@ -4,11 +4,74 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { I18n } from '../../../core/i18n/i18n';
-import { CaseDetail, RecoveryApi } from './recovery-api';
+import { Capability, SessionCapabilities } from '../../../core/auth/session-capabilities';
+import { CaseDetail, CompensationCandidates, MintedApologyCode, RecoveryApi } from './recovery-api';
 import { CloseIntent, RecoveryCaseDrawer } from './recovery-case-drawer';
 import { caseDetail, caseSummary, timelineEntry } from './recovery-fixtures.testing';
 
 const SCOPE = { tenantId: 'tenant-1', brandId: 'brand-1' };
+
+/** What exists for case-1's order and customer: two remedies (one already on a case) and two codes (one too). */
+function candidatesOf(overrides: Partial<CompensationCandidates> = {}): CompensationCandidates {
+  return {
+    orderId: 'order-1',
+    customerAccountId: 'customer-1',
+    remedies: [
+      {
+        refId: 'remedy-free',
+        label: 'ORDER_REFUND',
+        state: 'EXECUTED',
+        amountMinor: 45_000,
+        currency: 'UZS',
+        recordedAt: '2026-10-08T06:00:00Z',
+        taken: false,
+      },
+      {
+        refId: 'remedy-taken',
+        label: 'DELIVERY_FEE_REIMBURSEMENT',
+        state: 'RECORDED',
+        amountMinor: 12_000,
+        currency: 'UZS',
+        recordedAt: '2026-10-08T06:30:00Z',
+        taken: true,
+      },
+    ],
+    grants: [
+      {
+        grantId: 'grant-free',
+        benefitType: 'PERCENTAGE_OFF_ORDER',
+        value: 1_000,
+        currency: 'UZS',
+        status: 'ACTIVE',
+        sourceType: 'OPERATOR_MANUAL',
+        codeHint: 'K7Q2',
+        createdAt: '2026-10-08T06:00:00Z',
+        expiresAt: null,
+        taken: false,
+      },
+      {
+        grantId: 'grant-taken',
+        benefitType: 'FREE_DELIVERY',
+        value: 0,
+        currency: null,
+        status: 'REDEEMED',
+        sourceType: 'RECOVERY_CASE',
+        codeHint: 'ZZZ9',
+        createdAt: '2026-10-07T06:00:00Z',
+        expiresAt: null,
+        taken: true,
+      },
+    ],
+    ...overrides,
+  };
+}
+
+const MINTED: MintedApologyCode = {
+  grantId: 'grant-new',
+  plaintextCode: 'SORRY-8F3K-2M9Q',
+  codeHint: '2M9Q',
+  validFrom: '2026-10-14T05:00:00Z',
+};
 
 async function flush(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -22,23 +85,32 @@ describe('RecoveryCaseDrawer', () => {
     transition: ReturnType<typeof vi.fn>;
     addNote: ReturnType<typeof vi.fn>;
     attach: ReturnType<typeof vi.fn>;
+    candidates: ReturnType<typeof vi.fn>;
+    mintApologyCode: ReturnType<typeof vi.fn>;
   };
   let changed: ReturnType<typeof vi.fn<() => void>>;
 
   async function render(
     detail: CaseDetail | (() => Promise<CaseDetail>) = caseDetail(),
     intent: CloseIntent | null = null,
+    held: readonly Capability[] = [],
   ): Promise<void> {
     api = {
       detail: vi.fn(typeof detail === 'function' ? detail : async () => detail),
       transition: vi.fn().mockResolvedValue({}),
       addNote: vi.fn().mockResolvedValue('entry-1'),
       attach: vi.fn().mockResolvedValue({}),
+      candidates: vi.fn().mockResolvedValue(candidatesOf()),
+      mintApologyCode: vi.fn().mockResolvedValue(MINTED),
     };
     changed = vi.fn<() => void>();
     await TestBed.configureTestingModule({
       imports: [RecoveryCaseDrawer],
-      providers: [provideRouter([]), { provide: RecoveryApi, useValue: api }],
+      providers: [
+        provideRouter([]),
+        { provide: RecoveryApi, useValue: api },
+        { provide: SessionCapabilities, useValue: { has: (c: Capability) => held.includes(c) } },
+      ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
     fixture = TestBed.createComponent(RecoveryCaseDrawer);
@@ -338,13 +410,54 @@ describe('RecoveryCaseDrawer', () => {
       expect(el<HTMLButtonElement>('case-note-add').disabled).toBe(true);
     });
 
-    it('links a compensation by kind and identifier', async () => {
+    it('links a remedy picked from what exists for the order, never one typed in', async () => {
+      await render();
+
+      expect(api.candidates).toHaveBeenCalledWith(SCOPE, 'location-1', 'case-1');
+      const picker = el<HTMLSelectElement>('compensation-ref');
+      const options = [...picker.options].map((option) =>
+        option.textContent?.replace(/\s+/g, ' ').trim(),
+      );
+      // The placeholder, the free refund described in words, and not the remedy another case already holds.
+      expect(options).toHaveLength(2);
+      expect(options[1]).toContain('Refund');
+      expect(options[1]).toContain('executed');
+      expect(options.join(' ')).not.toContain('Delivery fee reimbursed');
+
+      picker.value = 'remedy-free';
+      picker.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      await click('compensation-attach');
+
+      expect(api.attach).toHaveBeenCalledWith(
+        SCOPE,
+        'location-1',
+        'case-1',
+        'ORDER_REMEDY',
+        'remedy-free',
+      );
+    });
+
+    it('offers the customer’s codes under the apology-code kind by their tail, never the code', async () => {
       await render();
 
       const kind = el<HTMLSelectElement>('compensation-kind');
       kind.value = 'BENEFIT_GRANT';
       kind.dispatchEvent(new Event('change'));
-      type('compensation-ref', ' grant-77 ');
+      fixture.detectChanges();
+
+      const picker = el<HTMLSelectElement>('compensation-ref');
+      const labels = [...picker.options].map((option) =>
+        option.textContent?.replace(/\s+/g, ' ').trim(),
+      );
+      expect(labels).toHaveLength(2);
+      expect(labels[1]).toContain('Percentage off the order');
+      expect(labels[1]).toContain('10%');
+      expect(labels[1]).toContain('…K7Q2');
+      expect(labels.join(' ')).not.toContain('ZZZ9');
+
+      picker.value = 'grant-free';
+      picker.dispatchEvent(new Event('change'));
       fixture.detectChanges();
       await click('compensation-attach');
 
@@ -353,9 +466,45 @@ describe('RecoveryCaseDrawer', () => {
         'location-1',
         'case-1',
         'BENEFIT_GRANT',
-        'grant-77',
+        'grant-free',
       );
-      expect(el<HTMLInputElement>('compensation-ref').value).toBe('');
+    });
+
+    it('will not link until something is chosen', async () => {
+      await render();
+
+      expect(el<HTMLButtonElement>('compensation-attach').disabled).toBe(true);
+    });
+
+    it('says when nothing is recorded for the order and points to the finance console for someone who can open it', async () => {
+      await render(caseDetail(), null, ['PAYMENT_READ']);
+      api.candidates.mockResolvedValue(candidatesOf({ remedies: [] }));
+      await click('compensation-refresh');
+
+      expect(el('compensation-none').textContent).toContain('No unlinked remedy');
+      const link = el<HTMLAnchorElement>('compensation-record-remedy');
+      expect(link.getAttribute('href')).toBe('/finance/payments?order=order-1');
+    });
+
+    it('does not link to the finance console for someone who cannot read payments there', async () => {
+      await render();
+
+      expect(host().querySelector('[data-testid="compensation-record-remedy"]')).toBeNull();
+      expect(el('compensation-record-remedy-denied').textContent).toContain('payments');
+    });
+
+    it('says the list could not be read, and reads it again on request', async () => {
+      await render();
+      api.candidates.mockRejectedValue(new ApiError(ApiErrorCode.INTERNAL_ERROR, 500, null, 'c-1'));
+      await click('compensation-refresh');
+
+      expect(host().querySelector('[data-testid="compensation-error"]')).not.toBeNull();
+      expect(host().querySelector('[data-testid="compensation-ref"]')).toBeNull();
+
+      api.candidates.mockResolvedValue(candidatesOf());
+      await click('compensation-refresh');
+      expect(host().querySelector('[data-testid="compensation-error"]')).toBeNull();
+      expect(host().querySelector('[data-testid="compensation-ref"]')).not.toBeNull();
     });
 
     it('lists what is linked, with the amount and currency of an order remedy', async () => {
@@ -401,11 +550,240 @@ describe('RecoveryCaseDrawer', () => {
         expect(host().querySelector(`[data-testid="${id}"]`), id).toBeNull();
       }
       expect(host().querySelector('[data-testid="compensation-attach"]')).toBeNull();
+      expect(host().querySelector('[data-testid="mint-open"]')).toBeNull();
+      expect(api.candidates).not.toHaveBeenCalled();
       expect(host().textContent).toContain('closed and cannot be changed');
     });
 
     it('still takes a note', () => {
       expect(host().querySelector('[data-testid="case-note-add"]')).not.toBeNull();
+    });
+  });
+
+  describe('issuing an apology code (D10)', () => {
+    async function openMintForm(
+      held: readonly Capability[] = ['PRICING_PROMOTION_MANAGE'],
+    ): Promise<void> {
+      await render(caseDetail(), null, held);
+      await click('mint-open');
+    }
+
+    function pick(testId: string, value: string): void {
+      const select = el<HTMLSelectElement>(testId);
+      select.value = value;
+      select.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+    }
+
+    it('offers no mint to someone without the promotions capability, and says why under the apology-code kind', async () => {
+      await render();
+      pick('compensation-kind', 'BENEFIT_GRANT');
+
+      expect(host().querySelector('[data-testid="mint-open"]')).toBeNull();
+      expect(el('mint-denied').textContent).toContain('promotions capability');
+      expect(api.mintApologyCode).not.toHaveBeenCalled();
+    });
+
+    it('mints a percentage in basis points for the case’s customer, sourced from the case', async () => {
+      await openMintForm();
+      pick('mint-shape', 'PERCENTAGE_OFF_ORDER');
+      type('mint-value', '10');
+      type('mint-basket', '50000');
+      type('mint-days', '14');
+      fixture.detectChanges();
+      const before = Date.now();
+      await click('mint-submit');
+
+      expect(api.mintApologyCode).toHaveBeenCalledTimes(1);
+      const [scope, input] = api.mintApologyCode.mock.calls[0];
+      expect(scope).toEqual(SCOPE);
+      expect(input).toMatchObject({
+        customerAccountId: 'customer-1',
+        shape: 'PERCENTAGE_OFF_ORDER',
+        value: 1_000,
+        currency: 'UZS',
+        minBasketMinor: 50_000,
+        sourceId: 'case-1',
+      });
+      const days = (new Date(input.expiresAt).getTime() - before) / 86_400_000;
+      expect(days).toBeGreaterThan(13.99);
+      expect(days).toBeLessThan(14.01);
+    });
+
+    it('mints a fixed amount in the order’s currency and previews it in words', async () => {
+      await openMintForm();
+      type('mint-value', '25000');
+      fixture.detectChanges();
+
+      expect(el('mint-preview').textContent).toContain('25');
+      await click('mint-submit');
+
+      expect(api.mintApologyCode.mock.calls[0][1]).toMatchObject({
+        shape: 'FIXED_AMOUNT_OFF_ORDER',
+        value: 25_000,
+        currency: 'UZS',
+        minBasketMinor: 0,
+      });
+    });
+
+    it('mints free delivery with no value and no currency', async () => {
+      await openMintForm();
+      pick('mint-shape', 'FREE_DELIVERY');
+
+      expect(host().querySelector('[data-testid="mint-value"]')).toBeNull();
+      await click('mint-submit');
+
+      expect(api.mintApologyCode.mock.calls[0][1]).toMatchObject({
+        shape: 'FREE_DELIVERY',
+        value: 0,
+        currency: null,
+      });
+    });
+
+    it('will not submit a percentage over 100, an empty amount, or a lifetime beyond a year', async () => {
+      await openMintForm();
+      expect(el<HTMLButtonElement>('mint-submit').disabled).toBe(true);
+
+      pick('mint-shape', 'PERCENTAGE_OFF_ORDER');
+      type('mint-value', '101');
+      fixture.detectChanges();
+      expect(el<HTMLButtonElement>('mint-submit').disabled).toBe(true);
+
+      type('mint-value', '100');
+      fixture.detectChanges();
+      expect(el<HTMLButtonElement>('mint-submit').disabled).toBe(false);
+
+      type('mint-days', '366');
+      fixture.detectChanges();
+      expect(el<HTMLButtonElement>('mint-submit').disabled).toBe(true);
+    });
+
+    it('shows the code once, reads the list again, preselects the new code, and forgets it when told', async () => {
+      await openMintForm();
+      api.candidates.mockResolvedValue(
+        candidatesOf({
+          grants: [
+            ...candidatesOf().grants,
+            {
+              grantId: 'grant-new',
+              benefitType: 'FIXED_AMOUNT_OFF_ORDER',
+              value: 25_000,
+              currency: 'UZS',
+              status: 'ACTIVE',
+              sourceType: 'RECOVERY_CASE',
+              codeHint: '2M9Q',
+              createdAt: '2026-10-14T05:00:00Z',
+              expiresAt: null,
+              taken: false,
+            },
+          ],
+        }),
+      );
+      type('mint-value', '25000');
+      fixture.detectChanges();
+      await click('mint-submit');
+
+      expect(el('minted-code-value').textContent).toContain('SORRY-8F3K-2M9Q');
+      expect(el<HTMLSelectElement>('compensation-kind').value).toBe('BENEFIT_GRANT');
+      expect(el<HTMLSelectElement>('compensation-ref').value).toBe('grant-new');
+      // The form is closed; the plaintext lives nowhere in the picker.
+      expect(host().querySelector('[data-testid="mint-form"]')).toBeNull();
+      expect(el<HTMLSelectElement>('compensation-ref').textContent).not.toContain('SORRY');
+
+      await click('minted-code-done');
+      expect(host().querySelector('[data-testid="minted-code"]')).toBeNull();
+      expect(host().textContent).not.toContain('SORRY-8F3K-2M9Q');
+    });
+
+    it('asks for the same expiry instant when an unchanged form is submitted again after a lost response', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(new Date('2026-10-23T05:00:00.000Z'));
+        await openMintForm();
+        api.mintApologyCode.mockRejectedValueOnce(
+          new ApiError(ApiErrorCode.NETWORK_UNREACHABLE, 0, null, 'c-3'),
+        );
+        type('mint-value', '25000');
+        type('mint-days', '14');
+        fixture.detectChanges();
+        await click('mint-submit');
+        expect(host().querySelector('[data-testid="mint-form"]')).not.toBeNull();
+
+        // A minute later the operator clicks again with nothing changed: the same request, not a new one.
+        vi.setSystemTime(new Date('2026-10-23T05:01:00.000Z'));
+        await click('mint-submit');
+
+        expect(api.mintApologyCode).toHaveBeenCalledTimes(2);
+        const first = api.mintApologyCode.mock.calls[0][1];
+        const retry = api.mintApologyCode.mock.calls[1][1];
+        expect(retry).toEqual(first);
+        expect(retry.expiresAt).toBe('2026-11-06T05:00:00.000Z');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('takes a new expiry instant once the form was edited after a lost response', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(new Date('2026-10-23T05:00:00.000Z'));
+        await openMintForm();
+        api.mintApologyCode.mockRejectedValueOnce(
+          new ApiError(ApiErrorCode.NETWORK_UNREACHABLE, 0, null, 'c-3'),
+        );
+        type('mint-value', '25000');
+        type('mint-days', '14');
+        fixture.detectChanges();
+        await click('mint-submit');
+
+        vi.setSystemTime(new Date('2026-10-23T05:01:00.000Z'));
+        type('mint-days', '7');
+        fixture.detectChanges();
+        await click('mint-submit');
+
+        expect(api.mintApologyCode.mock.calls[1][1].expiresAt).toBe('2026-10-30T05:01:00.000Z');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('takes a fresh expiry instant for the next code once one was issued', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(new Date('2026-10-23T05:00:00.000Z'));
+        await openMintForm();
+        type('mint-value', '25000');
+        type('mint-days', '14');
+        fixture.detectChanges();
+        await click('mint-submit');
+        await click('minted-code-done');
+
+        vi.setSystemTime(new Date('2026-10-23T06:00:00.000Z'));
+        await click('mint-open');
+        type('mint-value', '25000');
+        type('mint-days', '14');
+        fixture.detectChanges();
+        await click('mint-submit');
+
+        expect(api.mintApologyCode).toHaveBeenCalledTimes(2);
+        expect(api.mintApologyCode.mock.calls[1][1].expiresAt).toBe('2026-11-06T06:00:00.000Z');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('shows a refusal as a sentence and keeps the form open without a code', async () => {
+      await openMintForm();
+      api.mintApologyCode.mockRejectedValue(
+        new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, 'c-2'),
+      );
+      type('mint-value', '25000');
+      fixture.detectChanges();
+      await click('mint-submit');
+
+      expect(host().querySelector('[data-testid="minted-code"]')).toBeNull();
+      expect(host().querySelector('[data-testid="drawer-error"]')).not.toBeNull();
+      expect(host().querySelector('[data-testid="mint-form"]')).not.toBeNull();
     });
   });
 });

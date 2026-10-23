@@ -131,9 +131,13 @@ public class StaffPreferenceSchemas {
         byName.put(
                 StaffPreferenceSurface.SHELL,
                 new SurfaceDefinition(1, StaffPreferenceSchemas::validateShell, List.of()));
+        // Schema 2 (batch 21): courierEta, source, fiscal, distance and externalNumber join the column
+        // vocabulary. A document stores a change from the default and all five are off by default, so a
+        // schema-1 document means the same thing under schema 2 and the one upgrade step changes nothing.
         byName.put(
                 StaffPreferenceSurface.ORDER_BOARD,
-                new SurfaceDefinition(1, StaffPreferenceSchemas::validateOrderBoard, List.of()));
+                new SurfaceDefinition(
+                        2, StaffPreferenceSchemas::validateOrderBoard, List.of(UnaryOperator.identity())));
         return byName;
     }
 

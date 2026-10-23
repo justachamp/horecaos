@@ -225,6 +225,31 @@ Rollback is deleting the new endpoints and leaving the schema in place —
 - [ ] A staff-identity record and a capability-to-sentence label registry, so
       the access-check screen can show names and sentences instead of codes
 
+## Status addition, 2026-10-23 (batch 21, wave w10-privacy)
+
+This is a dated addition to the record, not a change to what it decided: the Decision, Alternatives considered and
+Consequences above stand as accepted. It records where later work has changed what they describe. The status line and the
+checklist are left for the documentation close-out.
+
+- **A per-tenant retention sweep now exists** (the second Alternatives row; the second Negative consequence). The row's revisit
+  condition, a tenant that sets a shorter window and means it, was taken as met under the owner's instruction to build
+  everything. `CartRetentionSweeper` and `CourierApplicantRetentionSweeper` sweep each tenant on its own window (its own value,
+  else the platform's, else the code default) raised to a floor of one day and one month, so a shorter value is honoured and is no
+  longer "silently ignored" for those two keys. Courier tracks keep the shared-partition rule: a shorter tenant value cannot
+  shorten what the others keep, and the legal floor stands. The retention card now says what each value does
+  (`GET /api/v1/operations/tenants/{tenantId}/retention-windows`: the effective window, the floor, shared or the tenant's own, and
+  whether the number is provisional). A production start is refused while a retention value is unconfirmed
+  (`ProvisionalRetentionGuard`, ADR 0029).
+- **Consent labels are a map.** `label_ru`, `label_uz` and `label_en` (V0289, NOT NULL) are replaced by
+  `customer.consent_type_translations` (V0683) over the languages the tenant's brands offer, with defaults seeded in all three live
+  languages, and the console reads the map in its own language, then the tenant's default, then any. The registry is still a reference
+  catalogue a tenant cannot author.
+- **`ConsentService.record` is still not constrained** (the first Negative consequence and the unchecked item below stand). What
+  exists is a check that can count and log, without the purpose, a decision recorded under an unregistered one, behind a flag that
+  defaults off; refusing waits for legal's answer on lawful basis per purpose (ADR 0029 Open input).
+- **The worklist now lists three kinds of request**, erasure, a copy of her data and a correction, with the day a copy is owed by.
+  It stays read-only; acting on a request happens on the customer's record, as the Accepted trade-off above says.
+
 ## Exit criteria
 
 A tenant manager can, from the operations console alone: see every

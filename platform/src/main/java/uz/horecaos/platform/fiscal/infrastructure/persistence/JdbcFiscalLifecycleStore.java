@@ -3,6 +3,7 @@ package uz.horecaos.platform.fiscal.infrastructure.persistence;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -56,6 +57,35 @@ public class JdbcFiscalLifecycleStore {
 
     public JdbcFiscalLifecycleStore(JdbcClient jdbc) {
         this.jdbc = jdbc;
+    }
+
+    /**
+     * The status of each order's fiscal document, one statement for a board page (gap map row {@code 1.1}'s
+     * optional «Ф» chip).
+     *
+     * <p>An order may carry a sale document, a refund and corrections; the chip answers «did the sale get
+     * its receipt», so the sale document wins and the newest document stands in for an order that has none
+     * (a refund-only record). The tenant is a predicate of the statement, and an order with no document is
+     * simply absent.
+     */
+    public java.util.Map<UUID, String> statusByOrders(UUID tenantId, java.util.Collection<UUID> orderIds) {
+        if (orderIds.isEmpty()) {
+            return java.util.Map.of();
+        }
+        java.util.Map<UUID, String> byOrder = new java.util.HashMap<>();
+        jdbc.sql("""
+                        SELECT DISTINCT ON (d.order_id) d.order_id, d.status
+                        FROM fiscal.fiscal_documents d
+                        WHERE d.tenant_id = :tenantId AND d.order_id IN (:orderIds)
+                        ORDER BY d.order_id, (d.document_type = 'SALE') DESC, d.created_at DESC, d.id DESC
+                        """)
+                .param("tenantId", tenantId)
+                .param("orderIds", orderIds)
+                .query((row, number) ->
+                        java.util.Map.entry(row.getObject("order_id", UUID.class), row.getString("status")))
+                .list()
+                .forEach(entry -> byOrder.put(entry.getKey(), entry.getValue()));
+        return byOrder;
     }
 
     /**
@@ -252,6 +282,13 @@ public class JdbcFiscalLifecycleStore {
      * of some status, including the ones that can only be blocked. An order that
      * kept reappearing would be the same defect as a sweep that never runs.
      *
+     * <p><strong>The tender is found through the settlement.</strong> {@code tender_id} was derived from
+     * {@code payments.tenders.payment_intent_id}, which nothing writes: the settlement plans its tenders with no
+     * intent and the intent is created after it, so every document the opener wrote kept NULL and the evidence could
+     * not link a tender to its receipt. A tender that does name the intent still wins; otherwise the order's one
+     * money tender is the leg the sale covers, and an order with two money legs and no link to tell them apart keeps
+     * none rather than a guess.
+     *
      * @param closedSince a floor on {@code closed_at}. An order that completed
      *                    before the fiscal module existed is not this sweep's to
      *                    open, and without the floor every run scans the whole
@@ -263,7 +300,26 @@ public class JdbcFiscalLifecycleStore {
                        o.total_minor, o.currency, o.closed_at,
                        COALESCE(l.timezone, :fallbackZone) AS business_zone,
                        i.id AS payment_intent_id, i.tender, i.provider_type,
-                       i.status AS intent_status
+                       i.status AS intent_status,
+                       -- The money tender this document will cover (ADR 0038, ADR 0166 Decision 2): the
+                       -- one tender that names the intent when a writer has linked them, else the one money
+                       -- tender of the order's settlement, and none when either is not unambiguous.
+                       -- Nothing in production sets payments.tenders.payment_intent_id (the tender is
+                       -- inserted by OrderSettlementService.plan with none, and the intent is created after
+                       -- it), so the first branch alone left tender_id NULL on every real document.
+                       COALESCE(
+                         (SELECT (array_agg(t.id))[1]
+                            FROM payments.tenders t
+                           WHERE t.tenant_id = o.tenant_id AND t.payment_intent_id = i.id
+                             AND NOT t.settles_from_balance
+                          HAVING count(*) = 1),
+                         (SELECT (array_agg(t.id))[1]
+                            FROM payments.order_settlements s
+                            JOIN payments.tenders t
+                              ON t.tenant_id = s.tenant_id AND t.settlement_id = s.id
+                           WHERE s.tenant_id = o.tenant_id AND s.order_id = o.id
+                             AND NOT t.settles_from_balance
+                          HAVING count(*) = 1)) AS tender_id
                 FROM ordering.orders o
                 LEFT JOIN payments.payment_intents i
                        ON i.tenant_id = o.tenant_id AND i.order_id = o.id
@@ -294,7 +350,8 @@ public class JdbcFiscalLifecycleStore {
                         row.getObject("payment_intent_id", UUID.class),
                         row.getString("tender"),
                         row.getString("provider_type"),
-                        row.getString("intent_status")))
+                        row.getString("intent_status"),
+                        row.getObject("tender_id", UUID.class)))
                 .list();
     }
 
@@ -329,14 +386,17 @@ public class JdbcFiscalLifecycleStore {
         parameters.put("reasonNote", document.reasonNote());
         parameters.put("blockedAt", document.state() == FiscalDocumentState.BLOCKED ? utc(document.openedAt()) : null);
         parameters.put("now", utc(document.openedAt()));
+        parameters.put("tenderId", document.tenderId());
+        parameters.put("businessDate", document.businessDate());
 
         return jdbc.sql("""
                 INSERT INTO fiscal.fiscal_documents (
                     id, tenant_id, order_id, legal_entity_id, payment_intent_id, provider_type,
                     document_type, status, reason_code, reason_note, blocked_at, attempt_count,
-                    version, created_at, updated_at)
+                    version, created_at, updated_at, tender_id, business_date)
                 VALUES (:id, :tenantId, :orderId, :legalEntityId, :paymentIntentId, :providerType,
-                    'SALE', :status, :reasonCode, :reasonNote, :blockedAt, 0, 1, :now, :now)
+                    'SALE', :status, :reasonCode, :reasonNote, :blockedAt, 0, 1, :now, :now,
+                    :tenderId, CAST(:businessDate AS date))
                 ON CONFLICT (tenant_id, order_id, tender_id)
                     WHERE document_type = 'SALE' DO NOTHING
                 """).params(parameters).update() == 1;
@@ -370,8 +430,12 @@ public class JdbcFiscalLifecycleStore {
                        ON l.tenant_id = d.tenant_id AND l.id = i.location_id
                 WHERE d.status = 'PENDING'
                   AND d.document_type = 'SALE'
-                  AND d.provider_type IS NOT NULL
-                  AND i.status = 'PAID'
+                  AND (
+                       -- A provider receipt waits for the capture it fiscalizes after.
+                       (d.provider_type IS NOT NULL AND i.status = 'PAID')
+                       -- A terminal receipt (a cash sale; ADR 0166 "Providers") has no capture to wait for:
+                       -- the opener wrote it when the order completed, which is when the cash was handed over.
+                       OR d.provider_type IS NULL)
                 ORDER BY d.created_at
                 LIMIT :limit
                 FOR UPDATE OF d SKIP LOCKED
@@ -492,6 +556,33 @@ public class JdbcFiscalLifecycleStore {
                 WHERE tenant_id = :tenantId AND id = :id
                   AND status IN ('PENDING', 'SUBMITTED')
                 """).params(parameters).update() == 1;
+    }
+
+    /**
+     * Restates why a document that is already blocked is blocked.
+     *
+     * <p>A retry that was refused for a different reason than the one the document carries (a document
+     * blocked before the receipt line builder existed, retried and now short of a classification) must not
+     * go on saying the old reason. {@code blocked_at} is not moved: how long the document has been waiting
+     * is still how long it has been waiting.
+     */
+    public boolean restateBlock(UUID tenantId, UUID documentId, String reasonCode, String reasonNote, Instant now) {
+        return jdbc.sql("""
+                UPDATE fiscal.fiscal_documents
+                SET reason_code = :reasonCode,
+                    reason_note = :reasonNote,
+                    version = version + 1,
+                    updated_at = :now
+                WHERE tenant_id = :tenantId AND id = :id AND status = 'BLOCKED'
+                  AND reason_code <> :reasonCode
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", documentId)
+                        .param("reasonCode", reasonCode)
+                        .param("reasonNote", reasonNote)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     public Optional<FiscalDocumentRow> find(UUID tenantId, UUID documentId) {
@@ -636,7 +727,8 @@ public class JdbcFiscalLifecycleStore {
             UUID paymentIntentId,
             String tender,
             String providerType,
-            String intentStatus) {
+            String intentStatus,
+            @Nullable UUID tenderId) {
 
         public boolean cash() {
             return "CASH".equals(tender);
@@ -677,7 +769,37 @@ public class JdbcFiscalLifecycleStore {
             FiscalDocumentState state,
             String reasonCode,
             String reasonNote,
-            Instant openedAt) {}
+            Instant openedAt,
+            @Nullable UUID tenderId,
+            @Nullable LocalDate businessDate) {
+
+        /** A document with neither snapshot, which is every document there was before they were taken. */
+        public NewFiscalDocument(
+                UUID id,
+                UUID tenantId,
+                UUID orderId,
+                @Nullable UUID legalEntityId,
+                UUID paymentIntentId,
+                String providerType,
+                FiscalDocumentState state,
+                String reasonCode,
+                String reasonNote,
+                Instant openedAt) {
+            this(
+                    id,
+                    tenantId,
+                    orderId,
+                    legalEntityId,
+                    paymentIntentId,
+                    providerType,
+                    state,
+                    reasonCode,
+                    reasonNote,
+                    openedAt,
+                    null,
+                    null);
+        }
+    }
 
     /** A document the sweep has claimed, with everything its deadline needs. */
     /**

@@ -22,8 +22,9 @@ import type {
 } from '../features/kitchen/kitchen-api';
 import { VduWall, VduWallPhase, WallboardVduFreshness } from '../wallboard-shell/vdu-wall';
 import { DeviceBoardError, DeviceBoardApi } from './device-board-api';
-import { DeviceClass } from './device-profile';
+import { DeviceClass, DeviceIdleMedia } from './device-profile';
 import { DeviceAuthError, DeviceSession } from './device-session';
+import { KioskIdleLoop } from './kiosk-idle-loop';
 import { TerminalSession } from './terminal-session';
 import { TerminalUnlock } from './terminal-unlock';
 
@@ -35,6 +36,8 @@ const STALE_THRESHOLD_MS = BOARD_POLL_MS * 3;
 const CLOCK_TICK_MS = 1_000;
 /** A kiosk re-reads its own record this often, which is also how the registry knows it is alive (ADR 0162, Decision 5). */
 const KIOSK_POLL_MS = 60_000;
+/** How long a kiosk shows each idle picture before the next (ADR 0187). */
+const IDLE_PICTURE_MS = 8_000;
 
 type ProfilePhase = 'idle' | 'loading' | 'failed';
 
@@ -86,7 +89,7 @@ interface EnrolmentState {
  */
 @Component({
   selector: 'app-device-shell',
-  imports: [TPipe, QQrCode, VduWall, TerminalUnlock],
+  imports: [TPipe, QQrCode, VduWall, TerminalUnlock, KioskIdleLoop],
   templateUrl: './device-shell.html',
   styleUrl: './device-shell.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -113,6 +116,21 @@ export class DeviceShell implements OnInit {
   /** Whether the server enrolled this device as a kiosk (ADR 0162): it pairs and shows its status, and nothing else yet. */
   protected readonly isKiosk = computed(() => this.profile()?.deviceClass === 'KIOSK');
   protected readonly kioskChannel = computed(() => this.profile()?.kiosk ?? null);
+
+  /** The pictures the kiosk's channel plays while nobody is ordering, in order (ADR 0187); empty until the platform lists some. */
+  protected readonly idleMedia = signal<readonly DeviceIdleMedia[]>([]);
+  private readonly idleIndex = signal(0);
+  /**
+   * The picture on screen now, or null: no list, or a channel that is switched off here (a kiosk that cannot sell says so
+   * on its status screen and does not paper over it with a loop).
+   */
+  protected readonly idlePicture = computed<DeviceIdleMedia | null>(() => {
+    const pictures = this.idleMedia();
+    if (pictures.length === 0 || this.kioskChannel()?.channelStatus !== 'ACTIVE') {
+      return null;
+    }
+    return pictures[this.idleIndex() % pictures.length];
+  });
 
   /** The unlock screen is open on request (`PERSON_OPTIONAL`, or a PIN change); `PERSON_REQUIRED` opens it by itself. */
   protected readonly unlockOpen = signal(false);
@@ -208,6 +226,7 @@ export class DeviceShell implements OnInit {
   private wallInterval: ReturnType<typeof setInterval> | null = null;
   private clockInterval: ReturnType<typeof setInterval> | null = null;
   private kioskInterval: ReturnType<typeof setInterval> | null = null;
+  private idleInterval: ReturnType<typeof setInterval> | null = null;
   private enrolClock: ReturnType<typeof setInterval> | null = null;
   private lastProfileReadAt = 0;
   private lastRosterReadAt = 0;
@@ -295,12 +314,50 @@ export class DeviceShell implements OnInit {
   private startKioskPoll(): void {
     this.stopKioskPoll();
     this.kioskInterval = setInterval(() => void this.refreshKiosk(), KIOSK_POLL_MS);
+    // The pictures are read at once, not a minute from now: a kiosk that has just been switched on should not sit
+    // on «Ready» for a minute in front of a lobby.
+    void this.refreshIdleMedia();
+    this.idleInterval = setInterval(
+      () => this.idleIndex.update((index) => index + 1),
+      IDLE_PICTURE_MS,
+    );
   }
 
   private stopKioskPoll(): void {
     if (this.kioskInterval !== null) {
       clearInterval(this.kioskInterval);
       this.kioskInterval = null;
+    }
+    if (this.idleInterval !== null) {
+      clearInterval(this.idleInterval);
+      this.idleInterval = null;
+    }
+  }
+
+  /** A kiosk that is revoked, reset or re-paired starts from no pictures: the next channel's are its own. */
+  private forgetIdleMedia(): void {
+    this.idleMedia.set([]);
+    this.idleIndex.set(0);
+  }
+
+  /** The idle pictures, as the platform lists them now. A failed read keeps the last list on screen; the next minute asks again. */
+  private async refreshIdleMedia(): Promise<void> {
+    const scope = this.session.setup();
+    if (!scope) {
+      return;
+    }
+    try {
+      const configuration = await this.boardApi.kioskConfiguration(scope);
+      const before = this.idleMedia();
+      const same =
+        before.length === configuration.idleMedia.length &&
+        before.every((picture, index) => picture.id === configuration.idleMedia[index].id);
+      if (!same) {
+        this.idleMedia.set(configuration.idleMedia);
+        this.idleIndex.set(0);
+      }
+    } catch {
+      // Keep what is playing. A refusal of the grant is caught by the record read beside this one.
     }
   }
 
@@ -313,7 +370,9 @@ export class DeviceShell implements OnInit {
         this.forgetEverything();
       }
       // Any other failure keeps the last status on screen; the next minute asks again.
+      return;
     }
+    await this.refreshIdleMedia();
   }
 
   // ---------------------------------------------------------------------
@@ -428,6 +487,7 @@ export class DeviceShell implements OnInit {
     this.stopBoardPoll();
     this.stopWallPoll();
     this.stopKioskPoll();
+    this.forgetIdleMedia();
     this.session.forgetCredential();
     void this.terminal.lock();
     this.profilePhase.set('idle');
@@ -667,6 +727,7 @@ export class DeviceShell implements OnInit {
     this.stopBoardPoll();
     this.stopWallPoll();
     this.stopKioskPoll();
+    this.forgetIdleMedia();
     void this.terminal.lock();
     this.session.forgetCredential();
     this.session.clearSetup();

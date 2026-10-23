@@ -73,7 +73,7 @@
 }
 
 .referrals__table th {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
@@ -88,7 +88,7 @@
 }
 
 .referrals__action-col {
-  text-align: right;
+  text-align: end;
   display: flex;
   gap: 6px;
   justify-content: flex-end;

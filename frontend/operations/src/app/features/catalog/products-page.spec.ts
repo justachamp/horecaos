@@ -11,6 +11,7 @@ import { CurrentBrand } from '../../core/auth/current-brand';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n, Locale } from '../../core/i18n/i18n';
 import { LocaleSet } from '../../core/i18n/locale-set';
+import { ShortcutRegistry } from '../../shared/keyboard/shortcut-registry';
 import { CatalogApi, ProductListFilters } from './catalog-api';
 import { CatalogSummary, CategorySummary, ProductSummary } from './catalog-domain';
 import { ProductsPage } from './products-page';
@@ -851,6 +852,38 @@ describe('ProductsPage', () => {
     expect(summary?.textContent).toContain('12');
   });
 
+  it('opens the fiscal workbench straight away when the fiscalization settings hand a node off with ?workbench=fiscal', async () => {
+    configure({
+      listCatalogs: () => of(FAKE_CATALOGS),
+      listProducts: () =>
+        of({ items: [product({ productId: 'p1', hasMxik: false })], nextCursor: null }),
+      fiscalCoverage: () => of({ totalNodes: 3, unclassifiedCount: 1, nodes: [] }),
+    });
+
+    const harness = await RouterTestingHarness.create('/catalog/products?workbench=fiscal');
+    await flushMicrotasks();
+    harness.detectChanges();
+    const host = harness.routeNativeElement!;
+
+    expect(host.querySelector('[data-testid="fiscal-workbench-summary"]')).not.toBeNull();
+  });
+
+  it('does not open the workbench on a plain visit', async () => {
+    configure({
+      listCatalogs: () => of(FAKE_CATALOGS),
+      listProducts: () => of({ items: [product({ productId: 'p1' })], nextCursor: null }),
+      fiscalCoverage: () => of({ totalNodes: 3, unclassifiedCount: 1, nodes: [] }),
+    });
+
+    const harness = await RouterTestingHarness.create('/catalog/products');
+    await flushMicrotasks();
+    harness.detectChanges();
+
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="fiscal-workbench-summary"]'),
+    ).toBeNull();
+  });
+
   it('bulk-classifies through the fiscal workbench’s grid in one call and refreshes the coverage', async () => {
     const bulkClassify = vi
       .fn()
@@ -916,5 +949,156 @@ describe('ProductsPage', () => {
       ]),
     );
     expect(fiscalCoverage).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('ProductsPage: the keys (catalog.md §4.1, gap map row X.1)', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function key(value: string, target?: HTMLElement): boolean {
+    const event = new KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'target', {
+      value: target ?? document.activeElement ?? document.body,
+    });
+    return TestBed.inject(ShortcutRegistry).dispatch(event);
+  }
+
+  // In the order the table draws them: it sorts by name.
+  const two = [
+    product({ productId: 'p1', name: 'Лагман', code: 'LAGMAN' }),
+    product({ productId: 'p2', name: 'Плов' }),
+  ];
+
+  async function open(items: readonly ProductSummary[] = two): Promise<HTMLElement> {
+    configure({
+      listCatalogs: () => of(FAKE_CATALOGS),
+      listProducts: () => of({ items, nextCursor: null }),
+    });
+    const harness = await RouterTestingHarness.create('/catalog/products');
+    await flushMicrotasks();
+    harness.detectChanges();
+    return harness.routeNativeElement!;
+  }
+
+  const rows = (host: HTMLElement): HTMLElement[] => [
+    ...host.querySelectorAll<HTMLElement>('tbody tr[data-testid="dt-row"]'),
+  ];
+
+  it('is on the cheat-sheet while the list is, and gone with it', async () => {
+    const host = await open();
+    expect(host).toBeTruthy();
+    const scope = TestBed.inject(ShortcutRegistry)
+      .scopes()
+      .find((candidate) => candidate.id === 'catalog-products')!;
+
+    expect(scope.title()).toBe('Товары');
+    expect(scope.shortcuts.flatMap((shortcut) => shortcut.caps)).toEqual([
+      '/',
+      'j',
+      '↓',
+      'k',
+      '↑',
+      'Enter',
+      'e',
+      'Space',
+      'c',
+      'Esc',
+    ]);
+  });
+
+  it('/ goes to the search box, and j, k and the arrows move the row cursor', async () => {
+    const host = await open();
+
+    expect(key('/', document.body)).toBe(true);
+    expect(document.activeElement).toBe(host.querySelector('[data-testid="products-search"]'));
+    (document.activeElement as HTMLElement).blur();
+
+    key('j');
+    expect(document.activeElement).toBe(rows(host)[0]);
+    key('ArrowDown');
+    expect(document.activeElement).toBe(rows(host)[1]);
+    key('k');
+    expect(document.activeElement).toBe(rows(host)[0]);
+  });
+
+  it('Enter and e open the editor of the product the cursor is on', async () => {
+    const host = await open();
+    key('j');
+    key('j');
+
+    expect(key('Enter')).toBe(true);
+    await flushMicrotasks();
+    expect(TestBed.inject(Router).url).toBe('/catalog/products/p2');
+
+    await TestBed.inject(Router).navigateByUrl('/catalog/products');
+    await flushMicrotasks();
+    const again = rows(host);
+    expect(again.length).toBeGreaterThan(0);
+    key('j', document.body);
+    expect(key('e')).toBe(true);
+    await flushMicrotasks();
+    expect(TestBed.inject(Router).url).toBe('/catalog/products/p1');
+  });
+
+  it('Space ticks the row for a bulk action, and Esc clears the ticks', async () => {
+    const host = await open();
+    key('j');
+
+    expect(key(' ')).toBe(true);
+    await flushMicrotasks();
+
+    expect(host.querySelector('[data-testid="dt-bulk-bar"]')).not.toBeNull();
+    (document.activeElement as HTMLElement).focus();
+    expect(key('Escape', document.body)).toBe(true);
+    await flushMicrotasks();
+    expect(host.querySelector('[data-testid="dt-bulk-bar"]')).toBeNull();
+  });
+
+  it('c copies the id of the product the cursor is on through the row menu', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    await open();
+    key('j');
+    key('j');
+
+    expect(key('c')).toBe(true);
+
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('p2'));
+  });
+
+  it('c does nothing while the cursor is on no row', async () => {
+    await open();
+
+    expect(key('c', document.body)).toBe(false);
+  });
+
+  it('Esc in the search box empties it, and a second Esc lets go of it', async () => {
+    const host = await open();
+    const search = host.querySelector<HTMLInputElement>('[data-testid="products-search"]')!;
+    search.focus();
+    search.value = 'Лаг';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(key('Escape', search)).toBe(true);
+    expect(search.value).toBe('');
+    expect(document.activeElement).toBe(search);
+
+    key('Escape', search);
+    expect(document.activeElement).not.toBe(search);
+  });
+
+  it('leaves a letter typed in the search box to the box', async () => {
+    const host = await open();
+    const search = host.querySelector<HTMLInputElement>('[data-testid="products-search"]')!;
+    search.focus();
+
+    expect(key('j', search)).toBe(false);
+    expect(key('c', search)).toBe(false);
   });
 });

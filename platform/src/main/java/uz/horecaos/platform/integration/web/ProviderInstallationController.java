@@ -255,6 +255,12 @@ public class ProviderInstallationController {
         return value == null ? null : OffsetDateTime.parse(value);
     }
 
+    /**
+     * Provider types whose installation is HorecaOS's own (ADR 0095, ADR 0096), never a tenant's.
+     */
+    private static final java.util.Set<String> PLATFORM_OWNED_PROVIDER_TYPES =
+            java.util.Set.of("CLICK_CARD", "DIDOX", "FAKTURA_UZ");
+
     @PostMapping
     @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, mutating = true)
     @Operation(
@@ -276,6 +282,17 @@ public class ProviderInstallationController {
                     ErrorCode.INVALID_REQUEST,
                     "A routing installation is created by choosing \"use platform routing\" on a ROAD "
                             + "delivery tariff, not through this door");
+        }
+
+        if (PLATFORM_OWNED_PROVIDER_TYPES.contains(
+                request.providerType().strip().toUpperCase(java.util.Locale.ROOT))) {
+            // HorecaOS's own accounts (the card merchant account of ADR 0095, the e-invoicing operators of ADR
+            // 0096) are platform installations declared in the control plane. Their approved environments live in
+            // the same catalogue as the tenants', and nothing but this check keeps a tenant from installing one
+            // of them by name: an installation no adapter would ever answer for, pointed at HorecaOS's endpoint.
+            throw new ApiException(
+                    ErrorCode.INVALID_REQUEST,
+                    "That provider is HorecaOS's own account and is not installed by a tenant");
         }
 
         // Category alone used to be the whole check, so a request could name any
@@ -808,7 +825,8 @@ public class ProviderInstallationController {
     @Operation(summary = "List an installation's bindings")
     List<BindingView> bindings(@PathVariable UUID tenantId, @PathVariable UUID installationId) {
         return jdbc.sql("""
-                SELECT b.id, b.brand_id, b.location_id, b.status, b.priority, b.effective_from, b.effective_until
+                SELECT b.id, b.brand_id, b.location_id, b.status, b.priority, b.effective_from, b.effective_until,
+                       b.version, b.marketplace_ruleset_code
                   FROM integration.bindings b
                  WHERE b.tenant_id = :tenantId AND b.installation_id = :installationId
                  ORDER BY b.created_at DESC
@@ -822,7 +840,9 @@ public class ProviderInstallationController {
                         rs.getString("status"),
                         rs.getInt("priority"),
                         rs.getObject("effective_from", OffsetDateTime.class),
-                        rs.getObject("effective_until", OffsetDateTime.class)))
+                        rs.getObject("effective_until", OffsetDateTime.class),
+                        rs.getLong("version"),
+                        rs.getString("marketplace_ruleset_code")))
                 .list();
     }
 
@@ -1307,7 +1327,12 @@ public class ProviderInstallationController {
             String status,
             int priority,
             OffsetDateTime effectiveFrom,
-            @Nullable OffsetDateTime effectiveUntil) {}
+            @Nullable OffsetDateTime effectiveUntil,
+            // The binding's version, which a writer of the binding quotes in If-Match (ADR 0031).
+            long version,
+            // ADR 0138: the marketplace ruleset a MARKETPLACE binding names, or null (the universal rules
+            // alone); always null for any other category.
+            @Nullable String marketplaceRulesetCode) {}
 
     /**
      * One branch, one capability, one resolved winner (gap-map row 10.8a).

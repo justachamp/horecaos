@@ -73,6 +73,10 @@ class MigrationImportSuppressionTests {
             // import is the import doing its job, not a publication a consumer of content.events needs
             // to hear about as if an operator had just made it.
             Map.entry("integration/outbox/ContentOutboxEventListener.java", ExternalEffect.OUTBOX_PUBLICATION),
+            // ADR 0138 / ADR 0180's CatalogDraftChanged, same footing: a catalog brought in by an import is a
+            // bulk write that must not announce itself to every consumer of catalog.events as if an operator
+            // had just edited each product.
+            Map.entry("integration/outbox/CatalogOutboxEventListener.java", ExternalEffect.OUTBOX_PUBLICATION),
             Map.entry("notifications/application/OrderNotificationTrigger.java", ExternalEffect.CUSTOMER_NOTIFICATION),
             // The outbound half, and a different effect from the trigger above for
             // the same reason POS splits its two: not writing an intent is a

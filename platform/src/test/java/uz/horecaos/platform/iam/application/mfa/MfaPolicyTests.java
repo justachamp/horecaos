@@ -26,6 +26,12 @@ class MfaPolicyTests {
     private final Map<UUID, Set<String>> tenantRoles = new HashMap<>();
     private final Map<UUID, MfaRequirementMode> modes = new HashMap<>();
 
+    /** The tenant jobs the fixture's tenant has defined, by code, and what each carries (ADR 0186). */
+    private final Map<String, Set<String>> tenantJobs = new HashMap<>();
+
+    /** Every code the policy asked the facts about, so a test can say the OFF path never reads a job. */
+    private final java.util.List<String> jobLookups = new java.util.ArrayList<>();
+
     private MfaPolicy policy(String enforcement) {
         StaffAccountFacts facts = new StaffAccountFacts() {
             @Override
@@ -36,6 +42,18 @@ class MfaPolicyTests {
             @Override
             public Map<UUID, Set<String>> rolesByTenant(String subject) {
                 return PERSON.equals(subject) ? tenantRoles : Map.of();
+            }
+
+            @Override
+            public Map<String, Set<String>> tenantJobCapabilities(UUID tenantId, Set<String> roleCodes) {
+                jobLookups.addAll(roleCodes);
+                Map<String, Set<String>> found = new HashMap<>();
+                for (String code : roleCodes) {
+                    if (tenantJobs.containsKey(code)) {
+                        found.put(code, tenantJobs.get(code));
+                    }
+                }
+                return found;
             }
 
             @Override
@@ -182,6 +200,99 @@ class MfaPolicyTests {
         assertThat(policy("PROMPT").requirementFor(PERSON, false)).isEqualTo(Requirement.REQUIRED);
         modes.put(TENANT, MfaRequirementMode.OFF);
         assertThat(policy("PROMPT").requirementFor(PERSON, false)).isEqualTo(Requirement.OFFERED);
+    }
+
+    // ------------------------------------------------ a job the company composed (ADR 0186)
+
+    private static final String FINANCIER = "job-3f9a1c0b2d";
+    private static final String CASHIER = "job-8c01d7e5a4";
+
+    @Test
+    @DisplayName("SENSITIVE_ROLES asks the holder of a company-made job that carries a power only sensitive jobs carry")
+    void aCompanyMadeJobCarryingMoneyIsAsked() {
+        modes.put(TENANT, MfaRequirementMode.SENSITIVE_ROLES);
+        // 'tenant-finance' copied without its iam.* rows and renamed: the powers are the finance job's.
+        Set<String> financeWithoutIam = new java.util.TreeSet<>();
+        for (var capability : PlatformRole.TENANT_FINANCE.capabilities()) {
+            if (!capability.resourceType().equals("iam")
+                    && !capability.resourceType().equals("platform")) {
+                financeWithoutIam.add(capability.code());
+            }
+        }
+        tenantJobs.put(FINANCIER, financeWithoutIam);
+        tenantRoles.put(TENANT, Set.of(FINANCIER));
+
+        assertThat(policy("OFF").requirementFor(PERSON, false))
+                .as("a colleague holding the code-owned tenant-finance is asked, and so is the holder of its copy")
+                .isEqualTo(Requirement.REQUIRED);
+    }
+
+    @Test
+    @DisplayName("a company-made job carrying one approval of money is enough, among otherwise ordinary powers")
+    void oneSensitivePowerIsEnough() {
+        modes.put(TENANT, MfaRequirementMode.SENSITIVE_ROLES);
+        tenantJobs.put(FINANCIER, Set.of("order.read", "order.cancel", "refund.approve"));
+        tenantRoles.put(TENANT, Set.of(FINANCIER));
+
+        assertThat(policy("OFF").requirementFor(PERSON, false)).isEqualTo(Requirement.REQUIRED);
+    }
+
+    @Test
+    @DisplayName("a company-made job of ordinary powers asks nobody, as the code-owned cook and cashier do not")
+    void aCompanyMadeJobOfOrdinaryPowersIsNotAsked() {
+        modes.put(TENANT, MfaRequirementMode.SENSITIVE_ROLES);
+        // Every one of these a branch manager, who is not sensitive, already holds.
+        tenantJobs.put(CASHIER, Set.of("order.read", "order.cancel", "refund.request", "customer.pii.reveal"));
+        tenantRoles.put(TENANT, Set.of(CASHIER));
+
+        assertThat(policy("OFF").requirementFor(PERSON, false)).isEqualTo(Requirement.NOT_REQUIRED);
+    }
+
+    @Test
+    @DisplayName("a company-made job whose capabilities could not be read is asked, not waved through")
+    void aJobWhoseCapabilitiesAreNotKnownIsAsked() {
+        modes.put(TENANT, MfaRequirementMode.SENSITIVE_ROLES);
+        tenantRoles.put(TENANT, Set.of(CASHIER));
+
+        assertThat(policy("OFF").requirementFor(PERSON, false))
+                .as("the facts know no such job: a read that RLS or a join cut short must not read as 'ordinary'")
+                .isEqualTo(Requirement.REQUIRED);
+
+        tenantJobs.put(CASHIER, Set.of());
+        assertThat(policy("OFF").requirementFor(PERSON, false))
+                .as("a job that carries nothing cannot be written, so it is a cut-short answer too")
+                .isEqualTo(Requirement.REQUIRED);
+
+        tenantJobs.put(CASHIER, Set.of("order.read", "a.capability.the.build.no.longer.declares"));
+        assertThat(policy("OFF").requirementFor(PERSON, false)).isEqualTo(Requirement.REQUIRED);
+    }
+
+    @Test
+    @DisplayName("the tenant's other settings are unchanged by a company-made job: OFF asks nobody and reads no job")
+    void aCompanyMadeJobDoesNotChangeTheOtherModes() {
+        tenantJobs.put(FINANCIER, Set.of("refund.approve"));
+        tenantRoles.put(TENANT, Set.of(FINANCIER));
+
+        modes.put(TENANT, MfaRequirementMode.OFF);
+        assertThat(policy("OFF").requirementFor(PERSON, false)).isEqualTo(Requirement.NOT_REQUIRED);
+        assertThat(jobLookups).as("OFF has no use for what a job carries").isEmpty();
+
+        tenantJobs.put(CASHIER, Set.of("order.read"));
+        tenantRoles.put(TENANT, Set.of(CASHIER));
+        modes.put(TENANT, MfaRequirementMode.ALL_STAFF);
+        assertThat(policy("OFF").requirementFor(PERSON, false)).isEqualTo(Requirement.REQUIRED);
+        assertThat(jobLookups).as("nor has ALL_STAFF").isEmpty();
+    }
+
+    @Test
+    @DisplayName("a code-owned sensitive job short-circuits: the policy asks the facts about company-made jobs only")
+    void codeOwnedJobsAreNotLookedUp() {
+        modes.put(TENANT, MfaRequirementMode.SENSITIVE_ROLES);
+        tenantJobs.put(CASHIER, Set.of("order.read"));
+        tenantRoles.put(TENANT, Set.of(code(PlatformRole.LOCATION_STAFF), CASHIER));
+
+        assertThat(policy("OFF").requirementFor(PERSON, false)).isEqualTo(Requirement.NOT_REQUIRED);
+        assertThat(jobLookups).containsExactly(CASHIER);
     }
 
     @Test

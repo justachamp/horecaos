@@ -442,6 +442,27 @@ public class ContentOperationsController {
                 reason(body.reason()));
     }
 
+    @PutMapping("/policies/layout")
+    @RequiresCapability(value = Capability.CONTENT_MANAGE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Publish the next version of storefront.layout",
+            description = "STANDARD (today's category navigation) or MARKETPLACE (a compact category strip and an "
+                    + "all-categories overlay), for the brand. Dark: nothing sets it until a tenant that runs a "
+                    + "marketplace asks (ADR 0183 D17). Requires If-Match carrying the policy version last read.")
+    public Policies setLayoutPolicy(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @Valid @RequestBody LayoutPolicyRequest body,
+            HttpServletRequest request) {
+        return policies.setLayout(
+                tenantId,
+                brandId,
+                actor(),
+                Math.toIntExact(AggregateVersion.requireIfMatch(request)),
+                body.layout(),
+                reason(body.reason()));
+    }
+
     // ================================================================ helpers
 
     private String actor() {
@@ -551,6 +572,11 @@ public class ContentOperationsController {
             @Nullable @Size(max = 1000) String reason) {}
 
     public record HostResponse(String host) {}
+
+    /** @param layout {@code STANDARD} or {@code MARKETPLACE} */
+    public record LayoutPolicyRequest(
+            @NotBlank String layout,
+            @Nullable @Size(max = 500) String reason) {}
 
     public record PublishingPolicyRequest(
             @Nullable Boolean requireAllBrandLocales,

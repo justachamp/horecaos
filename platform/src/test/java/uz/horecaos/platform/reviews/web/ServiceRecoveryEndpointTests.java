@@ -377,6 +377,122 @@ class ServiceRecoveryEndpointTests {
     }
 
     @Test
+    @DisplayName("the worklist can be filtered by the rating of the review, on the brand and on the branch")
+    void theRatingFilterOverHttp() throws Exception {
+        UUID oneStar = openCase("RC-ONE", CHILONZOR);
+        MvcResult rated = submit(completedOrder("RC-TWO", CHILONZOR), 2, COMMENT, List.of(), false);
+        assertThat(rated.getResponse().getStatus()).isEqualTo(200);
+        UUID twoStars = jdbc.sql("SELECT id FROM reviews.recovery_cases WHERE review_id = :review")
+                .param(
+                        "review",
+                        UUID.fromString(JSON.readTree(rated.getResponse().getContentAsString())
+                                .path("id")
+                                .asText()))
+                .query(UUID.class)
+                .single();
+
+        assertThat(listIds(BRAND_MANAGER, brandCases() + "?minRating=2&maxRating=2"))
+                .containsExactly(twoStars.toString());
+        assertThat(listIds(BRAND_MANAGER, brandCases() + "?maxRating=1")).containsExactly(oneStar.toString());
+        assertThat(listIds(BRAND_MANAGER, brandCases() + "?minRating=1&maxRating=2"))
+                .containsExactlyInAnyOrder(oneStar.toString(), twoStars.toString());
+        assertThat(listIds(CHI_MANAGER, locationCases(CHILONZOR) + "?minRating=2"))
+                .as("the branch's own list takes the same filter")
+                .containsExactly(twoStars.toString());
+        assertThat(listIds(BRAND_MANAGER, brandCases() + "?minRating=4")).isEmpty();
+        assertThat(getAs(BRAND_MANAGER, brandCases() + "?minRating=0")
+                        .getResponse()
+                        .getStatus())
+                .as("a bound outside one to five is refused, not answered with a list that looks like a quiet week")
+                .isEqualTo(400);
+        assertThat(getAs(BRAND_MANAGER, brandCases() + "?minRating=4&maxRating=2")
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("a case worker without the payment console's capability still sees the order's remedies and the"
+            + " customer's codes in the drawer's picker, and never a code")
+    void theCompensationPickerOverHttp() throws Exception {
+        UUID orderId = completedOrder("RC-PICK", CHILONZOR);
+        MvcResult rated = submit(orderId, 1, COMMENT, List.of(), false);
+        UUID caseId = jdbc.sql("SELECT id FROM reviews.recovery_cases WHERE review_id = :review")
+                .param(
+                        "review",
+                        UUID.fromString(JSON.readTree(rated.getResponse().getContentAsString())
+                                .path("id")
+                                .asText()))
+                .query(UUID.class)
+                .single();
+        UUID remedy = remedyOf(orderId, 45_000);
+        remedyOf(completedOrder("RC-OTHER", CHILONZOR), 10_000);
+        MvcResult minted = mvc.perform(post("/api/v1/operations/tenants/" + TENANT + "/brands/" + BRAND
+                                + "/benefit-grants")
+                        .with(token(OWNER))
+                        .header("Idempotency-Key", key())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(("{\"customerAccountId\":\"%s\",\"shape\":\"FIXED_AMOUNT_OFF_ORDER\",\"value\":20000,"
+                                        + "\"currency\":\"UZS\",\"minBasketMinor\":0,\"sourceType\":\"RECOVERY_CASE\","
+                                        + "\"sourceId\":\"%s\"}")
+                                .formatted(OrderBoardFixtures.customerOf(TENANT), caseId)))
+                .andReturn();
+        assertThat(minted.getResponse().getStatus()).isEqualTo(201);
+        JsonNode mintedBody = JSON.readTree(minted.getResponse().getContentAsString());
+        String grantId = mintedBody.path("grantId").asText();
+        String plaintext = mintedBody.path("plaintextCode").asText();
+        String picker = locationCases(CHILONZOR) + "/" + caseId + "/compensation-candidates";
+
+        MvcResult asSupport = getAs(SUPPORT, picker);
+
+        assertThat(asSupport.getResponse().getStatus()).isEqualTo(200);
+        JsonNode body = JSON.readTree(asSupport.getResponse().getContentAsString());
+        assertThat(body.path("orderId").asText()).isEqualTo(orderId.toString());
+        assertThat(body.path("customerAccountId").asText())
+                .isEqualTo(OrderBoardFixtures.customerOf(TENANT).toString());
+        assertThat(body.path("remedies"))
+                .as("this order's remedy only, not the other order's")
+                .hasSize(1);
+        assertThat(body.path("remedies").get(0).path("refId").asText()).isEqualTo(remedy.toString());
+        assertThat(body.path("remedies").get(0).path("amountMinor").asLong()).isEqualTo(45_000L);
+        assertThat(body.path("remedies").get(0).path("label").asText()).isEqualTo("ORDER_REFUND");
+        assertThat(body.path("remedies").get(0).path("taken").asBoolean()).isFalse();
+        assertThat(body.path("grants")).hasSize(1);
+        assertThat(body.path("grants").get(0).path("grantId").asText()).isEqualTo(grantId);
+        assertThat(body.path("grants").get(0).path("benefitType").asText()).isEqualTo("FIXED_AMOUNT_OFF_ORDER");
+        assertThat(body.path("grants").get(0).path("value").asLong()).isEqualTo(20_000L);
+        assertThat(asSupport.getResponse().getContentAsString())
+                .as("the picker lists a code by its last characters and never the code")
+                .doesNotContain(plaintext);
+
+        assertThat(postAs(
+                                SUPPORT,
+                                locationCases(CHILONZOR) + "/" + caseId + "/compensations",
+                                "{\"kind\":\"ORDER_REMEDY\",\"refId\":\"%s\"}".formatted(remedy))
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(201);
+        JsonNode after = JSON.readTree(getAs(SUPPORT, picker).getResponse().getContentAsString());
+        assertThat(after.path("remedies").get(0).path("taken").asBoolean())
+                .as("once linked it is marked, so the picker never offers a conflict")
+                .isTrue();
+
+        assertThat(getAs(COOK, picker).getResponse().getStatus())
+                .as("the line holds no recovery capability")
+                .isEqualTo(403);
+        assertThat(getAs(CHI_MANAGER, locationCases(YUNUSOBOD) + "/" + caseId + "/compensation-candidates")
+                        .getResponse()
+                        .getStatus())
+                .as("another branch's route is refused")
+                .isEqualTo(403);
+        assertThat(getAs(BRAND_MANAGER, locationCases(YUNUSOBOD) + "/" + caseId + "/compensation-candidates")
+                        .getResponse()
+                        .getStatus())
+                .as("and a case of mine asked for through another branch is not found")
+                .isEqualTo(404);
+    }
+
+    @Test
     @DisplayName("finance can work a case without reading the customer's words: the comment is withheld, with a marker")
     void financeWorksACaseButCannotReadTheComment() throws Exception {
         UUID caseId = openCase("RC-FIN", CHILONZOR);

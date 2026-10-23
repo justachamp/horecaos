@@ -1,5 +1,6 @@
 package uz.horecaos.platform.fiscal.api;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -41,6 +42,8 @@ public final class SentReceiptEvidence {
      * <p>Money is whole som in the platform's own minor unit (ADR 0018), not Click's tiyin: the
      * adapter converts at its boundary and this is what the platform means by the amount.
      *
+     * @param quantity          the count as sent: whole for a piece, decimal for a weighed line (a record
+     *                          written before decimals existed holds a whole number, which reads the same)
      * @param ikpu              the product classifier sent, as sent: not what the catalogue says today
      * @param markingCodeCount  how many marking codes this line transmitted (Click's {@code Labels});
      *                          the codes themselves are not here
@@ -53,7 +56,7 @@ public final class SentReceiptEvidence {
             String ikpu,
             String packageCode,
             @Nullable Long unitCode,
-            int quantity,
+            BigDecimal quantity,
             long unitPriceMinor,
             long taxAmountMinor,
             int vatPercent,

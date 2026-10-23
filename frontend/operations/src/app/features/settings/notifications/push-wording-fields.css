@@ -1,0 +1,41 @@
+.push-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.field {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1px solid var(--q-surface-2);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.cover {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.cover__preview {
+  width: 180px;
+  aspect-ratio: 3 / 1;
+  object-fit: cover;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.error {
+  color: var(--q-error-text);
+}
+
+.hint {
+  color: var(--q-ink-muted);
+  margin: 0;
+}

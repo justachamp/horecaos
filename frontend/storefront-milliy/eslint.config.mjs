@@ -1,6 +1,9 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
+import horecaos from '../operations/tools/eslint-plugin-horecaos/index.js';
+import rawTextParser from '../operations/tools/eslint-plugin-horecaos/raw-text-parser.js';
+
 export default [
   {
     ignores: ['dist/**', '.angular/**', 'node_modules/**', 'coverage/**'],
@@ -23,6 +26,19 @@ export default [
           ignoreRestSiblings: true,
         },
       ],
+    },
+  },
+  {
+    // ADR 0149, Decision 6: the writing direction is the registry's to state, so a stylesheet says
+    // `margin-inline-start`, not `margin-left`. The storefronts' layout is mostly Tailwind
+    // utilities (already logical where it matters); this covers the hand-written component SCSS.
+    // No stylesheet is exempt (the baseline list is gone, X.40); a declaration that must stay
+    // physical says why with `physical-ok: <reason>`.
+    files: ['**/*.css', '**/*.scss'],
+    plugins: { horecaos },
+    languageOptions: { parser: rawTextParser },
+    rules: {
+      'horecaos/no-physical-direction': 'error',
     },
   },
 ];

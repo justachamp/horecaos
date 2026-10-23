@@ -182,6 +182,25 @@
           />
         </label>
 
+        <h3 class="q-caption couriers__section">{{ 'couriers.photo.heading' | t }}</h3>
+        @if (newPhotoPreview(); as preview) {
+          <img
+            [src]="preview"
+            alt=""
+            class="couriers__photo"
+            data-testid="register-photo-preview"
+          />
+        }
+        <q-media-uploader
+          [aspectRatios]="['1:1']"
+          [accept]="'image/jpeg,image/png,image/webp'"
+          [uploading]="uploadingPhoto()"
+          (cropped)="uploadNewPhoto($event)"
+          (selected)="uploadNewPhoto($event)"
+          (rejected)="onPhotoRejected($event)"
+          data-testid="register-photo-uploader"
+        />
+
         <h3 class="q-caption couriers__section">{{ 'couriers.compliance.heading' | t }}</h3>
         <p class="q-caption couriers__hint">{{ 'couriers.compliance.optional' | t }}</p>
 
@@ -270,6 +289,36 @@
           <dd class="q-body-sm">{{ engagementStatusLabel(courier.engagementStatus) }}</dd>
         </div>
       </dl>
+
+      <h3 class="q-caption couriers__section">{{ 'couriers.photo.heading' | t }}</h3>
+      @if (detailPhotoUrl(); as photo) {
+        <img [src]="photo" alt="" class="couriers__photo" data-testid="courier-photo" />
+      } @else {
+        <p class="q-body-sm couriers__missing" data-testid="courier-photo-none">
+          {{ 'couriers.photo.none' | t }}
+        </p>
+      }
+      <q-media-uploader
+        [aspectRatios]="['1:1']"
+        [accept]="'image/jpeg,image/png,image/webp'"
+        [uploading]="uploadingPhoto()"
+        (cropped)="replacePhoto($event)"
+        (selected)="replacePhoto($event)"
+        (rejected)="onPhotoRejected($event)"
+        data-testid="courier-photo-uploader"
+      />
+
+      <q-courier-access-card
+        [tenantId]="tenantIdOfScope()"
+        [courierId]="courier.courierId"
+        [eligible]="canHaveAccess(courier)"
+      />
+      <q-courier-lifecycle-card
+        [tenantId]="tenantIdOfScope()"
+        [courier]="courier"
+        [types]="types()"
+        (changed)="onLifecycleChanged()"
+      />
 
       <h3 class="q-caption couriers__section">{{ 'couriers.compliance.heading' | t }}</h3>
       @if (missingFieldCount() > 0) {

@@ -17,6 +17,16 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
  *                      explicitNullTerminates()} and no default — an explicit
  *                      null at a scope then resolves to null rather than to a
  *                      value nobody chose
+ * @param entitledBy   the code of the ADR 0021 plan feature that must be in force for this
+ *                      key to be set at all (settings.md §1.2's fifth state, «Locked by
+ *                      plan»), or absent for a key no plan gates. A string and not a
+ *                      {@code commercial} type: {@code tenancy} must not depend on {@code
+ *                      commercial}, and the operations surface asks the {@code iam}
+ *                      {@code EntitlementGate} about the code. {@code
+ *                      ConfigurationKeyEntitlementTests} holds every code named here to a
+ *                      feature key {@code EntitlementKeys} declares
+ * @param provisional present while the key's default is a retention period nobody with the authority has confirmed
+ *                    (ADR 0029, «Provisional retention»); see {@link ProvisionalRetention}
  */
 public record ConfigurationKey<T>(
         String code,
@@ -26,7 +36,52 @@ public record ConfigurationKey<T>(
         String owningModule,
         boolean tenantVisible,
         boolean explicitNullTerminates,
-        String description) {
+        String description,
+        @Nullable String entitledBy,
+        @Nullable ProvisionalRetention provisional) {
+
+    /** A key no plan feature gates: how every declaration was written before {@code entitledBy} existed. */
+    public ConfigurationKey(
+            String code,
+            Class<T> valueType,
+            @Nullable T defaultValue,
+            Set<ScopeType> settableScopes,
+            String owningModule,
+            boolean tenantVisible,
+            boolean explicitNullTerminates,
+            String description) {
+        this(
+                code,
+                valueType,
+                defaultValue,
+                settableScopes,
+                owningModule,
+                tenantVisible,
+                explicitNullTerminates,
+                description,
+                null,
+                null);
+    }
+
+    /**
+     * A retention period that is a placeholder (ADR 0029, «Provisional retention»): the key's <em>default</em> is a guess
+     * until someone with the authority confirms it, and confirming it is writing the value at {@code PLATFORM} scope, which
+     * ADR 0030 audits. While the key still resolves from its code default it is provisional, and the startup check reports
+     * it (and refuses a production start when it governs personal data).
+     *
+     * @param governsPersonalData whether the rows this period keeps hold personal data. A provisional period over counts
+     *                            and no person (the customer funnel) is reported; one over a person's data is refused
+     * @param awaitingConfirmationFrom who must confirm it, named so the report says whom to ask
+     */
+    public record ProvisionalRetention(boolean governsPersonalData, String awaitingConfirmationFrom) {
+
+        public ProvisionalRetention {
+            Objects.requireNonNull(awaitingConfirmationFrom, "Say who must confirm a provisional period");
+            if (awaitingConfirmationFrom.isBlank()) {
+                throw new IllegalArgumentException("Say who must confirm a provisional period");
+            }
+        }
+    }
 
     public ConfigurationKey {
         Objects.requireNonNull(code, "Key code is required");
@@ -42,6 +97,10 @@ public record ConfigurationKey<T>(
         if (!SUPPORTED_TYPES.contains(valueType)) {
             throw new IllegalArgumentException(
                     "Unsupported configuration value type %s for %s".formatted(valueType.getName(), code));
+        }
+        if (entitledBy != null && !entitledBy.matches("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$")) {
+            throw new IllegalArgumentException(
+                    "entitledBy must be an entitlement key code (dotted lower case): " + entitledBy);
         }
     }
 
@@ -66,6 +125,8 @@ public record ConfigurationKey<T>(
         private boolean tenantVisible;
         private boolean explicitNullTerminates;
         private String description = "";
+        private @Nullable String entitledBy;
+        private @Nullable ProvisionalRetention provisional;
 
         private Builder(String code, Class<T> valueType) {
             this.code = code;
@@ -97,6 +158,21 @@ public record ConfigurationKey<T>(
             return this;
         }
 
+        /**
+         * Gates this key behind an ADR 0021 plan feature: a tenant whose plan does not include {@code
+         * entitlementKeyCode} sees the key locked (settings.md §1.2) and may not set it.
+         */
+        public Builder<T> entitledBy(String entitlementKeyCode) {
+            this.entitledBy = entitlementKeyCode;
+            return this;
+        }
+
+        /** Marks the key's default as a provisional retention period (ADR 0029); see {@link ProvisionalRetention}. */
+        public Builder<T> provisionalRetention(boolean governsPersonalData, String awaitingConfirmationFrom) {
+            this.provisional = new ProvisionalRetention(governsPersonalData, awaitingConfirmationFrom);
+            return this;
+        }
+
         public Builder<T> describedAs(String text) {
             this.description = text;
             return this;
@@ -111,7 +187,9 @@ public record ConfigurationKey<T>(
                     owningModule,
                     tenantVisible,
                     explicitNullTerminates,
-                    description);
+                    description,
+                    entitledBy,
+                    provisional);
         }
     }
 }

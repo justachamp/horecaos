@@ -18,7 +18,14 @@ import { MessageKey } from '../../../core/i18n/messages.en';
 import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
-import { WiringSentence, wiringSentence } from '../channel-wiring';
+import {
+  WiringSentence,
+  courierCodeIn,
+  courierWiringSentence,
+  handedKey,
+  wiringSentence,
+} from '../channel-wiring';
+import { explainDeliveryReason } from '../delivery-reasons';
 import { ContactPolicyPanel } from '../contact-policy/contact-policy-panel';
 import { OffersPanel } from '../offers/offers-panel';
 import { ScenarioEditor } from '../scenarios/scenario-editor';
@@ -29,6 +36,9 @@ import {
   CampaignView,
   ChannelView,
   CourierBroadcastView,
+  CourierReadinessView,
+  CourierResultView,
+  CourierTemplateView,
   MarketingApi,
   MarketingTemplateView,
   SuppressionView,
@@ -182,7 +192,50 @@ export class CampaignsPage implements OnInit {
   protected readonly createBroadcastError = signal<string | null>(null);
   protected readonly newBroadcastTargetKind = signal<'ALL_ACTIVE' | 'GROUP'>('ALL_ACTIVE');
   protected readonly newBroadcastTargetGroupId = signal('');
-  protected readonly newBroadcastMessage = signal('');
+  protected readonly newBroadcastTemplateKey = signal('');
+  /** The value typed for each variable of the chosen wording, by variable name (ADR 0182). */
+  protected readonly newBroadcastValues = signal<Readonly<Record<string, string>>>({});
+
+  /**
+   * Whether a courier SMS can leave for this brand and the wordings a dispatcher may name, read with the
+   * tab (ADR 0182): the page says why it cannot in a sentence before a dispatcher drafts anything.
+   */
+  protected readonly courierReadiness = signal<CourierReadinessView | null>(null);
+  protected readonly courierWiringProblem = computed<WiringSentence | null>(() => {
+    const readiness = this.courierReadiness();
+    return readiness !== null && !readiness.isWired
+      ? courierWiringSentence(readiness.reason)
+      : null;
+  });
+  protected readonly courierTemplates = computed<readonly CourierTemplateView[]>(
+    () => this.courierReadiness()?.templates ?? [],
+  );
+  protected readonly selectedCourierTemplate = computed<CourierTemplateView | null>(
+    () =>
+      this.courierTemplates().find((t) => t.templateKey === this.newBroadcastTemplateKey()) ?? null,
+  );
+  /** The chosen wording, per language, with the typed values put in and unfilled variables left as they are. */
+  protected readonly broadcastPreview = computed<readonly (readonly [string, string])[]>(() => {
+    const template = this.selectedCourierTemplate();
+    if (template === null) {
+      return [];
+    }
+    const values = this.newBroadcastValues();
+    return Object.entries(template.bodiesByLocale).map(([locale, body]) => [
+      locale,
+      body.replace(/\{\{\s*([A-Za-z0-9_.]+)\s*\}\}/g, (whole, name: string) => {
+        const value = (values[name] ?? '').trim();
+        return value.length > 0 ? value : whole;
+      }),
+    ]);
+  });
+
+  /** Which broadcast's per-courier results are open, and what was read for each. */
+  protected readonly openResultsId = signal<string | null>(null);
+  protected readonly resultsLoading = signal(false);
+  protected readonly broadcastResults = signal<
+    Readonly<Record<string, readonly CourierResultView[]>>
+  >({});
 
   // --------------------------------------------------------- record suppression
 
@@ -778,7 +831,14 @@ export class CampaignsPage implements OnInit {
     this.courierBroadcastsLoading.set(true);
     this.courierBroadcastsError.set(null);
     try {
-      this.courierBroadcasts.set(await this.api.listCourierBroadcasts(scope));
+      const [broadcasts, readiness] = await Promise.all([
+        this.api.listCourierBroadcasts(scope),
+        // The readiness is an addition to the list, not a condition of it: unread, the page shows the
+        // list and no sentence, and the send still says why when it refuses.
+        this.api.courierReadiness(scope).catch(() => null),
+      ]);
+      this.courierBroadcasts.set(broadcasts);
+      this.courierReadiness.set(readiness);
       this.courierBroadcastsLoaded.set(true);
     } catch (error) {
       this.courierBroadcastsError.set(this.describe(error));
@@ -790,7 +850,8 @@ export class CampaignsPage implements OnInit {
   protected openCreateBroadcast(): void {
     this.newBroadcastTargetKind.set('ALL_ACTIVE');
     this.newBroadcastTargetGroupId.set('');
-    this.newBroadcastMessage.set('');
+    this.newBroadcastTemplateKey.set('');
+    this.newBroadcastValues.set({});
     this.createBroadcastError.set(null);
     this.showCreateBroadcast.set(true);
   }
@@ -799,11 +860,41 @@ export class CampaignsPage implements OnInit {
     this.showCreateBroadcast.set(false);
   }
 
+  /** Choosing a wording starts its variables empty: a value typed for another wording means nothing here. */
+  protected chooseBroadcastTemplate(templateKey: string): void {
+    this.newBroadcastTemplateKey.set(templateKey);
+    this.newBroadcastValues.set({});
+  }
+
+  protected setBroadcastValue(name: string, value: string): void {
+    this.newBroadcastValues.update((current) => ({ ...current, [name]: value }));
+  }
+
+  protected broadcastValue(name: string): string {
+    return this.newBroadcastValues()[name] ?? '';
+  }
+
+  /** The label of a wording's variable: the three the platform names, otherwise the variable as the wording spells it. */
+  protected variableLabel(name: string): string {
+    return name === 'place' || name === 'time' || name === 'note'
+      ? this.i18n.t(`marketing.courierBroadcasts.variable.${name}`)
+      : name;
+  }
+
+  /**
+   * A wording the gateway has approved, every variable it declares given a short single-line value (the
+   * server checks the same, and says which is wrong), and a target that names a group when it is one.
+   */
   protected canCreateBroadcast(): boolean {
+    const template = this.selectedCourierTemplate();
     return (
       !this.createBroadcastSubmitting() &&
-      this.newBroadcastMessage().trim().length > 0 &&
-      this.newBroadcastMessage().length <= 480 &&
+      template !== null &&
+      !template.awaitingGateway &&
+      template.variables.every((name) => {
+        const value = this.broadcastValue(name).trim();
+        return value.length > 0 && value.length <= 80 && !/[\r\n]/.test(value);
+      }) &&
       (this.newBroadcastTargetKind() === 'ALL_ACTIVE' ||
         this.newBroadcastTargetGroupId().trim().length > 0)
     );
@@ -823,7 +914,13 @@ export class CampaignsPage implements OnInit {
           this.newBroadcastTargetKind() === 'GROUP'
             ? this.newBroadcastTargetGroupId().trim()
             : null,
-        message: this.newBroadcastMessage().trim(),
+        templateKey: this.newBroadcastTemplateKey(),
+        variables: Object.fromEntries(
+          (this.selectedCourierTemplate()?.variables ?? []).map((name) => [
+            name,
+            this.broadcastValue(name).trim(),
+          ]),
+        ),
       });
       this.showCreateBroadcast.set(false);
       this.courierBroadcastsLoaded.set(false);
@@ -847,20 +944,98 @@ export class CampaignsPage implements OnInit {
     }
     this.sendingBroadcastId.set(broadcast.broadcastId);
     this.courierBroadcastsError.set(null);
+    let unavailable = false;
     try {
       await this.api.sendCourierBroadcast(scope, broadcast.broadcastId);
-    } catch {
-      // Refused sends still update the row (status FAILED, refusalReason
-      // set) — nothing further to show here beyond re-reading the list.
+    } catch (error) {
+      // A refusal the platform recorded still updates the row (status FAILED, refusalReason set) and
+      // needs nothing more than the re-read below. The one that records nothing is an identity
+      // provider that could not be asked: the broadcast stays a draft, and the page says so.
+      unavailable = error instanceof ApiError && error.status === 503;
     } finally {
       this.sendingBroadcastId.set(null);
       this.courierBroadcastsLoaded.set(false);
       await this.loadCourierBroadcasts();
+      if (unavailable) {
+        // After the re-read, which clears the error band at its start.
+        this.courierBroadcastsError.set(
+          this.i18n.t(courierWiringSentence('COURIER_CONTACTS_UNAVAILABLE').key),
+        );
+      }
     }
   }
 
   protected broadcastStatusLabelKey(status: string): MessageKey {
     return `marketing.courierBroadcasts.status.${status}` as MessageKey;
+  }
+
+  /**
+   * Why a broadcast was refused, in words. The platform records its reason in English with a stable
+   * code in it; the dispatcher reads the code's sentence, and anything else as it was written.
+   */
+  protected broadcastRefusalText(reason: string): string {
+    const code = courierCodeIn(reason);
+    return code === null ? reason : this.i18n.t(courierWiringSentence(code).key);
+  }
+
+  /** Opens or closes a broadcast's per-courier results, reading them the first time. */
+  protected async toggleBroadcastResults(broadcast: CourierBroadcastView): Promise<void> {
+    if (this.openResultsId() === broadcast.broadcastId) {
+      this.openResultsId.set(null);
+      return;
+    }
+    this.openResultsId.set(broadcast.broadcastId);
+    const scope = this.brand.scope();
+    if (!scope) {
+      return;
+    }
+    this.resultsLoading.set(true);
+    try {
+      const results = await this.api.courierBroadcastRecipients(scope, broadcast.broadcastId);
+      this.broadcastResults.update((current) => ({ ...current, [broadcast.broadcastId]: results }));
+    } catch (error) {
+      this.courierBroadcastsError.set(this.describe(error));
+    } finally {
+      this.resultsLoading.set(false);
+    }
+  }
+
+  protected resultsOf(broadcastId: string): readonly CourierResultView[] {
+    return this.broadcastResults()[broadcastId] ?? [];
+  }
+
+  /** What became of one courier's message, in words. */
+  protected courierStateText(state: string): string {
+    if (state === 'NO_CONTACT') {
+      return this.i18n.t('marketing.courierBroadcasts.results.state.NO_CONTACT');
+    }
+    const keys: Readonly<Record<string, MessageKey>> = {
+      DELIVERED: 'marketing.delivery.DELIVERED',
+      READ: 'marketing.delivery.READ',
+      FAILED: 'marketing.delivery.FAILED',
+      REJECTED: 'marketing.delivery.REJECTED',
+      NO_RECEIPT: 'marketing.delivery.NO_RECEIPT',
+      HANDED_TO_OPERATOR: handedKey('SMS'),
+      WITHHELD: 'marketing.delivery.WITHHELD',
+      PENDING: 'marketing.delivery.PENDING',
+    };
+    const key = keys[state];
+    return key ? this.i18n.t(key) : state;
+  }
+
+  protected courierReasonText(reason: string): string {
+    return explainDeliveryReason(reason, (key, values) => this.i18n.t(key, values));
+  }
+
+  /** The wording a broadcast sends, and the values given it, for the list: the key, then each value. */
+  protected broadcastWording(broadcast: CourierBroadcastView): string {
+    if (broadcast.templateKey === null) {
+      return broadcast.message ?? '';
+    }
+    const values = Object.values(broadcast.variables);
+    return values.length === 0
+      ? broadcast.templateKey
+      : `${broadcast.templateKey}: ${values.join(' · ')}`;
   }
 
   private describe(error: unknown): string {

@@ -1,6 +1,7 @@
 package uz.horecaos.platform.catalog.api;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -23,6 +24,17 @@ public interface FiscalClassificationLookup {
      *         entry may still lack individual fields, which the caller decides how to treat
      */
     Map<UUID, FiscalClassificationFacts> classifications(UUID tenantId, UUID brandId, Set<UUID> priceableIds);
+
+    /**
+     * The classification of the brand's delivery fee node, which is a priceable node like a dish and the
+     * line a receipt files the delivery charge under (ADR 0038, ADR 0166 Decision 9).
+     *
+     * @return empty when the brand has no delivery fee node, or the node has no classification row at all;
+     *         a present entry may still lack individual fields, which the caller decides how to treat
+     */
+    default Optional<FiscalClassificationFacts> deliveryFee(UUID tenantId, UUID brandId) {
+        return Optional.empty();
+    }
 
     /**
      * @param fiscalUnitCode the tax authority's unit code

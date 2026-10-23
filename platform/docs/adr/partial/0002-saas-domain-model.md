@@ -128,3 +128,20 @@ delivery, and operational concerns.
   separately approved merge/split migration.
 - The canonical diagrams, transitions, processes, and legacy mapping live in
   `docs/domains` and gate physical schema changes.
+
+## Status addition (2026-10-14)
+
+ADR 0177 (batch 21) takes the decision the acceptance model left open and amends one invariant of it.
+Two gates the operations spec asked of the acceptance policy, auto-accept restricted to a set of channels and
+a minimum of prior successful orders, were registered as scalars (`ordering.auto_accept_eligible_channels`,
+`ordering.auto_accept_min_prior_orders`) and read by nothing, because `OrderAcceptancePolicy` refused an
+approval channel under `AUTO_CONFIRM` and so could not say who confirms an order a gate holds back. ADR 0177
+reads both gates at checkout and relaxes the invariant: an `AUTO_CONFIRM` document may carry an approval
+channel, timeout and timeout action (with the same 30-second to 30-minute bound restaurant approval has),
+which is the path an order held back by a gate follows. A held order is written `AWAITING_APPROVAL` with
+the order's own mode snapshot `RESTAURANT_APPROVAL`, records `AUTO_ACCEPT_HELD_CHANNEL` or
+`AUTO_ACCEPT_HELD_PRIOR_ORDERS` as the reason of its checkout transition, and stays held after its payment
+lands. With no approval channel on the document there is nowhere to hold an order, so it is confirmed and
+counted; marketplace and aggregator orders, which bypass checkout, are not gated. This record's Decision,
+Alternatives and Consequences are unchanged, and the Implementation status line above is not advanced by
+this addition: it is ADR 0177 that carries the build.

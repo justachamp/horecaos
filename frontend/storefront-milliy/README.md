@@ -21,13 +21,13 @@ make run   # starts the API on :8080, with the `local` Spring profile
 [`platform/docs/local-fixtures.md`](../../platform/docs/local-fixtures.md) for
 the authoritative reference. The parts this storefront cares about:
 
-| Resource | Value |
-| --- | --- |
-| Tenant | `10000000-0000-0000-0000-000000000001` |
-| Brand | `10000000-0000-0000-0000-000000000002` |
+| Resource | Value                                  |
+| -------- | -------------------------------------- |
+| Tenant   | `10000000-0000-0000-0000-000000000001` |
+| Brand    | `10000000-0000-0000-0000-000000000002` |
 | Location | `10000000-0000-0000-0000-000000000003` |
-| Channel | `STOREFRONT` |
-| Currency | `UZS` |
+| Channel  | `STOREFRONT`                           |
+| Currency | `UZS`                                  |
 
 These are exactly the values already committed in `public/config.json`, so a
 fresh checkout needs no edits to run against a local `make run`.
@@ -50,10 +50,10 @@ There is no password. Sign-in is a phone number and an SMS code, and `make
 run`'s `local` profile configures one fixed number that needs no real SMS
 gateway:
 
-| Setting | Value |
-| --- | --- |
-| Phone | `+998 00 000 00 00` |
-| Code | `000000` |
+| Setting | Value               |
+| ------- | ------------------- |
+| Phone   | `+998 00 000 00 00` |
+| Code    | `000000`            |
 
 Enter that phone number on the storefront's own login screen and `000000`
 when asked for the code. Any other number goes down the real SMS route and
@@ -103,18 +103,25 @@ file is generated at **container start** by `docker-entrypoint.sh`, which
 runs `envsubst` over `config.template.json` using these environment
 variables:
 
-| Variable | Default | Maps to |
-| --- | --- | --- |
-| `APP_API_BASE_URL` | `/api/v1` | `apiBaseUrl` |
-| `APP_TENANT_ID` | the local fixture tenant | `tenantId` |
-| `APP_BRAND_ID` | the local fixture brand | `brandId` |
-| `APP_DEFAULT_LOCATION_ID` | the local fixture location | `defaultLocationId` |
-| `APP_CHANNEL` | `STOREFRONT` | `channel` |
-| `APP_YANDEX_MAPS_API_KEY` | the shared browser key already in `public/config.json` | `yandexMapsApiKey` |
-| `APP_BRAND_DISPLAY_NAME` | `Storefront` (neutral) | `brand.displayName` |
-| `APP_BRAND_LOGO_URL` | *(empty — renders the name as text instead)* | `brand.logoUrl` |
-| `APP_BRAND_ACCENT` | `#52525b` (neutral grey) | `brand.theme.accent` |
-| `APP_BRAND_ACCENT_DEEP` | `#3f3f46` (neutral grey) | `brand.theme.accentDeep` |
+| Variable                  | Default                                      | Maps to                  |
+| ------------------------- | -------------------------------------------- | ------------------------ |
+| `APP_API_BASE_URL`        | `/api/v1`                                    | `apiBaseUrl`             |
+| `APP_TENANT_ID`           | the local fixture tenant                     | `tenantId`               |
+| `APP_BRAND_ID`            | the local fixture brand                      | `brandId`                |
+| `APP_DEFAULT_LOCATION_ID` | the local fixture location                   | `defaultLocationId`      |
+| `APP_CHANNEL`             | `STOREFRONT`                                 | `channel`                |
+| `APP_BRAND_DISPLAY_NAME`  | `Storefront` (neutral)                       | `brand.displayName`      |
+| `APP_BRAND_LOGO_URL`      | _(empty — renders the name as text instead)_ | `brand.logoUrl`          |
+| `APP_BRAND_ACCENT`        | `#52525b` (neutral grey)                     | `brand.theme.accent`     |
+| `APP_BRAND_ACCENT_DEEP`   | `#3f3f46` (neutral grey)                     | `brand.theme.accentDeep` |
+
+**There is no map key here.** This storefront has no map and no geocoder: its Yandex services were
+unused and were removed in batch 21. When it gets an address screen, the map's browser key
+(`GET /storefront/tenants/{tenant}/brands/{brand}/map-config`) and the lookups
+(`POST .../geocode/suggestions|resolutions|reverse-resolutions`) come from the platform, which makes the
+call with its own key, rate limited and metered (ADR 0145); `frontend/storefront`'s `locations-add` is the
+worked example. A map key was a committed default in this image until batch 21; it was removed and
+`platform/tools/checks/repo_hygiene.py` (`check_no_committed_map_key`) keeps it out.
 
 The defaults reproduce the same fixture tenant `public/config.json` already
 holds, so `docker run` with no environment variables set behaves like local
@@ -129,7 +136,6 @@ docker run -p 8080:80 \
   -e APP_BRAND_ID=<brand-uuid> \
   -e APP_DEFAULT_LOCATION_ID=<location-uuid> \
   -e APP_CHANNEL=STOREFRONT \
-  -e APP_YANDEX_MAPS_API_KEY=<key> \
   -e APP_BRAND_DISPLAY_NAME="Tandir House" \
   -e APP_BRAND_LOGO_URL=https://cdn.example.com/tandir-house/logo.svg \
   -e APP_BRAND_ACCENT=#c0392b \

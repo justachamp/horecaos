@@ -97,6 +97,13 @@ public final class EventCatalog {
     public static final String INTEGRATION_EVENTS_TOPIC = KafkaTopicCatalog.INTEGRATION_EVENTS;
 
     /**
+     * ADR 0016 catalog facts. Its own topic: a consumer that must re-project a channel's menu when the draft
+     * moves should not read ordering's volume to find that out, and nothing on it carries a name, a price or a
+     * URL.
+     */
+    public static final String CATALOG_EVENTS_TOPIC = KafkaTopicCatalog.CATALOG_EVENTS;
+
+    /**
      * ADR 0111 lead facts. Its own topic: a consumer of "a catering enquiry arrived" should not
      * read ordering's volume to find it, and the producer is the customers module.
      */
@@ -108,6 +115,13 @@ public final class EventCatalog {
      * comment, a case note, a tag label or a name.
      */
     public static final String REVIEWS_EVENTS_TOPIC = KafkaTopicCatalog.REVIEWS_EVENTS;
+
+    /**
+     * ADR 0166 fiscal facts. Its own topic: a consumer of "a receipt is being corrected" should not read
+     * ordering's volume to find it, and the producer is the fiscal module. Nothing on it is receipt
+     * evidence.
+     */
+    public static final String FISCAL_EVENTS_TOPIC = KafkaTopicCatalog.FISCAL_EVENTS;
 
     /**
      * ADR 0018 pricing facts. Its own topic rather than a share of {@code
@@ -367,6 +381,36 @@ public final class EventCatalog {
                     Retention.BUSINESS_FACT,
                     Classification.INTERNAL,
                     "The commercial commitment. POS export never gates this."),
+            new EventContract(
+                    "OrderPreparing",
+                    1,
+                    "ordering",
+                    ORDERING_EVENTS_TOPIC,
+                    "orderId",
+                    "events/ordering.events/OrderPreparing.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "The kitchen started on the order. The fact a customer's «being prepared» message waits on."),
+            new EventContract(
+                    "OrderReady",
+                    1,
+                    "ordering",
+                    ORDERING_EVENTS_TOPIC,
+                    "orderId",
+                    "events/ordering.events/OrderReady.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "The food is ready. For pickup, the fact the customer is told to come for it."),
+            new EventContract(
+                    "OrderFulfilling",
+                    1,
+                    "ordering",
+                    ORDERING_EVENTS_TOPIC,
+                    "orderId",
+                    "events/ordering.events/OrderFulfilling.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "The order left the pass with a courier. The fact a customer's «on the way» message waits on."),
             new EventContract(
                     "OrderCompleted",
                     1,
@@ -641,6 +685,33 @@ public final class EventCatalog {
                     "A lead became the order or the reservation it was for (ADR 0111): exactly one of the "
                             + "two ids."),
             new EventContract(
+                    "FiscalCorrectionRequested",
+                    1,
+                    "fiscal",
+                    FISCAL_EVENTS_TOPIC,
+                    "documentId",
+                    "events/fiscal.events/FiscalCorrectionRequested.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A correction or a void was requested against an issued fiscal receipt (ADR 0166), by a "
+                            + "person under a second person's approval or by the platform because an amendment "
+                            + "changed a filed total. Identifiers, the kind, the document's status and a "
+                            + "reason code -- never a fiscal sign, a receipt number or link, a terminal id, a "
+                            + "marking code or a taxpayer number."),
+            new EventContract(
+                    "FiscalCorrectionAttached",
+                    1,
+                    "fiscal",
+                    FISCAL_EVENTS_TOPIC,
+                    "documentId",
+                    "events/fiscal.events/FiscalCorrectionAttached.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "The tenant's fiscal agent issued a correction or a void and an operator attached its "
+                            + "reference (ADR 0166): a linked CORRECTION or REFUND document exists and the "
+                            + "original is CORRECTED or VOIDED. Names the linked document; carries none of "
+                            + "its evidence."),
+            new EventContract(
                     "ReviewSubmitted",
                     1,
                     "reviews",
@@ -795,6 +866,19 @@ public final class EventCatalog {
                     "An offer version was put in front of campaigns (ADR 0112). The offer, its brand "
                             + "and its version number; never the promotion or rule it references, which a "
                             + "consumer reads through the authorized offers API."),
+            new EventContract(
+                    "CatalogDraftChanged",
+                    1,
+                    "catalog",
+                    CATALOG_EVENTS_TOPIC,
+                    "brandId",
+                    "events/catalog.events/CatalogDraftChanged.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A brand's draft menu changed (ADR 0016, ADR 0137, ADR 0138): a product, variant, category, "
+                            + "modifier, classification, physical attribute, combo or a channel's images or "
+                            + "offering. Says which entity and how, never what it became -- no name, price or URL. "
+                            + "The draft moved; nothing a customer is served did until it is published."),
             new EventContract(
                     "ContentItemPublished",
                     1,

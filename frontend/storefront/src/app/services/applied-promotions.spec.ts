@@ -1,5 +1,6 @@
 import {
   discountLines,
+  titleFor,
   discountRowsFor,
   giftOfferGroups,
   noteLines,
@@ -52,6 +53,46 @@ describe('discountLines', () => {
   });
 });
 
+describe('titles written for the customer (ADR 0140)', () => {
+  const WORDED: AppliedPromotion = {
+    ...AUTO_DISCOUNT,
+    titles: { ru: 'Скидка на ланч', 'uz-Latn': 'Tushlik chegirmasi', en: 'Lunch offer' },
+  };
+
+  it("prints the marketer's wording in the customer's language instead of the kind of benefit", () => {
+    expect(discountLines([WORDED], 'uz-Latn')).toEqual([
+      { labelKey: 'cart.offerDiscount', amountMinor: 4_000, title: 'Tushlik chegirmasi' },
+    ]);
+    expect(discountRowsFor([WORDED], 4_000, (minor) => `${minor} so'm`, 'ru')).toEqual([
+      { labelKey: 'cart.offerDiscount', amount: "4000 so'm", title: 'Скидка на ланч' },
+    ]);
+  });
+
+  it('falls back to the kind of benefit for a language nobody wrote for, never to another language', () => {
+    const russianOnly: AppliedPromotion = { ...AUTO_DISCOUNT, titles: { ru: 'Скидка' } };
+    expect(discountLines([russianOnly], 'en')).toEqual([
+      { labelKey: 'cart.offerDiscount', amountMinor: 4_000 },
+    ]);
+    expect(discountLines([russianOnly])).toEqual([
+      { labelKey: 'cart.offerDiscount', amountMinor: 4_000 },
+    ]);
+  });
+
+  it('accepts a title written for the bare language and ignores a blank one', () => {
+    expect(titleFor({ uz: 'Chegirma' }, 'uz-Latn')).toBe('Chegirma');
+    expect(titleFor({ en: '   ' }, 'en')).toBeUndefined();
+    expect(titleFor(null, 'en')).toBeUndefined();
+    expect(titleFor({ en: 'Offer' }, undefined)).toBeUndefined();
+  });
+
+  it('leaves the captions for a delivery offer and a surcharge as they were', () => {
+    const worded: AppliedPromotion = { ...DELIVERY, titles: { en: 'Free delivery' } };
+    expect(noteLines([worded])).toEqual([
+      { labelKey: 'cart.deliveryOfferNote', amountMinor: 5_000 },
+    ]);
+  });
+});
+
 describe('noteLines', () => {
   it('describes a delivery offer and a surcharge, in the order the platform listed them', () => {
     expect(noteLines([SURCHARGE, DELIVERY])).toEqual([
@@ -62,6 +103,18 @@ describe('noteLines', () => {
 
   it('never repeats a discount, which is already a line of its own', () => {
     expect(noteLines([AUTO_DISCOUNT, CODE_DISCOUNT])).toEqual([]);
+  });
+
+  it('says "service charge" for an order-level charge, not "surcharge"', () => {
+    const serviceCharge: AppliedPromotion = {
+      source: 'AUTOMATIC',
+      effect: 'SERVICE_CHARGE',
+      amountMinor: 9_000,
+    };
+    expect(noteLines([serviceCharge, SURCHARGE])).toEqual([
+      { labelKey: 'cart.serviceChargeNote', amountMinor: 9_000 },
+      { labelKey: 'cart.surchargeNote', amountMinor: 1_500 },
+    ]);
   });
 });
 

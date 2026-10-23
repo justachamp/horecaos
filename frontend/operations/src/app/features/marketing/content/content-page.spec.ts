@@ -47,6 +47,8 @@ const POLICIES: ContentPolicies = {
   publishingVersion: 1,
   editorial: { news: true, gallery: false, recipes: false, vacancies: true },
   editorialVersion: 1,
+  layout: 'STANDARD',
+  layoutVersion: 0,
   editorialEntitled: true,
   videoEntitled: true,
 };

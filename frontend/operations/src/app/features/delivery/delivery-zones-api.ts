@@ -13,11 +13,8 @@ export interface ZoneSummaryResponse {
   /** `DELIVERY` | `CATCHMENT`. */
   readonly role: string;
   readonly code: string;
-  readonly displayNameRu: string;
-  readonly displayNameUz: string;
-  readonly displayNameEn: string;
-  /** Every language the zone has a name in (row 10.12), the platform triple first, each once. */
-  readonly displayNames?: LabelsByLocale;
+  /** Every language the zone has a name in (row 10.12), each once; the only shape a zone's name has since V0679. */
+  readonly displayNames: LabelsByLocale;
   readonly status: string;
   readonly activeVersion?: number | null;
   readonly priority?: number | null;
@@ -56,11 +53,7 @@ export interface ZoneVersionResponse {
 export interface CreateZoneRequest {
   readonly role: 'DELIVERY' | 'CATCHMENT';
   readonly code: string;
-  /** The platform triple's names — still *required*, see `platformColumns`. */
-  readonly displayNameRu: string;
-  readonly displayNameUz: string;
-  readonly displayNameEn: string;
-  /** The name per locale (row 10.12), additive: the way to name a language beyond the triple. */
+  /** The name per locale (row 10.12); the brand's default language is required. */
   readonly displayNames: LabelsByLocale;
 }
 
@@ -167,9 +160,8 @@ export interface BatchImportZoneRow {
   readonly externalRef: string;
   readonly role: 'DELIVERY' | 'CATCHMENT';
   readonly code: string;
-  readonly displayNameRu: string;
-  readonly displayNameUz: string;
-  readonly displayNameEn: string;
+  /** The name per locale; a row that names none is named by its code in the brand's default language. */
+  readonly displayNames: LabelsByLocale;
   readonly regionId?: string | null;
   readonly priority: number;
   readonly currency: string;

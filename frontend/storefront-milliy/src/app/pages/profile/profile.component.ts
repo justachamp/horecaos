@@ -14,8 +14,10 @@ import { CustomerProfileService } from '../../services/customer-profile.service'
 import { HorecaOSApiError, messageKeyFor } from '../../core/api/problem-details';
 import { ConsentBoxComponent } from '../../shared/consent-box/consent-box.component';
 import { IconComponent } from '../../shared/icon/icon.component';
-import { LANG_LABELS, LangService } from '../../services/lang.service';
+import { LangService } from '../../services/lang.service';
 import { OrdersService } from '../../services/orders.service';
+import { type PointsBalance, PointsService } from '../../services/points.service';
+import { formatMoney } from '../../core/money/money';
 import {
   type FeedbackConfig,
   type OfferedTag,
@@ -23,6 +25,8 @@ import {
   ReviewsService,
 } from '../../services/reviews.service';
 import { MyReviewsComponent } from './my-reviews/my-reviews.component';
+import { PushSubscribeComponent } from '../../shared/push-subscribe/push-subscribe';
+import { PushSubscriptionService } from '../../services/push-subscription.service';
 import { TagPickerComponent } from '../../shared/tag-picker/tag-picker.component';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { TranslateService } from '../../services/translate.service';
@@ -81,6 +85,7 @@ type LoadState = 'loading' | 'ready' | 'error';
     ConsentBoxComponent,
     IconComponent,
     MyReviewsComponent,
+    PushSubscribeComponent,
     TagPickerComponent,
     TranslatePipe,
   ],
@@ -96,14 +101,45 @@ export class ProfileComponent implements OnInit {
   private readonly orders = inject(OrdersService);
   private readonly reviews = inject(ReviewsService);
   private readonly router = inject(Router);
+  private readonly pointsService = inject(PointsService);
+  private readonly pushSubscription = inject(PushSubscriptionService);
 
   protected readonly state = signal<LoadState>('loading');
-  protected readonly languages = Object.keys(LANG_LABELS);
+  /** The languages this brand serves that the platform has live and this build can draw (ADR 0149). */
+  protected readonly languages = this.lang.offered;
 
   protected readonly editing = signal(false);
   protected readonly draftFirstName = signal('');
   protected readonly draftLastName = signal('');
   protected readonly savingName = signal(false);
+
+  /** The customer's own points at this brand (ADR 0046, ADR 0185), once read; null while unread or unreadable. */
+  protected readonly points = signal<PointsBalance | null>(null);
+
+  /**
+   * What the customer can spend, and their total when more is held back, as they read them. Null for a customer
+   * with no points to talk about, so the screen is exactly what it was.
+   */
+  protected readonly pointsLines = computed<{ spendable: string; total: string | null } | null>(
+    () => {
+      const points = this.points();
+      if (points === null || points.accountId === null || points.balance === null) {
+        return null;
+      }
+      const spendable = points.spendable ?? points.balance;
+      if (points.balance.amountMinor <= 0 && spendable.amountMinor <= 0) {
+        return null;
+      }
+      const unit = this.translate.get('common.currency');
+      return {
+        spendable: formatMoney(spendable, unit),
+        total:
+          points.balance.amountMinor > spendable.amountMinor
+            ? formatMoney(points.balance, unit)
+            : null,
+      };
+    },
+  );
 
   protected readonly ratableOrder = signal<RatableOrder | null>(null);
   protected readonly feedback = signal<FeedbackConfig | null>(null);
@@ -153,6 +189,16 @@ export class ProfileComponent implements OnInit {
       return;
     }
     void this.loadRatablePrompt();
+    void this.loadPoints();
+  }
+
+  /** A convenience beside the identity: a customer with no points, or a platform that cannot be asked, sees what they always saw. */
+  private async loadPoints(): Promise<void> {
+    try {
+      this.points.set(await this.pointsService.balance());
+    } catch {
+      this.points.set(null);
+    }
   }
 
   /** Best-effort: a failure here hides the prompt, never breaks the screen. */
@@ -230,6 +276,8 @@ export class ProfileComponent implements OnInit {
   }
 
   protected async signOut(): Promise<void> {
+    // The next customer on this handset is asked afresh about push (ADR 0182, D14).
+    this.pushSubscription.forget();
     await this.customerOtp.signOut();
     await this.router.navigate(['/home']);
   }

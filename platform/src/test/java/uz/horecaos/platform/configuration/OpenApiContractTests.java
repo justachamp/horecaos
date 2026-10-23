@@ -52,7 +52,7 @@ import uz.horecaos.platform.support.TestDatabase;
  * per-group documents are additive views over the same running API — filtered by path, never
  * regenerated — so they share this class's compatibility machinery rather than duplicating it.
  * {@link #everyPublishedPathBelongsToExactlyOneSurfaceGroup()} is the test that keeps the split
- * honest: it proves the four group documents partition the full document's paths exactly, so a
+ * honest: it proves the group documents partition the full document's paths exactly, so a
  * controller landing under a prefix no {@link OpenApiSurface} claims fails the build instead of
  * silently missing from every per-surface document and its generated TypeScript client.
  */
@@ -389,19 +389,33 @@ class OpenApiContractTests {
         }
         Set<String> oldRequired = strings(oldResolved.path("required"));
         Set<String> newRequired = strings(newResolved.path("required"));
-        assertThat(newRequired)
+        // The one exception is a request an Accepted ADR reshaped on purpose (ADR 0182's courier
+        // broadcast draft), named and kept narrow in AcceptedContractWidenings.
+        Set<String> mayBecomeRequired = AcceptedContractWidenings.mayBecomeRequired(context);
+        assertThat(newRequired.stream()
+                        .filter(property -> !mayBecomeRequired.contains(property))
+                        .collect(java.util.stream.Collectors.toSet()))
                 .as("schema for %s cannot make an existing optional field required", context)
                 .isSubsetOf(oldRequired);
         // The one exception is a relaxation an Accepted ADR made on purpose (ADR 0150's optional
         // no-promise fallback), named and kept narrow in AcceptedContractWidenings.
         Set<String> mayBecomeOptional = AcceptedContractWidenings.mayBecomeOptional(context);
+        Set<String> mayBeRemoved = AcceptedContractWidenings.mayBeRemoved(context);
         assertThat(oldRequired.stream()
                         .filter(property -> !mayBecomeOptional.contains(property))
+                        .filter(property -> !mayBeRemoved.contains(property))
                         .collect(java.util.stream.Collectors.toSet()))
                 .as("schema for %s cannot make a published required field optional", context)
                 .isSubsetOf(newRequired);
         oldResolved.path("properties").fieldNames().forEachRemaining(property -> {
+            if (mayBeRemoved.contains(property)
+                    && newResolved.path("properties").path(property).isMissingNode()) {
+                return;
+            }
             JsonNode newProperty = newResolved.path("properties").path(property);
+            if (newProperty.isMissingNode() && mayBeRemoved.contains(property)) {
+                return;
+            }
             assertThat(newProperty.isMissingNode())
                     .as("schema for %s cannot remove property %s", context, property)
                     .isFalse();

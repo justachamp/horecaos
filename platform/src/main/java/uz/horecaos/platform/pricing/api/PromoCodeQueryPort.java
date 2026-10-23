@@ -37,25 +37,46 @@ public interface PromoCodeQueryPort {
     Eligibility check(UUID tenantId, UUID brandId, String code, @Nullable UUID customerAccountId, Instant now);
 
     /**
-     * @param promotionId set only when {@code reason} is {@link Reason#OK}, naming
-     *                     the promotion {@code QuoteService} should present as
-     *                     redeemed by this code
+     * @param promotionId set only when {@code reason} is {@link Reason#OK} and the code is a shared one, naming
+     *                     the promotion {@code QuoteService} should present as redeemed by this code
+     * @param grantId      set only when {@code reason} is {@link Reason#OK} and the code is a customer's one-off
+     *                     benefit grant (ADR 0140), naming the grant {@code QuoteService} should present. Exactly
+     *                     one of the two is set for an eligible code
      */
-    record Eligibility(Reason reason, @Nullable UUID promotionId) {
+    record Eligibility(
+            Reason reason,
+            @Nullable UUID promotionId,
+            @Nullable UUID grantId) {
+
+        public Eligibility(Reason reason, @Nullable UUID promotionId) {
+            this(reason, promotionId, null);
+        }
 
         public boolean isEligible() {
             return reason == Reason.OK;
         }
 
         public static Eligibility ok(UUID promotionId) {
-            return new Eligibility(Reason.OK, promotionId);
+            return new Eligibility(Reason.OK, promotionId, null);
+        }
+
+        public static Eligibility okGrant(UUID grantId) {
+            return new Eligibility(Reason.OK, null, grantId);
+        }
+
+        /**
+         * The id the engine's evidence names for what the code stands for: the promotion of a shared code, the
+         * grant of a one-off one. Null for a refusal.
+         */
+        public @Nullable UUID standsFor() {
+            return promotionId != null ? promotionId : grantId;
         }
 
         public static Eligibility refused(Reason reason) {
             if (reason == Reason.OK) {
                 throw new IllegalArgumentException("OK is not a refusal reason");
             }
-            return new Eligibility(reason, null);
+            return new Eligibility(reason, null, null);
         }
 
         public enum Reason {
@@ -72,7 +93,11 @@ public interface PromoCodeQueryPort {
              * — inventing an identity for a guest would make two strangers share
              * a limit, which is worse than not enforcing one at all.
              */
-            PER_CUSTOMER_LIMIT_REACHED
+            PER_CUSTOMER_LIMIT_REACHED,
+            /** A customer's one-off grant that was already spent, revoked or retired (ADR 0140). */
+            CODE_ALREADY_USED,
+            /** A code that is a customer's one-off grant, presented by a guest who has no account to spend it on. */
+            CODE_REQUIRES_ACCOUNT
         }
     }
 }

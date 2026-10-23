@@ -63,7 +63,7 @@
 }
 
 .backfill__table thead th {
-  text-align: left;
+  text-align: start;
   color: var(--q-ink-muted);
   padding: 8px 12px;
   border-bottom: 1px solid var(--q-hairline);
@@ -76,7 +76,7 @@
 }
 
 .backfill__num {
-  text-align: right;
+  text-align: end;
 }
 
 .backfill__cell {
@@ -153,4 +153,64 @@
   gap: 4px 8px;
   margin-top: 2px;
   color: var(--q-ink-muted);
+}
+
+.backfill__bulk {
+  margin: 12px 0 8px;
+  padding: 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.backfill__bulk legend {
+  padding: 0 4px;
+}
+
+.backfill__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin: 8px 0;
+}
+
+.backfill__filter {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.backfill__filter select,
+.backfill__filter input {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.backfill__filter-number {
+  width: 88px;
+}
+
+.backfill__bulk-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.backfill__bulk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 220px;
+}
+
+.backfill__select {
+  width: 32px;
+  padding: 6px 8px;
+  vertical-align: middle;
 }

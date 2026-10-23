@@ -75,6 +75,8 @@
     "search": "Search...",
     "menu": "Menu 😍",
     "all": "All",
+    "allCategories": "All categories",
+    "categoriesClose": "Close",
     "goHome": "Go to home",
     "noResults": "No results found",
     "recentSearches": "Recent searches",
@@ -92,6 +94,7 @@
     "learnMore": "Learn more",
     "open": "Open",
     "popupClose": "Close",
+    "brandSwitcher": "Our other brands",
     "editorialSection": "More from us",
     "editorial": {
       "news": "News",
@@ -170,6 +173,7 @@
     "offerDiscount": "Special offer",
     "deliveryOfferNote": "Includes a delivery offer of {{amount}}",
     "surchargeNote": "Includes a surcharge of {{amount}}",
+    "serviceChargeNote": "Includes a service charge of {{amount}}",
     "promoTitle": "Promo code",
     "promoPlaceholder": "Enter the code",
     "promoApply": "Apply",
@@ -185,7 +189,8 @@
       "add": "Add your free {{name}}",
       "addMany": "Add your free {{name}} ×{{count}}"
     },
-    "autoAdded": "Added automatically"
+    "autoAdded": "Added automatically",
+    "pointsChanged": "The most you can pay with points has changed. Check the amount and place the order again."
   },
   "orders": {
     "title": "Orders",
@@ -265,6 +270,9 @@
     "addAddress": "Add address",
     "enterAddress": "Enter address",
     "searchAddress": "Search address...",
+    "typeAddress": "Type your full address",
+    "noMapHint": "The map is not available right now. Type your address in full: street, house number and a landmark. The restaurant will confirm it.",
+    "searchUnavailable": "Address search is not available right now. Type the full address.",
     "selectAddress": "Select address",
     "resolving": "Resolving address...",
     "coordinates": "Coordinates:",
@@ -322,7 +330,21 @@
     "errors": {
       "avatarUnavailable": "Profile photos are not available yet.",
       "avatarFailed": "That image could not be saved. Please try another."
-    }
+    },
+    "privacy": "My data",
+    "privacyTitle": "My data",
+    "privacySignInRequired": "Sign in to ask for a copy of your data.",
+    "privacyCopyTitle": "A copy of your data",
+    "privacyCopyBenefit": "You can ask for a copy of the personal data we hold about you. Someone on our team prepares it, and we tell you here when it is ready.",
+    "privacyAsk": "Ask for a copy of my data",
+    "privacyPreparing": "We are preparing your data.",
+    "privacyDueBy": "We will have it ready by",
+    "privacyWithdraw": "Withdraw my request",
+    "privacyReady": "Your data is ready.",
+    "privacyGetFile": "Get my data",
+    "privacyOpenFile": "Open my data",
+    "privacyLinkShort": "This link works for a few minutes. Ask again here if it stops working.",
+    "privacyExpired": "The file has expired. You can ask for a new copy."
   },
   "product": {
     "variants": "Variants",
@@ -353,6 +375,19 @@
     "variantGroupsTitle": "Choices for {{variant}}",
     "fromPrice": "from {{price}}",
     "ingredients": "Ingredients"
+  },
+  "push": {
+    "title": "Offers from us",
+    "text": "Get a notification on this device when we have a promotion. You can turn it off here at any time.",
+    "turnOn": "Turn on notifications",
+    "turnOff": "Turn off",
+    "notNow": "Not now",
+    "consentNote": "By turning it on you agree to receive promotional messages from this restaurant on this device.",
+    "onTitle": "Notifications are on",
+    "onText": "We will send you offers on this device.",
+    "blocked": "Notifications are blocked in this browser. Allow them in the browser’s site settings to turn them on.",
+    "enabled": "Notifications are on",
+    "disabled": "Notifications are off"
   },
   "terms": {
     "agreementTitle": "Public offer agreement",
@@ -459,6 +494,8 @@
       "codeNotActive": "That promo code is not active yet.",
       "codeExpired": "That promo code has expired.",
       "codeLimitReached": "You've reached the limit for this promo code.",
+      "codeAlreadyUsed": "That code has already been used.",
+      "codeRequiresAccount": "Sign in to use this code. It was issued to a customer account.",
       "channelNotEnabled": "This is not available on this channel yet.",
       "modeUnavailable": "This option is not available right now.",
       "closed": "This branch is closed right now.",
@@ -482,6 +519,7 @@
     "nutritionPer100g": "per 100 g",
     "nutritionPer100ml": "per 100 ml",
     "nutritionPerUnit": "per serving ({{amount}})",
+    "nutritionAccuracy": "Nutrition values are approximate and may differ from the actual product.",
     "calories": "Calories",
     "proteins": "Protein",
     "fats": "Fat",
@@ -534,6 +572,34 @@
       "title": "Filter by tag",
       "clear": "Clear",
       "empty": "No dish carries all of the selected tags."
+    }
+  },
+  "points": {
+    "title": "Pay with points",
+    "summary": "You have {{available}} in points. Up to {{maximum}} can go towards this order.",
+    "use": "Use my points",
+    "amount": "Points to use",
+    "useMaximum": "Use the most",
+    "cashToPay": "Left to pay",
+    "exceeds": "That is more than the {{maximum}} this order allows.",
+    "adjusted": "The most you can use changed, so the amount was lowered.",
+    "blockedByPromotion": "Points cannot be used together with the offer on this order.",
+    "spent": "Paid with points",
+    "profileTitle": "My points",
+    "profileSpendable": "Points you can spend: {{amount}}",
+    "profileTotal": "Total points: {{amount}}. The rest are not spendable yet."
+  },
+  "split": {
+    "title": "How this order is paid",
+    "points": "Points",
+    "money": "Money",
+    "status": {
+      "PLANNED": "To pay",
+      "RESERVED": "Held",
+      "SETTLED": "Paid",
+      "RELEASED": "Returned to you",
+      "REVERSED": "Refunded",
+      "FAILED": "Did not go through"
     }
   }
 }

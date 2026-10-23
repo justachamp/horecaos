@@ -12,6 +12,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
+import uz.horecaos.platform.pricing.api.BenefitGrantDirectory;
 import uz.horecaos.platform.pricing.api.BenefitGrantDirectory.GrantSummary;
 import uz.horecaos.platform.support.TestDatabase;
 
@@ -120,5 +121,44 @@ class JdbcBenefitGrantDirectoryTests {
         assertThat(GrantSummary.class.getRecordComponents())
                 .extracting(java.lang.reflect.RecordComponent::getName)
                 .containsExactly("grantId", "brandId", "customerAccountId", "status", "sourceType", "sourceId");
+    }
+
+    @Test
+    @DisplayName("a customer's grants are listed newest first, with what each is worth and the end of its code, and"
+            + " never another tenant's, brand's or customer's")
+    void aCustomersGrantsAreListed() {
+        UUID older = grant(TENANT, "REDEEMED", "OPERATOR_MANUAL", null, "older");
+        jdbc.sql("UPDATE pricing.benefit_grants SET created_at = now() - interval '1 day' WHERE id = :id")
+                .param("id", older)
+                .update();
+        UUID newer = grant(TENANT, "ACTIVE", "RECOVERY_CASE", CASE, "newer");
+        grant(OTHER_TENANT, "ACTIVE", "OPERATOR_MANUAL", null, "foreign");
+        UUID forSomeoneElse = grant(TENANT, "ACTIVE", "OPERATOR_MANUAL", null, "someone-else");
+        jdbc.sql("UPDATE pricing.benefit_grants SET customer_account_id = gen_random_uuid() WHERE id = :id")
+                .param("id", forSomeoneElse)
+                .update();
+        UUID otherBrand = grant(TENANT, "ACTIVE", "OPERATOR_MANUAL", null, "other-brand");
+        jdbc.sql("UPDATE pricing.benefit_grants SET brand_id = gen_random_uuid() WHERE id = :id")
+                .param("id", otherBrand)
+                .update();
+
+        var listed = directory.forCustomer(TENANT, BRAND, CUSTOMER);
+
+        assertThat(listed)
+                .extracting(BenefitGrantDirectory.GrantListing::grantId)
+                .containsExactly(newer, older);
+        assertThat(listed.get(0)).satisfies(grant -> {
+            assertThat(grant.benefitType()).isEqualTo("FIXED_AMOUNT_OFF_ORDER");
+            assertThat(grant.value()).isEqualTo(20_000L);
+            assertThat(grant.currency()).isEqualTo("UZS");
+            assertThat(grant.status()).isEqualTo("ACTIVE");
+            assertThat(grant.sourceType()).isEqualTo("RECOVERY_CASE");
+            assertThat(grant.sourceId()).isEqualTo(CASE);
+            assertThat(grant.codeHint()).isEqualTo("ABCD");
+        });
+        assertThat(BenefitGrantDirectory.GrantListing.class.getRecordComponents())
+                .extracting(java.lang.reflect.RecordComponent::getName)
+                .as("the hint is the last characters; there is no field that could hold the code or its hash")
+                .doesNotContain("code", "codeHash", "plaintextCode");
     }
 }

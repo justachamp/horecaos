@@ -63,6 +63,16 @@
     reader. Adding one is what should bring them, not a wish for completeness.
 - Open inputs: Checkout payment timing, cancellation, approval timeout, and scheduled-order lead-time policy (product)
 
+**Status addition, 2026-10-14 ([ADR 0181](../built/0181-compensation-from-a-case-promotion-targeting-requote-and-discretionary-discounts.md), D12).** The
+scheduled-order re-quote stays evidence, and its checkpoints are decided: the order's confirmation and the
+kitchen start. The sweep's instant is the promised time less `horecaos.ordering.scheduled-requote.lead`
+(PT60M) and an operator's re-check reads the same pricing path. A changed finding does not touch the order and
+there is no customer-facing acceptance flow with a payment delta in this record: the operator phones the customer
+or cancels by the existing path, and the console shows the findings
+(`GET`/`POST .../orders/{orderId}/promotion-requotes`). This closes the part of the scheduled-order lead-time
+input that concerned pricing checkpoints; the payment-timing and cancellation parts stay open. The record's
+Decision is not edited.
+
 ## Context
 
 The existing order-acceptance policy defines two channels: automatic acceptance

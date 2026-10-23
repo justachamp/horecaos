@@ -82,9 +82,182 @@
       </p>
     }
 
+    <fieldset class="backfill__bulk" data-testid="backfill-bulk" [disabled]="saving()">
+      <legend class="q-subhead">{{ 'settings.fiscalization.backfill.bulk.title' | t }}</legend>
+      <p class="q-caption backfill__note">{{ 'settings.fiscalization.backfill.bulk.lead' | t }}</p>
+
+      <div class="backfill__filters">
+        <label class="backfill__filter">
+          <span class="q-caption">{{
+            'settings.fiscalization.classification.field.type' | t
+          }}</span>
+          <select
+            class="q-body-sm"
+            [value]="typeFilter()"
+            (change)="setTypeFilter($any($event.target).value)"
+            data-testid="backfill-filter-type"
+          >
+            <option value="ALL">{{ 'settings.fiscalization.backfill.filter.all' | t }}</option>
+            <option value="VARIANT">{{ typeLabel('VARIANT') }}</option>
+            <option value="MODIFIER_OPTION">{{ typeLabel('MODIFIER_OPTION') }}</option>
+          </select>
+        </label>
+        <label class="backfill__filter">
+          <span class="q-caption">{{
+            'settings.fiscalization.classification.field.category' | t
+          }}</span>
+          <select
+            class="q-body-sm"
+            [value]="categoryFilter()"
+            (change)="categoryFilter.set($any($event.target).value)"
+            data-testid="backfill-filter-category"
+          >
+            <option value="">{{ 'settings.fiscalization.backfill.filter.all' | t }}</option>
+            <option [value]="noCategory">
+              {{ 'settings.fiscalization.backfill.filter.noCategory' | t }}
+            </option>
+            @for (category of categories(); track category.id) {
+              <option [value]="category.id">{{ category.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="backfill__filter">
+          <span class="q-caption">{{ 'settings.fiscalization.backfill.filter.name' | t }}</span>
+          <input
+            class="q-body-sm"
+            type="search"
+            autocomplete="off"
+            [value]="nameFilter()"
+            (input)="nameFilter.set($any($event.target).value)"
+            data-testid="backfill-filter-name"
+          />
+        </label>
+        <label class="backfill__filter">
+          <span class="q-caption">{{
+            'settings.fiscalization.backfill.filter.locations' | t
+          }}</span>
+          <input
+            class="q-body-sm backfill__filter-number"
+            type="number"
+            min="0"
+            inputmode="numeric"
+            [value]="minLocations()"
+            (input)="setMinLocations($any($event.target).value)"
+            data-testid="backfill-filter-locations"
+          />
+        </label>
+        @if (filtered()) {
+          <button
+            type="button"
+            class="q-caption backfill__link"
+            (click)="clearFilters()"
+            data-testid="backfill-filter-clear"
+          >
+            {{ 'settings.fiscalization.backfill.filter.clear' | t }}
+          </button>
+        }
+      </div>
+      <p class="q-caption" role="status" data-testid="backfill-bulk-counts">
+        {{
+          'settings.fiscalization.backfill.bulk.counts'
+            | t
+              : {
+                  shown: visibleRows().length,
+                  total: rows().length,
+                  selected: selectedRows().length,
+                }
+        }}
+      </p>
+
+      <div class="backfill__bulk-row">
+        <div class="backfill__bulk-field">
+          <span class="q-caption">{{ 'settings.fiscalization.backfill.column.mxik' | t }}</span>
+          <q-mxik-picker
+            [code]="bulkMxik()"
+            [resetKey]="epoch()"
+            [scope]="searchScope()"
+            [invalid]="bulkMxikError() !== null"
+            [ariaLabel]="'settings.fiscalization.backfill.column.mxik' | t"
+            (codeChange)="onBulkMxik($event)"
+            (picked)="onBulkPicked($event)"
+            data-testid="backfill-bulk-mxik"
+          />
+          @if (bulkMxikError(); as key) {
+            <span class="q-caption backfill__error" data-testid="backfill-bulk-mxik-error">{{
+              key | t
+            }}</span>
+          }
+        </div>
+        <div class="backfill__bulk-field">
+          <span class="q-caption">{{
+            'settings.fiscalization.backfill.column.packageCode' | t
+          }}</span>
+          <input
+            class="q-body-sm backfill__cell"
+            [class.backfill__cell--invalid]="bulkPackageError() !== null"
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            spellcheck="false"
+            [value]="bulkPackage()"
+            [attr.aria-label]="'settings.fiscalization.backfill.column.packageCode' | t"
+            [attr.aria-invalid]="bulkPackageError() !== null"
+            (input)="onBulkPackage($any($event.target).value)"
+            data-testid="backfill-bulk-package"
+          />
+          @if (bulkPackageError(); as key) {
+            <span class="q-caption backfill__error" data-testid="backfill-bulk-package-error">{{
+              key | t
+            }}</span>
+          }
+          @if (bulkPackageSuggestions().length > 0) {
+            <span class="q-caption backfill__suggestions" data-testid="backfill-bulk-suggestions">
+              @for (code of bulkPackageSuggestions(); track code) {
+                <button
+                  type="button"
+                  class="q-caption backfill__link"
+                  (click)="useBulkPackage(code)"
+                  [attr.data-testid]="'backfill-bulk-suggestion-' + code"
+                >
+                  {{ code }}
+                </button>
+              }
+            </span>
+          }
+        </div>
+        <button
+          type="button"
+          class="q-body-sm backfill__button"
+          (click)="applyBulk()"
+          [disabled]="!canApplyBulk()"
+          data-testid="backfill-bulk-apply"
+        >
+          {{ 'settings.fiscalization.backfill.bulk.apply' | t: { count: selectedRows().length } }}
+        </button>
+      </div>
+      @if (bulkSummary(); as result) {
+        <p class="q-body-sm" role="status" data-testid="backfill-bulk-summary">
+          {{
+            'settings.fiscalization.backfill.bulk.applied'
+              | t: { rows: result.rows, cells: result.cells, kept: result.kept }
+          }}
+        </p>
+      }
+    </fieldset>
+
     <table class="backfill__table">
       <thead>
         <tr>
+          <th class="backfill__select">
+            <input
+              type="checkbox"
+              [checked]="allVisibleSelected()"
+              [disabled]="visibleRows().length === 0 || saving()"
+              [attr.aria-label]="'settings.fiscalization.backfill.bulk.selectAll' | t"
+              (change)="toggleAllVisible($any($event.target).checked)"
+              data-testid="backfill-select-all"
+            />
+          </th>
           <th class="q-caption">{{ 'settings.fiscalization.classification.field.type' | t }}</th>
           <th class="q-caption">{{ 'settings.fiscalization.classification.field.name' | t }}</th>
           <th class="q-caption">
@@ -99,8 +272,27 @@
         </tr>
       </thead>
       <tbody>
-        @for (row of rows(); track row.nodeId; let index = $index) {
+        @if (visibleRows().length === 0) {
+          <tr data-testid="backfill-no-match">
+            <td class="q-body-sm backfill__empty" colspan="8">
+              {{ 'settings.fiscalization.backfill.filter.noMatch' | t }}
+            </td>
+          </tr>
+        }
+        @for (row of visibleRows(); track row.nodeId; let index = $index) {
           <tr data-testid="backfill-row" [attr.data-node-id]="row.nodeId">
+            <td class="backfill__select">
+              <input
+                type="checkbox"
+                [checked]="isSelected(row.nodeId)"
+                [disabled]="saving()"
+                [attr.aria-label]="
+                  'settings.fiscalization.backfill.bulk.selectRow' | t: { name: row.name }
+                "
+                (change)="toggleRow(row.nodeId, $any($event.target).checked)"
+                [attr.data-testid]="'backfill-select-' + row.nodeId"
+              />
+            </td>
             <td class="q-body-sm">{{ typeLabel(row.nodeType) }}</td>
             <td class="q-body-sm">{{ row.name }}</td>
             <td class="q-body-sm">{{ row.categoryName ?? '—' }}</td>

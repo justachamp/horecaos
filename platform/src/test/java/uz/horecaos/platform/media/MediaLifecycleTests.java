@@ -51,6 +51,7 @@ import uz.horecaos.platform.media.api.MalwareScanner;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAssetStatus;
 import uz.horecaos.platform.media.api.MediaEvent;
+import uz.horecaos.platform.media.api.MediaPurpose;
 import uz.horecaos.platform.media.application.MediaAssetService;
 import uz.horecaos.platform.media.application.MediaDerivativeService;
 import uz.horecaos.platform.media.application.MediaDerivativeStore;
@@ -744,6 +745,103 @@ class MediaLifecycleTests {
                         .orElseThrow()
                         .widthPx())
                 .isEqualTo(1000);
+    }
+
+    @Test
+    @DisplayName("a KIOSK_IDLE picture at 9:16 becomes available, and a 4:3 one is rejected by verification (ADR 0187)")
+    void aPurposedImageAnswersToItsPurposesShape() throws Exception {
+        byte[] portrait = encode("jpg", 540, 960);
+        byte[] landscape = encode("jpg", 640, 480);
+
+        var fits = purposedUpload(portrait);
+        var wrong = purposedUpload(landscape);
+
+        assertThat(verificationWorker.verifyOnce()).isEqualTo(2);
+        assertThat(media.find(TENANT_A, fits).orElseThrow().status()).isEqualTo(MediaAssetStatus.AVAILABLE);
+        assertThat(media.find(TENANT_A, fits).orElseThrow().purpose()).isEqualTo("KIOSK_IDLE");
+        assertThat(media.find(TENANT_A, wrong).orElseThrow().status()).isEqualTo(MediaAssetStatus.REJECTED);
+        assertThat(rejectionCode(wrong))
+                .as("the 4:3 picture is refused for its shape, on the header's own dimensions")
+                .isEqualTo("PURPOSE_ASPECT_RATIO");
+        // The same bytes with no purpose are an ordinary, available image: the rule is the purpose's and nothing
+        // else's.
+        MediaAssetId ordinary = anAvailableAsset("image/jpeg", landscape);
+        assertThat(media.find(TENANT_A, ordinary).orElseThrow().purpose()).isNull();
+    }
+
+    @Test
+    @DisplayName(
+            "a purposed upload is refused before anything is allocated when it is over its cap, private, a video, an AVIF or not the tenant's")
+    void aPurposedUploadIsRefusedUpFront() {
+        long overTheCap = MediaPurpose.KIOSK_IDLE.maximumBytes() + 1;
+
+        assertThatThrownBy(() ->
+                        purposedRequest(MediaOwner.tenant(TENANT_A), MediaVisibility.PUBLIC, "image/jpeg", overTheCap))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("at most 1048576");
+        assertThatThrownBy(
+                        () -> purposedRequest(MediaOwner.tenant(TENANT_A), MediaVisibility.PRIVATE, "image/jpeg", 1000))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> purposedRequest(MediaOwner.brand(BRAND), MediaVisibility.PUBLIC, "image/jpeg", 1000))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(
+                        () -> purposedRequest(MediaOwner.tenant(TENANT_A), MediaVisibility.PUBLIC, "video/mp4", 1000))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("still image");
+        // AVIF is a type the platform stores for an ordinary asset and not one a kiosk's browser is promised to decode:
+        // the purpose's own set is JPEG, PNG and WebP, and the same refusal covers a type the platform stores for no
+        // one.
+        assertThatThrownBy(
+                        () -> purposedRequest(MediaOwner.tenant(TENANT_A), MediaVisibility.PUBLIC, "image/avif", 1000))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("JPEG, PNG or WebP");
+        assertThatThrownBy(
+                        () -> purposedRequest(MediaOwner.tenant(TENANT_A), MediaVisibility.PUBLIC, "image/gif", 1000))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(jdbc.sql("SELECT count(*) FROM media.assets")
+                        .query(Long.class)
+                        .single())
+                .as("nothing was allocated by any of the refusals")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("the database refuses a purposed asset that is private or owned by a brand, whatever the service does")
+    void theDatabaseRefusesAPurposedAssetThatIsNotPublicAndTenantOwned() {
+        assertThatThrownBy(() -> jdbc.sql("""
+                        INSERT INTO media.assets (asset_id, tenant_id, owner_scope, owner_id, object_key, bucket, status,
+                            visibility, declared_content_type, declared_size_bytes, purpose)
+                        VALUES (:id, :tenantId, 'TENANT', :tenantId, :key, 'b', 'PENDING_UPLOAD', 'PRIVATE',
+                            'image/jpeg', 10, 'KIOSK_IDLE')
+                        """)
+                        .param("id", UUID.randomUUID())
+                        .param("tenantId", TENANT_A)
+                        .param("key", "k-" + UUID.randomUUID())
+                        .update())
+                .hasMessageContaining("ck_media_asset_purpose_shape");
+        assertThatThrownBy(() -> jdbc.sql("""
+                        INSERT INTO media.assets (asset_id, tenant_id, owner_scope, owner_id, object_key, bucket, status,
+                            visibility, declared_content_type, declared_size_bytes, purpose)
+                        VALUES (:id, :tenantId, 'BRAND', :brand, :key, 'b', 'PENDING_UPLOAD', 'PUBLIC',
+                            'image/jpeg', 10, 'KIOSK_IDLE')
+                        """)
+                        .param("id", UUID.randomUUID())
+                        .param("tenantId", TENANT_A)
+                        .param("brand", BRAND)
+                        .param("key", "k-" + UUID.randomUUID())
+                        .update())
+                .hasMessageContaining("ck_media_asset_purpose_shape");
+        assertThatThrownBy(() -> jdbc.sql("""
+                        INSERT INTO media.assets (asset_id, tenant_id, owner_scope, owner_id, object_key, bucket, status,
+                            visibility, declared_content_type, declared_size_bytes, purpose)
+                        VALUES (:id, :tenantId, 'TENANT', :tenantId, :key, 'b', 'PENDING_UPLOAD', 'PUBLIC',
+                            'image/jpeg', 10, 'LOBBY_MUSIC')
+                        """)
+                        .param("id", UUID.randomUUID())
+                        .param("tenantId", TENANT_A)
+                        .param("key", "k-" + UUID.randomUUID())
+                        .update())
+                .hasMessageContaining("ck_media_asset_purpose");
     }
 
     @Test
@@ -1461,6 +1559,20 @@ class MediaLifecycleTests {
         assertThat(verificationWorker.verifyOnce()).isEqualTo(1);
         assertThat(media.find(TENANT_A, ticket.assetId()).orElseThrow().status())
                 .isEqualTo(MediaAssetStatus.AVAILABLE);
+        return ticket.assetId();
+    }
+
+    private MediaAssetService.UploadTicket purposedRequest(
+            MediaOwner owner, MediaVisibility visibility, String contentType, long size) {
+        return media.requestUpload(
+                TENANT_A, owner, visibility, contentType, size, "idle.jpg", null, null, MediaPurpose.KIOSK_IDLE);
+    }
+
+    /** A KIOSK_IDLE upload put to the store and claimed complete; verification is the caller's to run. */
+    private MediaAssetId purposedUpload(byte[] content) throws Exception {
+        var ticket = purposedRequest(MediaOwner.tenant(TENANT_A), MediaVisibility.PUBLIC, "image/jpeg", content.length);
+        assertThat(put(ticket.uploadUrl(), ticket.requiredHeaders(), content)).isEqualTo(200);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.UPLOADED);
         return ticket.assetId();
     }
 

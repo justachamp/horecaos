@@ -1,0 +1,146 @@
+<section class="idle" data-testid="kiosk-idle">
+  <h3 class="q-emphasis">{{ 'settings.kiosk.idle.title' | t }}</h3>
+  <p class="q-body-sm hint">{{ 'settings.kiosk.idle.lead' | t }}</p>
+
+  @if (channels().length === 0) {
+    <p class="q-body-sm hint" data-testid="kiosk-idle-no-channels">
+      {{ 'settings.kiosk.idle.noChannels' | t }}
+    </p>
+  } @else {
+    @if (channels().length > 1) {
+      <label class="field">
+        <span class="q-caption hint">{{ 'settings.kiosk.idle.channel' | t }}</span>
+        <select
+          [value]="channelId()"
+          (change)="chooseChannel($any($event.target).value)"
+          data-testid="kiosk-idle-channel"
+        >
+          @for (choice of channels(); track choice.channelId) {
+            <option [value]="choice.channelId" [selected]="channelId() === choice.channelId">
+              {{ choice.displayName }}
+            </option>
+          }
+        </select>
+      </label>
+    }
+    <p class="q-caption hint" data-testid="kiosk-idle-shared">
+      {{ 'settings.kiosk.idle.shared' | t }}
+    </p>
+
+    @switch (state()) {
+      @case ('loading') {
+        <p class="q-body-sm">{{ 'settings.kiosk.idle.loading' | t }}</p>
+      }
+      @case ('denied') {
+        <p class="q-body-sm" data-testid="kiosk-idle-denied">
+          {{ 'settings.kiosk.idle.denied' | t }}
+        </p>
+      }
+      @case ('error') {
+        <p class="q-body-sm error" data-testid="kiosk-idle-error">
+          {{ 'settings.kiosk.idle.error' | t }}
+        </p>
+      }
+      @case ('ready') {
+        <div class="layout">
+          <q-kiosk-frame [caption]="'settings.kiosk.idle.preview' | t">
+            @if (first(); as picture) {
+              <img class="screen" [src]="src(picture)" alt="" data-testid="kiosk-idle-preview" />
+            } @else {
+              <p class="q-caption screen-empty" data-testid="kiosk-idle-preview-empty">
+                {{ 'settings.kiosk.idle.previewEmpty' | t }}
+              </p>
+            }
+          </q-kiosk-frame>
+
+          <div class="pictures">
+            <p class="q-caption hint" data-testid="kiosk-idle-count">
+              {{ 'settings.kiosk.idle.count' | t: { count: items().length, max: maximumCount() } }}
+            </p>
+
+            @if (items().length === 0) {
+              <p class="q-body-sm hint" data-testid="kiosk-idle-empty">
+                {{ 'settings.kiosk.idle.empty' | t }}
+              </p>
+            } @else {
+              <ol class="list" data-testid="kiosk-idle-list">
+                @for (item of items(); track item.id; let index = $index; let last = $last) {
+                  <li class="row" [attr.data-testid]="'kiosk-idle-item-' + item.id">
+                    <img class="thumb" [src]="src(item)" alt="" loading="lazy" />
+                    <span class="q-body-sm">{{ positionLabel(item) }}</span>
+                    @if (canManage()) {
+                      <span class="actions">
+                        <button
+                          type="button"
+                          class="secondary"
+                          [disabled]="index === 0 || busy() || uploading()"
+                          (click)="move(item, -1)"
+                          [attr.data-testid]="'kiosk-idle-up-' + item.id"
+                        >
+                          {{ 'settings.kiosk.idle.up' | t }}
+                        </button>
+                        <button
+                          type="button"
+                          class="secondary"
+                          [disabled]="last || busy() || uploading()"
+                          (click)="move(item, 1)"
+                          [attr.data-testid]="'kiosk-idle-down-' + item.id"
+                        >
+                          {{ 'settings.kiosk.idle.down' | t }}
+                        </button>
+                        <button
+                          type="button"
+                          class="secondary"
+                          [disabled]="busy() || uploading()"
+                          (click)="remove(item)"
+                          [attr.data-testid]="'kiosk-idle-remove-' + item.id"
+                        >
+                          {{ 'settings.kiosk.idle.remove' | t }}
+                        </button>
+                      </span>
+                    }
+                  </li>
+                }
+              </ol>
+            }
+
+            @if (canManage()) {
+              @if (full()) {
+                <p class="q-body-sm hint" data-testid="kiosk-idle-full">
+                  {{ 'settings.kiosk.idle.full' | t: { max: maximumCount() } }}
+                </p>
+              } @else {
+                <q-media-uploader
+                  [aspectRatios]="ratios"
+                  [accept]="accept"
+                  [maxSizeBytes]="originalMaxBytes"
+                  [exportEdgePx]="exportEdge"
+                  [uploading]="uploading()"
+                  (cropped)="onPicture($event)"
+                  (selected)="onPicture($event)"
+                  (rejected)="onRejected($event)"
+                  data-testid="kiosk-idle-uploader"
+                />
+                <p class="q-caption hint">{{ 'settings.kiosk.idle.hint' | t }}</p>
+              }
+            }
+
+            @if (uploading()) {
+              <p class="q-body-sm" data-testid="kiosk-idle-uploading">
+                {{ 'settings.kiosk.idle.uploading' | t }}
+              </p>
+            }
+            @if (notice()) {
+              <p class="q-body-sm" role="status" data-testid="kiosk-idle-notice">{{ notice() }}</p>
+            }
+            @if (problem()) {
+              <p class="q-body-sm error" role="alert" data-testid="kiosk-idle-problem">
+                {{ problem() }}
+              </p>
+            }
+          </div>
+        </div>
+      }
+    }
+  }
+</section>

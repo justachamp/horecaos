@@ -50,6 +50,11 @@ export interface AuditSearchFilters {
   readonly limit?: number;
   /** The previous page's `nextCursor` (Staff 9.3) — omit for the first page. */
   readonly cursor?: string;
+  /**
+   * Only the actions the platform registers as personal data leaving — a reveal of a protected value, an export
+   * (Settings 10.11). The list lives in the backend (`PiiEgressActions`); the console keeps none of its own.
+   */
+  readonly piiEgress?: boolean;
 }
 
 /**
@@ -88,6 +93,7 @@ export class ActivityLogApi {
           to: filters.to,
           limit: filters.limit,
           cursor: filters.cursor,
+          piiEgress: filters.piiEgress,
         },
       }),
     );

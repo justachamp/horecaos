@@ -236,6 +236,7 @@ public class StorefrontPaymentController {
      *                        {@code account.order_id}. Opaque and non-sequential,
      *                        so it reveals nothing and cannot be walked
      * @param checkoutUrl     where to send the browser, or null for a push
+     * @param form            a checkout to POST instead of follow, or null (see {@link PaymentFormResponse})
      * @param amountMinor     whole som (ADR 0018). Not divided by anything: a
      *                        formatter that asks ISO 4217 how many decimal places
      *                        UZS has divides by 100 and shows a customer a price a
@@ -252,7 +253,8 @@ public class StorefrontPaymentController {
             long amountMinor,
             String currency,
             boolean rePresented,
-            int presentationCount) {
+            int presentationCount,
+            @Nullable PaymentFormResponse form) {
 
         static PaymentSessionResponse of(PaymentCheckoutService.PaymentSession session) {
             return new PaymentSessionResponse(
@@ -266,7 +268,18 @@ public class StorefrontPaymentController {
                     session.amountMinor(),
                     session.currency(),
                     session.rePresented(),
-                    session.presentationCount());
+                    session.presentationCount(),
+                    session.form() == null
+                            ? null
+                            : new PaymentFormResponse(
+                                    session.form().action(), session.form().fields()));
         }
     }
+
+    /**
+     * A checkout the browser submits as a form instead of following as a link (Payme with a fiscalised cashbox:
+     * the receipt detail is a field of the form). The page creates a form with these hidden fields and submits
+     * it; the fields are the customer's own checkout and are not stored or logged anywhere.
+     */
+    public record PaymentFormResponse(String action, java.util.Map<String, String> fields) {}
 }

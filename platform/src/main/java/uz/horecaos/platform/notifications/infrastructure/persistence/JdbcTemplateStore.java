@@ -22,9 +22,12 @@ import org.springframework.stereotype.Repository;
  * and the tenant would be shown a suppression reason that is not true.
  *
  * <p>Resolution prefers a brand's own wording over the tenant's default. ADR 0020
- * also names a platform default beneath those two; it does not exist here, because
- * a platform row would be a NULL-tenant row in a tenant-scoped table and the first
- * slice does not need one.
+ * also names a platform default beneath those two. It does not exist here, and that
+ * is deliberate: a platform row would be a NULL-tenant row in a tenant-scoped table
+ * (ADR 0056's row-level security is untouched by keeping it out). The layer is
+ * bundled in code instead ({@code PlatformDefaultTemplates}, ADR 0184), the way
+ * ADR 0068's platform default terms are, and {@code NotificationTemplateService}
+ * falls to it when this store finds no active template at any scope.
  */
 @Repository
 public class JdbcTemplateStore {
@@ -50,38 +53,29 @@ public class JdbcTemplateStore {
     }
 
     /**
-     * The template that applies here, most specific variant first.
+     * The template that applies here, brand scope first and then the most specific variant.
      *
-     * <p>Four independent dimensions, each nullable meaning "any": brand,
-     * fulfilment mode, and channel source all narrow a tenant-wide default,
-     * exactly as brand alone used to. The predicate for each is an OR against
-     * NULL rather than a separate query per combination, so the choice is
-     * still made by one statement, and a brand id belonging to another tenant
-     * still matches nothing because the tenant predicate is applied first.
+     * <p>Three independent dimensions, each nullable meaning "any": brand, fulfilment mode and
+     * channel source. The predicate for each is an OR against NULL rather than a separate query per
+     * combination, so the choice is still made by one statement, and a brand id belonging to another
+     * tenant still matches nothing because the tenant predicate is applied first. A caller that
+     * passes null for {@code fulfillmentMode} or {@code channelSource} (nothing is known, not "this
+     * order has none") can still only match a row that is itself null on that dimension: passing
+     * null never selects a variant-specific row it did not ask for.
      *
-     * <p>{@code ORDER BY} sums how many of the three optional dimensions this
-     * row pins down and ranks the highest total first — the same "narrowest
-     * scope wins" rule {@code JdbcProviderInstallationLookup.specificity()}
-     * applies to a provider binding's brand-vs-location scope, generalised to
-     * three dimensions instead of two. A caller that passes null for
-     * {@code fulfillmentMode} or {@code channelSource} (nothing is known, not
-     * "this order has none") can still only match a row that is itself null
-     * on that dimension — passing null never accidentally selects a
-     * variant-specific row it did not ask for.
+     * <p><strong>The precedence is ADR 0184, D20, and it is lexicographic, not a sum.</strong>
+     * First, scope: a row of this brand outranks every tenant-wide row, whatever the tenant-wide row
+     * pins down. Then, within a scope, how many variant dimensions the row pins down: a row that
+     * names both a fulfilment mode and a channel source outranks one that names a single dimension,
+     * which outranks the generic row. Then, between two rows that each pin exactly one, the
+     * fulfilment-mode row outranks the channel-source row.
      *
-     * <p><strong>Tie-break between equally specific rows on different
-     * dimensions is a side effect of column order, not a product rule.</strong>
-     * A fulfilment-mode-only variant (specificity 1) and a channel-source-only
-     * variant (specificity 1) can both match the same order — a delivery order
-     * placed on the storefront, say — and {@code fulfillment_mode NULLS LAST}
-     * is listed before {@code channel_source NULLS LAST}, so the fulfilment
-     * variant always wins that tie, silently, with no way for an operator to
-     * ask for the other one instead. No ADR decides which dimension should
-     * take precedence, so this is documented and pinned by {@code
-     * TemplateVariantResolutionTests
-     * .aFulfilmentOnlyVariantOutranksAChannelOnlyVariantOfEqualSpecificity}
-     * rather than changed here; reordering these two lines is a real,
-     * deliberate precedence change and that test will catch it.
+     * <p>The ORDER BY used to add the brand column to the other two as a third "dimension". That
+     * made a tenant-wide row pinned on both mode and source (score 2) outrank a brand-wide generic
+     * row (score 1), and the brand's own override was silently ignored for exactly the orders the
+     * tenant had pinned. Scope outranks variant: a brand that wrote its own wording means it for
+     * every order it serves, unless it also wrote a narrower one. {@code
+     * TemplateVariantResolutionTests} pins every step of the order.
      *
      * @param fulfillmentMode null when the message is not about an order, or
      *                        its fulfilment mode is not known to the caller
@@ -117,21 +111,46 @@ public class JdbcTemplateStore {
                   -- driver unable to infer one, the same reason JdbcOrderStore's
                   -- own optional fulfilment-mode filter already casts.
                 ORDER BY
-                    (CASE WHEN brand_id IS NOT NULL THEN 1 ELSE 0 END
-                     + CASE WHEN fulfillment_mode IS NOT NULL THEN 1 ELSE 0 END
-                     + CASE WHEN channel_source IS NOT NULL THEN 1 ELSE 0 END) DESC,
-                    brand_id NULLS LAST,
-                    -- Below the specificity sum, this column order is itself the
-                    -- tiebreak between two equally-specific rows on different
-                    -- dimensions: fulfilment_mode beats channel_source whenever
-                    -- both match. See this method's own doc comment.
-                    fulfillment_mode NULLS LAST,
-                    channel_source NULLS LAST
+                    -- ADR 0184, D20: scope first ...
+                    (brand_id IS NOT NULL) DESC,
+                    -- ... then how many variant dimensions the row pins down ...
+                    ((fulfillment_mode IS NOT NULL)::int + (channel_source IS NOT NULL)::int) DESC,
+                    -- ... then, between two rows pinning exactly one, fulfilment mode over channel source.
+                    (fulfillment_mode IS NOT NULL) DESC,
+                    (channel_source IS NOT NULL) DESC
                 LIMIT 1
                 """)
                 .params(parameters)
                 .query(JdbcTemplateStore::templateRow)
                 .optional();
+    }
+
+    /**
+     * Whether this tenant has any ACTIVE template for the key and channel that could answer this brand,
+     * whatever variant it is pinned to (ADR 0184, D20.3).
+     *
+     * <p>The platform's own wording answers only when this is false. {@link #activeTemplate} cannot be
+     * asked: it takes the order's fulfilment mode and channel source and matches only a row that is
+     * generic or pinned to those, so a tenant that wrote a delivery-only template looks exactly like a
+     * tenant that wrote none to a pickup order. The scope rule is the same as there (this brand's own
+     * rows and the tenant-wide ones; a sibling brand's template is not this brand's to be silenced by),
+     * and the variant predicates are the whole difference.
+     */
+    public boolean hasActiveTemplate(UUID tenantId, UUID brandId, String templateKey, String channel) {
+        return Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT EXISTS (
+                            SELECT 1
+                              FROM notifications.templates
+                             WHERE tenant_id = :tenantId AND template_key = :key AND channel = :channel
+                               AND status = 'ACTIVE'
+                               AND (brand_id = :brandId OR brand_id IS NULL))
+                        """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("key", templateKey)
+                .param("channel", channel)
+                .query(Boolean.class)
+                .single());
     }
 
     public Optional<TemplateRow> template(UUID tenantId, UUID templateId) {
@@ -170,7 +189,8 @@ public class JdbcTemplateStore {
                 SELECT id, tenant_id, template_id, version_number, locale, subject_template,
                        body_template, variables_schema::text AS variables_schema, content_hash,
                        status, approved_by, activated_at, provider_review,
-                       provider_review_reference, provider_review_note, provider_review_updated_at
+                       provider_review_reference, provider_review_note, provider_review_updated_at,
+                       show_item_prices, cover_asset_id, target_path
                 FROM notifications.template_versions
                 WHERE tenant_id = :tenantId AND template_id = :templateId
                   AND version_number = :versionNumber AND locale = :locale
@@ -188,7 +208,8 @@ public class JdbcTemplateStore {
                 SELECT id, tenant_id, template_id, version_number, locale, subject_template,
                        body_template, variables_schema::text AS variables_schema, content_hash,
                        status, approved_by, activated_at, provider_review,
-                       provider_review_reference, provider_review_note, provider_review_updated_at
+                       provider_review_reference, provider_review_note, provider_review_updated_at,
+                       show_item_prices, cover_asset_id, target_path
                 FROM notifications.template_versions
                 WHERE tenant_id = :tenantId AND template_id = :templateId
                   AND version_number = :versionNumber
@@ -212,7 +233,8 @@ public class JdbcTemplateStore {
                 SELECT id, tenant_id, template_id, version_number, locale, subject_template,
                        body_template, variables_schema::text AS variables_schema, content_hash,
                        status, approved_by, activated_at, provider_review,
-                       provider_review_reference, provider_review_note, provider_review_updated_at
+                       provider_review_reference, provider_review_note, provider_review_updated_at,
+                       show_item_prices, cover_asset_id, target_path
                 FROM notifications.template_versions
                 WHERE tenant_id = :tenantId AND template_id = :templateId
                 ORDER BY version_number DESC, locale
@@ -220,6 +242,37 @@ public class JdbcTemplateStore {
                 .param("tenantId", tenantId)
                 .param("templateId", templateId)
                 .query(JdbcTemplateStore::versionRow)
+                .list();
+    }
+
+    /**
+     * The locale rows of the version each of this brand's templates is showing, in one read (ADR 0184,
+     * row 10.9a's list): the active version, or for a template with none yet the newest draft.
+     *
+     * <p>One statement for the whole list rather than one read per template, so a console with sixty
+     * templates is one round trip and not sixty-one. Tenant-wide templates are included, as they are in
+     * {@link #templatesForBrand}, because what a brand sends is whichever of the two resolution picks.
+     */
+    public List<ShownVersionRow> shownVersions(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT v.template_id, v.version_number, v.locale, v.status, v.provider_review
+                FROM notifications.template_versions v
+                JOIN notifications.templates t ON t.id = v.template_id AND t.tenant_id = v.tenant_id
+                WHERE t.tenant_id = :tenantId AND (t.brand_id = :brandId OR t.brand_id IS NULL)
+                  AND v.version_number = COALESCE(
+                        t.active_version,
+                        (SELECT max(m.version_number) FROM notifications.template_versions m
+                          WHERE m.tenant_id = t.tenant_id AND m.template_id = t.id))
+                ORDER BY v.template_id, v.locale
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((row, number) -> new ShownVersionRow(
+                        row.getObject("template_id", UUID.class),
+                        row.getInt("version_number"),
+                        row.getString("locale"),
+                        row.getString("status"),
+                        row.getString("provider_review")))
                 .list();
     }
 
@@ -320,6 +373,46 @@ public class JdbcTemplateStore {
             String contentHash,
             boolean awaitsGateway,
             Instant now) {
+        insertVersion(
+                id,
+                tenantId,
+                templateId,
+                versionNumber,
+                locale,
+                subjectTemplate,
+                bodyTemplate,
+                variablesSchemaJson,
+                contentHash,
+                awaitsGateway,
+                false,
+                null,
+                null,
+                now);
+    }
+
+    /**
+     * Inserts one draft locale of a version, with the version's «show item prices» setting (ADR 0184) and what
+     * a push wording adds to it (ADR 0182): a cover (an ADR 0010 media asset id, already checked) and the
+     * storefront path a tap opens.
+     *
+     * @param showItemPrices the same value on every locale row of one version: the service writes it
+     *        once per version, never per language
+     */
+    public void insertVersion(
+            UUID id,
+            UUID tenantId,
+            UUID templateId,
+            int versionNumber,
+            String locale,
+            @Nullable String subjectTemplate,
+            String bodyTemplate,
+            String variablesSchemaJson,
+            String contentHash,
+            boolean awaitsGateway,
+            boolean showItemPrices,
+            @Nullable UUID coverAssetId,
+            @Nullable String targetPath,
+            Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", id);
         parameters.put("tenantId", tenantId);
@@ -330,7 +423,10 @@ public class JdbcTemplateStore {
         parameters.put("body", bodyTemplate);
         parameters.put("schema", variablesSchemaJson);
         parameters.put("hash", contentHash);
+        parameters.put("showItemPrices", showItemPrices);
         parameters.put("now", utc(now));
+        parameters.put("cover", coverAssetId);
+        parameters.put("targetPath", targetPath);
         parameters.put("review", awaitsGateway ? "PENDING" : "NOT_REQUIRED");
         parameters.put("reviewedBy", awaitsGateway ? GATEWAY_MODERATION : null);
         parameters.put("reviewedAt", awaitsGateway ? utc(now) : null);
@@ -342,10 +438,10 @@ public class JdbcTemplateStore {
                     id, tenant_id, template_id, version_number, locale, subject_template,
                     body_template, variables_schema, content_hash, status, created_at, updated_at,
                     provider_review, provider_review_updated_by, provider_review_updated_at,
-                    provider_review_note)
+                    provider_review_note, show_item_prices, cover_asset_id, target_path)
                 VALUES (:id, :tenantId, :templateId, :versionNumber, :locale, :subject,
                     :body, CAST(:schema AS jsonb), :hash, 'DRAFT', :now, :now,
-                    :review, :reviewedBy, :reviewedAt, :reviewNote)
+                    :review, :reviewedBy, :reviewedAt, :reviewNote, :showItemPrices, :cover, :targetPath)
                 """).params(parameters).update();
     }
 
@@ -489,7 +585,10 @@ public class JdbcTemplateStore {
                 row.getString("provider_review"),
                 row.getString("provider_review_reference"),
                 row.getString("provider_review_note"),
-                providerReviewUpdatedAt == null ? null : providerReviewUpdatedAt.toInstant());
+                providerReviewUpdatedAt == null ? null : providerReviewUpdatedAt.toInstant(),
+                row.getBoolean("show_item_prices"),
+                row.getObject("cover_asset_id", UUID.class),
+                row.getString("target_path"));
     }
 
     private static OffsetDateTime utc(Instant instant) {
@@ -555,5 +654,17 @@ public class JdbcTemplateStore {
             String providerReview,
             @Nullable String providerReviewReference,
             @Nullable String providerReviewNote,
-            @Nullable Instant providerReviewUpdatedAt) {}
+            @Nullable Instant providerReviewUpdatedAt,
+            /** ADR 0184: whether {{productList}} follows each item with its line total. */
+            boolean showItemPrices,
+            @Nullable UUID coverAssetId,
+            @Nullable String targetPath) {}
+
+    /**
+     * One locale row of the version a template list should summarise: the active version, or for a
+     * template with none the newest draft. The list screen needs the languages a template has and the
+     * worst moderation state among them, not the text, so the rows carry neither wording nor schema.
+     */
+    public record ShownVersionRow(
+            UUID templateId, int versionNumber, String locale, String status, String providerReview) {}
 }

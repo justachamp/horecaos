@@ -64,6 +64,7 @@
           [attr.aria-selected]="i === activeIndex()"
           class="q-combobox__option"
           [class.q-combobox__option--active]="i === activeIndex()"
+          [class.q-combobox__option--columns]="!!option.detail"
           (mousedown)="$event.preventDefault()"
           (click)="choose(option)"
           data-testid="q-combobox-option"
@@ -71,6 +72,11 @@
           <span class="q-body-sm">{{ option.label }}</span>
           @if (option.sublabel) {
             <span class="q-caption q-combobox__sublabel">{{ option.sublabel }}</span>
+          }
+          @if (option.detail) {
+            <span class="q-caption q-combobox__detail" data-testid="q-combobox-option-detail">{{
+              option.detail
+            }}</span>
           }
         </li>
       }

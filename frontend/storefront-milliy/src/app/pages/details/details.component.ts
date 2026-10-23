@@ -86,6 +86,9 @@ export class DetailsComponent implements OnInit {
   /** ISO currency of the menu the product came from; null before any menu is read. */
   protected readonly currency = this.menu.currency;
 
+  /** ADR 0137, row 4.2c: whether the menu asks for the КБЖУ accuracy line under a nutrition table. */
+  protected readonly nutritionAccuracyNotice = this.menu.nutritionAccuracyNotice;
+
   protected readonly state = signal<LoadState>('loading');
   protected readonly item = signal<MenuItem | null>(null);
   protected readonly variantId = signal<string | null>(null);

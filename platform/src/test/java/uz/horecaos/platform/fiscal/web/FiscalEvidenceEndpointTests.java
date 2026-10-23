@@ -42,10 +42,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalService;
-import uz.horecaos.platform.fiscal.api.FiscalEvidencePolicies;
 import uz.horecaos.platform.fiscal.api.SentReceiptEvidence;
 import uz.horecaos.platform.iam.api.PlatformRole;
-import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
@@ -61,7 +59,6 @@ import uz.horecaos.platform.payments.domain.SentReceipt;
 import uz.horecaos.platform.payments.domain.SomAmount;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcFiscalDocumentStore;
 import uz.horecaos.platform.support.TestDatabase;
-import uz.horecaos.platform.tenancy.api.PolicyAuthor;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
 /**
@@ -127,6 +124,8 @@ class FiscalEvidenceEndpointTests {
         registry.add("spring.datasource.username", db::username);
         registry.add("spring.datasource.password", db::password);
         registry.add("horecaos.messaging.outbox.enabled", () -> "false");
+        // The fixtures are dated 2026-10-08 on a fixed clock; a lookback of days would age them out of the pass.
+        registry.add("horecaos.fiscal.amendment-corrections.lookback", () -> "P36500D");
         registry.add("spring.kafka.bootstrap-servers", () -> "localhost:59092");
         // The envelope protection the sent lines are written behind.
         registry.add("horecaos.secrets.data_encryption.platform.kek", () -> "a-test-key-encryption-key");
@@ -151,10 +150,10 @@ class FiscalEvidenceEndpointTests {
     private JdbcFiscalDocumentStore payments;
 
     @Autowired
-    private PolicyAuthor policyAuthor;
+    private ApprovalService approvals;
 
     @Autowired
-    private ApprovalService approvals;
+    private uz.horecaos.platform.fiscal.application.FiscalAmendmentCorrections amendmentCorrections;
 
     @Autowired
     private ObjectMapper json;
@@ -170,6 +169,7 @@ class FiscalEvidenceEndpointTests {
                 // keeps a tenant alive: a run that lands between two tests would stop the tenant's deletion.
                 "reporting.fact_forecast",
                 "reporting.forecast_run",
+                "ordering.order_revisions",
                 "fiscal.fiscal_correction_requests",
                 "fiscal.fiscal_documents",
                 "fiscal.fiscal_terminals",
@@ -193,6 +193,11 @@ class FiscalEvidenceEndpointTests {
                 "iam.grants")) {
             jdbc.sql("DELETE FROM " + table).update();
         }
+        // The facts a fixture's request and attachment wrote to the outbox reference the tenant.
+        jdbc.sql("DELETE FROM integration.outbox_events WHERE tenant_id IN (:a, :b)")
+                .param("a", TENANT)
+                .param("b", OTHER_TENANT)
+                .update();
         // A request for a second signature is tenant-owned and survives the fixtures it was raised about.
         jdbc.sql("DELETE FROM audit.approval_requests WHERE tenant_id IN (:a, :b)")
                 .param("a", TENANT)
@@ -270,6 +275,38 @@ class FiscalEvidenceEndpointTests {
         assertThat(body.path("retention").path("provisional").asBoolean())
                 .as("a seven-year default nobody has confirmed says so")
                 .isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "the evidence states the tender the document covers and the business day its seller was resolved on, as stored (ADR 0038, ADR 0166 Decision 2)")
+    void theEvidenceStatesTheTenderAndTheBusinessDayAsStored() throws Exception {
+        UUID orderId = seedOrder("E-102");
+        UUID documentId = issuedClickDocument(orderId, ENTITY_A, line("Lavash classic", 1, 25_000L, List.of()));
+
+        JsonNode before = evidence(FINANCE, orderId, null).path("documents").path(0);
+        assertThat(before.path("tenderId").isNull() || before.path("tenderId").isMissingNode())
+                .as("a document written before the snapshots were taken says nothing, rather than a guess")
+                .isTrue();
+        assertThat(before.path("businessDate").isNull()
+                        || before.path("businessDate").isMissingNode())
+                .isTrue();
+
+        UUID tender = UUID.randomUUID();
+        jdbc.sql("""
+                UPDATE fiscal.fiscal_documents
+                   SET tender_id = :tender, business_date = DATE '2026-10-14'
+                 WHERE id = :id
+                """).param("tender", tender).param("id", documentId).update();
+
+        JsonNode document = evidence(FINANCE, orderId, null).path("documents").path(0);
+
+        assertThat(document.path("tenderId").asText())
+                .as("which money tender the document covers: stored, not inferred")
+                .isEqualTo(tender.toString());
+        assertThat(document.path("businessDate").asText())
+                .as("the local day, in the branch's calendar, on which the order closed")
+                .isEqualTo("2026-10-14");
     }
 
     @Test
@@ -690,7 +727,385 @@ class FiscalEvidenceEndpointTests {
         }
     }
 
+    // ------------------------------------------------------------------ retention (X.2-11)
+
+    @Test
+    @DisplayName(
+            "the platform sees each tenant's evidence against its retention, report-only; a tenant's own people cannot read it")
+    void theRetentionReportIsThePlatformsAndDeletesNothing() throws Exception {
+        UUID recent = issuedClickDocument(seedOrder("E-901"), ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        UUID old = issuedClickDocument(seedOrder("E-902"), ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        jdbc.sql("UPDATE fiscal.fiscal_documents SET created_at = :at, issued_at = :at WHERE id = :id")
+                .param("id", old)
+                .param("at", Instant.now().minus(Duration.ofDays(365L * 8)).atOffset(ZoneOffset.UTC))
+                .update();
+        grantPlatformAdmin("retention-platform-admin");
+
+        MvcResult read = mvc.perform(
+                        get("/api/v1/control-plane/fiscal/retention").with(tokenFor("retention-platform-admin")))
+                .andReturn();
+
+        assertThat(read.getResponse().getStatus()).isEqualTo(200);
+        JsonNode rows = json.readTree(read.getResponse().getContentAsString());
+        JsonNode mine = java.util.stream.StreamSupport.stream(rows.spliterator(), false)
+                .filter(row -> row.path("tenantId").asText().equals(TENANT.toString()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("the tenant that holds evidence is in the report"));
+        assertThat(mine.path("retentionYears").asInt()).isEqualTo(7);
+        assertThat(mine.path("provisional").asBoolean())
+                .as("the default nobody has confirmed says so")
+                .isTrue();
+        assertThat(mine.path("documents").asLong()).isEqualTo(2);
+        assertThat(mine.path("pastRetention").asLong())
+                .as("one is eight years old and one is not")
+                .isEqualTo(1);
+        assertThat(rows.toString()).doesNotContain(FISCAL_SIGN).doesNotContain(RECEIPT_URL);
+
+        // Report-only: both documents are still there, and the recent one is untouched.
+        assertThat(jdbc.sql("SELECT count(*) FROM fiscal.fiscal_documents WHERE tenant_id = :t")
+                        .param("t", TENANT)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(2L);
+        assertThat(documentStatus(recent)).isEqualTo("ISSUED");
+
+        // A tenant's own finance role is not the platform's.
+        assertThat(mvc.perform(get("/api/v1/control-plane/fiscal/retention").with(tokenFor(FINANCE)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(403);
+    }
+
+    private void grantPlatformAdmin(String subject) {
+        jdbc.sql("""
+                INSERT INTO iam.grants
+                    (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
+                     status, granted_by, reason, valid_from)
+                VALUES (:id, NULL, :subject, :roleId, true, 'PLATFORM', NULL,
+                        'ACTIVE', 'test-fixture', 'fiscal retention endpoint test', :validFrom)
+                ON CONFLICT DO NOTHING
+                """)
+                .param("id", UUID.nameUUIDFromBytes((subject + PlatformRole.PLATFORM_ADMIN.code()).getBytes(UTF_8)))
+                .param("subject", subject)
+                .param("roleId", RoleRegistrySynchronizer.platformRoleId(PlatformRole.PLATFORM_ADMIN))
+                .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
     // ------------------------------------------------------ correction and void
+
+    // ------------------------------------------- an amendment after the receipt (X.2-6, ADR 0166 Decision 8)
+
+    @Test
+    @DisplayName(
+            "an amendment that changes a filed order opens a correction request on its own, unapproved, and an attachment still needs a second person")
+    void anAmendmentAfterTheReceiptOpensARequestThatWaitsForAPerson() throws Exception {
+        UUID orderId = seedOrder("E-801");
+        UUID documentId = issuedClickDocument(orderId, ENTITY_A, line("Lavash", 2, 25_000L, List.of()));
+        amendedAt(orderId, 2, NOW.plus(Duration.ofHours(1)), true);
+
+        assertThat(amendmentCorrections.openRequests(100)).isEqualTo(1);
+
+        assertThat(documentStatus(documentId)).isEqualTo("CORRECTION_REQUESTED");
+        Map<String, Object> request =
+                jdbc.sql("""
+                        SELECT kind, reason_code, status, requested_by, approval_id, source_revision
+                          FROM fiscal.fiscal_correction_requests WHERE document_id = :d
+                        """).param("d", documentId).query().singleRow();
+        assertThat(request.get("kind")).isEqualTo("CORRECTION");
+        assertThat(request.get("reason_code")).isEqualTo("AMENDED_AFTER_ISSUE");
+        assertThat(request.get("status")).isEqualTo("REQUESTED");
+        assertThat(request.get("requested_by"))
+                .as("opened by the platform, not by a person")
+                .isEqualTo("fiscal-amendment-watch");
+        assertThat(request.get("approval_id")).as("no one has approved it yet").isNull();
+        assertThat(request.get("source_revision")).isEqualTo(2);
+
+        // The same sweep again opens nothing: a revision is covered once.
+        assertThat(amendmentCorrections.openRequests(100)).isZero();
+        assertThat(jdbc.sql("SELECT count(*) FROM fiscal.fiscal_correction_requests WHERE document_id = :d")
+                        .param("d", documentId)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1L);
+
+        // It is a fact on the topic, from the platform, and an audit fact by the system job.
+        assertThat(outboxFacts("FiscalCorrectionRequested", documentId))
+                .singleElement()
+                .satisfies(fact -> {
+                    JsonNode payload = payloadOf(fact);
+                    assertThat(payload.path("source").asText()).isEqualTo("AMENDMENT");
+                    assertThat(payload.path("reasonCode").asText()).isEqualTo("AMENDED_AFTER_ISSUE");
+                    assertThat(payload.path("status").asText()).isEqualTo("CORRECTION_REQUESTED");
+                });
+        assertThat(auditFacts("fiscal.correction.requested", documentId))
+                .singleElement()
+                .satisfies(fact -> {
+                    assertThat(fact.get("actor_subject")).isEqualTo("fiscal-amendment-watch");
+                    assertThat(fact.get("approval_request_id")).isNull();
+                });
+
+        // The worklist shows it, with a label a person can read.
+        JsonNode worklist =
+                json.readTree(mvc.perform(get("/api/v1/operations/tenants/" + TENANT + "/fiscal/correction-requests")
+                                .with(tokenFor(FINANCE)))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString());
+        assertThat(worklist).hasSize(1);
+        assertThat(worklist.path(0).path("reasonCode").asText()).isEqualTo("AMENDED_AFTER_ISSUE");
+
+        // It stays pending until a second person acts: attaching a reference is a request for a signature, and
+        // while it waits the request is still open and the original is not touched.
+        UUID requestId = jdbc.sql("SELECT id FROM fiscal.fiscal_correction_requests WHERE document_id = :d")
+                .param("d", documentId)
+                .query(UUID.class)
+                .single();
+        MvcResult waiting = attach(requestId, 2, "amend-attach-1", "SIGN-AMENDED", "R-8010001", null);
+        assertThat(waiting.getResponse().getStatus()).isEqualTo(422);
+        assertThat(json.readTree(waiting.getResponse().getContentAsString())
+                        .path("code")
+                        .asText())
+                .isEqualTo("SECOND_APPROVER_REQUIRED");
+        assertThat(documentStatus(documentId)).isEqualTo("CORRECTION_REQUESTED");
+    }
+
+    @Test
+    @DisplayName(
+            "an amendment before the receipt left, a revision that declares no fiscal consequence, and a receipt not issued yet open nothing")
+    void anAmendmentThatDoesNotOweACorrectionOpensNothing() throws Exception {
+        // 1. The amendment was applied before the receipt was sent: the receipt is built from the amended order.
+        UUID early = seedOrder("E-802");
+        UUID earlyDocument = issuedClickDocument(early, ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        amendedAt(early, 2, NOW.minus(Duration.ofHours(1)), true);
+
+        // 2. A revision that declares no fiscal consequence (a note, a promised time).
+        UUID unflagged = seedOrder("E-803");
+        UUID unflaggedDocument = issuedClickDocument(unflagged, ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        amendedAt(unflagged, 2, NOW.plus(Duration.ofHours(1)), false);
+
+        // 3. A receipt that has been asked for and not answered: it is not issued, so there is nothing to correct
+        //    yet. The request is for an issued receipt only.
+        UUID pending = seedOrder("E-804");
+        UUID pendingDocument = submittedClickDocument(pending, ENTITY_A);
+        amendedAt(pending, 2, NOW.plus(Duration.ofHours(1)), true);
+
+        assertThat(amendmentCorrections.openRequests(100)).isZero();
+
+        assertThat(documentStatus(earlyDocument)).isEqualTo("ISSUED");
+        assertThat(documentStatus(unflaggedDocument)).isEqualTo("ISSUED");
+        assertThat(documentStatus(pendingDocument)).isEqualTo("SUBMITTED");
+        assertThat(jdbc.sql("SELECT count(*) FROM fiscal.fiscal_correction_requests")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "only the latest flagged revision asks, a declined request is not reopened for the same revision, and a later amendment asks again")
+    void aRevisionIsCoveredOnceAndALaterOneAsksAgain() throws Exception {
+        UUID orderId = seedOrder("E-805");
+        UUID documentId = issuedClickDocument(orderId, ENTITY_A, line("Lavash", 2, 25_000L, List.of()));
+        amendedAt(orderId, 2, NOW.plus(Duration.ofHours(1)), true);
+        amendedAt(orderId, 3, NOW.plus(Duration.ofHours(2)), true);
+
+        assertThat(amendmentCorrections.openRequests(100))
+                .as("two flagged revisions of one filed order are one request, for the latest")
+                .isEqualTo(1);
+        assertThat(jdbc.sql("SELECT source_revision FROM fiscal.fiscal_correction_requests WHERE document_id = :d")
+                        .param("d", documentId)
+                        .query(Integer.class)
+                        .single())
+                .isEqualTo(3);
+
+        // The tenant's agent declines; the document is issued again and the same revisions are not asked about.
+        UUID requestId = jdbc.sql("SELECT id FROM fiscal.fiscal_correction_requests WHERE document_id = :d")
+                .param("d", documentId)
+                .query(UUID.class)
+                .single();
+        MvcResult closed = mvc.perform(
+                        closure(FINANCE, requestId, 2, "DECLINED", "the agent would not issue it", "amend-close"))
+                .andReturn();
+        assertThat(closed.getResponse().getStatus())
+                .as(closed.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(documentStatus(documentId)).isEqualTo("ISSUED");
+        assertThat(amendmentCorrections.openRequests(100)).isZero();
+
+        // A later amendment is a new fact and asks again.
+        amendedAt(orderId, 4, NOW.plus(Duration.ofHours(3)), true);
+        assertThat(amendmentCorrections.openRequests(100)).isEqualTo(1);
+        assertThat(documentStatus(documentId)).isEqualTo("CORRECTION_REQUESTED");
+    }
+
+    @Test
+    @DisplayName("an amended order whose receipt was already corrected or voided is not asked about again")
+    void aReceiptAlreadyCorrectedIsNotAskedAboutAgain() throws Exception {
+        UUID orderId = seedOrder("E-806");
+        UUID documentId = issuedClickDocument(orderId, ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        jdbc.sql("UPDATE fiscal.fiscal_documents SET status = 'CORRECTED', version = version + 1 WHERE id = :id")
+                .param("id", documentId)
+                .update();
+        amendedAt(orderId, 2, NOW.plus(Duration.ofHours(1)), true);
+
+        assertThat(amendmentCorrections.openRequests(100)).isZero();
+        assertThat(documentStatus(documentId)).isEqualTo("CORRECTED");
+    }
+
+    @Test
+    @DisplayName(
+            "an amendment filed after more answered ones than a batch holds is still found: the pass pages through its window")
+    void aNewAmendmentIsFoundBehindMoreAnsweredOnesThanABatchHolds() throws Exception {
+        UUID first = seedOrder("E-808");
+        UUID second = seedOrder("E-809");
+        UUID firstDocument = issuedClickDocument(first, ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        UUID secondDocument = issuedClickDocument(second, ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        amendedAt(first, 2, NOW.plus(Duration.ofHours(1)), true);
+        amendedAt(second, 2, NOW.plus(Duration.ofHours(2)), true);
+        assertThat(amendmentCorrections.openRequests(2)).isEqualTo(2);
+
+        // Another order is amended later. The two before it are answered and stay in the window for thirty days;
+        // a pass that re-read only the oldest two flagged revisions would never get past them.
+        UUID third = seedOrder("E-810");
+        UUID thirdDocument = issuedClickDocument(third, ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        amendedAt(third, 2, NOW.plus(Duration.ofHours(3)), true);
+
+        assertThat(amendmentCorrections.openRequests(2))
+                .as("the batch is the size of a page, not of the pass")
+                .isEqualTo(1);
+        assertThat(documentStatus(thirdDocument)).isEqualTo("CORRECTION_REQUESTED");
+        assertThat(documentStatus(firstDocument)).isEqualTo("CORRECTION_REQUESTED");
+        assertThat(documentStatus(secondDocument)).isEqualTo("CORRECTION_REQUESTED");
+        assertThat(amendmentCorrections.openRequests(2)).isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "the latest revision of an order speaks for the earlier ones even when a page boundary falls between them")
+    void theLatestRevisionAsksEvenAcrossPages() throws Exception {
+        UUID amendedTwice = seedOrder("E-811");
+        UUID amendedOnce = seedOrder("E-812");
+        UUID twiceDocument = issuedClickDocument(amendedTwice, ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        issuedClickDocument(amendedOnce, ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        amendedAt(amendedTwice, 2, NOW.plus(Duration.ofHours(1)), true);
+        amendedAt(amendedOnce, 2, NOW.plus(Duration.ofHours(2)), true);
+        amendedAt(amendedTwice, 3, NOW.plus(Duration.ofHours(3)), true);
+
+        // One revision per page: the order's two revisions are two pages apart.
+        assertThat(amendmentCorrections.openRequests(1)).isEqualTo(2);
+
+        assertThat(jdbc.sql("SELECT source_revision FROM fiscal.fiscal_correction_requests WHERE document_id = :d")
+                        .param("d", twiceDocument)
+                        .query(Integer.class)
+                        .single())
+                .as("one request for the order, asked on its latest revision")
+                .isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName(
+            "the whole loop (ADR 0166 exit criteria): an amendment asks, the sweep repeats harmlessly, a second person approves, the agent's reference is attached, and the original reads CORRECTED beside its linked correction")
+    void theWholeLoopFromAnAmendmentToAnAttachedReference() throws Exception {
+        UUID orderId = seedOrder("E-807");
+        UUID documentId = issuedClickDocument(orderId, ENTITY_A, line("Lavash", 2, 25_000L, List.of()));
+        amendedAt(orderId, 2, NOW.plus(Duration.ofHours(1)), true);
+
+        // 1. The amended order asks, once, however often the pass runs.
+        assertThat(amendmentCorrections.openRequests(100)).isEqualTo(1);
+        assertThat(amendmentCorrections.openRequests(100)).isZero();
+        assertThat(amendmentCorrections.openRequests(100)).isZero();
+
+        // 2. What the operator sees on the order: the original, in the state the platform put it in, and the
+        //    request with nobody as its approver.
+        JsonNode asked = evidence(FINANCE, orderId, null).path("documents").path(0);
+        assertThat(asked.path("status").asText()).isEqualTo("CORRECTION_REQUESTED");
+        assertThat(asked.path("correction").path("status").asText()).isEqualTo("REQUESTED");
+        UUID requestId = jdbc.sql("SELECT id FROM fiscal.fiscal_correction_requests WHERE document_id = :d")
+                .param("d", documentId)
+                .query(UUID.class)
+                .single();
+
+        // 3. The first person cannot file the reference alone: the call is recorded as waiting for a checker,
+        //    and a person cannot be their own.
+        MvcResult waiting = attach(requestId, 2, "loop-attach-1", "SIGN-LOOP", "R-8070001", "TERM-0042");
+        assertThat(waiting.getResponse().getStatus()).isEqualTo(422);
+        JsonNode problem = json.readTree(waiting.getResponse().getContentAsString());
+        assertThat(problem.path("code").asText()).isEqualTo("SECOND_APPROVER_REQUIRED");
+        UUID approvalRequestId =
+                UUID.fromString(problem.path("approvalRequestId").asText());
+        assertThatThrownBy(() -> approvals.decide(
+                        approvalRequestId, ApprovalService.Decision.APPROVE, ActorRef.user(FINANCE, null), "self"))
+                .isInstanceOf(ApprovalService.SelfApprovalException.class);
+        assertThat(documentStatus(documentId)).isEqualTo("CORRECTION_REQUESTED");
+
+        // 4. The second person signs what was typed; the same call, repeated, files it.
+        approvals.decide(approvalRequestId, ApprovalService.Decision.APPROVE, ActorRef.user(CHECKER, null), "matches");
+        MvcResult attached = attach(requestId, 2, "loop-attach-2", "SIGN-LOOP", "R-8070001", "TERM-0042");
+        assertThat(attached.getResponse().getStatus())
+                .as(attached.getResponse().getContentAsString())
+                .isEqualTo(200);
+        UUID linkedId = UUID.fromString(json.readTree(attached.getResponse().getContentAsString())
+                .path("linkedDocumentId")
+                .asText());
+
+        // 5. The original reads CORRECTED and its evidence is the evidence it always was; the correction is a
+        //    document of its own that says what it corrects.
+        assertThat(documentStatus(documentId)).isEqualTo("CORRECTED");
+        JsonNode after = evidence(FINANCE, orderId, null);
+        List<String> statuses = new ArrayList<>();
+        after.path("documents")
+                .forEach(document -> statuses.add(document.path("status").asText()));
+        assertThat(statuses).containsExactlyInAnyOrder("CORRECTED", "ISSUED");
+        JsonNode correctionDocument = java.util.stream.StreamSupport.stream(
+                        after.path("documents").spliterator(), false)
+                .filter(document -> document.path("documentId").asText().equals(linkedId.toString()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(correctionDocument.path("documentType").asText()).isEqualTo("CORRECTION");
+        assertThat(correctionDocument.path("correctsDocumentId").asText()).isEqualTo(documentId.toString());
+
+        // 6. The pass has nothing left to say about an order whose receipt was corrected.
+        assertThat(amendmentCorrections.openRequests(100)).isZero();
+
+        // 7. The facts, in order, on the topic; and the audit trail names the platform and then the people.
+        assertThat(outboxFacts("FiscalCorrectionRequested", documentId))
+                .singleElement()
+                .satisfies(fact ->
+                        assertThat(payloadOf(fact).path("source").asText()).isEqualTo("AMENDMENT"));
+        assertThat(outboxFacts("FiscalCorrectionAttached", documentId))
+                .singleElement()
+                .satisfies(fact -> assertThat(
+                                payloadOf(fact).path("linkedDocumentId").asText())
+                        .isEqualTo(linkedId.toString()));
+        assertThat(auditFacts("fiscal.correction.requested", documentId))
+                .singleElement()
+                .satisfies(fact -> assertThat(fact.get("actor_subject")).isEqualTo("fiscal-amendment-watch"));
+        assertThat(auditFacts("fiscal.correction.attached", documentId))
+                .singleElement()
+                .satisfies(fact -> assertThat(fact.get("approval_request_id")).isEqualTo(approvalRequestId));
+    }
+
+    /** An amendment's revision of the order, with or without the fiscal consequence ADR 0039 declares. */
+    private void amendedAt(UUID orderId, int revision, Instant createdAt, boolean fiscalCorrectionRequired) {
+        jdbc.sql("""
+                INSERT INTO ordering.order_revisions (order_id, revision, tenant_id, source, amendment_id,
+                    pricing_quote_id, pricing_context_hash, currency, subtotal_minor, tax_minor, discount_minor,
+                    fee_minor, total_minor, delta_total_minor, fiscal_correction_required,
+                    created_by_actor_type, created_by_actor_id, created_at)
+                SELECT o.id, :revision, o.tenant_id, 'AMENDMENT', :amendment, o.pricing_quote_id,
+                       o.pricing_context_hash, 'UZS', 40000, 0, 0, 0, 40000, -10000, :flag,
+                       'USER', 'operator', :at
+                  FROM ordering.orders o WHERE o.id = :orderId
+                """)
+                .param("orderId", orderId)
+                .param("revision", revision)
+                .param("amendment", UUID.randomUUID())
+                .param("flag", fiscalCorrectionRequired)
+                .param("at", createdAt.atOffset(ZoneOffset.UTC))
+                .update();
+    }
 
     @Test
     @DisplayName("a correction request needs a second person; once approved the document moves, and it is audited")
@@ -749,6 +1164,26 @@ class FiscalEvidenceEndpointTests {
                     .doesNotContain(FISCAL_SIGN);
         });
 
+        // The fact that it was raised is in the outbox, written in the transaction that moved the document
+        // (ADR 0166 "Events"), and carries identifiers and a status: nothing of the receipt.
+        List<Map<String, Object>> requested = outboxFacts("FiscalCorrectionRequested", documentId);
+        assertThat(requested).singleElement().satisfies(fact -> {
+            assertThat(fact.get("topic")).isEqualTo("fiscal.events");
+            assertThat(fact.get("partition_key")).isEqualTo(documentId.toString());
+            JsonNode payload = payloadOf(fact);
+            assertThat(payload.path("status").asText()).isEqualTo("CORRECTION_REQUESTED");
+            assertThat(payload.path("kind").asText()).isEqualTo("CORRECTION");
+            assertThat(payload.path("reasonCode").asText()).isEqualTo("WRONG_LINES");
+            assertThat(payload.path("source").asText()).isEqualTo("OPERATOR");
+            assertThat(payload.path("orderId").asText()).isEqualTo(orderId.toString());
+            assertThat(payload.path("legalEntityId").asText()).isEqualTo(ENTITY_A.toString());
+            assertThat(String.valueOf(fact.get("payload")))
+                    .doesNotContain(FISCAL_SIGN)
+                    .doesNotContain(RECEIPT_URL)
+                    .doesNotContain(RECEIPT_NUMBER)
+                    .doesNotContain(TIN_A);
+        });
+
         // It shows on the order's evidence, and on the ageing worklist.
         JsonNode correction =
                 evidence(FINANCE, orderId, null).path("documents").path(0).path("correction");
@@ -801,6 +1236,10 @@ class FiscalEvidenceEndpointTests {
                         .query(Long.class)
                         .single())
                 .isEqualTo(1L);
+        assertThat(outboxFacts("FiscalCorrectionRequested", documentId))
+                .as("the refused second request published nothing, and the blocked document none at all")
+                .hasSize(1);
+        assertThat(outboxFacts("FiscalCorrectionRequested", blocked)).isEmpty();
     }
 
     @Test
@@ -851,6 +1290,21 @@ class FiscalEvidenceEndpointTests {
 
         assertThat(auditFacts("fiscal.correction.attached", documentId)).hasSize(1);
 
+        List<Map<String, Object>> attachedFacts = outboxFacts("FiscalCorrectionAttached", documentId);
+        assertThat(attachedFacts).singleElement().satisfies(fact -> {
+            assertThat(fact.get("topic")).isEqualTo("fiscal.events");
+            JsonNode payload = payloadOf(fact);
+            assertThat(payload.path("status").asText()).isEqualTo("CORRECTED");
+            assertThat(payload.path("kind").asText()).isEqualTo("CORRECTION");
+            assertThat(payload.path("linkedDocumentId").asText()).isEqualTo(linkedId.toString());
+            assertThat(payload.path("linkedDocumentType").asText()).isEqualTo("CORRECTION");
+            assertThat(String.valueOf(fact.get("payload")))
+                    .doesNotContain("SIGN-NEW-CORRECTION")
+                    .doesNotContain("R-9990001")
+                    .doesNotContain(FISCAL_SIGN)
+                    .doesNotContain(TIN_A);
+        });
+
         // The request is closed: a second attachment is a conflict, and nothing is created.
         MvcResult again = attach(requestId, 3, "attach-2", "SIGN-AGAIN", "R-9990002", null);
         assertThat(again.getResponse().getStatus()).isEqualTo(409);
@@ -859,6 +1313,9 @@ class FiscalEvidenceEndpointTests {
                         .query(Long.class)
                         .single())
                 .isEqualTo(2L);
+        assertThat(outboxFacts("FiscalCorrectionAttached", documentId))
+                .as("the refused second attachment published nothing")
+                .hasSize(1);
     }
 
     @Test
@@ -1194,52 +1651,72 @@ class FiscalEvidenceEndpointTests {
 
     @Test
     @DisplayName(
-            "a retry that would file the placeholder outside a sandbox is a 409 FISCAL_LINES_NOT_BUILT, sends nothing and leaves the document as it was")
-    void aRetryOutsideASandboxIsRefusedBeforeAnythingIsSent() throws Exception {
+            "a retry whose order cannot be built is blocked with the reason that names why, sends nothing and files no placeholder")
+    void aRetryThatCannotBuildItsLinesSendsNothing() throws Exception {
         UUID orderId = seedOrder("E-301");
         UUID documentId = pendingClickDocument(orderId);
+
+        // The order seeded here recorded no tax rule on its quote, so no VAT rate can be stated on a
+        // receipt for it: the builder answers with the obstacle and nothing is invented to get past it.
+        MvcResult refused = mvc.perform(
+                        post("/api/v1/tenants/" + TENANT + "/fiscal/documents/" + documentId + "/retries")
+                                .with(tokenFor(FINANCE))
+                                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "retry-unbuildable")
+                                .header("If-Match", "W/\"1\"")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"reason\":\"the customer asked for their receipt\"}"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(200);
+        JsonNode body = json.readTree(refused.getResponse().getContentAsString());
+        assertThat(body.path("outcome").asText()).isEqualTo("BLOCKED_TAX");
+
+        Map<String, Object> row = jdbc.sql("""
+                        SELECT status, reason_code, lines_synthetic, protected_request_reference
+                          FROM fiscal.fiscal_documents WHERE id = :id
+                        """).param("id", documentId).query().singleRow();
+        assertThat(row.get("status")).isEqualTo("BLOCKED");
+        assertThat(row.get("reason_code"))
+                .as("the document says why, in a reason an operator can act on")
+                .isEqualTo("VAT_NOT_EXPRESSIBLE");
+        assertThat(row.get("lines_synthetic")).isEqualTo(false);
+        assertThat(row.get("protected_request_reference"))
+                .as("nothing was sent, so nothing is recorded as sent")
+                .isNull();
+    }
+
+    @Test
+    @DisplayName(
+            "a document blocked before the line builder existed is restated with the true reason when it is retried")
+    void aHistoricalLinesNotBuiltBlockIsRestatedOnRetry() throws Exception {
+        UUID orderId = seedOrder("E-302");
+        UUID documentId = pendingClickDocument(orderId);
         jdbc.sql("""
-                INSERT INTO integration.provider_environments (code, provider_category, provider_type,
-                    base_url, is_production, egress_allowlist)
-                VALUES ('click-evidence-prod', 'PAYMENT', 'CLICK', 'https://example.invalid', true,
-                    'example.invalid')
-                ON CONFLICT DO NOTHING
-                """).update();
-        jdbc.sql("UPDATE integration.installations SET environment_code = 'click-evidence-prod' WHERE id = :id")
-                .param("id", INSTALLATION)
+                UPDATE fiscal.fiscal_documents
+                   SET status = 'BLOCKED', reason_code = 'LINES_NOT_BUILT', reason_note = 'before the builder',
+                       blocked_at = :now
+                 WHERE id = :id
+                """)
+                .param("id", documentId)
+                .param("now", NOW.atOffset(ZoneOffset.UTC))
                 .update();
-        // Even with the platform's permission, a production environment refuses.
-        allowPlaceholders(true);
-        try {
-            MvcResult refused = mvc.perform(
-                            post("/api/v1/tenants/" + TENANT + "/fiscal/documents/" + documentId + "/retries")
-                                    .with(tokenFor(FINANCE))
-                                    .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "retry-prod")
-                                    .header("If-Match", "W/\"1\"")
-                                    .contentType(MediaType.APPLICATION_JSON)
-                                    .content("{\"reason\":\"the customer asked for their receipt\"}"))
-                    .andReturn();
 
-            assertThat(refused.getResponse().getStatus()).isEqualTo(409);
-            JsonNode problem = json.readTree(refused.getResponse().getContentAsString());
-            assertThat(problem.path("code").asText()).isEqualTo("RESOURCE_CONFLICT");
-            assertThat(problem.path("reasonCode").asText()).isEqualTo("FISCAL_LINES_NOT_BUILT");
+        MvcResult retried = mvc.perform(
+                        post("/api/v1/tenants/" + TENANT + "/fiscal/documents/" + documentId + "/retries")
+                                .with(tokenFor(FINANCE))
+                                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "retry-historical")
+                                .header("If-Match", "W/\"1\"")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"reason\":\"the builder exists now\"}"))
+                .andReturn();
 
-            Map<String, Object> row =
-                    jdbc.sql("""
-                            SELECT status, attempt_count, version, lines_synthetic, protected_request_reference
-                              FROM fiscal.fiscal_documents WHERE id = :id
-                            """).param("id", documentId).query().singleRow();
-            assertThat(row.get("status")).isEqualTo("PENDING");
-            assertThat(row.get("attempt_count"))
-                    .as("the attempt claimed for the call was rolled back")
-                    .isEqualTo(0);
-            assertThat(row.get("version")).isEqualTo(1);
-            assertThat(row.get("lines_synthetic")).isEqualTo(false);
-            assertThat(row.get("protected_request_reference")).isNull();
-        } finally {
-            allowPlaceholders(false);
-        }
+        assertThat(retried.getResponse().getStatus()).isEqualTo(200);
+        assertThat(jdbc.sql("SELECT reason_code FROM fiscal.fiscal_documents WHERE id = :id")
+                        .param("id", documentId)
+                        .query(String.class)
+                        .single())
+                .as("the worklist shows what is true now, not what was true when it was claimed")
+                .isEqualTo("VAT_NOT_EXPRESSIBLE");
     }
 
     // ----------------------------------------------------- the four new statuses
@@ -1675,6 +2152,24 @@ class FiscalEvidenceEndpointTests {
     }
 
     /** The audit trail is append-only and outlives the fixtures, so a fact is asked for by the document it is about. */
+    private JsonNode payloadOf(Map<String, Object> fact) {
+        return json.readTree((String) fact.get("payload"));
+    }
+
+    /** The facts of one type written to the outbox for one document, oldest first. */
+    private List<Map<String, Object>> outboxFacts(String eventType, UUID documentId) {
+        return jdbc.sql("""
+                        SELECT topic, partition_key, payload::text AS payload
+                          FROM integration.outbox_events
+                         WHERE event_type = :type AND aggregate_id = :id
+                         ORDER BY occurred_at, event_id
+                        """)
+                .param("type", eventType)
+                .param("id", documentId)
+                .query()
+                .listOfRows();
+    }
+
     private List<Map<String, Object>> auditFacts(String actionCode, UUID documentId) {
         return auditFacts(actionCode).stream()
                 .filter(fact -> documentId.equals(fact.get("target_id")))
@@ -1710,7 +2205,8 @@ class FiscalEvidenceEndpointTests {
                 base.barcode(),
                 base.markingCodes(),
                 commissionTin,
-                null);
+                null,
+                base.kind());
     }
 
     private FiscalReceiptLine line(String name, int quantity, long unitPrice, List<String> markingCodes) {
@@ -1787,7 +2283,6 @@ class FiscalEvidenceEndpointTests {
                 merchantBinding(entityId),
                 new SentReceipt(
                         List.of(lines), new SomAmount(total, "UZS"), new SomAmount(0, "UZS"), new SomAmount(0, "UZS")),
-                false,
                 NOW);
     }
 
@@ -1806,15 +2301,6 @@ class FiscalEvidenceEndpointTests {
                 .param("url", RECEIPT_URL)
                 .param("now", NOW.atOffset(ZoneOffset.UTC))
                 .update();
-    }
-
-    private void allowPlaceholders(boolean allowed) {
-        policyAuthor.author(
-                FiscalEvidencePolicies.SYNTHETIC_LINES_ALLOWED,
-                ResourceScope.platform(),
-                new FiscalEvidencePolicies.SyntheticLines(allowed),
-                ActorRef.user("platform-admin", "Platform"),
-                "endpoint test");
     }
 
     private UUID pendingClickDocument(UUID orderId) {

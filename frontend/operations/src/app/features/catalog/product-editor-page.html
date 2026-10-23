@@ -487,19 +487,20 @@
                       {{ variant.translations[editingLocale()]?.name || variant.sku || '—' }}
                     </legend>
 
-                    <label class="editor__field">
+                    <div class="editor__field">
                       <span class="q-caption">{{ 'catalog.editor.fiscal.mxik' | t }}</span>
-                      <q-combobox
-                        [query]="mxikQueryFor(variant.variantId)"
-                        [options]="mxikOptionsFor(variant.variantId)"
-                        [loading]="mxikSearchingFor(variant.variantId)"
+                      <q-mxik-picker
+                        [code]="mxikCodeFor(variant.variantId)"
+                        [scope]="brandScope()"
                         [placeholder]="'catalog.editor.fiscal.mxik' | t"
-                        (queryChange)="onMxikQueryChange(variant.variantId, $event)"
-                        (search)="searchMxik(variant.variantId, $event)"
-                        (optionSelected)="onMxikOptionSelected(variant.variantId, $event)"
+                        [ariaLabel]="'catalog.editor.fiscal.mxik' | t"
+                        (codeChange)="onMxikCodeChange(variant.variantId, $event)"
+                        (picked)="
+                          onMxikPicked(variant.variantId, $event, pkgInput, fiscalUnitInput)
+                        "
                         data-testid="editor-fiscal-mxik"
                       />
-                    </label>
+                    </div>
 
                     <label class="editor__field">
                       <span class="q-caption">{{ 'catalog.editor.fiscal.packageCode' | t }}</span>
@@ -508,7 +509,25 @@
                         type="text"
                         class="q-mono"
                         [value]="variant.fiscal?.packageCode || ''"
+                        data-testid="editor-fiscal-package"
                       />
+                      @if (packageSuggestionsFor(variant.variantId).length > 0) {
+                        <span
+                          class="q-caption editor__suggestions"
+                          data-testid="editor-fiscal-package-suggestions"
+                        >
+                          @for (code of packageSuggestionsFor(variant.variantId); track code) {
+                            <button
+                              type="button"
+                              class="q-caption editor__suggestion"
+                              (click)="pkgInput.value = code"
+                              [attr.data-testid]="'editor-fiscal-package-suggestion-' + code"
+                            >
+                              {{ code }}
+                            </button>
+                          }
+                        </span>
+                      }
                     </label>
 
                     <label class="editor__field">
@@ -519,7 +538,25 @@
                         min="1"
                         class="q-mono"
                         [value]="variant.fiscal?.fiscalUnitCode ?? ''"
+                        data-testid="editor-fiscal-unit"
                       />
+                      @if (unitSuggestionsFor(variant.variantId).length > 0) {
+                        <span
+                          class="q-caption editor__suggestions"
+                          data-testid="editor-fiscal-unit-suggestions"
+                        >
+                          @for (code of unitSuggestionsFor(variant.variantId); track code) {
+                            <button
+                              type="button"
+                              class="q-caption editor__suggestion"
+                              (click)="fiscalUnitInput.value = '' + code"
+                              [attr.data-testid]="'editor-fiscal-unit-suggestion-' + code"
+                            >
+                              {{ code }}
+                            </button>
+                          }
+                        </span>
+                      }
                     </label>
 
                     <label class="editor__field">
@@ -594,7 +631,7 @@
                         saveFiscal(
                           variant,
                           buildFiscalRequest(
-                            mxikQueryFor(variant.variantId),
+                            mxikCodeFor(variant.variantId),
                             pkgInput.value,
                             fiscalUnitInput.value,
                             fiscalNameInput.value,

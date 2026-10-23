@@ -511,7 +511,7 @@ class RoadDistanceEndToEndTests {
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "zone-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"role":"DELIVERY","code":"%s","displayNameRu":"R","displayNameUz":"U","displayNameEn":"E"}
+                                {"role":"DELIVERY","code":"%s","displayNames":{"ru":"R","uz-Latn":"U","en":"E"}}
                                 """.formatted(code)))
                 .andReturn();
         assertThat(created.getResponse().getStatus()).isEqualTo(200);

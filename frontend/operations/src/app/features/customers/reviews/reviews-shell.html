@@ -19,6 +19,16 @@
         {{ 'customers.reviews.tab.recovery' | t }}
       </a>
     }
+    @if (capabilities.has('REPORTING_READ')) {
+      <a
+        class="reviews-shell__tab"
+        routerLink="/customers/reviews/report"
+        routerLinkActive="reviews-shell__tab--on"
+        data-testid="reviews-tab-report"
+      >
+        {{ 'customers.reviews.tab.report' | t }}
+      </a>
+    }
     @if (capabilities.has('REVIEW_MODERATE')) {
       <a
         class="reviews-shell__tab"

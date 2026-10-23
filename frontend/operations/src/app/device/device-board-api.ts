@@ -2,13 +2,20 @@ import { Injectable, inject } from '@angular/core';
 
 import { newIdempotencyKey } from '../core/api/idempotency';
 import { LocationScope, operationsPaths } from '../core/api/operations-paths';
+import { terminalPaths } from '../core/api/terminal-paths';
 import type {
   BoardResponse,
   ItemResponse,
   VduBoardResponse,
 } from '../features/kitchen/kitchen-api';
 import { environment } from '../../environments/environment';
-import { DEVICE_BUILD, DeviceProfile, toDeviceProfile } from './device-profile';
+import {
+  DEVICE_BUILD,
+  DeviceKioskConfiguration,
+  DeviceProfile,
+  toDeviceProfile,
+  toKioskConfiguration,
+} from './device-profile';
 import { DeviceSession } from './device-session';
 import { TerminalSession } from './terminal-session';
 
@@ -66,6 +73,22 @@ export class DeviceBoardApi {
       throw new DeviceBoardError(502, 'The device record was not understood');
     }
     return profile;
+  }
+
+  /**
+   * A kiosk's own configuration (`GET .../kiosk/configuration`, `kiosk.device.read`, ADR 0162): of it the shell reads the
+   * pictures its channel plays while nobody is ordering (ADR 0187). Nothing else in it is used here.
+   */
+  async kioskConfiguration(scope: LocationScope): Promise<DeviceKioskConfiguration> {
+    const body = await this.authorizedFetch<unknown>(
+      terminalPaths.kioskConfiguration(scope),
+      'GET',
+    );
+    const configuration = toKioskConfiguration(body);
+    if (!configuration) {
+      throw new DeviceBoardError(502, 'The kiosk configuration was not understood');
+    }
+    return configuration;
   }
 
   /**

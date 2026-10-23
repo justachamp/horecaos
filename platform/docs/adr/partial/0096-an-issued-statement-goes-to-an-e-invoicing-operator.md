@@ -82,3 +82,21 @@ the tenant's legal entity, and its state is shown in the control plane.
 ## References
 
 - ADR 0088
+
+## Status notes
+
+### 2026-10-14 — batch 21, wave `w12-money`: the merchant reads the state, and the connection runbook
+
+The Decision above is unchanged. Two things were added; neither changes what waits on the owner.
+
+- **A tenant reads the state of its own e-invoice.** `GET /api/v1/tenants/{tenantId}/commercial/einvoices`
+  (`COMMERCIAL_USAGE_READ`, `CommercialOperationsEInvoiceController`) lists the invoices made from the tenant's issued
+  statements, and the operations console's Finance > Subscription shows the operator, the document number, the state in words,
+  the operator's own status and when it was last asked. It carries no account, no secret and no failure text from the operator,
+  and shows nothing for a tenant that has none.
+- **The connection has a runbook.** `docs/runbooks/connect-einvoicing-operator.md` binds both installations, has finance state the
+  line codes and VAT, and walks one statement through as a draft that is then deleted and released. It has never been
+  executed. The facts that wait on the owner and finance, one section each, are in
+  `docs/runbooks/external-connections/w12-money.md`.
+- **Still not done:** the accounts with Didox and Faktura.uz, and finance's classification and VAT. The first checklist item stays
+  open.

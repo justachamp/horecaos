@@ -44,6 +44,9 @@ public final class ConfigurationValueRules {
      */
     static final int DISCLOSURE_TEXT_MAXIMUM_CHARACTERS = 500;
 
+    /** The longest cover note on a data-subject export (ADR 0029); {@code CustomerConfigurationKeys} holds the same number. */
+    static final int DSAR_COVER_NOTE_MAXIMUM_CHARACTERS = 2_000;
+
     /**
      * The languages a printed document can be written in (ADR 0154): the ones the language registry has
      * live for messages (ADR 0149), the same list {@code printing.api.PrintingConfigurationKeys} reads;
@@ -56,6 +59,13 @@ public final class ConfigurationValueRules {
             Map.entry("ordering.at_risk_before_minutes", ConfigurationValueRules::requireMinutesWithinADay),
             Map.entry("iam.staff_mfa_requirement", ConfigurationValueRules::requireMfaRequirementMode),
             Map.entry("ordering.late_order_threshold_minutes", ConfigurationValueRules::requireLateOrderThreshold),
+            // ADR 0177: the two auto-accept gates are read at checkout now, so a typo in either is no longer
+            // harmless. The channel list is checked against the tenant's real channels by the ordering
+            // module's AutoAcceptChannelsGuard; here only its shape, which needs no database.
+            Map.entry("ordering.auto_accept_eligible_channels", ConfigurationValueRules::requireChannelListOrAll),
+            Map.entry(
+                    "ordering.auto_accept_min_prior_orders",
+                    integerBetween("ordering.auto_accept_min_prior_orders", 0, 1_000)),
             Map.entry("kitchen.display.not_seen_after_minutes", ConfigurationValueRules::requireNotSeenAfterMinutes),
             Map.entry(
                     "assistant.disclosure_text_en",
@@ -92,6 +102,27 @@ public final class ConfigurationValueRules {
                             "DEVICE_ONLY",
                             "PERSON_OPTIONAL",
                             "PERSON_REQUIRED")),
+            // ADR 0029, batch 21: a data-subject export. The deadline is days to answer (a day to a quarter: past
+            // either end
+            // it is a typo, not a promise), the bundle is kept a day to a month, and the cover note is plain text.
+            Map.entry(
+                    "customers.dsar_response_deadline_days",
+                    integerBetween("customers.dsar_response_deadline_days", 1, 90)),
+            Map.entry(
+                    "customers.dsar_bundle_retention_days",
+                    integerBetween("customers.dsar_bundle_retention_days", 1, 30)),
+            Map.entry(
+                    "customers.dsar_cover_note_ru",
+                    value -> requirePlainText(
+                            "customers.dsar_cover_note_ru", value, DSAR_COVER_NOTE_MAXIMUM_CHARACTERS)),
+            Map.entry(
+                    "customers.dsar_cover_note_uz_latn",
+                    value -> requirePlainText(
+                            "customers.dsar_cover_note_uz_latn", value, DSAR_COVER_NOTE_MAXIMUM_CHARACTERS)),
+            Map.entry(
+                    "customers.dsar_cover_note_en",
+                    value -> requirePlainText(
+                            "customers.dsar_cover_note_en", value, DSAR_COVER_NOTE_MAXIMUM_CHARACTERS)),
             // ADR 0176: a sign-in row is kept thirty days to two years; past either end it is a typo.
             Map.entry("iam.staff_sign_in_retention_days", integerBetween("iam.staff_sign_in_retention_days", 30, 730)),
             // ADR 0156: the working-time keys. Each range is the record's own.
@@ -185,11 +216,14 @@ public final class ConfigurationValueRules {
      * chat. Blank is allowed -- it means "keep the platform's wording".
      */
     private static void requirePlainShortText(String code, Object value) {
+        requirePlainText(code, value, DISCLOSURE_TEXT_MAXIMUM_CHARACTERS);
+    }
+
+    private static void requirePlainText(String code, Object value, int maximumCharacters) {
         String text = String.valueOf(value);
-        if (text.length() > DISCLOSURE_TEXT_MAXIMUM_CHARACTERS) {
+        if (text.length() > maximumCharacters) {
             throw new ApiException(
-                    ErrorCode.VALIDATION_FAILED,
-                    "%s must be at most %d characters".formatted(code, DISCLOSURE_TEXT_MAXIMUM_CHARACTERS));
+                    ErrorCode.VALIDATION_FAILED, "%s must be at most %d characters".formatted(code, maximumCharacters));
         }
         boolean hasControlCharacter =
                 text.codePoints().anyMatch(codePoint -> Character.isISOControl(codePoint) && codePoint != '\n');
@@ -234,6 +268,52 @@ public final class ConfigurationValueRules {
                 ErrorCode.VALIDATION_FAILED,
                 code + " must be one of " + String.join(", ", allowed),
                 Map.of("field", code));
+    }
+
+    /** A sales channel code as the registry stores it: letters, digits, dot, underscore and hyphen. */
+    private static final Pattern CHANNEL_CODE = Pattern.compile("^[A-Za-z0-9._-]{1,32}$");
+
+    private static final int MAXIMUM_ELIGIBLE_CHANNELS = 40;
+
+    /**
+     * {@code ALL}, or a comma-separated list of channel codes (ADR 0177). {@code ALL} is the whole
+     * value or it is absent: {@code ALL,STOREFRONT} says nothing a reader could act on, and blank
+     * would be read as "no gate" by one reader and "no channel" by another, so it is refused.
+     */
+    private static void requireChannelListOrAll(Object value) {
+        String code = "ordering.auto_accept_eligible_channels";
+        String text = String.valueOf(value).trim();
+        if (text.isEmpty()) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    code + " must be ALL or a comma-separated list of sales channel codes",
+                    Map.of("field", code));
+        }
+        if ("ALL".equalsIgnoreCase(text)) {
+            return;
+        }
+        String[] codes = text.split(",", -1);
+        if (codes.length > MAXIMUM_ELIGIBLE_CHANNELS) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "%s names at most %d channels".formatted(code, MAXIMUM_ELIGIBLE_CHANNELS),
+                    Map.of("field", code));
+        }
+        for (String candidate : codes) {
+            String trimmed = candidate.trim();
+            if ("ALL".equalsIgnoreCase(trimmed)) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        code + ": ALL stands alone; it cannot be listed beside channel codes",
+                        Map.of("field", code));
+            }
+            if (!CHANNEL_CODE.matcher(trimmed).matches()) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        code + " must be a comma-separated list of sales channel codes (letters, digits, . _ -)",
+                        Map.of("field", code));
+            }
+        }
     }
 
     private static void requirePublicVisibility(Object value) {

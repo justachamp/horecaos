@@ -136,7 +136,38 @@ class EventSchemaValidationTests {
                         "CUSTOMER_CHANGED_MIND",
                         "AWAITING_APPROVAL",
                         "CANCELLED",
-                        3));
+                        3),
+                // ADR 0184: the three milestones a customer is told about, now facts on the topic.
+                new uz.horecaos.platform.ordering.api.OrderPreparing(
+                        UUID.randomUUID(),
+                        new TenantId(TENANT),
+                        ORDER,
+                        ORDERED_AT,
+                        BRAND,
+                        LOCATION,
+                        "DELIVERY",
+                        ORDERED_AT,
+                        4),
+                new uz.horecaos.platform.ordering.api.OrderReady(
+                        UUID.randomUUID(),
+                        new TenantId(TENANT),
+                        ORDER,
+                        ORDERED_AT,
+                        BRAND,
+                        LOCATION,
+                        "PICKUP",
+                        ORDERED_AT,
+                        5),
+                new uz.horecaos.platform.ordering.api.OrderFulfilling(
+                        UUID.randomUUID(),
+                        new TenantId(TENANT),
+                        ORDER,
+                        ORDERED_AT,
+                        BRAND,
+                        LOCATION,
+                        "DELIVERY",
+                        ORDERED_AT,
+                        6));
     }
 
     @ParameterizedTest(name = "{0} ordering payload validates against its schema")

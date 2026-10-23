@@ -552,6 +552,25 @@ public class JdbcReferralStore {
 
     // ------------------------------------------------------------- mapping
 
+    /**
+     * ADR 0029 erasure: switches off the referral codes an erased customer owned, so a friend cannot redeem a code
+     * that still names her as the referrer. {@code DISABLED}, not deleted: redemptions reference the code, and the
+     * redemption ledger (who was rewarded how much, for which order) is the programme's financial record.
+     *
+     * @return how many codes were switched off
+     */
+    public int disableCodesOfCustomer(UUID tenantId, UUID customerAccountId, java.time.Instant now) {
+        return jdbc.sql("""
+                UPDATE referral.codes
+                   SET status = 'DISABLED', version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND customer_account_id = :customerAccountId AND status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("customerAccountId", customerAccountId)
+                .param("now", java.time.OffsetDateTime.ofInstant(now, java.time.ZoneOffset.UTC))
+                .update();
+    }
+
     private static ProgramRow toProgramRow(ResultSet row, int number) throws SQLException {
         return new ProgramRow(
                 row.getObject("id", UUID.class),

@@ -1,0 +1,163 @@
+<div class="switcher" data-testid="storefront-switcher">
+  @if (loading()) {
+    <p class="q-caption" role="status">{{ 'marketing.content.list.loading' | t }}</p>
+  } @else if (denied()) {
+    <q-denied-state capability="content.read" />
+  } @else {
+    @if (error(); as message) {
+      <p class="q-body-sm switcher__error" role="alert" data-testid="storefront-switcher-error">
+        {{ message }}
+      </p>
+    }
+    @if (saved(); as done) {
+      <p class="q-body-sm" role="status" data-testid="storefront-switcher-saved">
+        {{ done | t }}
+      </p>
+    }
+
+    @if (policies(); as current) {
+      <section class="switcher__block" data-testid="storefront-layout">
+        <h2 class="q-subhead">{{ 'marketing.storefront.layout.title' | t }}</h2>
+        <p class="q-body-sm switcher__note">{{ 'marketing.storefront.layout.hint' | t }}</p>
+        @for (r of [round()]; track r) {
+          <fieldset class="switcher__choices" [disabled]="busy()">
+            <legend class="q-caption">{{ 'marketing.storefront.layout.title' | t }}</legend>
+            @for (layout of layouts; track layout) {
+              <label class="switcher__choice">
+                <input
+                  type="radio"
+                  name="storefront-layout"
+                  [value]="layout"
+                  [checked]="current.layout === layout"
+                  (change)="setLayout(layout)"
+                  [attr.data-testid]="'storefront-layout-' + layout"
+                />
+                <span class="q-body-sm">{{ layoutKey(layout) | t }}</span>
+              </label>
+            }
+          </fieldset>
+        }
+      </section>
+    }
+
+    <section class="switcher__block" data-testid="switcher-entries">
+      <h2 class="q-subhead">{{ 'marketing.storefront.switcher.title' | t }}</h2>
+      <p class="q-body-sm switcher__note">{{ 'marketing.storefront.switcher.hint' | t }}</p>
+
+      @if (entries().length === 0) {
+        <p class="q-body-sm switcher__note" data-testid="switcher-empty">
+          {{ 'marketing.storefront.switcher.empty' | t }}
+        </p>
+      } @else {
+        <ol class="switcher__list">
+          @for (entry of entries(); track entry.id; let first = $first; let last = $last) {
+            <li class="switcher__entry" [attr.data-testid]="'switcher-entry-' + entry.id">
+              <div class="switcher__who">
+                <span class="q-body-sm switcher__name">{{ entry.targetBrandName }}</span>
+                <span class="q-caption switcher__where">
+                  {{ entry.channelCode }}
+                  @if (entry.hostname) {
+                    · {{ entry.hostname }}
+                  }
+                </span>
+                <span
+                  class="q-caption switcher__status"
+                  [class.switcher__status--off]="!entry.shown"
+                  [attr.data-testid]="'switcher-status-' + entry.id"
+                >
+                  {{ status(entry) | t }}
+                </span>
+              </div>
+              <div class="switcher__actions">
+                <button
+                  type="button"
+                  class="q-body-sm"
+                  [disabled]="busy() || first"
+                  (click)="move(entry, -1)"
+                  [attr.data-testid]="'switcher-up-' + entry.id"
+                >
+                  {{ 'marketing.storefront.switcher.up' | t }}
+                </button>
+                <button
+                  type="button"
+                  class="q-body-sm"
+                  [disabled]="busy() || last"
+                  (click)="move(entry, 1)"
+                  [attr.data-testid]="'switcher-down-' + entry.id"
+                >
+                  {{ 'marketing.storefront.switcher.down' | t }}
+                </button>
+                <button
+                  type="button"
+                  class="q-body-sm"
+                  [disabled]="busy()"
+                  (click)="toggle(entry)"
+                  [attr.data-testid]="'switcher-toggle-' + entry.id"
+                >
+                  {{
+                    (entry.state === 'ACTIVE'
+                      ? 'marketing.storefront.switcher.hide'
+                      : 'marketing.storefront.switcher.show'
+                    ) | t
+                  }}
+                </button>
+                <button
+                  type="button"
+                  class="q-body-sm"
+                  [disabled]="busy()"
+                  (click)="remove(entry)"
+                  [attr.data-testid]="'switcher-remove-' + entry.id"
+                >
+                  {{ 'marketing.storefront.switcher.remove' | t }}
+                </button>
+              </div>
+            </li>
+          }
+        </ol>
+      }
+
+      <div class="switcher__add" data-testid="switcher-add">
+        <h3 class="q-body-sm switcher__add-title">
+          {{ 'marketing.storefront.switcher.add.title' | t }}
+        </h3>
+        @if (available().length === 0) {
+          <p class="q-body-sm switcher__note" data-testid="switcher-no-candidates">
+            {{ 'marketing.storefront.switcher.add.none' | t }}
+          </p>
+        } @else {
+          <label class="q-caption" for="switcher-pick">{{
+            'marketing.storefront.switcher.add.target' | t
+          }}</label>
+          <select
+            id="switcher-pick"
+            class="q-body-sm switcher__select"
+            [value]="pick()"
+            (change)="pick.set($any($event.target).value)"
+            data-testid="switcher-pick"
+          >
+            <option value="">{{ 'marketing.storefront.switcher.add.choose' | t }}</option>
+            @for (candidate of available(); track candidateKey(candidate)) {
+              <option [value]="candidateKey(candidate)">
+                {{ candidate.brandName }} — {{ candidate.channelCode }}
+                @if (candidate.hostname) {
+                  ({{ candidate.hostname }})
+                } @else {
+                  ({{ 'marketing.storefront.switcher.add.noAddress' | t }})
+                }
+              </option>
+            }
+          </select>
+          <button
+            type="button"
+            class="q-body-sm"
+            [disabled]="busy() || pick() === ''"
+            (click)="add()"
+            data-testid="switcher-add-submit"
+          >
+            {{ 'marketing.storefront.switcher.add.submit' | t }}
+          </button>
+        }
+      </div>
+    </section>
+  }
+</div>

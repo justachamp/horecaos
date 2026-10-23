@@ -52,9 +52,14 @@
   --shadow-card: 0 8px 24px -12px rgba(4, 6, 15, 0.18);
   --shadow-nav: 0 -6px 24px -12px rgba(4, 6, 15, 0.22);
 
-  /* Type. Urbanist carries display, Poppins carries UI and numerals. */
-  --font-display: 'Urbanist', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-ui: 'Poppins', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Type (ADR 0035, ADR 0149 Decision 7, gap-map row X.40). IBM Plex Sans, the design system's face, bundled
+   * with the app and declared in angular.json's `styles` so the glyph audit (`npm run lint:rules`) can read
+   * what is shipped. It replaces two families fetched from a third party at runtime: a face that arrives
+   * after first paint, with no Uzbek modifier letter in the subset the page asked for. Display and UI are
+   * one family, told apart by weight and size. Weights 300, 400 and 600 ship; 500 renders as 400 and 700
+   * to 800 as 600 until a heavier weight is wanted. */
+  --font-display: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-ui: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
 * {

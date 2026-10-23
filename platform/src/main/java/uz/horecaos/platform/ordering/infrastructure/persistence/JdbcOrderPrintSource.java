@@ -15,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.ordering.api.OrderPrintSource;
+import uz.horecaos.platform.ordering.api.OrderSettlementPort;
+import uz.horecaos.platform.tenancy.api.LocalizedLabels;
 
 /**
  * {@link OrderPrintSource} over the order tables (ADR 0154).
@@ -32,10 +34,12 @@ class JdbcOrderPrintSource implements OrderPrintSource {
 
     private final JdbcClient jdbc;
     private final FieldProtection protection;
+    private final OrderSettlementPort settlements;
 
-    JdbcOrderPrintSource(JdbcClient jdbc, FieldProtection protection) {
+    JdbcOrderPrintSource(JdbcClient jdbc, FieldProtection protection, OrderSettlementPort settlements) {
         this.jdbc = jdbc;
         this.protection = protection;
+        this.settlements = settlements;
     }
 
     @Override
@@ -96,8 +100,9 @@ class JdbcOrderPrintSource implements OrderPrintSource {
                 found.fee(),
                 found.total(),
                 tendered,
-                // The same arithmetic, in the same place the order detail does it: tendered minus total.
-                tendered == null ? null : tendered - found.total(),
+                // The same arithmetic the order detail does: tendered minus the cash still owed, which is the total
+                // less the points the customer spent (ADR 0185).
+                tendered == null ? null : tendered - settlements.cashToCollectMinor(tenantId, orderId, found.total()),
                 found.kitchenNote(),
                 lines(tenantId, orderId, revealPurpose)));
     }
@@ -128,9 +133,28 @@ class JdbcOrderPrintSource implements OrderPrintSource {
                         .computeIfAbsent(entry.getKey(), key -> new ArrayList<>())
                         .add(entry.getValue()));
 
+        // The wording of every snapshot on the order (V0433, the only home of it since V0678): one query,
+        // tenant-scoped on both sides of the join.
+        Map<UUID, Map<String, String>> presetLabels = new LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT k.order_line_comment_preset_id, k.locale, k.label
+                  FROM ordering.order_line_comment_preset_labels k
+                  JOIN ordering.order_line_comment_presets p
+                    ON p.id = k.order_line_comment_preset_id AND p.tenant_id = k.tenant_id
+                  JOIN ordering.order_lines l ON l.id = p.order_line_id AND l.tenant_id = p.tenant_id
+                 WHERE k.tenant_id = :tenantId AND l.order_id = :orderId
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, number) -> presetLabels
+                        .computeIfAbsent(
+                                row.getObject("order_line_comment_preset_id", UUID.class), key -> new LinkedHashMap<>())
+                        .put(row.getString("locale"), row.getString("label")))
+                .list();
+
         Map<UUID, List<Preset>> presets = new LinkedHashMap<>();
         jdbc.sql("""
-                SELECT p.order_line_id, p.code_snapshot, p.label_ru_snapshot, p.label_uz_snapshot, p.label_en_snapshot
+                SELECT p.id, p.order_line_id, p.code_snapshot
                   FROM ordering.order_line_comment_presets p
                   JOIN ordering.order_lines l ON l.id = p.order_line_id AND l.tenant_id = p.tenant_id
                  WHERE p.tenant_id = :tenantId AND l.order_id = :orderId AND l.revision_to IS NULL
@@ -142,9 +166,8 @@ class JdbcOrderPrintSource implements OrderPrintSource {
                         row.getObject("order_line_id", UUID.class),
                         new Preset(
                                 row.getString("code_snapshot"),
-                                row.getString("label_ru_snapshot"),
-                                row.getString("label_uz_snapshot"),
-                                row.getString("label_en_snapshot"))))
+                                LocalizedLabels.merge(
+                                        presetLabels.getOrDefault(row.getObject("id", UUID.class), Map.of())))))
                 .list()
                 .forEach(entry -> presets.computeIfAbsent(entry.getKey(), key -> new ArrayList<>())
                         .add(entry.getValue()));

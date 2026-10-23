@@ -17,6 +17,11 @@ function base(scope: BrandScope): string {
   return `${TENANT}/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/content`;
 }
 
+/** The prefix of the brand switcher's routes; it is not a route itself, so it is not one of the builders. */
+function brandSwitcherBase(scope: BrandScope): string {
+  return `${base(scope)}/brand-switcher`;
+}
+
 export const contentPaths = {
   items(scope: BrandScope): string {
     return `${base(scope)}/items`;
@@ -88,5 +93,36 @@ export const contentPaths = {
 
   editorialPolicy(scope: BrandScope): string {
     return `${this.policies(scope)}/editorial`;
+  },
+
+  /** `storefront.layout` (ADR 0183 D17): `STANDARD` or `MARKETPLACE`. */
+  layoutPolicy(scope: BrandScope): string {
+    return `${this.policies(scope)}/layout`;
+  },
+
+  /** `BrandSwitcherController` (row 6.8): the brand's way to its sibling brands' storefronts. */
+  switcherEntries(scope: BrandScope): string {
+    return `${brandSwitcherBase(scope)}/entries`;
+  },
+
+  switcherEntry(scope: BrandScope, entryId: string): string {
+    return `${this.switcherEntries(scope)}/${enc(entryId)}`;
+  },
+
+  /** The sibling brands and website channels an entry can name. */
+  switcherCandidates(scope: BrandScope): string {
+    return `${brandSwitcherBase(scope)}/candidates`;
+  },
+
+  switcherOrder(scope: BrandScope): string {
+    return `${brandSwitcherBase(scope)}/order`;
+  },
+
+  /**
+   * `StorefrontBranchOrderController` (row 6.8, operations surface): the order the storefront lists
+   * the brand's branches in. Not under `/content` -- the order is a property of the branches.
+   */
+  branchOrder(scope: BrandScope): string {
+    return `/api/v1/operations/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/storefront-branch-order`;
   },
 } as const;

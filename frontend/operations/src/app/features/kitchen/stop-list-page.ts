@@ -28,9 +28,11 @@ import {
 } from '../../shared/ui/data-table/data-table-types';
 import { describeApiError } from '../orders/order-errors';
 import { StopExplainerDialog } from './stop-explainer-dialog';
+import { StopMaterialisationPanel } from './stop-materialisation-panel';
 import { StopPropagationBanner } from './stop-propagation-banner';
 import { StopInForce, StopScope, StopsApi } from './stop-scope-api';
 import { StopApplied, StopScopePanel } from './stop-scope-panel';
+import { registerStopListKeys } from './stop-list-keys';
 
 type StopTab = 'ALL' | 'AVAILABLE' | 'ON_STOP';
 
@@ -159,12 +161,22 @@ interface BulkAvailabilityResponse {
  */
 @Component({
   selector: 'q-stop-list-page',
-  imports: [TPipe, DataTable, QCellDef, StopScopePanel, StopPropagationBanner, StopExplainerDialog],
+  imports: [
+    TPipe,
+    DataTable,
+    QCellDef,
+    StopScopePanel,
+    StopPropagationBanner,
+    StopExplainerDialog,
+    StopMaterialisationPanel,
+  ],
   templateUrl: './stop-list-page.html',
   styleUrl: './stop-list-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class StopListPage implements OnInit {
+  /** catalog.md §4.6: the stop list's keys press the screen's own one-tap button. */
+  private readonly keys = registerStopListKeys();
   private readonly api = inject(ApiClient);
   private readonly location = inject(CurrentLocation);
   private readonly stopsApi = inject(StopsApi);

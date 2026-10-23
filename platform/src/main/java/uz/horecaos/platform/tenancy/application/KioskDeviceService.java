@@ -74,6 +74,7 @@ public class KioskDeviceService implements KioskDeviceLookup {
     private final ServiceabilityResolver serviceability;
     private final StaffDirectory staff;
     private final ConfigurationResolver configuration;
+    private final KioskIdleMediaService idleMedia;
     private final AuditRecorder audit;
     private final MeterRegistry meters;
     private final Clock clock;
@@ -86,6 +87,7 @@ public class KioskDeviceService implements KioskDeviceLookup {
             ServiceabilityResolver serviceability,
             StaffDirectory staff,
             ConfigurationResolver configuration,
+            KioskIdleMediaService idleMedia,
             AuditRecorder audit,
             MeterRegistry meters,
             Clock clock) {
@@ -96,6 +98,7 @@ public class KioskDeviceService implements KioskDeviceLookup {
         this.serviceability = serviceability;
         this.staff = staff;
         this.configuration = configuration;
+        this.idleMedia = idleMedia;
         this.audit = audit;
         this.meters = meters;
         this.clock = clock;
@@ -367,6 +370,7 @@ public class KioskDeviceService implements KioskDeviceLookup {
                 break;
             }
         }
+        KioskIdleMediaService.IdleMediaList idle = idleMedia.listFor(tenantId, channel.id());
         return new KioskConfiguration(
                 new KioskChannel(
                         channel.id(),
@@ -384,7 +388,9 @@ public class KioskDeviceService implements KioskDeviceLookup {
                 modes,
                 payments,
                 priceChannelCode,
-                channel.version());
+                channel.version(),
+                idle.items(),
+                idle.version());
     }
 
     // ------------------------------------------------------------------------ helpers
@@ -529,12 +535,20 @@ public class KioskDeviceService implements KioskDeviceLookup {
             @Nullable String closedReason,
             @Nullable Instant nextOpenAt) {}
 
-    /** {@code GET .../kiosk/configuration}: everything a kiosk may learn, and nothing it could order with. */
+    /**
+     * {@code GET .../kiosk/configuration}: everything a kiosk may learn, and nothing it could order with.
+     *
+     * @param idleMedia        the pictures its channel plays while nobody is ordering, in order (ADR 0187); each {@code url}
+     *                         is a path on the API's own origin that serves a public picture and nothing else
+     * @param idleMediaVersion changes whenever the list does, so a kiosk can tell without comparing pictures
+     */
     public record KioskConfiguration(
             KioskChannel channel,
             KioskBranch branch,
             List<String> fulfillmentModes,
             List<String> paymentMethods,
             String priceChannelCode,
-            int version) {}
+            int version,
+            List<KioskIdleMediaService.IdleMediaItem> idleMedia,
+            int idleMediaVersion) {}
 }

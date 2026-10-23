@@ -21,9 +21,10 @@ import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcPosBalanceSyn
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 
 /**
- * Drives the till-balance sync on a clock (ADR 0171 Decision 3, 4 and 6): a pull and a push every {@code
- * loyalty.pos_sync.pull_interval_seconds} for a binding whose mode says so, and a reconciliation once a day, after the
- * business day has closed.
+ * Drives the till-balance sync on a clock (ADR 0171 Decision 3, 4 and 6): a pull every {@code
+ * loyalty.pos_sync.pull_interval_seconds} for a binding whose mode says so, a push sweep of its own every {@code
+ * loyalty.pos_sync.push_interval_seconds} (so a platform movement reaches the till within a minute and not within five),
+ * and a reconciliation once a day, after the business day has closed.
  *
  * <p>A one-minute tick that asks each syncing binding whether it is due, rather than a timer sized to the policy, so the
  * interval is read from ADR 0030 on every tick and a change to it applies without a restart. Nothing runs for a vendor
@@ -78,6 +79,28 @@ public class PosBalanceSyncScheduler {
         }
     }
 
+    /**
+     * The push sweep, on its own clock (ADR 0171 Decision 3 and the accepted convergence window): a platform movement
+     * reaches the till within 60 seconds, so it cannot wait for the five-minute pull. Asked every ten seconds, it sends what
+     * has moved once {@code loyalty.pos_sync.push_interval_seconds} (30) have passed since its last pass, and only when
+     * something has moved, so an idle binding writes no run and a busy one writes one per interval.
+     */
+    @Scheduled(
+            initialDelayString = "${horecaos.loyalty.pos-sync.initial-delay:PT90S}",
+            fixedDelayString = "${horecaos.loyalty.pos-sync.push-tick:PT10S}")
+    public void pushTick() {
+        for (TenantBinding tenantBinding : port.syncingBindings()) {
+            try {
+                pushOne(tenantBinding);
+            } catch (RuntimeException failure) {
+                log.warn(
+                        "The till-balance push failed for binding {}",
+                        tenantBinding.binding().bindingId(),
+                        failure);
+            }
+        }
+    }
+
     /** @return the passes it started, for a deterministic test */
     public int tickOne(TenantBinding tenantBinding) {
         Instant now = clock.instant();
@@ -88,17 +111,39 @@ public class PosBalanceSyncScheduler {
         if (mode.pulls() && due(tenantBinding, RunKind.PULL, interval(tenantBinding), now)) {
             sync.run(tenantBinding.tenantId(), tenantBinding.brandId(), binding.bindingId(), RunKind.PULL, JOB);
             started++;
-            if (mode.pushes()) {
-                // After the pull, so the number sent to the till already includes what the till just reported.
-                sync.run(tenantBinding.tenantId(), tenantBinding.brandId(), binding.bindingId(), RunKind.PUSH, JOB);
-                started++;
-            }
         }
+        // After the pull, so the first number sent to a till already includes what the till just reported; from then on
+        // the push keeps its own cadence (pushTick), which is why this is a call and not a step of the pull.
+        started += pushOne(tenantBinding);
         if (reconcileDue(tenantBinding, now)) {
             sync.run(tenantBinding.tenantId(), tenantBinding.brandId(), binding.bindingId(), RunKind.RECONCILE, JOB);
             started++;
         }
         return started;
+    }
+
+    /**
+     * One push pass if the binding pushes, the push interval has passed and a matched account has moved.
+     *
+     * <p>A till that could not be written to last time (every account left unverifiable, none sent) is asked no more often
+     * than the pull interval, so a till that is down is not hammered every thirty seconds with a run row each.
+     *
+     * @return 1 when a pass was started, else 0
+     */
+    public int pushOne(TenantBinding tenantBinding) {
+        var binding = tenantBinding.binding();
+        if (!sync.modeOf(binding).pushes()) {
+            return 0;
+        }
+        Instant now = clock.instant();
+        if (!due(tenantBinding, RunKind.PUSH, pushInterval(tenantBinding), now)) {
+            return 0;
+        }
+        if (!store.hasPendingPushes(tenantBinding.tenantId(), binding.bindingId())) {
+            return 0;
+        }
+        sync.run(tenantBinding.tenantId(), tenantBinding.brandId(), binding.bindingId(), RunKind.PUSH, JOB);
+        return 1;
     }
 
     private boolean due(TenantBinding tenantBinding, RunKind kind, Duration interval, Instant now) {
@@ -120,6 +165,18 @@ public class PosBalanceSyncScheduler {
                         tenantBinding.tenantId(), tenantBinding.binding().bindingId(), RunKind.RECONCILE.name())
                 .map(last -> last.atZone(zone).toLocalDate().isBefore(today))
                 .orElse(true);
+    }
+
+    private Duration pushInterval(TenantBinding tenantBinding) {
+        Integer seconds =
+                configuration.value(LoyaltyConfigurationKeys.POS_SYNC_PUSH_INTERVAL_SECONDS, ResourceScope.platform());
+        Duration base = Duration.ofSeconds(
+                seconds == null ? LoyaltyConfigurationKeys.POS_SYNC_PUSH_INTERVAL_DEFAULT_SECONDS : seconds);
+        boolean lastPassSentNothing = store.lastRunOfKind(
+                        tenantBinding.tenantId(), tenantBinding.binding().bindingId(), RunKind.PUSH.name())
+                .map(last -> last.pushed() == 0 && last.unverifiable() > 0)
+                .orElse(false);
+        return lastPassSentNothing ? interval(tenantBinding) : base;
     }
 
     private Duration interval(TenantBinding tenantBinding) {

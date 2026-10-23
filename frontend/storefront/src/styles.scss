@@ -1,56 +1,17 @@
 @use 'tailwindcss';
 
-@font-face {
-  font-family: 'Halvar Breit';
-  font-style: normal;
-  font-weight: 300;
-  font-display: swap;
-  src: url('/halvar-font-family/Halvar-Breitschrift-Light-Demo.otf') format('opentype');
-}
-
-@font-face {
-  font-family: 'Halvar Breit';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/halvar-font-family/Halvar-Breitschrift-Regular-Demo.otf') format('opentype');
-}
-
-@font-face {
-  font-family: 'Halvar Breit';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('/halvar-font-family/Halvar-Breitschrift-Medium-Demo.otf') format('opentype');
-}
-
-@font-face {
-  font-family: 'Halvar Breit';
-  font-style: normal;
-  font-weight: 600 700;
-  font-display: swap;
-  src: url('/halvar-font-family/Halvar-Breitschrift-Bold-Demo.otf') format('opentype');
-}
-
-@font-face {
-  font-family: 'Halvar Breit';
-  font-style: normal;
-  font-weight: 800;
-  font-display: swap;
-  src: url('/halvar-font-family/Halvar-Breitschrift-ExtraBold-Demo.otf') format('opentype');
-}
-
-@font-face {
-  font-family: 'Halvar Breit';
-  font-style: normal;
-  font-weight: 900;
-  font-display: swap;
-  src: url('/halvar-font-family/Halvar-Breitschrift-Black-Demo.otf') format('opentype');
-}
+// Type (ADR 0035, ADR 0149 Decision 7, gap-map row X.40): IBM Plex Sans, the design system's face
+// (`frontend/design-tokens/tokens.css`), bundled with the app and declared in angular.json's `styles` (the
+// package's own stylesheet, so the browser fetches only the subset a screen needs, and the glyph audit,
+// `npm run lint:rules`, can read what is shipped). It replaces the demo faces of a display typeface whose
+// licence is personal use and whose 185 glyphs lacked the Uzbek modifier letters, Ў, and the colon, slash and
+// percent that a time, a price and a phone number are made of. Weights 300, 400 and 600 ship; 500 renders as
+// 400 and 700 to 900 as 600 until a heavier weight is wanted (add it with its complete face first, as the
+// package's default sheet does for its own three).
 
 @theme {
   --font-sans:
-    'Halvar Breit', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
     'Segoe UI Symbol', 'Noto Color Emoji';
 }
 
@@ -137,7 +98,7 @@ body {
   min-height: 100%;
   background-color: var(--surface-base);
   color: var(--text-primary);
-  font-family: 'Halvar Breit', ui-sans-serif, system-ui, sans-serif;
+  font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   touch-action: manipulation;
 }

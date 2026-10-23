@@ -6,12 +6,6 @@ import { CustomerProfileService } from '../../../services/customer-profile.servi
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import { BackDirective } from '../../../shared/back/back.directive';
 
-export interface LanguageOption {
-  id: string;
-  label: string;
-  flag: string; // emoji or image URL
-}
-
 @Component({
   selector: 'app-profile-language',
   imports: [CommonModule, TranslatePipe, BackDirective],
@@ -24,11 +18,8 @@ export class ProfileLanguageComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly profile = inject(CustomerProfileService);
 
-  readonly languages: LanguageOption[] = [
-    { id: 'uz', label: "O'zbek", flag: '🇺🇿' },
-    { id: 'ru', label: 'Русский', flag: '🇷🇺' },
-    { id: 'en', label: 'English', flag: '🇬🇧' },
-  ];
+  /** The languages this brand serves that the platform has live and this build can draw (ADR 0149). */
+  readonly languages = this.lang.offered;
 
   readonly selectedId = computed(() => this.lang.langId());
 

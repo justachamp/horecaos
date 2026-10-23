@@ -8,8 +8,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.payments.application.FiscalReceiptPort;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
@@ -62,11 +64,20 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
     private final ClickMerchantApi click;
     private final JdbcPaymentAttemptStore attempts;
     private final Clock clock;
+    private final ClickQuantityScale quantityScale;
 
+    /** Counts as they are: whole numbers only, which is what every receipt filed through here has been. */
     public ClickFiscalAdapter(ClickMerchantApi click, JdbcPaymentAttemptStore attempts, Clock clock) {
+        this(click, attempts, clock, ClickQuantityScale.WHOLE_COUNTS);
+    }
+
+    @Autowired
+    public ClickFiscalAdapter(
+            ClickMerchantApi click, JdbcPaymentAttemptStore attempts, Clock clock, ClickQuantityScale quantityScale) {
         this.click = click;
         this.attempts = attempts;
         this.clock = clock;
+        this.quantityScale = quantityScale;
     }
 
     @Override
@@ -78,6 +89,12 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
     @Override
     public boolean carriesMarkingCodes() {
         return true;
+    }
+
+    /** {@inheritDoc} Click's {@code ofd_data} for the captured payment of the document's intent. */
+    @Override
+    public Optional<FiscalSubmission> heldReceipt(FiscalDocument document, ProviderBinding binding) {
+        return capturedPaymentId(document, binding).flatMap(paymentId -> readBack(binding, paymentId, clock.instant()));
     }
 
     @Override
@@ -125,8 +142,21 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
                 return FiscalSubmission.rejected(
                         "NO_COMMISSION_PARTY", "A Click receipt line needs a TIN or a PINFL in CommissionInfo", now);
             }
-            items.add(item(line));
-            total = total == null ? line.lineTotal() : total.plus(line.lineTotal());
+            OptionalLong amount = quantityScale.amountOf(line.quantity());
+            if (amount.isEmpty()) {
+                // Click's Amount is a uint64 and the scale agreed for it cannot say this count exactly.
+                // Rounding a weighed quantity misstates a line on a legal document, so nothing leaves.
+                return FiscalSubmission.rejected(
+                        "QUANTITY_UNREPRESENTABLE",
+                        "Click's Amount cannot express a count of "
+                                + line.quantity().toPlainString() + " at the configured quantity scale of "
+                                + quantityScale.scale(),
+                        now);
+            }
+            items.add(item(line, amount.getAsLong()));
+            // What the customer pays: Click's Price is the line total, Discount comes off it, and the
+            // received_* split has to equal what was paid and not what was listed.
+            total = total == null ? line.netTotal() : total.plus(line.netTotal());
         }
 
         // The whole payment was settled by card, because a Click payment is by
@@ -199,7 +229,7 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
      * <p>{@code Price} is the line total and {@code GoodPrice} the unit price, which
      * is the reverse of the intuition Payme's field names create.
      */
-    private static Map<String, Object> item(FiscalReceiptLine line) {
+    private static Map<String, Object> item(FiscalReceiptLine line, long amount) {
         Map<String, Object> item = new LinkedHashMap<>();
         item.put("Name", trim(line.fiscalName()));
         if (line.barcode() != null) {
@@ -217,11 +247,9 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
         item.put("PackageCode", line.packageCode());
         item.put("GoodPrice", TiyinAmount.of(line.unitPrice()).value());
         item.put("Price", TiyinAmount.of(line.lineTotal()).value());
-        // Click types Amount as uint64, so a fractional quantity is unrepresentable
-        // and whether the field is scaled — ×1000 is common in Uzbek OFD schemas —
-        // is an open question with CLICK. FiscalReceiptLine already refuses a
-        // non-positive integer quantity, so nothing is lost here today.
-        item.put("Amount", line.quantity());
+        // Click types Amount as uint64. ClickQuantityScale turns the count into it, uniformly, and
+        // refuses a count it cannot say exactly (the caller has already done so).
+        item.put("Amount", amount);
         item.put("VAT", TiyinAmount.of(line.taxAmount()).value());
         item.put("VATPercent", line.vatPercent());
         if (line.discount() != null) {

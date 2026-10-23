@@ -82,6 +82,9 @@ class PlatformRoleTests {
             // Batch 18 (row 2.5a, ADR 0141 Phase 4): the aggregator polls a branch's
             // availability on the same partner-bound principal (PartnerAvailabilityController).
             Capability.MARKETPLACE_AVAILABILITY_PULL,
+            // Batch 21 (row 4.6a, ADR 0040): the aggregator pulls the menu its channel serves on the same
+            // partner-bound principal (PartnerMenuController).
+            Capability.MARKETPLACE_MENU_READ,
             Capability.COURIER_SHIFT_OPEN,
             Capability.COURIER_SHIFT_BREAK,
             // Courier policy 3.9: the courier app's own answers to an offer and moves along a delivery,
@@ -91,7 +94,12 @@ class PlatformRoleTests {
             Capability.COURIER_OFFER_DECLINE,
             Capability.COURIER_DELIVERY_ADVANCE,
             Capability.COURIER_DELIVERY_PAYMENT_CONFIRM,
-            Capability.COURIER_DELIVERY_LOCATION_REVEAL);
+            Capability.COURIER_DELIVERY_LOCATION_REVEAL,
+            // ADR 0179: the courier app's own record, and the courier's own duty session and
+            // observations -- the courier over their own record only (CourierSelfController,
+            // CourierSelfDutyController), never a manager.
+            Capability.COURIER_SELF_READ,
+            Capability.COURIER_TELEMETRY);
 
     /**
      * ADR 0045: capabilities that are in no bundle because being in one is the
@@ -236,6 +244,68 @@ class PlatformRoleTests {
                 .isTrue();
         assertThat(PlatformRole.LOCATION_MANAGER.grants(Capability.CUSTOMER_PII_REVEAL))
                 .isTrue();
+    }
+
+    /**
+     * ADR 0177: a phone-order operator gives a delivery address through a capability of its own,
+     * held by exactly the two roles of the New order screen and the three that already hold
+     * {@code CUSTOMER_MANAGE} -- and by nobody else, above all not by a role that could reveal a
+     * raw address for another reason.
+     */
+    @Test
+    void theDeliveryAddressOfAPhoneOrderIsHeldByTheScreensOwnPersonaAndTheTenantRolesAndNobodyElse() {
+        assertThat(Arrays.stream(PlatformRole.values())
+                        .filter(role -> role != PlatformRole.PLATFORM_ADMIN)
+                        .filter(role -> role.grants(Capability.CUSTOMER_ADDRESS_CAPTURE))
+                        .toList())
+                .containsExactlyInAnyOrder(
+                        PlatformRole.TENANT_OWNER,
+                        PlatformRole.TENANT_ADMIN,
+                        PlatformRole.SUPPORT_AGENT,
+                        PlatformRole.LOCATION_MANAGER,
+                        PlatformRole.LOCATION_STAFF);
+        assertThat(PlatformRole.LOCATION_STAFF.grants(Capability.CUSTOMER_PII_REVEAL))
+                .as("giving an address must not be a way round the masked lookup card (ADR 0039)")
+                .isFalse();
+        assertThat(PlatformRole.LOCATION_STAFF.grants(Capability.CUSTOMER_MANAGE))
+                .as("nor a way to blacklist, merge or edit anybody")
+                .isFalse();
+        assertThat(PlatformRole.LOCATION_STAFF.scopeType()).isEqualTo(ScopeType.LOCATION);
+    }
+
+    /**
+     * ADR 0137, ADR 0180: the till-revision notice is shown on the pass and the order detail of a branch, and
+     * its routes are branch routes. The people who stand at the pass must be able to read it, the branch
+     * manager must be able to close it, and the person who weighs must not be able to say the till was changed.
+     */
+    @Test
+    void theTillRevisionNoticeIsReadByTheBranchAndClosedByItsManager() {
+        assertThat(PlatformRole.LOCATION_MANAGER.grants(Capability.POS_EXPORT_READ))
+                .isTrue();
+        assertThat(PlatformRole.LOCATION_MANAGER.grants(Capability.POS_EXPORT_RESOLVE))
+                .isTrue();
+        assertThat(PlatformRole.LOCATION_STAFF.grants(Capability.POS_EXPORT_READ))
+                .isTrue();
+        assertThat(PlatformRole.LOCATION_STAFF.grants(Capability.POS_EXPORT_RESOLVE))
+                .as("the floor sees the difference and tells the manager; it does not decide the till is right")
+                .isFalse();
+        assertThat(PlatformRole.LOCATION_MANAGER.scopeType()).isEqualTo(ScopeType.LOCATION);
+        assertThat(PlatformRole.TENANT_OWNER.grants(Capability.POS_EXPORT_RESOLVE))
+                .as("a grant at a higher scope still covers the branch route")
+                .isTrue();
+    }
+
+    @Test
+    void everyRoleThatManagesCustomersCanAlsoCaptureTheirAddress() {
+        for (PlatformRole role : PlatformRole.values()) {
+            if (role.grants(Capability.CUSTOMER_MANAGE)) {
+                assertThat(role.grants(Capability.CUSTOMER_ADDRESS_CAPTURE))
+                        .as("%s manages customers, so narrowing the address routes to the new capability must "
+                                        .formatted(role)
+                                + "not take away what it could already do")
+                        .isTrue();
+            }
+        }
     }
 
     @Test
@@ -596,6 +666,21 @@ class PlatformRoleTests {
                         Capability.PRINT_JOB_REPORT))
                 .as("everything but looking is a write, which a suspended tenant may not do (ADR 0078)")
                 .noneMatch(Capability::isRead);
+    }
+
+    @Test
+    void definingAJobIsTheOwnersAndTheAdministratorsAndNobodyElsesAmongTheTenantVisibleRoles() {
+        // ADR 0186: iam.role.manage is the power to define a job the company then gives away. It stays with
+        // the two roles that already administer access, and is never in a job a company makes (TenantJobRules).
+        assertThat(Capability.IAM_ROLE_MANAGE.code()).isEqualTo("iam.role.manage");
+        assertThat(Capability.IAM_ROLE_MANAGE.isRead()).isFalse();
+        assertThat(TenantRoleCatalog.tenantVisibleRoles().stream()
+                        .filter(role -> role.capabilities().contains(Capability.IAM_ROLE_MANAGE)))
+                .containsExactly(PlatformRole.TENANT_OWNER, PlatformRole.TENANT_ADMIN);
+        assertThat(PlatformRole.TENANT_OWNER.scopeType()).isEqualTo(ScopeType.TENANT);
+        assertThat(PlatformRole.BRAND_MANAGER.capabilities()).doesNotContain(Capability.IAM_ROLE_MANAGE);
+        assertThat(PlatformRole.LOCATION_MANAGER.capabilities()).doesNotContain(Capability.IAM_ROLE_MANAGE);
+        assertThat(TenantJobRules.isComposable(Capability.IAM_ROLE_MANAGE)).isFalse();
     }
 
     @Test

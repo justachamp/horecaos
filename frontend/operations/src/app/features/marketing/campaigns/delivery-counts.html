@@ -1,0 +1,60 @@
+<dl class="facts" data-testid="delivery-counts">
+  <dt>{{ 'marketing.delivery.DELIVERED' | t }}</dt>
+  <dd class="q-tnum" data-testid="delivery-delivered">
+    @if (deliveredShown()) {
+      {{ counts().delivered }}
+    } @else {
+      <span class="muted" data-testid="delivered-not-reported">{{
+        'marketing.delivery.counts.notReported' | t
+      }}</span>
+    }
+  </dd>
+
+  <dt>{{ readLabel() | t }}</dt>
+  <dd class="q-tnum" data-testid="delivery-read">
+    @if (readShown()) {
+      {{ counts().read }}
+    } @else {
+      <span class="muted" data-testid="read-not-reported">{{
+        'marketing.delivery.counts.notReported' | t
+      }}</span>
+    }
+  </dd>
+
+  <dt>{{ handedLabel() | t }}</dt>
+  <dd class="q-tnum" data-testid="delivery-handed">{{ counts().handedToOperator }}</dd>
+
+  @if (noReceiptShown()) {
+    <dt>{{ 'marketing.delivery.NO_RECEIPT' | t }}</dt>
+    <dd class="q-tnum" data-testid="delivery-no-receipt">{{ counts().noReceipt }}</dd>
+  }
+
+  <dt>{{ 'marketing.delivery.FAILED' | t }}</dt>
+  <dd class="q-tnum" data-testid="delivery-failed">{{ counts().failed }}</dd>
+
+  <dt>{{ 'marketing.delivery.REJECTED' | t }}</dt>
+  <dd class="q-tnum" data-testid="delivery-rejected">{{ counts().rejected }}</dd>
+
+  <dt>{{ 'marketing.delivery.PENDING' | t }}</dt>
+  <dd class="q-tnum" data-testid="delivery-pending">{{ counts().pending }}</dd>
+
+  <dt>{{ 'marketing.delivery.WITHHELD' | t }}</dt>
+  <dd class="q-tnum" data-testid="delivery-withheld">{{ counts().withheld }}</dd>
+
+  @if (counts().segmentsBilled > 0) {
+    <dt>{{ 'marketing.delivery.counts.segments' | t }}</dt>
+    <dd class="q-tnum" data-testid="delivery-segments">{{ counts().segmentsBilled }}</dd>
+  }
+</dl>
+
+@if (withheldReasons().length > 0) {
+  <h4 class="q-caption">{{ 'marketing.delivery.counts.withheldTitle' | t }}</h4>
+  <ul class="reasons" data-testid="delivery-withheld-reasons">
+    @for (entry of withheldReasons(); track entry[0]) {
+      <li>
+        <span>{{ withheldText(entry[0]) }}</span>
+        <span class="q-tnum">{{ entry[1] }}</span>
+      </li>
+    }
+  </ul>
+}

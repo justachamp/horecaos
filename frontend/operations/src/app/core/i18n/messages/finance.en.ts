@@ -428,6 +428,19 @@ export const financeEn = {
   'finance.subscription.statements.total': 'Total',
   'finance.subscription.statements.status': 'Status',
   'finance.subscription.statements.download': 'Download CSV',
+  'finance.subscription.einvoice.label': 'E-invoice',
+  'finance.subscription.einvoice.state.DRAFT':
+    'prepared at {operator}; HorecaOS has not sent it to you yet',
+  'finance.subscription.einvoice.state.SENT':
+    'sent to you through {operator}; waiting for your signature',
+  'finance.subscription.einvoice.state.SIGNED': 'signed by you at {operator}',
+  'finance.subscription.einvoice.state.REFUSED': 'refused at {operator}',
+  'finance.subscription.einvoice.state.CANCELLED': 'cancelled at {operator}',
+  'finance.subscription.einvoice.state.UNKNOWN': '{operator} reports “{status}”',
+  'finance.subscription.einvoice.state.UNCONFIRMED':
+    'sent to {operator}; waiting for it to confirm',
+  'finance.subscription.einvoice.checked': 'checked {time}',
+  'finance.subscription.einvoice.sign': 'Open {operator} to sign or refuse it.',
   'finance.subscription.statements.empty': 'No statements have been issued yet.',
   'finance.subscription.statements.status.DRAFT': 'Preview',
   'finance.subscription.statements.status.ISSUED': 'Issued',
@@ -599,6 +612,29 @@ export const financeEn = {
     'HorecaOS can no longer charge it, and you are collected by card today, so you will be collected by invoice and bank transfer instead. Money you already added stays in your wallet.',
   'finance.wallet.card.remove.confirm': 'Remove card',
   'finance.wallet.card.remove.cancel': 'Keep it',
+  'finance.wallet.enrol.browser.lead':
+    'Type your card number and expiry below. They are sent straight to the card provider, not to HorecaOS, and are cleared from this page as soon as the provider answers. The provider then texts a code to your phone.',
+  'finance.wallet.enrol.browser.number': 'Card number',
+  'finance.wallet.enrol.browser.expiry': 'Expiry (MM/YY)',
+  'finance.wallet.enrol.browser.send': 'Send me the code',
+  'finance.wallet.enrol.browser.sent': 'The provider texted a code to {phone}.',
+  'finance.wallet.enrol.browser.sentNoPhone':
+    'The provider texted a code to the phone registered for this card.',
+  'finance.wallet.enrol.browser.unreachable':
+    'Could not reach the card provider. Nothing was sent to HorecaOS. Try again.',
+  'finance.wallet.enrol.browser.refused':
+    'The card provider did not accept that card. Check the number and the expiry.',
+  'finance.wallet.enrol.browser.unreadable':
+    'The card provider’s answer could not be read. Try again.',
+  'finance.wallet.reason.CARD_EXPIRED': 'That card has expired.',
+  'finance.wallet.reason.CARD_EXPIRY_REQUIRED': 'Enter the card’s expiry as a month and a year.',
+  'finance.wallet.reason.PROVIDER_UNAVAILABLE':
+    'The card provider is not answering. Try again in a few minutes.',
+  'finance.wallet.reason.PROVIDER_NOT_CONNECTED': 'Card payments are not connected right now.',
+  'finance.wallet.reason.PROVIDER_REFUSED': 'The card provider did not accept this.',
+  'finance.wallet.decline.PROVIDER_ERROR': 'declined by the card provider',
+  'finance.wallet.decline.PAYMENT_DECLINED': 'declined',
+  'finance.wallet.decline.PROVIDER_REJECTED': 'refused by the card provider',
   'finance.wallet.enrol.title': 'Add your card',
   'finance.wallet.enrol.lead':
     'Enter the card in the payment provider’s own form, then enter here the code that form gives back and the code your bank texts you.',
@@ -768,6 +804,7 @@ export const financeEn = {
   'finance.fiscalEvidence.seller.source.UNRESOLVED':
     'No legal entity is named on this document, so no TIN can be stated.',
   'finance.fiscalEvidence.field.merchantAccount': 'Merchant account',
+  'finance.fiscalEvidence.field.businessDate': 'Business day the seller was resolved on',
   'finance.fiscalEvidence.field.fiscalSign': 'Fiscal sign',
   'finance.fiscalEvidence.field.receiptNumber': 'Receipt number',
   'finance.fiscalEvidence.field.terminalId': 'Terminal',
@@ -791,7 +828,7 @@ export const financeEn = {
   'finance.fiscalEvidence.lines.kind.DELIVERY_FEE': 'Delivery',
   'finance.fiscalEvidence.lines.kind.SYNTHETIC': 'Placeholder',
   'finance.fiscalEvidence.lines.synthetic':
-    'This is the one-line placeholder a sandbox files to prove the connection. Its zeros are not a sale.',
+    'This is the one-line placeholder a sandbox filed before receipts were built from the order, to prove the connection. Its zeros are not a sale.',
   'finance.fiscalEvidence.lines.notSent':
     'No lines were recorded for this receipt: either nothing has been sent yet, or what was sent was not kept. Nothing is shown in their place.',
   'finance.fiscalEvidence.lines.notReadable':
@@ -823,6 +860,8 @@ export const financeEn = {
   'finance.fiscalEvidence.correction.reason.DUPLICATE_RECEIPT': 'Duplicate receipt',
   'finance.fiscalEvidence.correction.reason.CUSTOMER_REFUND': 'Customer refund',
   'finance.fiscalEvidence.correction.reason.OTHER': 'Other',
+  'finance.fiscalEvidence.correction.reason.AMENDED_AFTER_ISSUE':
+    'Order amended after the receipt was filed',
   'finance.fiscalEvidence.correction.note.label': 'What is wrong (up to 255 characters)',
   'finance.fiscalEvidence.correction.submit': 'Send the request',
   'finance.fiscalEvidence.correction.submitting': 'Sending…',

@@ -166,7 +166,7 @@
 }
 
 .recipients__table th {
-  text-align: left;
+  text-align: start;
   padding: 6px 8px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);

@@ -4,6 +4,7 @@ import { ApiClient } from '../core/api/api-client';
 import { APP_CONFIG } from '../core/config/app-config';
 import { newIdempotencyKey } from '../core/api/idempotency';
 import { LangService } from './lang.service';
+import type { PaymentForm } from './payment-form';
 
 /**
  * The online-payment handoff: opening a Click or Payme checkout for an order
@@ -86,4 +87,9 @@ export interface PaymentSessionResponse {
   readonly currency: string;
   readonly rePresented: boolean;
   readonly presentationCount: number;
+  /**
+   * A checkout to submit as a form instead of following as a link: Payme with a fiscalised cashbox, where the
+   * receipt detail is a form field. Absent on every other surface.
+   */
+  readonly form?: PaymentForm | null;
 }

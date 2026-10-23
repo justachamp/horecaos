@@ -7,7 +7,7 @@ import { LocationScope } from '../core/api/operations-paths';
 import { I18n } from '../core/i18n/i18n';
 import { QQrCode } from '../shared/ui/qr-code';
 import { DeviceBoardApi, DeviceBoardError } from './device-board-api';
-import { DeviceProfile } from './device-profile';
+import { DeviceProfile, toKioskConfiguration } from './device-profile';
 import { DeviceShell } from './device-shell';
 import { DeviceCredential, DeviceSession } from './device-session';
 import { AttributionMode, RosterMember } from './terminal-api';
@@ -272,6 +272,163 @@ describe('DeviceShell: kiosk pairing and the terminal unlock', () => {
 
       await vi.advanceTimersByTimeAsync(60_000);
       expect(me).toHaveBeenCalledTimes(3);
+    });
+
+    describe('its idle pictures (ADR 0187)', () => {
+      const PICTURES = {
+        idleMedia: [
+          { id: 'i2', assetId: 'a2', position: 1, url: '/api/v1/storefront/tenants/t1/media/a2' },
+          { id: 'i1', assetId: 'a1', position: 0, url: '/api/v1/storefront/tenants/t1/media/a1' },
+        ],
+        idleMediaVersion: 3,
+      };
+
+      const picture = (): string | null =>
+        (byId('device-kiosk-idle-picture') as HTMLImageElement | null)?.getAttribute('src') ?? null;
+
+      it('plays the channel’s pictures in their order, eight seconds each, and starts again after the last', async () => {
+        vi.useFakeTimers();
+        const kioskConfiguration = vi.fn().mockResolvedValue(toKioskConfiguration(PICTURES));
+        await render(makeSession({ enrolled: true, profile: KIOSK }), {
+          me: vi.fn().mockResolvedValue(KIOSK),
+          kioskConfiguration,
+        });
+        await vi.advanceTimersByTimeAsync(10);
+        fixture.detectChanges();
+
+        expect(kioskConfiguration).toHaveBeenCalledWith(SCOPE);
+        expect(picture()).toContain('/api/v1/storefront/tenants/t1/media/a1');
+        expect(byId('device-kiosk-status')).toBeNull();
+
+        await vi.advanceTimersByTimeAsync(7_000);
+        fixture.detectChanges();
+        expect(picture()).toContain('/media/a1');
+
+        await vi.advanceTimersByTimeAsync(1_100);
+        fixture.detectChanges();
+        expect(picture()).toContain('/media/a2');
+
+        await vi.advanceTimersByTimeAsync(8_000);
+        fixture.detectChanges();
+        expect(picture()).toContain('/media/a1');
+      });
+
+      it('keeps naming the channel and the branch over the loop', async () => {
+        vi.useFakeTimers();
+        await render(makeSession({ enrolled: true, profile: KIOSK }), {
+          me: vi.fn().mockResolvedValue(KIOSK),
+          kioskConfiguration: vi.fn().mockResolvedValue(toKioskConfiguration(PICTURES)),
+        });
+        await vi.advanceTimersByTimeAsync(10);
+        fixture.detectChanges();
+
+        expect(byId('device-kiosk-idle')).not.toBeNull();
+        expect(byId('device-kiosk-channel')?.textContent).toContain('Lobby channel');
+        expect(byId('device-kiosk-branch')?.textContent).toContain('Chilanzar');
+      });
+
+      it('shows the status screen it always showed when the channel has no pictures', async () => {
+        vi.useFakeTimers();
+        await render(makeSession({ enrolled: true, profile: KIOSK }), {
+          me: vi.fn().mockResolvedValue(KIOSK),
+          kioskConfiguration: vi.fn().mockResolvedValue({ idleMedia: [], idleMediaVersion: 0 }),
+        });
+        await vi.advanceTimersByTimeAsync(10);
+        fixture.detectChanges();
+
+        expect(byId('device-kiosk-idle')).toBeNull();
+        expect(byId('device-kiosk-ready')).not.toBeNull();
+      });
+
+      it('shows the status screen, not a loop, when its channel is switched off here', async () => {
+        vi.useFakeTimers();
+        const down = { ...KIOSK, kiosk: { ...KIOSK.kiosk!, channelStatus: 'ARCHIVED' } };
+        await render(makeSession({ enrolled: true, profile: down }), {
+          me: vi.fn().mockResolvedValue(down),
+          kioskConfiguration: vi.fn().mockResolvedValue(toKioskConfiguration(PICTURES)),
+        });
+        await vi.advanceTimersByTimeAsync(10);
+        fixture.detectChanges();
+
+        expect(byId('device-kiosk-idle')).toBeNull();
+        expect(byId('device-kiosk-channel-down')).not.toBeNull();
+      });
+
+      it('keeps the status screen when the configuration cannot be read, and keeps the loop it has when a later read fails', async () => {
+        vi.useFakeTimers();
+        const kioskConfiguration = vi
+          .fn()
+          .mockRejectedValueOnce(new DeviceBoardError(503, 'down'))
+          .mockResolvedValueOnce(toKioskConfiguration(PICTURES))
+          .mockRejectedValue(new DeviceBoardError(503, 'down'));
+        await render(makeSession({ enrolled: true, profile: KIOSK }), {
+          me: vi.fn().mockResolvedValue(KIOSK),
+          kioskConfiguration,
+        });
+        await vi.advanceTimersByTimeAsync(10);
+        fixture.detectChanges();
+        expect(byId('device-kiosk-ready')).not.toBeNull();
+
+        await vi.advanceTimersByTimeAsync(60_000);
+        fixture.detectChanges();
+        expect(picture()).not.toBeNull();
+
+        await vi.advanceTimersByTimeAsync(60_000);
+        fixture.detectChanges();
+        expect(picture()).not.toBeNull();
+      });
+
+      it('asks again every minute and plays a changed list from its first picture', async () => {
+        vi.useFakeTimers();
+        const changed = toKioskConfiguration({
+          idleMedia: [
+            { id: 'i9', assetId: 'a9', position: 0, url: '/api/v1/storefront/tenants/t1/media/a9' },
+          ],
+          idleMediaVersion: 4,
+        });
+        const kioskConfiguration = vi
+          .fn()
+          .mockResolvedValueOnce(toKioskConfiguration(PICTURES))
+          .mockResolvedValue(changed);
+        await render(makeSession({ enrolled: true, profile: KIOSK }), {
+          me: vi.fn().mockResolvedValue(KIOSK),
+          kioskConfiguration,
+        });
+        await vi.advanceTimersByTimeAsync(10);
+        fixture.detectChanges();
+        expect(picture()).toContain('/media/a1');
+
+        await vi.advanceTimersByTimeAsync(60_000);
+        fixture.detectChanges();
+
+        expect(kioskConfiguration).toHaveBeenCalledTimes(2);
+        expect(picture()).toContain('/media/a9');
+      });
+    });
+
+    it('drops the pictures of a kiosk that is revoked: a re-paired kiosk plays its own channel’s, not the old one’s', async () => {
+      vi.useFakeTimers();
+      const me = vi
+        .fn()
+        .mockResolvedValueOnce(KIOSK)
+        .mockRejectedValue(new DeviceBoardError(401, 'refused'));
+      const kioskConfiguration = vi.fn().mockResolvedValue(
+        toKioskConfiguration({
+          idleMedia: [
+            { id: 'i1', assetId: 'a1', position: 0, url: '/api/v1/storefront/tenants/t1/media/a1' },
+          ],
+          idleMediaVersion: 1,
+        }),
+      );
+      await render(makeSession({ enrolled: true, profile: KIOSK }), { me, kioskConfiguration });
+      await vi.advanceTimersByTimeAsync(10);
+      fixture.detectChanges();
+      expect(byId('device-kiosk-idle')).not.toBeNull();
+
+      await vi.advanceTimersByTimeAsync(60_000);
+      fixture.detectChanges();
+
+      expect(byId('device-kiosk-idle')).toBeNull();
     });
 
     it('returns to the pairing screen on the next read after a revoke', async () => {

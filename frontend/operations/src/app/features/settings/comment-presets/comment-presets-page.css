@@ -37,7 +37,7 @@
 }
 
 .comment-presets__table th {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);

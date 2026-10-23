@@ -110,6 +110,8 @@ class FakeContentService {
   readonly stories = signal<ContentHome['stories']>([]);
   readonly promoGrid = signal<ContentHome['promoGrid']>([]);
   readonly popup = signal<ContentHome['popup']>(null);
+  readonly brandSwitcher = signal<ContentHome['brandSwitcher']>([]);
+  readonly layout = signal<ContentHome['layout']>('STANDARD');
   load = vi.fn().mockResolvedValue(undefined);
 }
 
@@ -669,6 +671,58 @@ describe('HomeComponent -- a content link to a category', () => {
 
     expect(host.textContent).toContain('Toshkent oshi');
     expect(host.textContent).not.toContain('Achichuk');
+  });
+});
+
+describe('HomeComponent -- the brand switcher and the marketplace layout (ADR 0183 D17)', () => {
+  const eight = () =>
+    response(
+      Array.from({ length: 8 }, (_, i) => ({
+        id: `c${i + 1}`,
+        name: `Category ${i + 1}`,
+        items: [item(`p${i + 1}`, `Dish ${i + 1}`)],
+      })),
+    );
+
+  const railNames = (host: HTMLElement) =>
+    Array.from(host.querySelectorAll('nav[aria-label="home.categories"] .chip'))
+      .map((chip) => (chip.textContent ?? '').trim())
+      .filter((name) => name.startsWith('Category '));
+
+  it('draws no switcher and the whole category rail when the brand uses neither', async () => {
+    const { host } = await setUp(eight());
+
+    expect(host.querySelector('[data-testid="brand-switcher"]')).toBeNull();
+    expect(host.querySelector('[data-testid="all-categories-open"]')).toBeNull();
+    expect(railNames(host)).toHaveLength(8);
+  });
+
+  it('draws the other brands as links to their own websites, above the stories', async () => {
+    const { fixture, host } = await setUp(eight());
+    const content = TestBed.inject(ContentService) as unknown as FakeContentService;
+
+    content.brandSwitcher.set([
+      { targetBrandId: 'b-2', name: 'Pizza House', url: 'https://pizza.example.uz/' },
+      { targetBrandId: 'b-3', name: 'Sushi Bar', url: 'https://sushi.example.uz/' },
+    ]);
+    fixture.detectChanges();
+
+    const links = Array.from(host.querySelectorAll('[data-testid="brand-switcher"] a'));
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      'https://pizza.example.uz/',
+      'https://sushi.example.uz/',
+    ]);
+  });
+
+  it('compacts the rail and offers «all categories» when the brand chose the marketplace layout', async () => {
+    const { fixture, host } = await setUp(eight());
+    const content = TestBed.inject(ContentService) as unknown as FakeContentService;
+
+    content.layout.set('MARKETPLACE');
+    fixture.detectChanges();
+
+    expect(railNames(host)).toHaveLength(5);
+    expect(host.querySelector('[data-testid="all-categories-open"]')).not.toBeNull();
   });
 });
 

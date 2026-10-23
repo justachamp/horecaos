@@ -77,7 +77,8 @@
     "storyPrevious": "Previous slide",
     "storyProgress": "Slide {{current}} of {{total}}",
     "openLink": "Learn more",
-    "popupClose": "Close"
+    "popupClose": "Close",
+    "brandSwitcher": "Our other brands"
   },
   "editorial": {
     "homeLabel": "More from us",
@@ -114,6 +115,8 @@
     "searchHint": "Search a dish or a kitchen",
     "categories": "Categories",
     "allCategories": "All",
+    "showAllCategories": "All categories",
+    "categoriesClose": "Close",
     "emptyMenu": "This branch has no menu yet",
     "loadError": "The menu could not be loaded"
   },
@@ -169,13 +172,15 @@
     "offerDiscount": "Special offer",
     "deliveryOfferNote": "Includes a delivery offer of {{amount}}",
     "surchargeNote": "Includes a surcharge of {{amount}}",
+    "serviceChargeNote": "Includes a service charge of {{amount}}",
     "giftOffer": {
       "title": "A free gift is waiting for you",
       "choose": "Choose your free gift",
       "add": "Add your free {{name}}",
       "addMany": "Add your free {{name}} ×{{count}}"
     },
-    "autoAdded": "Added automatically"
+    "autoAdded": "Added automatically",
+    "pointsChanged": "The most you can pay with points has changed. Check the amount and place the order again."
   },
   "checkout": {
     "title": "Checkout",
@@ -383,6 +388,19 @@
     "modifierOption": "Option",
     "modifiersIncomplete": "Choose the required options above before adding to cart."
   },
+  "push": {
+    "title": "Offers from us",
+    "text": "Get a notification on this device when we have a promotion. You can turn it off here at any time.",
+    "turnOn": "Turn on notifications",
+    "turnOff": "Turn off",
+    "notNow": "Not now",
+    "consentNote": "By turning it on you agree to receive promotional messages from this restaurant on this device.",
+    "onTitle": "Notifications are on",
+    "onText": "We will send you offers on this device.",
+    "blocked": "Notifications are blocked in this browser. Allow them in the browser’s site settings to turn them on.",
+    "enabled": "Notifications are on",
+    "disabled": "Notifications are off"
+  },
   "terms": {
     "agreementTitle": "Public offer agreement",
     "loadError": "The terms of service could not be loaded. Please try again.",
@@ -435,6 +453,8 @@
       "codeNotActive": "That promo code is not active yet.",
       "codeExpired": "That promo code has expired.",
       "codeLimitReached": "You've reached the limit for this promo code.",
+      "codeAlreadyUsed": "That code has already been used.",
+      "codeRequiresAccount": "Sign in to use this code. It was issued to a customer account.",
       "channelNotEnabled": "This is not available on this channel yet.",
       "modeUnavailable": "This option is not available right now.",
       "closed": "This branch is closed right now.",
@@ -582,6 +602,7 @@
     "nutritionPer100g": "per 100 g",
     "nutritionPer100ml": "per 100 ml",
     "nutritionPerUnit": "per serving ({{amount}})",
+    "nutritionAccuracy": "Nutrition values are approximate and may differ from the actual product.",
     "calories": "Calories",
     "proteins": "Protein",
     "fats": "Fat",
@@ -609,6 +630,34 @@
       "title": "Filter by tag",
       "clear": "Clear",
       "empty": "No dish carries all of the selected tags."
+    }
+  },
+  "points": {
+    "title": "Pay with points",
+    "summary": "You have {{available}} in points. Up to {{maximum}} can go towards this order.",
+    "use": "Use my points",
+    "amount": "Points to use",
+    "useMaximum": "Use the most",
+    "cashToPay": "Left to pay",
+    "exceeds": "That is more than the {{maximum}} this order allows.",
+    "adjusted": "The most you can use changed, so the amount was lowered.",
+    "blockedByPromotion": "Points cannot be used together with the offer on this order.",
+    "spent": "Paid with points",
+    "profileTitle": "My points",
+    "profileSpendable": "Points you can spend: {{amount}}",
+    "profileTotal": "Total points: {{amount}}. The rest are not spendable yet."
+  },
+  "split": {
+    "title": "How this order is paid",
+    "points": "Points",
+    "money": "Money",
+    "status": {
+      "PLANNED": "To pay",
+      "RESERVED": "Held",
+      "SETTLED": "Paid",
+      "RELEASED": "Returned to you",
+      "REVERSED": "Refunded",
+      "FAILED": "Did not go through"
     }
   }
 }

@@ -16,7 +16,6 @@ set -eu
 : "${APP_BRAND_ID:=10000000-0000-0000-0000-000000000002}"
 : "${APP_DEFAULT_LOCATION_ID:=10000000-0000-0000-0000-000000000003}"
 : "${APP_CHANNEL:=STOREFRONT}"
-: "${APP_YANDEX_MAPS_API_KEY:=99847472-f185-464c-b2cb-7b28dd285a8c}"
 
 # Brand identity (AppConfig.brand -- see src/app/core/config/app-config.ts).
 # Defaults are the same neutral identity `load-config.ts` falls back to when
@@ -30,7 +29,7 @@ set -eu
 : "${APP_BRAND_ACCENT:=#52525b}"
 : "${APP_BRAND_ACCENT_DEEP:=#3f3f46}"
 
-export APP_API_BASE_URL APP_TENANT_ID APP_BRAND_ID APP_DEFAULT_LOCATION_ID APP_CHANNEL APP_YANDEX_MAPS_API_KEY \
+export APP_API_BASE_URL APP_TENANT_ID APP_BRAND_ID APP_DEFAULT_LOCATION_ID APP_CHANNEL \
   APP_BRAND_DISPLAY_NAME APP_BRAND_LOGO_URL APP_BRAND_ACCENT APP_BRAND_ACCENT_DEEP
 
 TEMPLATE=/etc/storefront/config.template.json
@@ -40,7 +39,7 @@ OUTPUT=/usr/share/nginx/html/config.json
 # variable in this process's environment (PATH, HOME, and so on) into any
 # stray "${...}" it might find -- there is none in this template today, but a
 # future edit to it should not turn into an accidental leak.
-envsubst '${APP_API_BASE_URL} ${APP_TENANT_ID} ${APP_BRAND_ID} ${APP_DEFAULT_LOCATION_ID} ${APP_CHANNEL} ${APP_YANDEX_MAPS_API_KEY} ${APP_BRAND_DISPLAY_NAME} ${APP_BRAND_LOGO_URL} ${APP_BRAND_ACCENT} ${APP_BRAND_ACCENT_DEEP}' \
+envsubst '${APP_API_BASE_URL} ${APP_TENANT_ID} ${APP_BRAND_ID} ${APP_DEFAULT_LOCATION_ID} ${APP_CHANNEL} ${APP_BRAND_DISPLAY_NAME} ${APP_BRAND_LOGO_URL} ${APP_BRAND_ACCENT} ${APP_BRAND_ACCENT_DEEP}' \
   < "$TEMPLATE" > "$OUTPUT"
 
 exec "$@"

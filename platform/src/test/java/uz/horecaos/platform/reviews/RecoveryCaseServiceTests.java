@@ -33,8 +33,10 @@ import uz.horecaos.platform.reviews.api.RecoveryCaseSlaBreached;
 import uz.horecaos.platform.reviews.api.RecoveryCaseStateChanged;
 import uz.horecaos.platform.reviews.api.RecoveryFactSource.CaseFact;
 import uz.horecaos.platform.reviews.api.ReviewsConfigurationKeys;
+import uz.horecaos.platform.reviews.application.RecoveryCaseService;
 import uz.horecaos.platform.reviews.application.RecoveryCaseService.AttachCommand;
 import uz.horecaos.platform.reviews.application.RecoveryCaseService.CaseDetail;
+import uz.horecaos.platform.reviews.application.RecoveryCaseService.CaseSummary;
 import uz.horecaos.platform.reviews.application.RecoveryCaseService.Scope;
 import uz.horecaos.platform.reviews.application.RecoveryCaseService.TransitionCommand;
 import uz.horecaos.platform.reviews.application.ReviewSubmissionService.Submission;
@@ -612,6 +614,52 @@ class RecoveryCaseServiceTests {
     // ============================================================= the worklist reads
 
     @Test
+    @DisplayName("the worklist can be narrowed to the reviews at a rating or within a range of ratings")
+    void theWorklistFiltersByRating() {
+        Scope brand = Scope.brand(TENANT, BRAND);
+        Scope second = Scope.location(TENANT, BRAND, LOCATION_2);
+        CaseRow oneStar = caseOf(rate(1, LOCATION, null));
+        clock.advance(Duration.ofMinutes(1));
+        CaseRow twoStars = caseOf(rate(2, LOCATION_2, null));
+        clock.advance(Duration.ofMinutes(1));
+        // Above the brand's threshold no case opens by itself: a person opens this one.
+        CaseRow threeStars = wiring.recovery.openManually(
+                Scope.location(TENANT, BRAND, LOCATION), rate(3, LOCATION, null).id(), "alice");
+
+        assertThat(wiring.recovery.list(brand, null, null, null, 1, 1, null, 50).items())
+                .extracting(s -> s.row().id())
+                .as("exactly one star")
+                .containsExactly(oneStar.id());
+        assertThat(wiring.recovery.list(brand, null, null, null, 2, 3, null, 50).items())
+                .extracting(s -> s.row().id())
+                .as("two to three stars, most urgent first")
+                .containsExactly(twoStars.id(), threeStars.id());
+        assertThat(wiring.recovery
+                        .list(brand, null, null, null, null, 2, null, 50)
+                        .items())
+                .extracting(s -> s.row().id())
+                .as("at most two stars")
+                .containsExactly(oneStar.id(), twoStars.id());
+        assertThat(wiring.recovery
+                        .list(brand, null, null, null, 3, null, null, 50)
+                        .items())
+                .extracting(s -> s.row().id())
+                .as("at least three stars")
+                .containsExactly(threeStars.id());
+        assertThat(wiring.recovery
+                        .list(second, null, null, null, 1, 1, null, 50)
+                        .items())
+                .as("the filter composes with the branch: the one-star case is at the other branch")
+                .isEmpty();
+        assertThat(wiring.recovery.list(brand, null, null, null, 5, 5, null, 50).items())
+                .as("no case about a five-star review")
+                .isEmpty();
+        assertThat(wiring.recovery.list(brand, null, null, null, 3, 3, null, 50).items())
+                .extracting(CaseSummary::rating)
+                .containsExactly(3);
+    }
+
+    @Test
     @DisplayName("the list is filtered by state, owner and clocks, ordered for work, scoped to the branch, and counted")
     void theWorklist() {
         Scope brand = Scope.brand(TENANT, BRAND);
@@ -900,6 +948,74 @@ class RecoveryCaseServiceTests {
         assertThat(link.currency()).isNull();
         assertThat(link.orderId()).isEqualTo(opened.orderId());
         assertThat(wiring.caseStore.hasCompensation(TENANT, opened.id())).isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "the picker offers the order's remedies and the customer's codes, marks what already belongs to a case,"
+                    + " and offers nothing of another order, customer, brand or tenant")
+    void theCompensationPicker() {
+        CaseRow first = caseOf(rate(1, LOCATION, null));
+        CaseRow second = caseOf(rate(1, LOCATION, null));
+        Scope here = Scope.location(TENANT, BRAND, LOCATION);
+        UUID customer = OrderBoardFixtures.customerOf(TENANT);
+        UUID mine = UUID.randomUUID();
+        UUID alsoMine = UUID.randomUUID();
+        UUID ofAnotherOrder = UUID.randomUUID();
+        UUID ofAnotherTenant = UUID.randomUUID();
+        wiring.remedies.register(TENANT, mine, first.orderId(), 45_000, "UZS");
+        wiring.remedies.register(TENANT, alsoMine, first.orderId(), 10_000, "UZS");
+        wiring.remedies.register(TENANT, ofAnotherOrder, second.orderId(), 10_000, "UZS");
+        wiring.remedies.register(OTHER_TENANT, ofAnotherTenant, first.orderId(), 10_000, "UZS");
+        UUID good = UUID.randomUUID();
+        UUID forAnotherCustomer = UUID.randomUUID();
+        UUID forAnotherBrand = UUID.randomUUID();
+        UUID revoked = UUID.randomUUID();
+        wiring.grants.register(TENANT, new GrantSummary(good, BRAND, customer, "ACTIVE", "OPERATOR_MANUAL", null));
+        wiring.grants.register(
+                TENANT,
+                new GrantSummary(forAnotherCustomer, BRAND, UUID.randomUUID(), "ACTIVE", "OPERATOR_MANUAL", null));
+        wiring.grants.register(
+                TENANT, new GrantSummary(forAnotherBrand, OTHER_BRAND, customer, "ACTIVE", "OPERATOR_MANUAL", null));
+        wiring.grants.register(TENANT, new GrantSummary(revoked, BRAND, customer, "REVOKED", "OPERATOR_MANUAL", null));
+
+        var before = wiring.recovery.candidates(here, first.id());
+
+        assertThat(before.remedies()).extracting(r -> r.remedy().refId()).containsExactlyInAnyOrder(mine, alsoMine);
+        assertThat(before.grants()).extracting(g -> g.grant().grantId()).containsExactly(good);
+        assertThat(before.orderId()).isEqualTo(first.orderId());
+        assertThat(before.customerAccountId()).isEqualTo(customer);
+        assertThat(before.remedies()).noneMatch(RecoveryCaseService.RemedyCandidate::taken);
+
+        wiring.recovery.attach(here, first.id(), new AttachCommand(CompensationKind.ORDER_REMEDY, mine), "alice");
+        wiring.recovery.attach(here, second.id(), new AttachCommand(CompensationKind.BENEFIT_GRANT, good), "alice");
+
+        var after = wiring.recovery.candidates(here, first.id());
+        assertThat(after.remedies())
+                .filteredOn(r -> r.remedy().refId().equals(mine))
+                .singleElement()
+                .satisfies(r ->
+                        assertThat(r.taken()).as("already linked to this case").isTrue());
+        assertThat(after.remedies())
+                .filteredOn(r -> r.remedy().refId().equals(alsoMine))
+                .singleElement()
+                .satisfies(r -> assertThat(r.taken()).isFalse());
+        assertThat(after.grants())
+                .singleElement()
+                .satisfies(g -> assertThat(g.taken())
+                        .as("the code is linked to another case, so attaching it here would conflict")
+                        .isTrue());
+    }
+
+    @Test
+    @DisplayName("a case outside the caller's branch has no picker: the same answer as no such case")
+    void thePickerIsScopedToTheBranch() {
+        CaseRow elsewhere = caseOf(rate(1, LOCATION_2, null));
+
+        assertThatThrownBy(() -> wiring.recovery.candidates(Scope.location(TENANT, BRAND, LOCATION), elsewhere.id()))
+                .isInstanceOf(ApiException.class)
+                .extracting(e -> ((ApiException) e).errorCode())
+                .isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
     }
 
     // ================================================================== the facts

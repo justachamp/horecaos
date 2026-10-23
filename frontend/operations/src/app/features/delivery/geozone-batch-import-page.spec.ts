@@ -6,6 +6,7 @@ import { BrandScope } from '../../core/api/catalog-paths';
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { I18n } from '../../core/i18n/i18n';
+import { LocaleSet } from '../../core/i18n/locale-set';
 import { MapBounds } from '../../shared/ui/map/map-provider';
 import { NullMapProvider, provideNullMapProvider } from '../../shared/ui/map/null-map-provider';
 import { DeliveryTariffsApi, TariffSummaryResponse } from './delivery-tariffs-api';
@@ -15,6 +16,7 @@ import { MapRegion, MapRegionService } from './map-region';
 
 const BRAND_SCOPE: BrandScope = { tenantId: 't1', brandId: 'b1' };
 
+/** A legacy export's row: the old exporter wrote the three name columns, which the page reads as the file's own format. */
 const VALID_ROW = {
   externalRef: 'legacy-1',
   code: 'CITY',
@@ -39,6 +41,14 @@ const TASHKENT: MapBounds = {
   southWest: { latitude: 41.15, longitude: 69.04 },
   northEast: { latitude: 41.47, longitude: 69.46 },
 };
+
+/** The brand's locale set, as far as the page reads it: its default language. */
+function localeSet(defaultLocale: string): Partial<LocaleSet> {
+  return {
+    ensureLoaded: () => Promise.resolve(),
+    defaultLocale: signal(defaultLocale),
+  };
+}
 
 /** The regions the page reads: Tashkent's box, or nothing at all for a tenant that may not read them. */
 class FakeRegions {
@@ -131,6 +141,7 @@ describe('GeozoneBatchImportPage', () => {
   async function render(
     api: Partial<DeliveryZonesApi>,
     tariffs: Partial<DeliveryTariffsApi> = { list: vi.fn().mockResolvedValue([]) },
+    defaultLocale = 'ru',
   ): Promise<void> {
     provider = new NullMapProvider();
     regions = new FakeRegions();
@@ -148,6 +159,7 @@ describe('GeozoneBatchImportPage', () => {
           },
         },
         { provide: DeliveryZonesApi, useValue: api },
+        { provide: LocaleSet, useValue: localeSet(defaultLocale) },
         { provide: DeliveryTariffsApi, useValue: tariffs },
       ],
     }).compileComponents();
@@ -171,6 +183,7 @@ describe('GeozoneBatchImportPage', () => {
           },
         },
         { provide: DeliveryZonesApi, useValue: {} },
+        { provide: LocaleSet, useValue: localeSet('ru') },
         { provide: DeliveryTariffsApi, useValue: { list: vi.fn() } },
         { provide: MapRegionService, useValue: new FakeRegions() },
       ],
@@ -295,6 +308,43 @@ describe('GeozoneBatchImportPage', () => {
     expect(host.querySelector('[data-testid="zone-import-summary"]')?.textContent).toContain(
       'Imported',
     );
+  });
+
+  // ---------------------------------------------- row 10.12: a zone is named per language
+
+  async function sentRows(
+    rows: unknown[],
+    defaultLocale = 'ru',
+  ): Promise<readonly { displayNames: unknown }[]> {
+    const importBatch = vi.fn().mockResolvedValue({ ...committed(), dryRun: true });
+    await render({ importBatch }, undefined, defaultLocale);
+    const host = await upload(rows);
+    click(host, 'zone-import-dry-run');
+    await flushMicrotasks();
+    return importBatch.mock.calls[0][1].rows;
+  }
+
+  it('sends a legacy export’s three name columns as the name per language, and none of the old fields', async () => {
+    const rows = await sentRows([VALID_ROW]);
+
+    expect(rows[0].displayNames).toEqual({ ru: 'Город', 'uz-Latn': 'Shahar', en: 'City' });
+    expect(Object.keys(rows[0])).not.toContain('displayNameRu');
+  });
+
+  it('reads a row’s own per-language names, a language the triple never held included', async () => {
+    const { displayNameRu, displayNameUz, displayNameEn, ...bare } = VALID_ROW;
+    void [displayNameRu, displayNameUz, displayNameEn];
+    const rows = await sentRows([{ ...bare, displayNames: { kk: 'Қала', en: ' City ' } }]);
+
+    expect(rows[0].displayNames).toEqual({ kk: 'Қала', en: 'City' });
+  });
+
+  it('names a row that names nothing by its code in the brand’s default language', async () => {
+    const { displayNameRu, displayNameUz, displayNameEn, ...bare } = VALID_ROW;
+    void [displayNameRu, displayNameUz, displayNameEn];
+    const rows = await sentRows([bare], 'uz-Latn');
+
+    expect(rows[0].displayNames).toEqual({ 'uz-Latn': 'CITY' });
   });
 
   // ------------------------------------------------ ADR 0145: looked at on a map

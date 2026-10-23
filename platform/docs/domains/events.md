@@ -50,8 +50,10 @@ changing retention is an approved operational migration with a rollback plan.
 | `pricing.events` | 3 | 1 | `PT168H` | `delete` |
 | `marketing.events` | 3 | 1 | `PT168H` | `delete` |
 | `content.events` | 3 | 1 | `PT168H` | `delete` |
+| `catalog.events` | 3 | 1 | `PT168H` | `delete` |
 | `customers.events` | 3 | 1 | `PT168H` | `delete` |
 | `reviews.events` | 3 | 1 | `PT168H` | `delete` |
+| `fiscal.events` | 3 | 1 | `PT168H` | `delete` |
 | `integration.events` | 3 | 1 | `PT168H` | `delete` |
 | `pos.commands` | 3 | 1 | `PT24H` | `delete` |
 
@@ -139,6 +141,9 @@ holds organization and subject identifiers and applied configuration.
 | `OrderExpired` | 1 | `orderId` | [`OrderExpired.v1`](../../src/main/resources/events/ordering.events/OrderExpired.v1.schema.json) | `orderId`, brand/location, approval deadline, status, version |
 | `OrderPaymentLapsed` | 1 | `orderId` | [`OrderPaymentLapsed.v1`](../../src/main/resources/events/ordering.events/OrderPaymentLapsed.v1.schema.json) | `orderId`, brand/location, the lapsed window in minutes, status, version |
 | `OrderCancelled` | 1 | `orderId` | [`OrderCancelled.v1`](../../src/main/resources/events/ordering.events/OrderCancelled.v1.schema.json) | `orderId`, brand/location, cancelling actor type, reason code, previous status, status, version |
+| `OrderPreparing` | 1 | `orderId` | [`OrderPreparing.v1`](../../src/main/resources/events/ordering.events/OrderPreparing.v1.schema.json) | `orderId`, brand/location, fulfilment mode, preparing-at, status, version |
+| `OrderReady` | 1 | `orderId` | [`OrderReady.v1`](../../src/main/resources/events/ordering.events/OrderReady.v1.schema.json) | `orderId`, brand/location, fulfilment mode, ready-at, status, version |
+| `OrderFulfilling` | 1 | `orderId` | [`OrderFulfilling.v1`](../../src/main/resources/events/ordering.events/OrderFulfilling.v1.schema.json) | `orderId`, brand/location, fulfilment mode, handed-over-at, status, version |
 | `OrderCompleted` | 1 | `orderId` | [`OrderCompleted.v1`](../../src/main/resources/events/ordering.events/OrderCompleted.v1.schema.json) | `orderId`, brand/location, completed-at, currency, total, version |
 | `OrderAmendmentProposed` | 1 | `orderId` | [`OrderAmendmentProposed.v1`](../../src/main/resources/events/ordering.events/OrderAmendmentProposed.v1.schema.json) | `orderId`, brand/location, `amendmentId`, base revision, command types, amendment status, order version |
 | `OrderAmendmentApplied` | 1 | `orderId` | [`OrderAmendmentApplied.v1`](../../src/main/resources/events/ordering.events/OrderAmendmentApplied.v1.schema.json) | `orderId`, brand/location, `amendmentId`, applied revision, command types, delta total, order version |
@@ -172,17 +177,29 @@ window that elapsed and nothing about the money.
 `OrderCancelled` never follows `OrderConfirmed` in this release: cancellation
 after confirmation is ADR 0039's and the application refuses it.
 
-`PREPARING`, `READY` and `FULFILLING` transitions are recorded in
-`ordering.order_state_history` and have no event. They will get one when
-something reads it — ADR 0014 delivery or ADR 0020 notifications — rather than
-being published now to a catalogue with no consumer.
+`PREPARING`, `READY` and `FULFILLING` transitions were recorded in
+`ordering.order_state_history` and had no event, to be published when something
+read them. `COMPLETED` left that list when ADR 0075 became its reader: a rating
+prompt has to know an order finished, and ADR 0071 accepts a review only once it
+has. The other three left it with ADR 0184: ADR 0045 tells a customer each
+milestone as an ADR 0020 message, and `notifications` cannot trigger a message
+from a history row. `OrderPreparing`, `OrderReady` and `OrderFulfilling` are
+published from the same place as the others (`OrderStateService`'s consequences
+of a forward transition), the same rule applied rather than an exception to it.
+Only a forward edge publishes: ADR 0110's compensating edges (`READY` back to
+`PREPARING`, `FULFILLING` back to `READY`) are corrections, go through
+`override`, and say nothing, because a customer told twice that the kitchen has
+started has been told something false the second time. The fulfilment mode is
+on all three so a consumer words a message, or declines one (a delivery order's
+`READY` is «waiting for a courier», which ADR 0045 does not message), without a
+second read. None carries the customer or the courier: who ordered is resolved
+through an authorized call, because ADR 0029 keeps personal data off every
+topic, and the courier's first name that «on the way» may carry is resolved by
+the consumer through its own port at the moment it renders and is stored
+nowhere.
 
-`COMPLETED` was on that list until ADR 0075 became its reader: a rating prompt
-has to know an order finished, and ADR 0071 accepts a review only once it has.
-So `OrderCompleted` is published and the other three are not, which is the same
-rule applied rather than an exception to it. It carries no customer — who
-ordered is resolved through an authorized call, because ADR 0029 keeps personal
-data off every topic and a prompt needs only the order id to find the chat.
+`OrderCompleted` carries no customer either — a prompt needs only the order id
+to find the chat.
 
 `OrderAmendmentProposed`, `OrderAmendmentApplied`, `OrderAmendmentRejected`,
 `OrderRevisionCreated`, `OrderCallbackRequested` and `OrderCallbackResolved`
@@ -373,6 +390,30 @@ status and is not published; a conversion publishes `LeadStatusChanged` and `Lea
 both. The contact journal (`customer.contact_attempts`) is not an event stream: it is append-only
 by grant and read through the customer card.
 
+## `fiscal.events`
+
+- Producing module: `fiscal`
+- Retention class: business fact
+- Classification: `INTERNAL` — no personal data and no receipt evidence on this topic
+- Key: `documentId`
+
+| Event | Version | Key | Schema | Version-1 payload |
+|---|---|---|---|---|
+| `FiscalCorrectionRequested` | 1 | `documentId` | [`FiscalCorrectionRequested.v1`](../../src/main/resources/events/fiscal.events/FiscalCorrectionRequested.v1.schema.json) | `documentId`, `requestId`, `orderId`, `legalEntityId?`, `kind`, `status`, `reasonCode`, `source` |
+| `FiscalCorrectionAttached` | 1 | `documentId` | [`FiscalCorrectionAttached.v1`](../../src/main/resources/events/fiscal.events/FiscalCorrectionAttached.v1.schema.json) | `documentId`, `requestId`, `orderId`, `legalEntityId?`, `kind`, `status`, `linkedDocumentId`, `linkedDocumentType` |
+
+ADR 0166 Decision 8. HorecaOS records a request to correct or void an issued receipt and the tenant's own
+fiscal agent issues it; these two facts are the request and the attachment of the agent's reference. Both are
+written through the outbox in the same transaction as the row they describe. `FiscalCorrectionRequested` is
+published whether a person raised the request under a second person's approval (`source: OPERATOR`) or the
+platform opened it because an amendment of the order changed a total that had already been filed (`source:
+AMENDMENT`, ADR 0039). Every payload is identifiers, the kind, the document's status and a stable reason code:
+never a fiscal sign, a receipt number, a receipt URL, a terminal id, a marking code or a taxpayer number, which
+are ADR 0029 `FINANCIAL` evidence read through the evidence endpoint under a recorded purpose;
+`FiscalEventContractTests` walks the payload types and refuses a field whose name is evidence. The fiscal
+lifecycle signals (`FiscalDocumentIssued`, `FiscalDocumentBlocked`) stay in-process signals as ADR 0166 says
+and are not on this topic.
+
 ## `reviews.events`
 
 - Producing module: `reviews`
@@ -515,6 +556,28 @@ high-volume per-request facts whose payload shape and retention deserve their
 own decision rather than riding along with a once-a-day control-plane
 activation — the same restraint `inventory.events` states for its own six
 unpublished siblings.
+
+## `catalog.events`
+
+- Producing module: `catalog`
+- Retention class: business fact
+- Classification: `INTERNAL` — no personal data, no name, no price and no URL on this topic
+- Key: `brandId`
+
+| Event | Version | Key | Schema | Version-1 payload |
+|---|---|---|---|---|
+| `CatalogDraftChanged` | 1 | `brandId` | [`CatalogDraftChanged.v1`](../../src/main/resources/events/catalog.events/CatalogDraftChanged.v1.schema.json) | `brandId`, `entityType`, `entityId`, `change` (`CREATED`, `UPDATED`, `ARCHIVED`, `TRANSLATED`, `MEDIA_CHANGED`, `CLASSIFIED`, `PHYSICAL_ATTRIBUTES_CHANGED`, `COMPOSITE_CHANGED`, `CHANNEL_MEDIA_REPLACED`, `CHANNEL_OFFERING_CHANGED`), `channelId` |
+
+ADR 0016's `CatalogDraftChanged`, which ADR 0136, 0137 and 0138 each said an authoring write "rides" and which no
+code published until batch 21 (ADR 0180). It says that a brand's *draft* moved, which entity and how, never what it
+became: what a dish is called or costs is in the draft, which a consumer reads through the authorized API. Nothing a
+customer is served moves until the draft is published (`CatalogPublished`, which is not built as an event). Appended
+by `CatalogOutboxEventListener` in the same `BEFORE_COMMIT` transaction as the write and its audit fact, so neither
+commits without the other; several writes to one entity in one transaction are one fact (`CatalogDraftSignal`), and a
+catalog import, which is a bulk write, is suppressed rather than announced row by row (`ImportSuppression`). The
+consumer it exists for is a marketplace menu push, which must re-project a channel's menu when the draft moves
+(ADR 0040, an external fact); nothing in the platform consumes it yet, and a pull-first partner reads the
+projection instead (`GET /api/v1/partner/tenants/{t}/restaurants/{l}/menu`).
 
 ## `content.events`
 

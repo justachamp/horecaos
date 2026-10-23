@@ -362,3 +362,9 @@ All approved journeys run on one coherent, accessible frontend platform; Keycloa
 and tenant switching cannot leak state; APIs are generated and compatibility-
 checked; brand themes cannot execute unsafe code; and every journey can be
 progressively routed and rolled back without creating two business writers.
+
+## Status addition (2026-10-14)
+
+This record is superseded and its `apps/courier` line (Vite and TanStack, "built only after
+courier scope is approved") is not what was built. [ADR 0179](../partial/0179-the-courier-client.md)
+decides the courier client: an Angular PWA in `frontend/courier`, on ADR 0035's platform.

@@ -3,7 +3,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { BrandScope } from '../api/catalog-paths';
 import { ApiClient } from '../api/api-client';
-import { settingsPaths } from '../api/settings-paths';
+import { brandListPath } from '../api/brand-list-path';
 import { BrandChoice } from './brand-choice';
 import { SessionContext, ScopeGrant } from './session-context';
 
@@ -148,9 +148,7 @@ export async function resolveBrandForTenant(
   }
   try {
     const result = await firstValueFrom(
-      api.get<readonly BrandSummary[]>(
-        settingsPaths.brands({ tenantId, brandId: '', locationId: '' }),
-      ),
+      api.get<readonly BrandSummary[]>(brandListPath({ tenantId })),
     );
     const brands = result.value ?? [];
     if (choice) {

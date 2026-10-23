@@ -7,15 +7,28 @@ import { debounceTime, distinctUntilChanged, switchMap, tap, catchError } from '
 import { YaMapComponent, YaPlacemarkDirective } from 'angular8-yandex-maps';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import { BackDirective } from '../../../shared/back/back.directive';
-import {
-  GeocodingService,
-  type GeocodeSuggestion as ReverseGeocodeSuggestion,
-} from '../../../services/geocoding.service';
-
-export type GeocodeSuggestion = ReverseGeocodeSuggestion;
+import { GeocodingService, type AddressSuggestion } from '../../../services/geocoding.service';
+import { MapConfigService, canLookUp, hasTiles } from '../../../services/map-config.service';
 
 const DEFAULT_CENTER = [41.2995, 69.2401] as [number, number]; // Tashkent [lat, lng]
 
+/**
+ * Adding an address: a pin on a map with the address it names, or, when the platform has no map to
+ * offer, the address typed in full (ADR 0145 decision 6).
+ *
+ * **The browser asks the platform, never a geocoder vendor.** The map's browser key, the type-ahead
+ * and the reverse lookup all come from the platform (`MapConfigService`, `GeocodingService`), which
+ * applies the region's box, rate limits and meters them. What the customer *confirms* is the pin:
+ * the saved row is `CUSTOMER_PIN`, never `GEOCODER` (the server refuses it from this surface).
+ *
+ * **Two modes, decided once from `map-config`.** With tiles on offer the screen is what it always
+ * was: the customer's position, a draggable pin, the address under it. With no provider (or no
+ * browser key) there is no map to confirm anything on, so the screen is a text field and a
+ * continue button, the address saves with no coordinates and is `NOT_GEOCODED` (the restaurant
+ * confirms it), and a suggestion that is chosen only fills the text. A lookup that fails while the
+ * map works (provider down, customer told to slow down) leaves the search field as plain text and
+ * the pin flow untouched.
+ */
 @Component({
   selector: 'app-locations-add',
   standalone: true,
@@ -31,6 +44,12 @@ const DEFAULT_CENTER = [41.2995, 69.2401] as [number, number]; // Tashkent [lat,
   styleUrl: './locations-add.component.scss',
 })
 export class LocationsAddComponent implements OnInit, OnDestroy {
+  /** `checking` until `map-config` has answered; `map` when tiles are on offer; `text` when they are not. */
+  mode = signal<'checking' | 'map' | 'text'>('checking');
+  /** The platform has lookups on offer at all (a provider is set up with at least one lookup feature). */
+  lookupsConfigured = signal(false);
+  /** The last type-ahead could not be answered: the field is plain text until one can. */
+  suggestionsUnavailable = signal(false);
   /** Permission state: 'prompt' | 'granted' | 'denied' | 'checking' */
   permissionState = signal<'checking' | 'prompt' | 'granted' | 'denied'>('checking');
   /** Loading map or geocoding */
@@ -63,7 +82,7 @@ export class LocationsAddComponent implements OnInit, OnDestroy {
 
   private mapInstance: ymaps.Map | null = null;
   searchQuery = signal('');
-  suggestions = signal<GeocodeSuggestion[]>([]);
+  suggestions = signal<AddressSuggestion[]>([]);
   searchLoading = signal(false);
   showDropdown = signal(false);
 
@@ -73,6 +92,7 @@ export class LocationsAddComponent implements OnInit, OnDestroy {
 
   constructor(
     private geocoding: GeocodingService,
+    private mapConfig: MapConfigService,
     private router: Router,
   ) {
     this.searchSub = this.searchSubject
@@ -82,21 +102,23 @@ export class LocationsAddComponent implements OnInit, OnDestroy {
         switchMap((q) => {
           const id = ++this.searchId;
           this.searchLoading.set(true);
-          return from(this.geocoding.search(q)).pipe(
-            tap((items: ReverseGeocodeSuggestion[]) => {
+          return from(this.geocoding.suggest(q)).pipe(
+            tap((lookup) => {
               if (id === this.searchId) {
                 this.searchLoading.set(false);
-                this.suggestions.set(items);
-                this.showDropdown.set(items.length > 0);
+                this.suggestionsUnavailable.set(!lookup.available);
+                this.suggestions.set([...lookup.items]);
+                this.showDropdown.set(lookup.items.length > 0);
               }
             }),
             catchError(() => {
               if (id === this.searchId) {
                 this.searchLoading.set(false);
+                this.suggestionsUnavailable.set(true);
                 this.suggestions.set([]);
                 this.showDropdown.set(false);
               }
-              return of([] as ReverseGeocodeSuggestion[]);
+              return of(null);
             }),
           );
         }),
@@ -111,7 +133,21 @@ export class LocationsAddComponent implements OnInit, OnDestroy {
   };
 
   ngOnInit(): void {
-    this.checkPermission();
+    void this.start();
+  }
+
+  /** Asks the platform what the map is, once, and chooses the mode the rest of the screen runs in. */
+  private async start(): Promise<void> {
+    const config = await this.mapConfig.ensureLoaded();
+    this.lookupsConfigured.set(canLookUp(config));
+    if (hasTiles(config)) {
+      this.mode.set('map');
+      this.checkPermission();
+    } else {
+      // No map to confirm a pin on: the typed address is the answer, and it saves NOT_GEOCODED.
+      this.mode.set('text');
+      this.loading.set(false);
+    }
   }
 
   private checkPermission(): void {
@@ -299,7 +335,8 @@ export class LocationsAddComponent implements OnInit, OnDestroy {
 
   onSearchInput(value: string): void {
     this.searchQuery.set(value);
-    if (value.trim().length >= 2) {
+    // Nothing is asked of a platform that has said it has no lookups; the field is plain text.
+    if (this.lookupsConfigured() && value.trim().length >= 2) {
       this.searchSubject.next(value);
     } else {
       this.suggestions.set([]);
@@ -307,27 +344,57 @@ export class LocationsAddComponent implements OnInit, OnDestroy {
     }
   }
 
-  selectSuggestion(s: GeocodeSuggestion): void {
-    this.searchQuery.set(s.address);
+  selectSuggestion(s: AddressSuggestion): void {
+    this.searchQuery.set(s.text);
     this.suggestions.set([]);
     this.showDropdown.set(false);
-    this.latitude.set(s.lat);
-    this.longitude.set(s.lng);
-    this.address.set(s.address);
-    // Animate map pan to selected location
-    if (this.mapInstance) {
-      this.mapInstance.panTo([s.lat, s.lng], { duration: 300 });
+    if (this.mode() !== 'map') {
+      // No map: the line is the address, and nothing is placed that nobody could confirm.
+      this.address.set(s.text);
+      return;
     }
+    // A suggestion has no point; choosing it asks the platform where it is, then the customer
+    // confirms that on the map by looking at it (and may drag the pin).
+    this.resolvingAddress.set(true);
+    this.geocoding
+      .resolve(s.text)
+      .then((lookup) => {
+        const place = lookup.items[0];
+        if (!place) {
+          this.address.set(s.text);
+          return;
+        }
+        this.latitude.set(place.lat);
+        this.longitude.set(place.lng);
+        this.address.set(place.address);
+        this.mapInstance?.panTo([place.lat, place.lng], { duration: 300 });
+      })
+      .catch(() => this.address.set(s.text))
+      .finally(() => this.resolvingAddress.set(false));
   }
 
   closeDropdown(): void {
     this.showDropdown.set(false);
   }
 
+  /** Whether Continue may be pressed: a pin is always there in map mode; text mode needs an address typed. */
+  canContinue(): boolean {
+    return this.mode() === 'map' || this.searchQuery().trim().length >= 3;
+  }
+
   goToSave(): void {
-    const lat = this.latitude();
-    const lng = this.longitude();
-    const address = this.address() || '';
+    if (!this.canContinue()) {
+      return;
+    }
+    const typed = this.searchQuery().trim();
+    const map = this.mode() === 'map';
+    // No map, no point: a coordinate the customer never saw on a map is not one they confirmed.
+    const lat = map ? this.latitude() : null;
+    const lng = map ? this.longitude() : null;
+    // The typed line is the address when there is no map, and also when the type-ahead could not
+    // answer: the customer wrote an address and dropped a pin, and the pin's reverse lookup is not.
+    const address =
+      !map || (this.suggestionsUnavailable() && typed.length > 0) ? typed : this.address() || '';
     const newLocation = { lat, lng, address };
     sessionStorage.setItem('new-location', JSON.stringify(newLocation));
     this.router.navigate(['/locations/save'], {

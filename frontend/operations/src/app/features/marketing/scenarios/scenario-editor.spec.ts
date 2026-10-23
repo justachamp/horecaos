@@ -39,8 +39,8 @@ function channel(name: string, wired: boolean, reason: string | null, cost: bool
 /** Telegram works; SMS is gated; email and push have no delivery. The state of this brand today. */
 const CHANNELS: readonly ChannelView[] = [
   channel('SMS', false, 'SMS_PURPOSE_NOT_PERMITTED', true),
-  channel('EMAIL', false, 'NO_DELIVERY_ADAPTER', true),
-  channel('PUSH', false, 'NO_DELIVERY_ADAPTER', false),
+  channel('EMAIL', false, 'EMAIL_NOT_CONFIGURED', false),
+  channel('PUSH', false, 'PUSH_NOT_CONFIGURED', false),
   channel('MESSAGING_APP', true, null, false),
 ];
 
@@ -372,16 +372,16 @@ describe('ScenarioEditor', () => {
       expect(saveButton().disabled).toBe(false);
     });
 
-    it('says plainly that email and push are not connected, and why', async () => {
+    it('says plainly that email and push are not set up on this deployment, and why', async () => {
       await render();
       choose('scenario-step-channel', 'EMAIL');
       expect(host.querySelector('[data-testid="scenario-step-unwired"]')!.textContent).toContain(
-        'mail service sends staff invitations',
+        'Email is not set up on this deployment',
       );
 
       choose('scenario-step-channel', 'PUSH');
       expect(host.querySelector('[data-testid="scenario-step-unwired"]')!.textContent).toContain(
-        'no push provider',
+        'Push is not set up on this deployment',
       );
     });
 

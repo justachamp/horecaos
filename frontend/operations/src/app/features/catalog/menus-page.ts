@@ -21,6 +21,7 @@ import { VariantAvailabilityRow } from './catalog-domain';
 import { InventoryApi } from './inventory-api';
 import { perQuantumLabel } from './per-quantum';
 import { PricingApi } from './pricing-api';
+import { registerMenusKeys } from './menus-keys';
 
 /** The five ways an operator can narrow the matrix — catalog.md §4.5's status tabs. */
 export type MenuStatusFilter = 'ALL' | 'AVAILABLE' | 'UNAVAILABLE' | 'HIDDEN' | 'NOT_ADDED';
@@ -116,6 +117,8 @@ const SELECTION_CAP = 200;
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class MenusPage implements OnInit {
+  /** The matrix's keys (catalog.md §4.5): they press the cells the table already draws. */
+  private readonly keys = registerMenusKeys();
   private readonly catalogApi = inject(CatalogApi);
   private readonly pricingApi = inject(PricingApi);
   private readonly inventoryApi = inject(InventoryApi);

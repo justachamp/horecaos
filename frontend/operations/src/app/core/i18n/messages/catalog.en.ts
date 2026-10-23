@@ -53,9 +53,7 @@ export const catalogEn = {
   'catalog.autoAdd.field.mandatory': 'The customer cannot decline it',
   'catalog.autoAdd.field.fulfillment': 'Fulfilment modes',
   'catalog.autoAdd.field.channel': 'Channel types',
-  'catalog.autoAdd.field.textRu': 'Customer text (Russian)',
-  'catalog.autoAdd.field.textUz': 'Customer text (Uzbek)',
-  'catalog.autoAdd.field.textEn': 'Customer text (English)',
+  'catalog.autoAdd.field.textIn': 'Customer text ({language})',
   'catalog.autoAdd.channelsNote':
     'Only channels that build orders from a cart. An aggregator or POS order cannot carry a rule.',
   'catalog.autoAdd.pickVariant': 'Find the item to add',
@@ -381,6 +379,14 @@ export const catalogEn = {
   'catalog.editor.physical.portion': 'Portion size',
   'catalog.editor.physical.portionHint': 'The step the quantity moves in, for example 0.5',
   'catalog.editor.physical.nutrition': 'Nutrition (КБЖУ)',
+  'catalog.editor.physical.accuracy.preview':
+    'Customers see this line under the table, in the language they read the menu in:',
+  'catalog.editor.physical.accuracy.ru':
+    'Значения КБЖУ приблизительные и могут отличаться от фактических.',
+  'catalog.editor.physical.accuracy.uz':
+    'KBJU qiymatlari taxminiy va haqiqiyidan farq qilishi mumkin.',
+  'catalog.editor.physical.accuracy.en':
+    'Nutrition values are approximate and may differ from the actual product.',
   'catalog.editor.physical.per100g': 'per 100 g',
   'catalog.editor.physical.per100ml': 'per 100 ml',
   'catalog.editor.physical.calories': 'Calories, kcal',

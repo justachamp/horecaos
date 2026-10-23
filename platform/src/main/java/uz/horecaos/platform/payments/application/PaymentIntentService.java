@@ -4,15 +4,18 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.fiscal.api.FiscalTerminalDirectory;
 import uz.horecaos.platform.migration.api.ExternalEffect;
 import uz.horecaos.platform.migration.api.ImportSuppression;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
@@ -58,9 +61,33 @@ public class PaymentIntentService implements PaymentIntentPort {
     private final PaymentBindingResolver bindings;
     private final PaymentBusinessCalendar calendar;
     private final PaymentFiscalService fiscal;
+    private final FiscalTerminalDirectory terminals;
     private final ApplicationEventPublisher events;
     private final Clock clock;
 
+    @Autowired
+    public PaymentIntentService(
+            JdbcPaymentIntentStore intents,
+            OrderDirectory orders,
+            PaymentLegalEntityResolver legalEntities,
+            PaymentBindingResolver bindings,
+            PaymentBusinessCalendar calendar,
+            PaymentFiscalService fiscal,
+            FiscalTerminalDirectory terminals,
+            ApplicationEventPublisher events,
+            Clock clock) {
+        this.intents = intents;
+        this.orders = orders;
+        this.legalEntities = legalEntities;
+        this.bindings = bindings;
+        this.calendar = calendar;
+        this.fiscal = fiscal;
+        this.terminals = terminals;
+        this.events = events;
+        this.clock = clock;
+    }
+
+    /** Where no location has fiscal equipment of its own: every cash sale is the tenant's unevidenced obligation. */
     public PaymentIntentService(
             JdbcPaymentIntentStore intents,
             OrderDirectory orders,
@@ -70,14 +97,16 @@ public class PaymentIntentService implements PaymentIntentPort {
             PaymentFiscalService fiscal,
             ApplicationEventPublisher events,
             Clock clock) {
-        this.intents = intents;
-        this.orders = orders;
-        this.legalEntities = legalEntities;
-        this.bindings = bindings;
-        this.calendar = calendar;
-        this.fiscal = fiscal;
-        this.events = events;
-        this.clock = clock;
+        this(
+                intents,
+                orders,
+                legalEntities,
+                bindings,
+                calendar,
+                fiscal,
+                (tenantId, locationId) -> false,
+                events,
+                clock);
     }
 
     /**
@@ -116,6 +145,18 @@ public class PaymentIntentService implements PaymentIntentPort {
     }
 
     /**
+     * Answered from the receipt port of the method's provider, so the answer is what the adapter actually
+     * does with a marking code and not a second statement of it (ADR 0166 Decision 7).
+     */
+    @Override
+    public boolean carriesMarkingCodes(UUID tenantId, String paymentMethodCode) {
+        return PaymentMethod.fromCode(paymentMethodCode)
+                .flatMap(PaymentMethod::provider)
+                .map(fiscal::carriesMarkingCodes)
+                .orElse(true);
+    }
+
+    /**
      * Which of these orders have a payment the operations console can present
      * again (the order board's {@code ISSUE_INVOICE}). See {@link
      * JdbcPaymentIntentStore#ordersWithPresentablePayment} for exactly which
@@ -126,6 +167,13 @@ public class PaymentIntentService implements PaymentIntentPort {
     @Transactional(readOnly = true)
     public Set<UUID> ordersWithPresentablePayment(UUID tenantId, Collection<UUID> orderIds) {
         return intents.ordersWithPresentablePayment(tenantId, orderIds);
+    }
+
+    /** The method each order is paid by, for the board's payment icon. See {@link JdbcPaymentIntentStore#paymentMethodsByOrders}. */
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, String> paymentMethodsByOrders(UUID tenantId, Collection<UUID> orderIds) {
+        return intents.paymentMethodsByOrders(tenantId, orderIds);
     }
 
     /**
@@ -226,7 +274,13 @@ public class PaymentIntentService implements PaymentIntentPort {
         intents.insert(intent);
 
         if (intent.tender() == PaymentTender.CASH) {
-            fiscal.recordCashNotApplicable(intent, now);
+            // ADR 0166 «Providers»: where the location has fiscal equipment of its own, a cash sale is a
+            // TERMINAL receipt, and "not applicable" would be false. No decision row is written here; the
+            // fiscal module opens the document when the order completes, which is when the cash was handed
+            // over, and sends it to the terminal. Where there is none the 2026-08-22 decision stands.
+            if (!terminals.hasCapableTerminal(tenantId, locationId)) {
+                fiscal.recordCashNotApplicable(intent, now);
+            }
         } else if (intent.providerType() != null) {
             // Gap map row 10.9d: the one call site PaymentLinkAutoSendTrigger
             // listens on. MARKETPLACE is PaymentTender.PROVIDER but carries no

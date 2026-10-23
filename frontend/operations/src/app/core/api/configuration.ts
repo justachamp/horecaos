@@ -24,6 +24,20 @@ export interface ConfigurationKeyView {
   readonly owningModule: string;
   readonly explicitNullTerminates: boolean;
   readonly description: string;
+  /** The plan feature this key needs, when it needs one (ADR 0021); absent for a key every plan has. */
+  readonly entitledBy?: string | null;
+  /** Present only while the tenant's plan lacks {@link entitledBy}: the key is greyed and refuses a write. */
+  readonly lockedByPlan?: LockedByPlanView | null;
+}
+
+/**
+ * Mirrors OperationsConfigurationController.LockedByPlan (settings.md §1.2, «Locked by plan»): the feature the
+ * plan lacks and what it is, in the catalogue's words. Never a link -- where a plan is bought is the console's
+ * own Finance screen.
+ */
+export interface LockedByPlanView {
+  readonly entitlementKey: string;
+  readonly description: string;
 }
 
 export interface ResolutionTraceLevel {
@@ -51,6 +65,8 @@ export interface ConfigurationResolutionView {
   readonly inspectedLevels: readonly ResolutionTraceLevel[];
   readonly describe: string;
   readonly currentVersionAtScope: number | null;
+  /** Present only while the tenant's plan lacks the feature this key needs (see {@link ConfigurationKeyView}). */
+  readonly lockedByPlan?: LockedByPlanView | null;
 }
 
 /** Mirrors OperationsConfigurationController.OperationsConfigurationValueResponse. */
@@ -75,4 +91,54 @@ export interface SetConfigurationValueInput {
   readonly stringValue?: string | null;
   readonly expectedVersion?: number | null;
   readonly reason: string;
+}
+
+/**
+ * Mirrors OperationsConfigurationController.OperationsConfigurationPlacement: one stored value, ready to print
+ * (settings.md §10.0). Never carries the subject of whoever set it, only the name this tenant knows them by.
+ */
+export interface ConfigurationPlacementView {
+  readonly scopeType: Exclude<ConfigurationScopeType, 'PLATFORM'>;
+  readonly brandId: string | null;
+  readonly brandName: string | null;
+  readonly locationId: string | null;
+  readonly locationName: string | null;
+  /** A deliberate «unset here»: a row exists and holds no value. */
+  readonly explicitNull: boolean;
+  /** The value as text, cut at 80 characters ({@link displayTruncated}); null for an explicit null. */
+  readonly displayValue: string | null;
+  readonly displayTruncated: boolean;
+  readonly version: number;
+  readonly changedByName: string | null;
+  readonly changedAt: string | null;
+}
+
+/** Mirrors OperationsConfigurationController.OperationsConfigurationKeyPlacements. */
+export interface ConfigurationKeyPlacementsView {
+  readonly keyCode: string;
+  readonly placements: readonly ConfigurationPlacementView[];
+}
+
+/** Mirrors OperationsConfigurationController.OperationsPolicyPlacement: the newest version at one scope. */
+export interface PolicyPlacementView {
+  readonly scopeType: Exclude<ConfigurationScopeType, 'PLATFORM'>;
+  readonly brandId: string | null;
+  readonly brandName: string | null;
+  readonly locationId: string | null;
+  readonly locationName: string | null;
+  readonly version: number;
+  readonly changedByName: string | null;
+  readonly effectiveFrom: string | null;
+}
+
+/** Mirrors OperationsConfigurationController.OperationsPolicyPlacements. */
+export interface PolicyPlacementsView {
+  readonly policyCode: string;
+  readonly placements: readonly PolicyPlacementView[];
+}
+
+/** Mirrors OperationsConfigurationController.OperationsConfigurationPlacementsResponse. */
+export interface ConfigurationPlacementsView {
+  readonly keys: readonly ConfigurationKeyPlacementsView[];
+  readonly policies: readonly PolicyPlacementsView[];
 }

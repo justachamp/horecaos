@@ -38,7 +38,7 @@
 }
 
 .table thead th {
-  text-align: left;
+  text-align: start;
   color: var(--q-ink-muted);
   padding: 8px 12px;
   border-bottom: 1px solid var(--q-hairline);
@@ -50,7 +50,7 @@
 }
 
 .num {
-  text-align: right;
+  text-align: end;
 }
 
 .empty {
@@ -91,7 +91,7 @@
 .segment {
   padding: 4px 10px;
   border: none;
-  border-right: 1px solid var(--q-hairline);
+  border-inline-end: 1px solid var(--q-hairline);
   background: var(--q-canvas);
   color: var(--q-ink-muted);
   font-size: var(--q-type-body-xs);
@@ -103,7 +103,7 @@
 }
 
 .segment:last-child {
-  border-right: none;
+  border-inline-end: none;
   border-radius: 0 var(--q-radius) var(--q-radius) 0;
 }
 
@@ -167,12 +167,12 @@
    products on stop get a 3px amber left border and a СТОП badge */
 
 .row--stopped td:first-child {
-  border-left: 3px solid var(--q-warning);
-  padding-left: 9px;
+  border-inline-start: 3px solid var(--q-warning);
+  padding-inline-start: 9px;
 }
 
 .stop-badge {
-  margin-left: 8px;
+  margin-inline-start: 8px;
   padding: 1px 6px;
   border-radius: var(--q-radius);
   background: var(--q-warning-tint);

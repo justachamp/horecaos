@@ -5,11 +5,13 @@
     <select
       [value]="selectedLangId()"
       (change)="selectLanguage($any($event.target).value)"
-      class="cursor-pointer rounded-lg border border-zinc-500 bg-surface-raised p-1.5 text-xl text-text-primary focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent"
+      class="cursor-pointer rounded-lg border border-zinc-500 bg-surface-raised p-1.5 text-base text-text-primary focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent"
       [attr.aria-label]="'Language'"
     >
-      @for (lang of languages; track lang.id) {
-        <option [value]="lang.id" [selected]="selectedLangId() === lang.id">{{ lang.flag }}</option>
+      @for (lang of languages(); track lang.id) {
+        <option [value]="lang.id" [selected]="selectedLangId() === lang.id">
+          {{ lang.label }}
+        </option>
       }
     </select>
   </div>

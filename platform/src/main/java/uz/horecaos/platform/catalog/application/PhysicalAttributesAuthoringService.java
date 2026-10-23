@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -14,6 +16,7 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.catalog.api.CatalogDraftChanged.Change;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.PhysicalAttributes;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
@@ -48,13 +51,26 @@ public class PhysicalAttributesAuthoringService {
     private final JdbcPhysicalAttributesStore store;
     private final AuditRecorder audit;
     private final Clock clock;
+    private final CatalogDraftSignal draft;
 
+    /** A service that says nothing when the draft moves, as every fixture built before the draft event is. */
     public PhysicalAttributesAuthoringService(
             JdbcCatalogStore catalog, JdbcPhysicalAttributesStore store, AuditRecorder audit, Clock clock) {
+        this(catalog, store, audit, clock, event -> {});
+    }
+
+    @Autowired
+    public PhysicalAttributesAuthoringService(
+            JdbcCatalogStore catalog,
+            JdbcPhysicalAttributesStore store,
+            AuditRecorder audit,
+            Clock clock,
+            ApplicationEventPublisher events) {
         this.catalog = catalog;
         this.store = store;
         this.audit = audit;
         this.clock = clock;
+        this.draft = new CatalogDraftSignal(events, clock);
     }
 
     /**
@@ -118,6 +134,7 @@ public class PhysicalAttributesAuthoringService {
             result = new View(attributes, version);
         }
 
+        draft.changed(tenantId, brandId, EntityType.VARIANT, variantId, Change.PHYSICAL_ATTRIBUTES_CHANGED);
         audit.record(AuditFact.of("catalog.variantPhysicalAttributes.set", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.brand(tenantId, brandId))

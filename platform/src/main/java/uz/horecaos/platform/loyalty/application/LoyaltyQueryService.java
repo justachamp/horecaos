@@ -3,6 +3,7 @@ package uz.horecaos.platform.loyalty.application;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -77,6 +78,19 @@ public class LoyaltyQueryService {
         return store.accountsOfCustomer(tenantId, customerAccountId).stream()
                 .map(account -> toView(tenantId, account))
                 .toList();
+    }
+
+    /**
+     * One customer's own points balance at one brand, or empty when they hold no account there yet.
+     *
+     * <p>The account is looked up by the customer and the brand together, never by an identifier the caller
+     * supplies, so nobody reads a balance by naming an account (ADR 0046: a brand's points are that brand's
+     * liability and the customer cannot see or spend another brand's). Empty is a customer who has earned
+     * nothing, not an error.
+     */
+    @Transactional(readOnly = true)
+    public Optional<BalanceView> balanceOfCustomer(UUID tenantId, UUID brandId, UUID customerAccountId) {
+        return store.findAccount(tenantId, brandId, customerAccountId).map(account -> toView(tenantId, account));
     }
 
     @Transactional(readOnly = true)

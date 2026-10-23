@@ -200,5 +200,92 @@ public final class CustomerConfigurationKeys {
                     + "needs-attention view again (ADR 0111).")
             .build();
 
+    /** The code both declarations share (ADR 0029, batch 21). */
+    public static final String DSAR_RESPONSE_DEADLINE_DAYS_CODE = "customers.dsar_response_deadline_days";
+
+    /**
+     * Days the platform gives itself to answer a data-subject access request, counted from the day it is raised. The
+     * bundle's cover note states it and the request carries the date it fixed ({@code response_due_at}), so a later
+     * change of the setting does not move a promise already made.
+     *
+     * <p>Thirty is a provisional default, not legal's answer: ADR 0029's Open input (legal) names "the wording and response
+     * deadline of the cover note" as the lawyer's to give. A tenant or the platform sets the confirmed number here;
+     * nothing else changes. <strong>Declared twice</strong>, like the others here; {@code CustomerConfigurationKeysTests}
+     * keeps the two identical.
+     */
+    public static final ConfigurationKey<Integer> DSAR_RESPONSE_DEADLINE_DAYS = ConfigurationKey.of(
+                    DSAR_RESPONSE_DEADLINE_DAYS_CODE, Integer.class)
+            .defaultValue(30)
+            .ownedBy("customers")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs(
+                    "Days from the day a data-subject access request is raised by which the tenant owes the customer "
+                            + "her data (ADR 0029). Provisional until legal confirms it.")
+            .build();
+
+    /** The code both declarations share (ADR 0029, batch 21). */
+    public static final String DSAR_BUNDLE_RETENTION_DAYS_CODE = "customers.dsar_bundle_retention_days";
+
+    /**
+     * Days a produced export stays in object storage before {@code ExportBundleSweeper} removes it. The bundle is the one
+     * place a customer's data is gathered, so it is kept only as long as it takes to collect it: seven days by default,
+     * from the day it was produced. A link to it lasts minutes and is minted on each authorised read. <strong>Declared
+     * twice</strong>, like the others here.
+     */
+    public static final ConfigurationKey<Integer> DSAR_BUNDLE_RETENTION_DAYS = ConfigurationKey.of(
+                    DSAR_BUNDLE_RETENTION_DAYS_CODE, Integer.class)
+            .defaultValue(7)
+            .ownedBy("customers")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs(
+                    "Days a produced data-subject export is kept in object storage before it is removed (ADR 0029).")
+            .build();
+
+    /** The code both declarations share (ADR 0029, batch 21). */
+    public static final String DSAR_COVER_NOTE_RU_CODE = "customers.dsar_cover_note_ru";
+
+    /** The code both declarations share (ADR 0029, batch 21). */
+    public static final String DSAR_COVER_NOTE_UZ_LATN_CODE = "customers.dsar_cover_note_uz_latn";
+
+    /** The code both declarations share (ADR 0029, batch 21). */
+    public static final String DSAR_COVER_NOTE_EN_CODE = "customers.dsar_cover_note_en";
+
+    /** The longest cover note a platform or tenant may author: a paragraph on the first page of a file, not a policy. */
+    public static final int DSAR_COVER_NOTE_MAXIMUM_CHARACTERS = 2000;
+
+    /**
+     * The wording that opens a data-subject export, in Russian. Blank keeps the platform's provisional wording, which the
+     * bundle then marks {@code PROVISIONAL}; legal's confirmed text goes here (platform scope) or per tenant, and the bundle
+     * marks it {@code AUTHORED}. Wording, not behaviour: nothing is withheld or added because of it.
+     */
+    public static final ConfigurationKey<String> DSAR_COVER_NOTE_RU = coverNoteKey(DSAR_COVER_NOTE_RU_CODE, "Russian");
+
+    /** {@link #DSAR_COVER_NOTE_RU}, in Uzbek (Latin). */
+    public static final ConfigurationKey<String> DSAR_COVER_NOTE_UZ_LATN =
+            coverNoteKey(DSAR_COVER_NOTE_UZ_LATN_CODE, "Uzbek (Latin)");
+
+    /** {@link #DSAR_COVER_NOTE_RU}, in English. */
+    public static final ConfigurationKey<String> DSAR_COVER_NOTE_EN = coverNoteKey(DSAR_COVER_NOTE_EN_CODE, "English");
+
+    /** The cover-note key for a language ({@code ru}, {@code uz-latn}, {@code en}), or empty for one with no key. */
+    public static java.util.Optional<ConfigurationKey<String>> coverNoteKeyFor(String languageTag) {
+        return switch (languageTag) {
+            case "ru" -> java.util.Optional.of(DSAR_COVER_NOTE_RU);
+            case "uz-latn" -> java.util.Optional.of(DSAR_COVER_NOTE_UZ_LATN);
+            case "en" -> java.util.Optional.of(DSAR_COVER_NOTE_EN);
+            default -> java.util.Optional.empty();
+        };
+    }
+
+    private static ConfigurationKey<String> coverNoteKey(String code, String language) {
+        return ConfigurationKey.of(code, String.class)
+                .defaultValue("")
+                .ownedBy("customers")
+                .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+                .describedAs("The " + language + " note that opens a data-subject export (ADR 0029). Blank keeps the "
+                        + "platform's provisional wording until legal's text is set.")
+                .build();
+    }
+
     private CustomerConfigurationKeys() {}
 }

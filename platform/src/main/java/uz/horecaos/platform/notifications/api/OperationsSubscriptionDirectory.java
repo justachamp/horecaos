@@ -40,6 +40,19 @@ public interface OperationsSubscriptionDirectory {
     List<ScopedBinding> platformDigestBindings(String eventClass);
 
     /**
+     * Whether this binding is an active {@code OPERATIONS} chat of this brand: one the brand's own
+     * routing screen lists and has not unbound (ADR 0058, gap-map row {@code 10.9b}).
+     *
+     * <p>What a template's test send to a chat asks before it sends (ADR 0184): a caller authorised
+     * for one brand must not be able to put a message into another brand's group by naming its binding
+     * id, and a binding that was unbound must not receive one. Defaulted to {@code false} for the
+     * hand-written test doubles that predate it; the Telegram directory is the one real answer.
+     */
+    default boolean isActiveOperationsChat(UUID tenantId, UUID brandId, UUID bindingId) {
+        return false;
+    }
+
+    /**
      * A binding with the scope it was bound at, and the tenant row it lives
      * under. {@code brandId} is never null in practice: ADR 0026's {@code
      * ck_binding_scope}/{@code ck_binding_location_implies_brand} pair forces

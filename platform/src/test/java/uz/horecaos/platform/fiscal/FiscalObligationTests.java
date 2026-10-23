@@ -19,6 +19,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
@@ -98,6 +100,8 @@ class FiscalObligationTests {
         jdbc.sql("DELETE FROM fiscal.fiscal_documents").update();
         jdbc.sql("TRUNCATE TABLE ordering.orders CASCADE").update();
         jdbc.sql("TRUNCATE TABLE payments.payment_intents CASCADE").update();
+        jdbc.sql("TRUNCATE TABLE payments.order_settlements, payments.payment_methods CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE customer.customer_accounts CASCADE").update();
         jdbc.sql("TRUNCATE TABLE catalog.catalogs CASCADE").update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
@@ -243,6 +247,103 @@ class FiscalObligationTests {
         assertThat(onlyDocument(order).legalEntityId())
                 .as("a UTC day rolls over at 05:00 in Tashkent, in the middle of a night service")
                 .isEqualTo(secondCompany);
+    }
+
+    @Test
+    @DisplayName("the opener keeps the tender the document covers and the business date the seller was resolved on")
+    void theOpenerSnapshotsTheTenderAndTheBusinessDate() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        // 00:30 on 20 August in Tashkent is 19:30 on the 19th in UTC: the branch's day is the 20th.
+        UUID order = completedOrder("O-tender", "CLICK", "PAID", Instant.parse("2026-08-19T19:30:00Z"));
+        UUID tender = settleWithAMoneyTender(order);
+
+        obligations.openObligations(50);
+
+        var kept = jdbc.sql("SELECT tender_id, business_date FROM fiscal.fiscal_documents WHERE order_id = :o")
+                .param("o", order)
+                .query()
+                .singleRow();
+        assertThat(kept.get("tender_id"))
+                .as("the money tender whose intent the document names, written and not inferred")
+                .isEqualTo(tender);
+        assertThat(java.util.Objects.requireNonNull(kept.get("business_date")).toString())
+                .as("the branch's own calendar day, kept as it was resolved")
+                .isEqualTo("2026-08-20");
+    }
+
+    @Test
+    @DisplayName(
+            "checkout never links the money tender to its intent, and the document still names the tender it covers")
+    void theTenderIsFoundThroughTheSettlementWhenNothingLinksItToTheIntent() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        UUID order = completedOrder("O-unlinked", "CLICK", "PAID", NOW.minusSeconds(3600));
+        // What production writes: OrderSettlementService.plan inserts the tender with no payment intent, the intent
+        // is created afterwards for the same order, and nothing ever updates the tender to name it.
+        UUID tender = settleWithAMoneyTender(order, false);
+
+        obligations.openObligations(50);
+
+        var kept = jdbc.sql("SELECT tender_id FROM fiscal.fiscal_documents WHERE order_id = :o")
+                .param("o", order)
+                .query()
+                .singleRow();
+        assertThat(kept.get("tender_id"))
+                .as("the settlement has one money tender, so that is the leg the sale covers; a document "
+                        + "that kept NULL here would leave the evidence unable to link a tender to its receipt")
+                .isEqualTo(tender);
+    }
+
+    @Test
+    @DisplayName("two money tenders and no link to tell them apart leave the tender unnamed rather than guessed")
+    void twoMoneyTendersWithNoLinkAreNotGuessedBetween() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        UUID order = completedOrder("O-two-legs", "CLICK", "PAID", NOW.minusSeconds(3600));
+        settleWithAMoneyTender(order, false);
+        UUID settlement = jdbc.sql("SELECT id FROM payments.order_settlements WHERE order_id = :o")
+                .param("o", order)
+                .query(UUID.class)
+                .single();
+        UUID cash = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO payments.payment_methods (id, tenant_id, code, display_name, responsibility)
+                VALUES (:id, :t, 'CASH', 'Cash', 'OPERATOR')
+                """).param("id", cash).param("t", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO payments.tenders (id, tenant_id, settlement_id, sequence, payment_method_id,
+                    settles_from_balance, amount_minor, currency, status, settled_at, idempotency_key, version)
+                VALUES (gen_random_uuid(), :t, :s, 2, :m, false, 1000, 'UZS', 'SETTLED', now(), :key, 1)
+                """)
+                .param("t", TENANT)
+                .param("s", settlement)
+                .param("m", cash)
+                .param("key", "tender-second-" + settlement)
+                .update();
+
+        obligations.openObligations(50);
+
+        var kept = jdbc.sql("SELECT tender_id FROM fiscal.fiscal_documents WHERE order_id = :o")
+                .param("o", order)
+                .query()
+                .singleRow();
+        assertThat(kept.get("tender_id"))
+                .as("which of two legs a single sale document covers is not something the opener can know")
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("an order with no tender row opens a document with no tender, and the date is still kept")
+    void aDocumentWithNoUnambiguousTenderKeepsNone() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        UUID order = completedOrder("O-no-tender", "CLICK", "PAID", NOW.minusSeconds(3600));
+
+        obligations.openObligations(50);
+
+        var kept = jdbc.sql("SELECT tender_id, business_date FROM fiscal.fiscal_documents WHERE order_id = :o")
+                .param("o", order)
+                .query()
+                .singleRow();
+        assertThat(kept.get("tender_id")).isNull();
+        assertThat(kept.get("business_date")).isNotNull();
     }
 
     @Test
@@ -417,23 +518,36 @@ class FiscalObligationTests {
         assertThat(document.reasonNote()).contains("CLICK");
     }
 
-    @Test
+    @ParameterizedTest(name = "{0} blocks the claim as {1}")
+    @CsvSource({
+        "BLOCKED_CLASSIFICATION, CLASSIFICATION_MISSING",
+        "BLOCKED_TAX, VAT_NOT_EXPRESSIBLE",
+        "BLOCKED_RECONCILIATION, RECEIPT_DOES_NOT_RECONCILE"
+    })
     @DisplayName(
-            "a claim the bridge refused to send because no real lines exist is blocked with that reason, not 'the provider did not report'")
-    void aRefusalToFilePlaceholderLinesBlocksTheClaimWithTheTrueReason() {
+            "a claim whose receipt could not be built is blocked with the reason that names why, not 'the provider did not report'")
+    void aReceiptThatCouldNotBeBuiltBlocksTheClaimWithTheTrueReason(
+            PartnerFiscalizationPort.Outcome outcome, String expectedReason) {
         assign(firstCompany, LocalDate.of(2026, 1, 1));
-        UUID order = completedOrder("S-8", "CLICK", "PAID", NOW.minusSeconds(3600));
+        UUID order = completedOrder("S-8-" + outcome.ordinal(), "CLICK", "PAID", NOW.minusSeconds(3600));
         obligations.openObligations(50);
 
         ClaimedSubmission claim = obligations.claimSubmissions(50).getFirst();
-        obligations.settle(claim, PartnerFiscalizationPort.Outcome.LINES_NOT_BUILT);
+        obligations.settle(claim, outcome);
 
         FiscalDocumentRow document = onlyDocument(order);
         assertThat(document.state()).isEqualTo(FiscalDocumentState.BLOCKED);
         assertThat(document.reasonCode())
                 .as("nothing was sent; an hour later the sweep would otherwise say a provider nobody "
                         + "asked failed to answer")
-                .isEqualTo(FiscalReasonCode.LINES_NOT_BUILT);
+                .isEqualTo(expectedReason);
+        assertThat(FiscalReasonCode.BLOCKING).contains(expectedReason);
+    }
+
+    @Test
+    @DisplayName(
+            "the historical LINES_NOT_BUILT reason stays blockable, so a document blocked before the builder existed can be worked")
+    void theHistoricalReasonStaysAValidBlockingReason() {
         assertThat(FiscalReasonCode.BLOCKING).contains(FiscalReasonCode.LINES_NOT_BUILT);
     }
 
@@ -504,6 +618,32 @@ class FiscalObligationTests {
 
         assertThat(partner.asks)
                 .as("a document blocked for its marks waits for them; it is not retried into the same refusal")
+                .containsExactly(document.id());
+    }
+
+    @Test
+    @DisplayName(
+            "a document that cannot be sent as it stands is blocked at once, not left SUBMITTED to be blocked later as the provider's silence")
+    void aDocumentThatCannotBeSentIsBlockedNotLeftSubmitted() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        UUID order = completedOrder("N-1", "CLICK", "PAID", NOW.minusSeconds(3600));
+        obligations.openObligations(50);
+
+        partner.answers = PartnerFiscalizationPort.Outcome.NOT_SENDABLE;
+        sweeper.submitCapturedObligations();
+
+        FiscalDocumentRow document = onlyDocument(order);
+        assertThat(document.state())
+                .as("SUBMITTED would hand it to the reporting sweep, which blocks it as PROVIDER_REPORT_OVERDUE, "
+                        + "'the provider did not report', about a provider nobody asked")
+                .isEqualTo(FiscalDocumentState.BLOCKED);
+        assertThat(document.reasonCode()).isEqualTo(FiscalReasonCode.NO_FISCAL_PATH);
+        assertThat(document.reasonNote()).contains("nothing was sent");
+
+        sweeper.submitCapturedObligations();
+
+        assertThat(partner.asks)
+                .as("a blocked document is not asked again into the same refusal")
                 .containsExactly(document.id());
     }
 
@@ -604,6 +744,109 @@ class FiscalObligationTests {
         }
     }
 
+    // ------------------------------------------------ the TERMINAL path (ADR 0166 «Providers», ADR 0038 stage 5)
+
+    /** The service as production wires it for a branch that has fiscal equipment of its own. */
+    private FiscalObligationService withATerminal() {
+        return new FiscalObligationService(
+                store,
+                entities,
+                new FiscalReportingPolicyService(
+                        new JdbcPolicyResolver(jdbc, JsonMapper.builder().build())),
+                (tenantId, locationId) -> LOCATION.equals(locationId),
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                "Asia/Tashkent",
+                Duration.ofDays(365));
+    }
+
+    /** Cash is collected at handover and the intent of a cash sale is not captured by anyone. */
+    private UUID cashSaleAwaitingNothing(String seed) {
+        UUID order = completedOrder(seed, null, null, NOW.minusSeconds(3600));
+        insertIntent("cash-" + order, order, "CASH", "CASH", null, "PENDING", NOW);
+        return order;
+    }
+
+    @Test
+    @DisplayName(
+            "a completed cash sale at a branch with a capable terminal opens a receipt for the terminal, not a block")
+    void aCashSaleAtATerminalBranchOpensAReceiptForTheTerminal() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        UUID order = cashSaleAwaitingNothing("T-1");
+
+        assertThat(withATerminal().openObligations(50)).isEqualTo(1);
+
+        FiscalDocumentRow document = onlyDocument(order);
+        assertThat(document.state()).isEqualTo(FiscalDocumentState.PENDING);
+        assertThat(document.reasonCode()).isEqualTo(FiscalReasonCode.AWAITING_TERMINAL);
+        assertThat(document.responsibility())
+                .as("no provider: the tenant's own equipment issues")
+                .isEqualTo("TERMINAL");
+        assertThat(document.legalEntityId())
+                .as("under the company that sold, resolved the same way a provider receipt resolves it")
+                .isEqualTo(firstCompany);
+    }
+
+    @Test
+    @DisplayName("a cash sale with no capable terminal and no recorded decision is still blocked NO_FISCAL_PATH")
+    void aCashSaleWithNoTerminalStaysBlocked() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        UUID order = cashSaleAwaitingNothing("T-2");
+
+        assertThat(obligations.openObligations(50)).isEqualTo(1);
+
+        FiscalDocumentRow document = onlyDocument(order);
+        assertThat(document.state()).isEqualTo(FiscalDocumentState.BLOCKED);
+        assertThat(document.reasonCode()).isEqualTo(FiscalReasonCode.NO_FISCAL_PATH);
+    }
+
+    @Test
+    @DisplayName("a terminal receipt is sent without waiting for a capture, which a cash sale never has")
+    void aTerminalReceiptIsSentWithoutACapture() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        UUID order = cashSaleAwaitingNothing("T-3");
+        FiscalObligationService service = withATerminal();
+        service.openObligations(50);
+
+        FiscalObligationSweeper terminalSweeper = new FiscalObligationSweeper(service, partner, 50);
+        terminalSweeper.submitCapturedObligations();
+        terminalSweeper.submitCapturedObligations();
+
+        assertThat(partner.asks)
+                .as("claimed first, so the terminal is asked once however often the sweep runs")
+                .containsExactly(onlyDocument(order).id());
+        assertThat(onlyDocument(order).state()).isEqualTo(FiscalDocumentState.SUBMITTED);
+    }
+
+    @Test
+    @DisplayName(
+            "no terminal bound to the seller blocks the claim NO_FISCAL_PATH, and an unreachable one TERMINAL_OFFLINE")
+    void theTerminalOutcomesBlockWithTheirOwnReasons() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        FiscalObligationService service = withATerminal();
+
+        UUID none = cashSaleAwaitingNothing("T-4");
+        UUID offline = cashSaleAwaitingNothing("T-5");
+        service.openObligations(50);
+        for (ClaimedSubmission claim : service.claimSubmissions(50)) {
+            service.settle(
+                    claim,
+                    claim.orderId().equals(none)
+                            ? PartnerFiscalizationPort.Outcome.NO_TERMINAL
+                            : PartnerFiscalizationPort.Outcome.TERMINAL_UNREACHABLE);
+        }
+
+        FiscalDocumentRow noTerminal = onlyDocument(none);
+        assertThat(noTerminal.state()).isEqualTo(FiscalDocumentState.BLOCKED);
+        assertThat(noTerminal.reasonCode()).isEqualTo(FiscalReasonCode.NO_FISCAL_PATH);
+        assertThat(noTerminal.reasonNote()).contains("terminal");
+
+        FiscalDocumentRow unreachable = onlyDocument(offline);
+        assertThat(unreachable.state()).isEqualTo(FiscalDocumentState.BLOCKED);
+        assertThat(unreachable.reasonCode())
+                .as("nothing left the building; the reason names a device, not a provider that never answered")
+                .isEqualTo(FiscalReasonCode.TERMINAL_OFFLINE);
+    }
+
     // -------------------------------------------------------------- fixtures
 
     private FiscalDocumentRow onlyDocument(UUID orderId) {
@@ -648,6 +891,60 @@ class FiscalObligationTests {
                 .param("e", entityId)
                 .param("from", from)
                 .update();
+    }
+
+    /** A settlement with one settled money tender naming the order's payment intent. */
+    private UUID settleWithAMoneyTender(UUID orderId) {
+        return settleWithAMoneyTender(orderId, true);
+    }
+
+    /**
+     * A settlement with one settled money tender.
+     *
+     * @param namingTheIntent whether the tender row carries the payment intent's id. Nothing in production sets
+     *     it ({@code OrderSettlementService.plan} inserts the tender with none and the intent is created after
+     *     it), so the honest fixture is {@code false}; {@code true} is the link a future writer would make.
+     */
+    private UUID settleWithAMoneyTender(UUID orderId, boolean namingTheIntent) {
+        UUID method = UUID.randomUUID();
+        UUID settlement = UUID.randomUUID();
+        UUID tender = UUID.randomUUID();
+        UUID intent = jdbc.sql("SELECT id FROM payments.payment_intents WHERE order_id = :o")
+                .param("o", orderId)
+                .query(UUID.class)
+                .single();
+        jdbc.sql("""
+                INSERT INTO payments.payment_methods (id, tenant_id, code, display_name, responsibility)
+                VALUES (:id, :t, 'CLICK', 'Click', 'PARTNER')
+                ON CONFLICT (tenant_id, code) DO NOTHING
+                """).param("id", method).param("t", TENANT).update();
+        UUID methodId = jdbc.sql("SELECT id FROM payments.payment_methods WHERE tenant_id = :t AND code = 'CLICK'")
+                .param("t", TENANT)
+                .query(UUID.class)
+                .single();
+        jdbc.sql("""
+                INSERT INTO payments.order_settlements (id, tenant_id, order_id, currency, total_due_minor,
+                    settled_minor, status, version)
+                VALUES (:id, :t, :o, 'UZS', 50000, 50000, 'SETTLED', 1)
+                """)
+                .param("id", settlement)
+                .param("t", TENANT)
+                .param("o", orderId)
+                .update();
+        jdbc.sql("""
+                INSERT INTO payments.tenders (id, tenant_id, settlement_id, sequence, payment_method_id,
+                    settles_from_balance, amount_minor, currency, status, payment_intent_id, settled_at,
+                    idempotency_key, version)
+                VALUES (:id, :t, :s, 1, :m, false, 50000, 'UZS', 'SETTLED', :intent, now(), :key, 1)
+                """)
+                .param("id", tender)
+                .param("t", TENANT)
+                .param("s", settlement)
+                .param("m", methodId)
+                .param("intent", namingTheIntent ? intent : null)
+                .param("key", "tender-" + tender)
+                .update();
+        return tender;
     }
 
     private UUID completedOrder(

@@ -446,6 +446,11 @@ export const reportsRu: AreaMessages<typeof reportsEn> = {
   'reports.customers.funnel.stage.ORDERED': 'Заказали',
   'reports.customers.funnel.visits.notMeasured':
     'Посещения: не измеряются. Для этого отчёта ничего не собирается ни из браузера, ни из приложения, ни из бота, поэтому посещения не показаны нулём и не оценены. Ресторан, которому нужны посещения, может прочитать их в собственной Google Analytics.',
+  'reports.customers.funnel.pageLoads.label': 'загрузок страниц, а не людей',
+  'reports.customers.funnel.pageLoads.note':
+    'Одна загрузка считается каждый раз, когда вкладка браузера открывает магазин, без cookie и без идентификатора. Один человек, открывший магазин дважды, — это две загрузки, поэтому цифра показана рядом с воронкой, а не её первой полосой: следующие этапы не являются её долей.',
+  'reports.customers.funnel.pageLoads.unrecorded':
+    '{days} дн. этого периода были до включения счётчика, поэтому итог неполный.',
   'reports.customers.funnel.reason.NOT_BY_CHANNEL':
     'У регистраций нет канала продаж, поэтому срез по каналу их не включает.',
   'reports.customers.funnel.unrecorded':
@@ -563,8 +568,12 @@ export const reportsRu: AreaMessages<typeof reportsEn> = {
   'reports.marketing.campaigns.count.deferred': 'Отложено (тихие часы)',
   'reports.marketing.campaigns.count.refused': 'Отказано',
   'reports.marketing.campaigns.count.total': 'Всего получателей',
-  'reports.marketing.campaigns.readReceiptsNotBuilt':
-    'Отметки о прочтении не показаны: пока не фиксируется ни статус прочтения, ни дата прочтения — это не измерено, а не равно нулю.',
+  'reports.marketing.campaigns.column.messages': 'Сообщений',
+  'reports.marketing.campaigns.column.delivered': 'Доставлено',
+  'reports.marketing.campaigns.column.failed': 'Не доставлено',
+  'reports.marketing.campaigns.column.withheld': 'Удержано',
+  'reports.marketing.campaigns.column.notReported': 'н/д',
+  'reports.marketing.campaigns.delivery.title': 'Что стало с сообщениями',
 
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
   'reports.forecast.title': 'Прогноз спроса',

@@ -374,6 +374,63 @@ public class JdbcPaymentAttemptStore {
     }
 
     /**
+     * Keeps the receipt lines a Payme checkout carried (V0687), once. Never rewritten: a re-presentation of
+     * the attempt carries the lines the first presentation fixed, because Payme may already hold a
+     * transaction created from them.
+     *
+     * @return true when this call wrote them
+     */
+    public boolean recordPresentedReceipt(UUID tenantId, UUID attemptId, String protectedReference, Instant now) {
+        return jdbc.sql("""
+                        UPDATE payments.payment_attempts
+                           SET presented_receipt_reference = :reference, updated_at = :now
+                         WHERE tenant_id = :tenantId AND id = :id AND presented_receipt_reference IS NULL
+                        """)
+                        .param("tenantId", tenantId)
+                        .param("id", attemptId)
+                        .param("reference", protectedReference)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
+    /** The protected reference to the lines this attempt's checkout carried, if it carried any. */
+    public Optional<String> presentedReceiptReference(UUID tenantId, UUID attemptId) {
+        return jdbc.sql("""
+                        SELECT presented_receipt_reference FROM payments.payment_attempts
+                         WHERE tenant_id = :tenantId AND id = :id AND presented_receipt_reference IS NOT NULL
+                        """)
+                .param("tenantId", tenantId)
+                .param("id", attemptId)
+                .query(String.class)
+                .optional();
+    }
+
+    /**
+     * The attempt of this intent whose checkout carried receipt lines, and which of them is the one that took
+     * the money: a captured attempt first, else the latest presented. The reference and the attempt it
+     * belongs to are returned together, because the ciphertext is bound to the attempt it was written for.
+     */
+    public Optional<PresentedReceiptRow> presentedReceiptOfIntent(UUID tenantId, UUID intentId) {
+        return jdbc.sql("""
+                        SELECT id, presented_receipt_reference
+                          FROM payments.payment_attempts
+                         WHERE tenant_id = :tenantId AND intent_id = :intentId
+                           AND presented_receipt_reference IS NOT NULL
+                         ORDER BY (status = 'CAPTURED') DESC, presented_at DESC NULLS LAST, id
+                         LIMIT 1
+                        """)
+                .param("tenantId", tenantId)
+                .param("intentId", intentId)
+                .query((row, number) -> new PresentedReceiptRow(
+                        row.getObject("id", UUID.class), row.getString("presented_receipt_reference")))
+                .optional();
+    }
+
+    /** An attempt and the protected reference to the lines its checkout carried. */
+    public record PresentedReceiptRow(UUID attemptId, String protectedReference) {}
+
+    /**
      * Records what the customer was shown. Never moves money and never a state.
      *
      * <p>{@code presentation_count} counts, rather than a boolean recording that a

@@ -6,10 +6,12 @@
  * Run with `node tools/eslint-plugin-horecaos/no-physical-direction.test.js` from
  * `frontend/operations/`, the way its sibling is run (`npm run lint:rules`).
  *
- * Three things are proved: the rule names each physical spelling and the logical one it becomes; it
- * lets a logical stylesheet through (and does not mistake `left: auto` or a class called
- * `.table-left-column` for an offset); and the baseline is a ratchet that can only shrink, because a
- * stylesheet listed in it that no longer needs to be is a failure here.
+ * Four things are proved: the rule names each physical spelling and the logical one it becomes, and
+ * `--fix` rewrites it; it lets a logical stylesheet through (and does not mistake `left: auto` or a
+ * class called `.table-left-column` for an offset); a declaration that says `physical-ok: <why>`
+ * is allowed and one with no reason is not; and, whatever any app's lint config says, no
+ * stylesheet of any app says `margin-left` any more -- the ratchet has no baseline list, only the
+ * reasoned exceptions, and their number is capped here so it cannot grow unseen.
  */
 
 const assert = require('assert');
@@ -35,8 +37,59 @@ ruleTester.run('no-physical-direction', rule, {
       parser: PARSER_PATH,
       filename: 'fixtures/logical.css',
     },
+    {
+      // A declaration that says why it must stay physical: on its own line, on the line above, or
+      // in SCSS's own comment syntax.
+      code: fixture('allowed-physical.css'),
+      parser: PARSER_PATH,
+      filename: 'fixtures/allowed.css',
+    },
   ],
   invalid: [
+    {
+      // The fixer: each spelling becomes its one logical twin, spacing and the rest untouched, and
+      // the width/style/colour suffix of a border side survives.
+      code: [
+        '.a { margin-left: 4px; margin-right:0; padding-left : 2px; }',
+        '.b { border-right-color: red; border-left: 1px solid; text-align:right; }',
+        '.c { left: 1px; right:\n    2px; float: right; border-bottom-right-radius: 3px; }',
+      ].join('\n'),
+      parser: PARSER_PATH,
+      filename: 'fixtures/fixer.css',
+      output: [
+        '.a { margin-inline-start: 4px; margin-inline-end:0; padding-inline-start : 2px; }',
+        '.b { border-inline-end-color: red; border-inline-start: 1px solid; text-align:end; }',
+        '.c { inset-inline-start: 1px; inset-inline-end:\n    2px; float: inline-end; border-end-end-radius: 3px; }',
+      ].join('\n'),
+      errors: 10,
+    },
+    {
+      // A `physical-ok` with no reason allows nothing, and one declaration's reason does not cover
+      // its neighbour on the next line.
+      code: [
+        '.a {',
+        '  left: 50%; /* physical-ok: centred */',
+        '  right: 0;',
+        '  margin-left: 1px; /* physical-ok: */',
+        '}',
+      ].join('\n'),
+      parser: PARSER_PATH,
+      filename: 'fixtures/unreasoned.css',
+      output: [
+        '.a {',
+        '  left: 50%; /* physical-ok: centred */',
+        '  inset-inline-end: 0;',
+        '  margin-inline-start: 1px; /* physical-ok: */',
+        '}',
+      ].join('\n'),
+      errors: [
+        { messageId: 'physicalDirection', data: { found: 'right:', logical: 'inset-inline-end' } },
+        {
+          messageId: 'physicalDirection',
+          data: { found: 'margin-left:', logical: 'margin-inline-start' },
+        },
+      ],
+    },
     {
       code: fixture('physical-direction.css'),
       parser: PARSER_PATH,
@@ -68,45 +121,72 @@ ruleTester.run('no-physical-direction', rule, {
           data: { found: 'border-top-left-radius:', logical: 'border-start-start-radius' },
         },
       ],
+      output: fixture('physical-direction.fixed.css'),
     },
   ],
 });
 
-// The ratchet, per app: every file on a baseline exists and still needs to be there.
-const apps = [
-  { app: 'operations', dir: process.cwd() },
-  { app: 'control-plane', dir: path.join(process.cwd(), '..', 'control-plane') },
-];
-const sizes = [];
-for (const { app, dir } of apps) {
-  const baseline = rule.loadBaseline(app);
-  const stale = [];
-  const missing = [];
-  for (const file of baseline) {
-    const full = path.join(dir, file);
-    if (!fs.existsSync(full)) {
-      missing.push(file);
-      continue;
-    }
-    if (rule.findPhysical(fs.readFileSync(full, 'utf8')).length === 0) {
-      stale.push(file);
+// The ratchet, across the apps: every stylesheet under every app's `src/`, read from disk.
+// `lint:rules` of an app proves that app's lint config still carries the rule
+// (`frontend/tools/lint-config.test.mjs`); this proves the tree is clean whichever config is read.
+const FRONTEND = path.join(__dirname, '..', '..', '..');
+const APPS = ['operations', 'control-plane', 'storefront', 'storefront-milliy', 'courier'];
+const STYLESHEET = /\.(?:css|scss)$/u;
+
+/** The exceptions that were agreed, by file. Growing this list is a decision a reviewer sees. */
+const ALLOWED = {
+  'operations/src/app/shared/ui/charts/donut-chart.css': 1,
+  'operations/src/app/shared/ui/kiosk-frame.css': 1,
+  'operations/src/app/shared/ui/phone-frame.css': 1,
+  'operations/src/app/shared/ui/telegram-mini-app-frame.css': 1,
+};
+
+function stylesheets(dir) {
+  const found = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...stylesheets(full));
+    } else if (STYLESHEET.test(entry.name)) {
+      found.push(full);
     }
   }
-  assert.deepStrictEqual(
-    missing,
-    [],
-    `${app}'s physical-direction baseline names files that do not exist: ${missing}`,
-  );
-  assert.deepStrictEqual(
-    stale,
-    [],
-    `${app}'s physical-direction baseline lists stylesheets that no longer use a physical direction; remove them so the list only shrinks: ${stale}`,
-  );
-  // Sorted and free of duplicates, so a diff of it reads as additions and removals only.
-  assert.deepStrictEqual([...baseline], [...baseline].sort(), `${app}'s baseline must stay sorted`);
-  sizes.push(`${app} ${baseline.size}`);
+  return found;
 }
 
+const violations = [];
+const allowed = {};
+let scanned = 0;
+for (const app of APPS) {
+  for (const file of stylesheets(path.join(FRONTEND, app, 'src'))) {
+    scanned += 1;
+    const key = path.relative(FRONTEND, file).split(path.sep).join('/');
+    for (const hit of rule.findPhysical(fs.readFileSync(file, 'utf8'))) {
+      if (hit.allowed) {
+        allowed[key] = (allowed[key] ?? 0) + 1;
+      } else {
+        violations.push(`${key}: ${hit.found} (use ${hit.logical})`);
+      }
+    }
+  }
+}
+assert.deepStrictEqual(
+  violations,
+  [],
+  `physical directions in a stylesheet: run \`npx eslint --fix "src/**/*.{css,scss}"\` in the app, or say why it must stay with a \`physical-ok: <reason>\` comment`,
+);
+assert.deepStrictEqual(
+  allowed,
+  ALLOWED,
+  'the stylesheets that keep a physical declaration with a reason changed: update ALLOWED here, so the exception is seen in review',
+);
+
+// The old escape hatch is gone and stays gone: a per-app baseline list is a silent exception.
+const leftovers = fs
+  .readdirSync(__dirname)
+  .filter((name) => name.startsWith('physical-direction-baseline'));
+assert.deepStrictEqual(leftovers, [], 'the physical-direction baselines were removed (X.40)');
+
 console.log(
-  `no-physical-direction: fixtures pass; stylesheets remaining on the baselines (${sizes.join(', ')}) and none of them is stale.`,
+  `no-physical-direction: fixtures pass; ${scanned} stylesheets across ${APPS.length} apps, no physical declaration, ${Object.keys(allowed).length} stylesheets with a stated exception (${Object.values(allowed).reduce((a, b) => a + b, 0)} declarations).`,
 );

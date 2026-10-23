@@ -1,0 +1,65 @@
+@if (visible()) {
+  <section class="points" data-testid="points-redemption">
+    <h2 class="points__title">{{ 'points.title' | t }}</h2>
+
+    @if (!redeemable()) {
+      <p class="points__hint" role="status" data-testid="points-blocked">
+        {{ 'points.blockedByPromotion' | t }}
+      </p>
+    } @else {
+      <p class="points__hint" data-testid="points-summary">
+        {{ 'points.summary' | t: { available: availableText(), maximum: maximumText() } }}
+      </p>
+
+      <label class="points__toggle">
+        <input
+          type="checkbox"
+          data-testid="points-toggle"
+          [checked]="enabled()"
+          (change)="toggle()"
+        />
+        <span>{{ 'points.use' | t }}</span>
+      </label>
+
+      @if (enabled()) {
+        <div class="points__amount">
+          <input
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            class="points__field"
+            data-testid="points-amount"
+            [attr.aria-label]="'points.amount' | t"
+            [value]="amountMinor() || ''"
+            (input)="onAmountInput($any($event.target).value)"
+          />
+          <button
+            type="button"
+            class="points__max"
+            data-testid="points-use-maximum"
+            (click)="useMaximum()"
+          >
+            {{ 'points.useMaximum' | t }}
+          </button>
+        </div>
+
+        @if (!amountValid()) {
+          <p class="points__hint points__hint--error" role="status" data-testid="points-exceeds">
+            {{ 'points.exceeds' | t: { maximum: maximumText() } }}
+          </p>
+        }
+        @if (adjusted()) {
+          <p class="points__hint" role="status" data-testid="points-adjusted">
+            {{ 'points.adjusted' | t }}
+          </p>
+        }
+        @if (cashToPayText(); as cash) {
+          <p class="points__cash" data-testid="points-cash">
+            <span>{{ 'points.cashToPay' | t }}</span>
+            <span class="points__cash-value">{{ cash }}</span>
+          </p>
+        }
+      }
+    }
+  </section>
+}

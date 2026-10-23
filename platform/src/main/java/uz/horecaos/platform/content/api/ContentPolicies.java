@@ -40,7 +40,52 @@ public final class ContentPolicies {
             false,
             "Which editorial kinds (news, gallery, recipes, vacancies) the brand runs. All off by default.");
 
+    /**
+     * How the brand's storefront lays out its category navigation (ADR 0157 Release 4, ADR 0183 D17): {@code STANDARD}, or
+     * {@code MARKETPLACE} (a compact category strip and an all-categories overlay). Brand-scoped, default {@code STANDARD},
+     * carried on the storefront's existing content read. Dark: no brand has it set until a tenant that runs a marketplace
+     * asks, and a {@code STANDARD} brand is served exactly the document it was served before.
+     */
+    public static final PolicyKey<StorefrontLayoutPolicy> STOREFRONT_LAYOUT = new PolicyKey<>(
+            "storefront.layout",
+            StorefrontLayoutPolicy.class,
+            Set.of(ScopeType.BRAND),
+            "content",
+            false,
+            "The storefront's category layout: STANDARD (today's) or MARKETPLACE (compact navigation and an "
+                    + "all-categories overlay). STANDARD by default.");
+
     private ContentPolicies() {}
+
+    /**
+     * {@code storefront.layout} v1.
+     *
+     * @param layout {@code STANDARD} or {@code MARKETPLACE}; anything else, and null, is read as {@code STANDARD}, so a
+     *               document a future release writes can never break today's storefront
+     */
+    public record StorefrontLayoutPolicy(
+            @org.jspecify.annotations.Nullable String layout) {
+
+        public static final String STANDARD = "STANDARD";
+        public static final String MARKETPLACE = "MARKETPLACE";
+
+        public static StorefrontLayoutPolicy platformDefault() {
+            return new StorefrontLayoutPolicy(STANDARD);
+        }
+
+        public boolean isMarketplace() {
+            return MARKETPLACE.equals(layout);
+        }
+
+        /** The layout this document means: {@code MARKETPLACE} exactly, else {@code STANDARD}. */
+        public String effective() {
+            return isMarketplace() ? MARKETPLACE : STANDARD;
+        }
+
+        public boolean isValid() {
+            return STANDARD.equals(layout) || MARKETPLACE.equals(layout);
+        }
+    }
 
     /**
      * {@code content.publishing} v1.

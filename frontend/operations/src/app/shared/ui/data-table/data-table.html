@@ -142,7 +142,12 @@
       </thead>
       <tbody>
         @for (row of rows(); track trackByRowId($index, row)) {
-          <tr class="q-data-table__row" data-testid="dt-row" (click)="rowClick.emit(row)">
+          <tr
+            class="q-data-table__row"
+            data-testid="dt-row"
+            [attr.data-row-id]="rowIdOf(row)"
+            (click)="rowClick.emit(row)"
+          >
             @if (selectable()) {
               <td class="q-data-table__select-col" (click)="$event.stopPropagation()">
                 <input

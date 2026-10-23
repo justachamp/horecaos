@@ -1,0 +1,55 @@
+.hint {
+  color: var(--q-ink-muted);
+}
+
+.status.configured {
+  color: var(--q-success, #1a7f37);
+}
+
+.status.not-configured {
+  color: var(--q-ink-muted);
+}
+
+.error {
+  color: var(--q-danger, #cf222e);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 480px;
+}
+
+.field-title {
+  margin-top: 12px;
+}
+
+.address {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.q-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font: inherit;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 8px;
+}

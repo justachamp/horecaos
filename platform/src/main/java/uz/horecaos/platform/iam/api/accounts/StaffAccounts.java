@@ -1,7 +1,9 @@
 package uz.horecaos.platform.iam.api.accounts;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
@@ -111,6 +113,8 @@ public interface StaffAccounts {
      *
      * <p>Used only by the backfill and never at request time: the tenant's own
      * record answers every screen, so a Keycloak outage no longer blanks a name.
+     * The one request-time read of a number is {@link #phones}, for a courier
+     * broadcast (ADR 0182), and it is a different call for that reason.
      *
      * @return empty when the identity provider has no account under that
      *         subject. An unreachable provider is an exception, not an empty
@@ -120,6 +124,42 @@ public interface StaffAccounts {
      */
     default Optional<StaffProfile> profile(String subjectId) {
         return Optional.empty();
+    }
+
+    /**
+     * The telephone number each of these accounts signs in with, read from the identity provider
+     * for one purpose (ADR 0182, D15).
+     *
+     * <p>A courier is created phone-first (ADR 0116): the number is the account's username and
+     * its {@code phone} attribute, and the platform keeps no copy of it anywhere else. A courier
+     * broadcast therefore asks the identity provider for it when it needs to send, and nowhere else
+     * does. This is the second reader of a phone number from the identity provider, beside
+     * {@link #profile}, which is the backfill's and says it is never called at request time; the
+     * two have different callers and different reasons, and this one exists because ADR 0182 made
+     * «send to a courier» a request-time act.
+     *
+     * <p>Personal data (ADR 0029): the numbers are returned to the caller for the length of one
+     * call, and a caller that logs, stores or emits one is wrong. {@code purpose} is the declared
+     * reason, recorded by the caller as an audit fact that names the accounts' count and never a
+     * number.
+     *
+     * @param purpose a short stable code for why, e.g. {@code COURIER_BROADCAST_DELIVERY}
+     * @return subject id to number, for the accounts that have a number. An account that does not
+     *         exist, or has none, is absent -- not an error
+     * @throws DirectoryUnavailableException when the identity provider could not be asked, so a
+     *         caller can tell "no such account" from "could not ask" and fail visibly instead of
+     *         concluding that nobody has a number
+     */
+    default Map<String, String> phones(Collection<String> subjectIds, String purpose) {
+        throw new UnsupportedOperationException("this StaffAccounts implementation does not read telephone numbers");
+    }
+
+    /** The identity provider could not be reached or answered with a fault; nothing is known about any account. */
+    final class DirectoryUnavailableException extends RuntimeException {
+
+        public DirectoryUnavailableException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 
     /**

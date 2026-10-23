@@ -1,5 +1,6 @@
 import type {
   CarouselItemKind,
+  ContentBrandSwitcherEntry,
   ContentCarouselItem,
   ContentGroup,
   ContentHome,
@@ -82,6 +83,30 @@ export function normalizeHomeDocument(raw: unknown, apiBaseUrl: string): Content
     stories: collect(raw['stories'], (item) => readStory(item, media)),
     promoGrid: collect(raw['promoGrid'], (item) => readCarouselItem(item, media, true)),
     popup: readPopup(raw['popup'], media),
+    brandSwitcher: collect(raw['brandSwitcher'], (entry) => readSwitcherEntry(entry, media)),
+    // Only the exact word turns the marketplace layout on: an unknown value from a later release
+    // must leave today's storefront as it is.
+    layout: raw['layout'] === 'MARKETPLACE' ? 'MARKETPLACE' : 'STANDARD',
+  };
+}
+
+function readSwitcherEntry(raw: unknown, media: MediaReader): ContentBrandSwitcherEntry | null {
+  if (!isDict(raw)) {
+    return null;
+  }
+  const targetBrandId = nonBlank(raw['targetBrandId']);
+  const name = nonBlank(raw['name']);
+  // The second check on an address that leaves the storefront: `https:` only, no credentials.
+  const url = httpsUrlOrNull(raw['url']);
+  if (targetBrandId === undefined || name === undefined || url === null) {
+    return null;
+  }
+  const logo = raw['logo'] === undefined ? null : media(raw['logo'], name);
+  return {
+    targetBrandId,
+    name,
+    ...optional('logo', logo !== null && logo.kind === 'IMAGE' ? logo : undefined),
+    url,
   };
 }
 

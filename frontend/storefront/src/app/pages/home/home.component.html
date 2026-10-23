@@ -77,6 +77,12 @@
     }
 
     <!-- The brand's content (ADR 0157): each section draws nothing until the document has it. -->
+    @if (content.brandSwitcher().length > 0) {
+      <!-- Dark until a brand lists a sibling (ADR 0183), so its code is fetched only by a storefront that shows it. -->
+      @defer (on immediate) {
+        <app-content-brand-switcher [entries]="content.brandSwitcher()" />
+      }
+    }
     <app-content-stories [stories]="content.stories()" [categories]="contentCategories()" />
     <app-content-carousel [items]="content.carousel()" [categories]="contentCategories()" />
     <app-content-promo-grid [items]="content.promoGrid()" [categories]="contentCategories()" />
@@ -183,7 +189,7 @@
           >
             {{ 'home.all' | t }}
           </button>
-          @for (cat of categories; track cat.id) {
+          @for (cat of stripCategories(); track cat.id) {
             <button
               type="button"
               (click)="selectCategory(cat.id)"
@@ -196,6 +202,16 @@
               [class.text-zinc-300]="selectedCategoryId() !== cat.id"
             >
               {{ cat.label }}
+            </button>
+          }
+          @if (marketplace() && menuCategoryItems().length > 0) {
+            <button
+              type="button"
+              (click)="categoriesOpen.set(true)"
+              class="whitespace-nowrap rounded-full border border-zinc-700 px-4 py-2 text-xs font-semibold text-zinc-300 transition-colors"
+              data-testid="all-categories-open"
+            >
+              {{ 'home.allCategories' | t }}
             </button>
           }
         </div>
@@ -227,6 +243,17 @@
     <div class="position-relative">
       <app-cart-hint-badge></app-cart-hint-badge>
     </div>
+  }
+  @if (categoriesOpen()) {
+    <!-- Opened by a tap on the marketplace layout's «all», so a storefront on the standard strip never loads it. -->
+    @defer (on immediate) {
+      <app-categories-overlay
+        [categories]="categories"
+        [selectedId]="selectedCategoryId()"
+        (chosen)="chooseFromOverlay($event)"
+        (closed)="categoriesOpen.set(false)"
+      />
+    }
   }
   <!-- Behind @defer so a home screen with no pop-up never loads the dialog's code. -->
   @defer (when content.popup() !== null) {

@@ -219,6 +219,7 @@ class TelegramAuthSignInIntegrationTest {
                 "en",
                 new NoOpConversationInboundPort(),
                 new TelegramInstallationBrandLookup(jdbc),
+                uz.horecaos.platform.support.TelegramLandings.inert(jdbc),
                 new TelegramUpdateDedupStore(jdbc, clock),
                 new InProcessRateLimiter(clock),
                 new JdbcConfigurationResolver(jdbc),

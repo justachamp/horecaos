@@ -1,0 +1,87 @@
+<section class="page">
+  @switch (store.state()) {
+    @case ('loading') {
+      <p class="q-body muted" role="status">{{ 'common.loading' | t }}</p>
+    }
+    @case ('error') {
+      <p class="notice error" role="alert">{{ errorMessage() }}</p>
+      <button type="button" class="btn" (click)="reload()">{{ 'common.retry' | t }}</button>
+    }
+    @case ('not-registered') {
+      <div class="card">
+        <h1 class="q-subhead">{{ 'home.notRegistered.title' | t }}</h1>
+        <p class="q-body">{{ 'home.notRegistered.body' | t }}</p>
+      </div>
+    }
+    @case ('ready') {
+      @let profile = store.profile();
+      @if (profile) {
+        <h1 class="q-title">
+          @if (name(); as who) {
+            {{ 'home.greeting' | t: { name: who } }}
+          } @else {
+            {{ 'home.greeting.anonymous' | t }}
+          }
+        </h1>
+
+        @if (store.error()) {
+          <p class="notice warning" role="status">{{ errorMessage() }}</p>
+        }
+
+        <div class="card">
+          <h2 class="q-emphasis">{{ 'home.shift.title' | t }}</h2>
+          @if (profile.openShift; as shift) {
+            <p class="q-subhead">
+              {{ dutyKeys[shift.dutyState] | t }}
+            </p>
+            <p class="q-body-sm muted">{{ 'home.shift.since' | t: { time: openedAt() } }}</p>
+            @if (shift.locationName) {
+              <p class="q-body-sm">{{ 'home.shift.at' | t: { branch: shift.locationName } }}</p>
+            }
+          } @else {
+            <p class="q-body">{{ 'home.shift.none' | t }}</p>
+          }
+          <a class="btn secondary" routerLink="/shift">{{ 'home.shift.manage' | t }}</a>
+        </div>
+
+        @if (profile.engagement; as engagement) {
+          <div class="card">
+            <h2 class="q-emphasis">{{ 'home.engagement.title' | t }}</h2>
+            <p class="q-body">{{ engagementKeys[engagement.status] | t }}</p>
+            @if (validUntil(); as date) {
+              <p class="q-body-sm muted">{{ 'home.engagement.validUntil' | t: { date: date } }}</p>
+            }
+            @if (engagement.warningState === 'EXPIRING') {
+              <p class="notice warning" role="status">{{ 'home.engagement.EXPIRING' | t }}</p>
+            }
+            @if (engagement.warningState === 'LAPSED') {
+              <p class="notice error" role="alert">{{ 'home.engagement.LAPSED' | t }}</p>
+            }
+          </div>
+        }
+
+        <div class="card">
+          <h2 class="q-emphasis">{{ 'home.branches.title' | t }}</h2>
+          @if (profile.branches.length === 0) {
+            <p class="q-body">{{ 'home.branches.none' | t }}</p>
+          } @else {
+            <ul class="branches">
+              @for (branch of profile.branches; track branch.locationId) {
+                <li>
+                  <span class="q-body">{{ branch.displayName }}</span>
+                  @if (branch.primary) {
+                    <span class="badge q-caption">{{ 'home.branches.primary' | t }}</span>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </div>
+
+        <button type="button" class="btn secondary" (click)="reload()">
+          {{ 'home.refresh' | t }}
+        </button>
+      }
+    }
+  }
+</section>

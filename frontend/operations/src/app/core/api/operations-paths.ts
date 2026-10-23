@@ -42,6 +42,15 @@ export const operationsPaths = {
   },
 
   /**
+   * `GET` the checkpoint findings of a scheduled order's promotions, newest first, and `POST` a re-check
+   * (`ScheduledOrderRequoteController`, ADR 0140, row `6.1`). Reads need `ORDER_READ` at the branch and the
+   * re-check `ORDER_AMEND`; neither changes the order.
+   */
+  orderPromotionRequotes(scope: LocationScope, orderId: string): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/orders/${encodeURIComponent(orderId)}/promotion-requotes`;
+  },
+
+  /**
    * The ADR 0045 realtime push endpoint — `OperationsStreamController`, on
    * the same pre-ADR-0031 prefix `orders` above sits on, since it is mapped
    * directly under the location rather than under `/operations`. Query
@@ -192,6 +201,34 @@ export const operationsPaths = {
    */
   orderIntakeCustomers(scope: LocationScope): string {
     return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/customers`;
+  },
+
+  /**
+   * ADR 0177, rows 1.3/1.3b: the delivery address of a phone order, for a caller whose only
+   * grant is at `LOCATION` scope (`OperationsCustomerController`). `GET` is the masked list of
+   * the resolved customer's saved addresses, `POST` saves one with its pin. The tenant-scoped
+   * {@link customerAddresses} stays for the Customers screen: `LOCATION_STAFF` and
+   * `LOCATION_MANAGER` cannot reach it, because a `LOCATION` grant never covers a `TENANT` route.
+   */
+  orderIntakeCustomerAddresses(scope: LocationScope, accountId: string): string {
+    return `${this.orderIntakeCustomers(scope)}/${encodeURIComponent(accountId)}/addresses`;
+  },
+
+  /** ADR 0177: `PUT` (key + `If-Match`) places or moves the pin of one saved address, and writes nothing else. */
+  orderIntakeCustomerAddressPin(
+    scope: LocationScope,
+    accountId: string,
+    addressId: string,
+  ): string {
+    return `${this.orderIntakeCustomerAddresses(scope, accountId)}/${encodeURIComponent(addressId)}/pin`;
+  },
+
+  /**
+   * ADR 0177: what this branch lets an operator do while keying an order in -- apply a promo code, flag a
+   * call back, record the cash tendered -- so the New order screen hides what the server would refuse.
+   */
+  orderEntryPolicy(scope: LocationScope): string {
+    return `${this.orders(scope)}/entry-policy`;
   },
 
   /** Row 1.3g (ADR 0040): record an aggregator's own order by hand. */
@@ -544,11 +581,37 @@ export const operationsPaths = {
   },
 
   /**
+   * ADR 0141, rollback switch three — the materialisation run that precedes switching stops off, at
+   * brand scope (`StopMaterialisationController`): `POST` starts a run, `GET` lists a brand's runs.
+   */
+  inventoryStopMaterialisationRuns(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrand(scope)}/inventory/stop-materialisation-runs`;
+  },
+
+  /** `GET` one run's report, cursor-paged: what the run could not carry, with dish and branch names. */
+  inventoryStopMaterialisationReport(scope: LocationScope, runId: string): string {
+    return `${this.inventoryStopMaterialisationRuns(scope)}/${encodeURIComponent(runId)}/report`;
+  },
+
+  /** `POST` acknowledges a finished run's report. Mutation: key and `If-Match` carrying the run's version. */
+  inventoryStopMaterialisationAcknowledgement(scope: LocationScope, runId: string): string {
+    return `${this.inventoryStopMaterialisationRuns(scope)}/${encodeURIComponent(runId)}/acknowledgement`;
+  },
+
+  /**
    * ADR 0141 — what each connected marketplace has and has not been told about the stop list
    * at this branch, and since when (`MarketplacePropagationController`, integration module).
    */
   inventoryMarketplacePropagation(scope: LocationScope): string {
     return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/marketplace-propagation`;
+  },
+
+  /**
+   * ADR 0180 Decision 3 — every dish a dry-run binding would push, one decision per row, with the dish's name
+   * (`MarketplacePropagationController.wouldPush`). Cursor-paged: `cursor` and `limit` query params.
+   */
+  inventoryMarketplaceWouldPush(scope: LocationScope, bindingId: string): string {
+    return `${this.inventoryMarketplacePropagation(scope)}/${encodeURIComponent(bindingId)}/would-push`;
   },
 
   /** ADR 0141 — "why can't I sell this?" for one dish here; optional `channel` query param (a channel code). */
@@ -955,18 +1018,20 @@ export const operationsPaths = {
   },
 
   /**
-   * The dispatcher's live map (ADR 0045, `OperationsCourierPositionController`,
-   * IA 3.2) — on the ADR 0031 prefix, but under its own `operations/couriers`
-   * sub-path rather than beside `dispatch`, matching the controller's own
-   * `RequestMapping`.
+   * The dispatcher's live map (ADR 0045, `OperationsCourierPositionController`, IA 3.2) — on
+   * {@link LEGACY_TENANT_PREFIX} like `streams`, because the controller is mapped at
+   * `/api/v1/tenants/{t}/brands/{b}/locations/{l}/operations/couriers`, not under `/api/v1/operations`.
+   * For a release this builder said the second and every live-map call 404'd (batch-20 audit); the
+   * literal path is pinned in `operations-paths.spec.ts` and `courier-positions-api.spec.ts`, and the
+   * conformance gate (`path-conformance.spec.ts`) resolves it against the published baseline.
    */
   courierPositions(scope: LocationScope): string {
-    return `${OPERATIONS}${tenantBrandLocation(scope)}/operations/couriers/positions`;
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/operations/couriers/positions`;
   },
 
   /** Open one courier's stored track for a stated purpose. Mutation: key required, audited. */
   courierTrackReveals(scope: LocationScope, courierId: string): string {
-    return `${OPERATIONS}${tenantBrandLocation(scope)}/operations/couriers/${encodeURIComponent(courierId)}/track-reveals`;
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/operations/couriers/${encodeURIComponent(courierId)}/track-reveals`;
   },
 
   /**
@@ -1259,6 +1324,75 @@ export const operationsPaths = {
   ): string {
     return `${this.customerErasureRequests(scope, accountId)}/${encodeURIComponent(requestId)}/execute`;
   },
+
+  /** What would stop this customer's erasure right now: a legal hold, an open order, an open recovery case. */
+  customerErasureBlocks(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/erasure-blocks`;
+  },
+
+  /** What an executed erasure changed, per module and table (ADR 0029's proof). */
+  customerErasureProof(scope: LocationScope, accountId: string, requestId: string): string {
+    return `${this.customerErasureRequests(scope, accountId)}/${encodeURIComponent(requestId)}/proof`;
+  },
+
+  /** `GET` this customer's legal holds, `POST` to place one (a second person approves). */
+  customerLegalHolds(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/legal-holds`;
+  },
+
+  /** Lift a hold (a second person approves). Mutation: key and `CUSTOMER_ERASURE_EXECUTE`. */
+  customerLegalHoldLift(scope: LocationScope, accountId: string, holdId: string): string {
+    return `${this.customerLegalHolds(scope, accountId)}/${encodeURIComponent(holdId)}/lift`;
+  },
+
+  /** `GET` this customer's requests for a copy of her data, `POST` to ask on her behalf (ADR 0029). */
+  customerExportRequests(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/export-requests`;
+  },
+
+  /** Gather her data into a bundle, under a stated purpose. Mutation: key and `CUSTOMER_PII_EXPORT`. */
+  customerExportRequestProduce(scope: LocationScope, accountId: string, requestId: string): string {
+    return `${this.customerExportRequests(scope, accountId)}/${encodeURIComponent(requestId)}/produce`;
+  },
+
+  /** A short-lived link to the produced bundle (`purpose` as a query value). `CUSTOMER_PII_EXPORT`. */
+  customerExportRequestBundle(scope: LocationScope, accountId: string, requestId: string): string {
+    return `${this.customerExportRequests(scope, accountId)}/${encodeURIComponent(requestId)}/bundle`;
+  },
+
+  /** Withdraw a PENDING export request. Mutation: key required. */
+  customerExportRequestCancel(scope: LocationScope, accountId: string, requestId: string): string {
+    return `${this.customerExportRequests(scope, accountId)}/${encodeURIComponent(requestId)}/cancel`;
+  },
+
+  /** `GET` what has been corrected on this customer's data (without the values), newest first. */
+  customerCorrections(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/corrections`;
+  },
+
+  /** `PUT` a correction of the customer's name against evidence (`CustomerCorrectionController`). */
+  customerCorrectionDisplayName(scope: LocationScope, accountId: string): string {
+    return `${this.customerCorrections(scope, accountId)}/display-name`;
+  },
+
+  /** `PUT` a correction of the date of birth against evidence. */
+  customerCorrectionDateOfBirth(scope: LocationScope, accountId: string): string {
+    return `${this.customerCorrections(scope, accountId)}/date-of-birth`;
+  },
+
+  /** `PUT` a correction of one contact point against evidence. */
+  customerCorrectionContactPoint(
+    scope: LocationScope,
+    accountId: string,
+    contactPointId: string,
+  ): string {
+    return `${this.customerCorrections(scope, accountId)}/contact-points/${encodeURIComponent(contactPointId)}`;
+  },
+
+  /** `PUT` a correction of one saved address against evidence. */
+  customerCorrectionAddress(scope: LocationScope, accountId: string, addressId: string): string {
+    return `${this.customerCorrections(scope, accountId)}/addresses/${encodeURIComponent(addressId)}`;
+  },
 } as const;
 
 /**
@@ -1356,6 +1490,40 @@ export const courierPaths = {
 
   adjustmentReasonArchival(tenantId: string, reasonId: string): string {
     return `${this.adjustmentReasons(tenantId)}/${encodeURIComponent(reasonId)}/archival`;
+  },
+
+  /**
+   * Preview a bonus or penalty rule against the shifts and settlement periods of the last days
+   * (`OperationsCourierRuleSimulationController`, ADR 0178). A `POST` because its body is a rule that
+   * does not exist yet; it writes nothing.
+   */
+  adjustmentRuleSimulations(tenantId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/adjustment-rule-simulations`;
+  },
+
+  /** Correct a courier's display reference or type (`PUT`, `expectedVersion` in the body). Mutation: key required. */
+  courierCorrection(tenantId: string, courierId: string): string {
+    return this.courier(tenantId, courierId);
+  },
+
+  /** End the courier's engagement (`POST`, ADR 0178). Mutation: key required. */
+  courierEngagementEnding(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/engagement-ending`;
+  },
+
+  /** Archive a courier whose balance is zero (`POST`, ADR 0178). Mutation: key required. */
+  courierArchival(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/archival`;
+  },
+
+  /** Where a courier's app access stands: never a number, never a link (`GET`, ADR 0178). */
+  courierAccess(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/access`;
+  },
+
+  /** Text the courier a link to set their own password, first sign-in or reset (`POST`, ADR 0178). Mutation: key required. */
+  courierAccessInvitations(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/access-invitations`;
   },
 
   /** Record a bonus or a penalty against one courier. Mutation: key required. */

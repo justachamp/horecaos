@@ -126,4 +126,60 @@ export const couriersEn = {
   'couriers.engagement.status.SUSPENDED_OPERATIONAL': 'Suspended',
   'couriers.engagement.status.ENDED': 'Ended',
   'couriers.warningState.LAPSED': 'Compliance document lapsed',
+  'couriers.access.heading': 'App access',
+  'couriers.access.note':
+    'The courier is texted a link to choose their own password. You never see it.',
+  'couriers.access.state.NONE': 'No invitation sent yet.',
+  'couriers.access.state.QUEUED': 'Waiting to be texted.',
+  'couriers.access.state.SENT': 'The link was texted and has not been used yet.',
+  'couriers.access.state.EXPIRED': 'The link expired before it was used.',
+  'couriers.access.state.ACCEPTED': 'The courier has set their password.',
+  'couriers.access.state.VOIDED': 'Replaced by a newer link, or the courier left before using it.',
+  'couriers.access.state.FAILED': 'The text could not be sent.',
+  'couriers.access.invite': 'Send invite',
+  'couriers.access.reset': 'Reset access',
+  'couriers.access.queued': 'Queued: the courier will be texted.',
+  'couriers.access.tooSoon': 'A link was asked for a moment ago. Try again in {seconds} s.',
+  'couriers.access.smsNotConnected':
+    'No SMS gateway carries courier messages yet, so the text waits until one is connected.',
+  'couriers.access.error.SMS_NOT_CONNECTED':
+    'Waiting: no SMS gateway is connected for courier messages.',
+  'couriers.access.error.NO_PHONE_NUMBER':
+    'The courier has no phone number on file at the identity provider.',
+  'couriers.access.error.SMS_REFUSED': 'The SMS gateway refused the message.',
+  'couriers.access.error.SMS_PURPOSE_NOT_PERMITTED':
+    'The SMS account is not cleared to carry courier messages.',
+  'couriers.access.error.SMS_UNAVAILABLE': 'The SMS gateway could not be reached.',
+  'couriers.access.error.IDENTITY_UNAVAILABLE': 'The identity provider could not be reached.',
+  'couriers.access.error.COURIER_GONE': 'The courier is archived.',
+  'couriers.access.error.other': 'The text could not be sent.',
+  'couriers.lifecycle.heading': 'Correct, end, archive',
+  'couriers.lifecycle.edit': 'Correct reference or type',
+  'couriers.lifecycle.reference': 'Display reference',
+  'couriers.lifecycle.type': 'Courier type',
+  'couriers.lifecycle.reason': 'Reason (recorded in the audit)',
+  'couriers.lifecycle.save': 'Save correction',
+  'couriers.lifecycle.cancel': 'Cancel',
+  'couriers.lifecycle.end': 'End engagement',
+  'couriers.lifecycle.endHint':
+    'Records that the courier stopped working for the tenant. They stay on the roster until archived.',
+  'couriers.lifecycle.archive': 'Archive',
+  'couriers.lifecycle.archiveHint':
+    'Only when the balance is zero and there is no open shift. An archived courier is a record and is no longer edited.',
+  'couriers.lifecycle.confirmEnd': 'End the engagement',
+  'couriers.lifecycle.confirmArchive': 'Archive the courier',
+  'couriers.lifecycle.archived': 'This courier is archived.',
+  'couriers.lifecycle.refused.COURIER_HAS_OPEN_SHIFT':
+    'The courier is on an open shift. Close it first.',
+  'couriers.lifecycle.refused.COURIER_HAS_ACTIVE_DELIVERIES':
+    'The courier is carrying a delivery. Finish or reassign it first.',
+  'couriers.lifecycle.refused.COURIER_BALANCE_NOT_ZERO':
+    'The courier’s balance is not zero. Settle it before archiving.',
+  'couriers.lifecycle.taken': 'Another courier already has that reference.',
+  'couriers.lifecycle.stale': 'This courier changed since you opened it. Reopen it and try again.',
+  'couriers.photo.heading': 'Photo',
+  'couriers.photo.none': 'No photo on file',
+  'couriers.photo.change': 'Replace the photo',
+  'couriers.photo.failed': 'The photo could not be saved.',
+  'couriers.photo.reason': 'Courier photo',
 } as const;

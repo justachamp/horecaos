@@ -64,7 +64,7 @@
 }
 
 .zone-import__table th {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
@@ -143,7 +143,7 @@
 
 .zone-import__verdict {
   display: inline-block;
-  margin-right: 8px;
+  margin-inline-end: 8px;
   font-size: var(--q-type-caption);
 }
 
@@ -174,7 +174,7 @@
 .zone-import__corners th,
 .zone-import__corners td {
   padding: 2px 8px;
-  text-align: left;
+  text-align: start;
   font-size: var(--q-type-caption);
 }
 

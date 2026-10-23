@@ -169,7 +169,7 @@
 
 .nav-row__label {
   flex: 1;
-  text-align: left;
+  text-align: start;
   font: 600 14px/1.3 var(--font-ui);
 }
 .nav-row__chevron {
@@ -250,4 +250,11 @@
   color: var(--status-error);
   font: 700 14px/1 var(--font-display);
   cursor: pointer;
+}
+
+/* ADR 0046, ADR 0185: the customer's own points sit in the rate-card's frame, beside the identity. */
+.points__line {
+  margin: 0;
+  font: 600 14px/1.4 var(--font-ui);
+  color: var(--text-primary);
 }

@@ -53,7 +53,7 @@
 }
 
 .menu-sets__table th {
-  text-align: left;
+  text-align: start;
   padding: 6px 8px;
   border-bottom: 1px solid var(--q-hairline);
 }
@@ -74,7 +74,7 @@
   cursor: pointer;
   padding: 0;
   font: inherit;
-  text-align: left;
+  text-align: start;
 }
 
 .menu-sets__copy-button,

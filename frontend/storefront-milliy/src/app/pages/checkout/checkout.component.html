@@ -152,6 +152,13 @@
       ></textarea>
     </section>
 
+    <!-- X.1 (ADR 0046, ADR 0185): part of the order paid with points -->
+    <app-points-redemption
+      [cartId]="cart.priced()?.cartId ?? null"
+      [quoteId]="cart.priced()?.quoteId ?? null"
+      (selectionChange)="onPointsChanged($event)"
+    />
+
     <app-order-summary
       [subtotal]="cart.subtotalFormatted()"
       [deliveryFee]="cart.deliveryFee()"
@@ -161,6 +168,8 @@
       [total]="cart.totalAmount()"
       [hiddenCharges]="cart.hiddenCharges()"
       [provisional]="cart.hasProvisionalLines()"
+      [pointsSpent]="pointsSpent()"
+      [cashToPay]="cashToPay()"
     />
 
     @if (pricingNoteKey(); as pricingRefusal) {
@@ -179,7 +188,7 @@
   <footer class="foot">
     <button type="button" class="cta" [disabled]="!canConfirm()" (click)="confirm()">
       {{ (submitting() ? 'checkout.placingOrder' : 'checkout.confirmOrder') | t }} ·
-      {{ cart.totalAmount() }}
+      {{ cashToPay() ?? cart.totalAmount() }}
     </button>
   </footer>
 }

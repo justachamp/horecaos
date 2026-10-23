@@ -13,7 +13,9 @@ import { RouterLink } from '@angular/router';
 
 import { BrandScope } from '../../../core/api/catalog-paths';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
+import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { formatDateTime } from '../../../core/format/datetime';
+import { formatMoney } from '../../../core/format/money';
 import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { Drawer } from '../../../shared/ui/drawer';
@@ -21,12 +23,15 @@ import { StatusPill } from '../../../shared/ui/status-pill';
 import { Timeline, TimelineEntry } from '../../../shared/ui/timeline';
 import { describeApiError } from '../../orders/order-errors';
 import {
+  ApologyShape,
   CASE_STATES,
   CaseDetail,
   CaseOutcome,
   CaseState,
   CaseSummary,
+  CompensationCandidates,
   CompensationKind,
+  MintedApologyCode,
   OUTCOMES_BY_CLOSING_STATE,
   RecoveryApi,
   TransitionInput,
@@ -34,9 +39,13 @@ import {
 import {
   compensateKey,
   compensationKey,
+  grantShapeKey,
+  grantStatusKey,
   isClosed,
   kindKey,
   outcomeKey,
+  remedyStateKey,
+  remedyTypeKey,
   slaKey,
   slaTone,
   sourceKey,
@@ -51,6 +60,19 @@ import {
 export type CloseIntent = 'RESOLVED' | 'CLOSED_UNRESOLVED' | 'DISMISS';
 
 const COMPENSATION_KINDS: readonly CompensationKind[] = ['ORDER_REMEDY', 'BENEFIT_GRANT'];
+const APOLOGY_SHAPES: readonly ApologyShape[] = [
+  'FIXED_AMOUNT_OFF_ORDER',
+  'PERCENTAGE_OFF_ORDER',
+  'FREE_DELIVERY',
+];
+const DEFAULT_VALID_DAYS = '30';
+const MAX_VALID_DAYS = 365;
+
+/** One thing the picker offers: the identifier the link is made with, and the words that describe it. */
+interface PickerOption {
+  readonly id: string;
+  readonly label: string;
+}
 
 /**
  * One case, open (ADR 0159, Decisions 8 to 11): the rating, the tags the customer tapped, the
@@ -60,6 +82,11 @@ const COMPENSATION_KINDS: readonly CompensationKind[] = ['ORDER_REMEDY', 'BENEFI
  * <p>Everything here is read from the drawer's own `GET`, the only place a note or the comment is
  * returned. A mutation answers with a state and a version, so after each one the drawer reads again
  * rather than patching what it holds: what the person sees is always what the server has.
+ *
+ * <p>Linking compensation is a pick, never a paste (Decision 9): the drawer reads what exists for this case's
+ * order and customer and offers it, and a code is minted from here for whoever holds
+ * `pricing.promotion.manage` (ADR 0181, D10) and nobody else -- a case worker without it is told so rather than
+ * handed a control that would be refused. The plaintext code is shown once, in this component's memory only.
  *
  * <p>The client does not decide which move is legal. It offers the moves the four-state machine
  * has from the current state and lets the server refuse the rest; a lost race (`STALE_VERSION`)
@@ -74,6 +101,7 @@ const COMPENSATION_KINDS: readonly CompensationKind[] = ['ORDER_REMEDY', 'BENEFI
 })
 export class RecoveryCaseDrawer {
   private readonly api = inject(RecoveryApi);
+  private readonly capabilities = inject(SessionCapabilities);
   protected readonly i18n = inject(I18n);
 
   readonly scope = input.required<BrandScope>();
@@ -100,7 +128,25 @@ export class RecoveryCaseDrawer {
   protected readonly compensationKind = signal<CompensationKind>('ORDER_REMEDY');
   protected readonly compensationRef = signal('');
 
+  protected readonly candidates = signal<CompensationCandidates | null>(null);
+  protected readonly candidatesState = signal<'idle' | 'loading' | 'ready' | 'error'>('idle');
+
+  // The apology-code mint (D10): open on demand, never prefilled with anything the customer typed.
+  protected readonly mintOpen = signal(false);
+  protected readonly mintShape = signal<ApologyShape>('FIXED_AMOUNT_OFF_ORDER');
+  protected readonly mintValue = signal('');
+  protected readonly mintMinBasket = signal('');
+  protected readonly mintDays = signal(DEFAULT_VALID_DAYS);
+  /** The code just minted. Shown once and dropped with the drawer: nothing else holds it. */
+  protected readonly minted = signal<MintedApologyCode | null>(null);
+  /** The expiry instant the last submission of the mint form chose; see {@link mintExpiry}. */
+  private mintAnchor: { readonly signature: string; readonly expiresAt: string | null } | null =
+    null;
+  protected readonly copied = signal(false);
+
   protected readonly compensationKinds = COMPENSATION_KINDS;
+  protected readonly apologyShapes = APOLOGY_SHAPES;
+  protected readonly grantShapeKey = grantShapeKey;
   protected readonly stars = stars;
   protected readonly slaKey = slaKey;
   protected readonly stateKey = stateKey;
@@ -164,6 +210,61 @@ export class RecoveryCaseDrawer {
   protected readonly canConfirmClose = computed(
     () => !this.busy() && this.outcome() !== '' && !this.outcomeNeedsLink(),
   );
+
+  /** Whether this operator may issue a code at all: the capability, not a guess from the page. */
+  protected readonly canMint = computed(() => this.capabilities.has('PRICING_PROMOTION_MANAGE'));
+
+  /** The finance console opens on the case's order only for someone who can read payments there. */
+  protected readonly canOpenRemedyConsole = computed(() => this.capabilities.has('PAYMENT_READ'));
+
+  /** The currency the order was paid in: a fixed-amount code is minted in it. */
+  protected readonly mintCurrency = computed(() => this.detail()?.order?.currency ?? null);
+
+  /** What the picker offers for the chosen kind, with the ones already on a case left out. */
+  protected readonly pickable = computed<readonly PickerOption[]>(() => {
+    const found = this.candidates();
+    if (found === null) {
+      return [];
+    }
+    // The wording follows the active locale; depending on it here re-words the options on a switch.
+    this.i18n.locale();
+    if (this.compensationKind() === 'ORDER_REMEDY') {
+      return found.remedies
+        .filter((r) => !r.taken)
+        .map((r) => ({ id: r.refId, label: this.remedyText(r) }));
+    }
+    return found.grants
+      .filter((g) => !g.taken)
+      .map((g) => ({ id: g.grantId, label: this.grantText(g) }));
+  });
+
+  protected readonly mintValueNeeded = computed(() => this.mintShape() !== 'FREE_DELIVERY');
+
+  protected readonly canSubmitMint = computed(() => {
+    if (this.busy() || this.closed() || !this.canMint()) {
+      return false;
+    }
+    const days = Number(this.mintDays());
+    if (
+      this.mintDays().trim() !== '' &&
+      !(Number.isInteger(days) && days >= 1 && days <= MAX_VALID_DAYS)
+    ) {
+      return false;
+    }
+    const basket = this.mintMinBasket().trim();
+    if (basket !== '' && !(Number.isInteger(Number(basket)) && Number(basket) >= 0)) {
+      return false;
+    }
+    const shape = this.mintShape();
+    if (shape === 'FREE_DELIVERY') {
+      return true;
+    }
+    const value = Number(this.mintValue());
+    if (!Number.isInteger(value) || value < 1) {
+      return false;
+    }
+    return shape === 'PERCENTAGE_OFF_ORDER' ? value <= 100 : this.mintCurrency() !== null;
+  });
 
   protected readonly canAttach = computed(
     () => !this.busy() && !this.closed() && this.compensationRef().trim() !== '',
@@ -274,6 +375,170 @@ export class RecoveryCaseDrawer {
 
   protected onCompensationKindChange(value: string): void {
     this.compensationKind.set(value as CompensationKind);
+    this.compensationRef.set('');
+  }
+
+  /** Reads what exists for this case's order and customer again (a remedy recorded in the finance console, say). */
+  protected async loadCandidates(): Promise<void> {
+    const summary = this.current();
+    this.candidatesState.set('loading');
+    try {
+      this.candidates.set(await this.api.candidates(this.scope(), summary.locationId, summary.id));
+      this.candidatesState.set('ready');
+    } catch (error) {
+      if (!(error instanceof ApiError)) {
+        throw error;
+      }
+      this.candidatesState.set('error');
+    }
+  }
+
+  // ------------------------------------------------------------------------------- apology code
+
+  protected toggleMint(): void {
+    this.mintOpen.update((open) => !open);
+  }
+
+  protected onMintShapeChange(value: string): void {
+    this.mintShape.set(value as ApologyShape);
+    this.mintValue.set('');
+  }
+
+  /** What the amount typed so far is, written the way the customer will read it. */
+  protected mintPreview(): string | null {
+    const currency = this.mintCurrency();
+    const value = Number(this.mintValue());
+    if (
+      this.mintShape() !== 'FIXED_AMOUNT_OFF_ORDER' ||
+      currency === null ||
+      !Number.isInteger(value) ||
+      value < 1
+    ) {
+      return null;
+    }
+    return formatMoney({ amountMinor: value, currency }, this.i18n.locale(), { withUnit: true });
+  }
+
+  /**
+   * Issues the code for this case's customer. The case is the grant's source, so the grant says why it exists; the
+   * link to the case is a separate, explicit pick, made from the list this call refreshes.
+   */
+  protected async mint(): Promise<void> {
+    if (!this.canSubmitMint()) {
+      return;
+    }
+    const shape = this.mintShape();
+    const entered = Number(this.mintValue());
+    const basket = this.mintMinBasket().trim();
+    const days = this.mintDays().trim();
+    const expiresAt = this.mintExpiry(days, [shape, entered, basket]);
+    const issued = await this.mutate(() =>
+      this.api.mintApologyCode(this.scope(), {
+        customerAccountId: this.current().customerAccountId,
+        shape,
+        // The form speaks in whole percent; the platform keeps basis points.
+        value:
+          shape === 'FREE_DELIVERY'
+            ? 0
+            : shape === 'PERCENTAGE_OFF_ORDER'
+              ? entered * 100
+              : entered,
+        currency: shape === 'FREE_DELIVERY' ? null : this.mintCurrency(),
+        minBasketMinor: basket === '' ? 0 : Number(basket),
+        sourceId: this.current().id,
+        expiresAt,
+      }),
+    );
+    if (issued === undefined) {
+      return;
+    }
+    this.mintAnchor = null;
+    this.minted.set(issued);
+    this.copied.set(false);
+    this.mintOpen.set(false);
+    this.mintValue.set('');
+    await this.loadCandidates();
+    // The code just issued is the one the operator is about to link.
+    this.compensationKind.set('BENEFIT_GRANT');
+    this.compensationRef.set(issued.grantId);
+  }
+
+  /**
+   * The instant the code lapses, fixed by the first submission of this form and kept for as long as the form is
+   * unchanged. A moving `Date.now()` here would make a retry after a lost response a different request from the
+   * first, and the platform would issue a second code (ADR 0031): the key only repeats when the body does. Any
+   * edit to the form is a new request and takes a new instant; an issued code and a switch of case drop it.
+   */
+  private mintExpiry(days: string, others: readonly unknown[]): string | null {
+    const signature = JSON.stringify([days, ...others]);
+    if (this.mintAnchor?.signature !== signature) {
+      this.mintAnchor = {
+        signature,
+        expiresAt:
+          days === '' ? null : new Date(Date.now() + Number(days) * 86_400_000).toISOString(),
+      };
+    }
+    return this.mintAnchor.expiresAt;
+  }
+
+  protected async copyMinted(): Promise<void> {
+    const code = this.minted()?.plaintextCode;
+    if (!code) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(code);
+      this.copied.set(true);
+    } catch {
+      // No clipboard in this context: the code is on screen to be read out.
+    }
+  }
+
+  protected forgetMinted(): void {
+    this.minted.set(null);
+    this.copied.set(false);
+  }
+
+  private remedyText(remedy: CompensationCandidates['remedies'][number]): string {
+    const typeKey = remedyTypeKey(remedy.label);
+    const stateKey = remedyStateKey(remedy.state);
+    const parts = [typeKey === null ? remedy.label : this.i18n.t(typeKey)];
+    if (remedy.amountMinor > 0) {
+      parts.push(
+        formatMoney(
+          { amountMinor: remedy.amountMinor, currency: remedy.currency },
+          this.i18n.locale(),
+          {
+            withUnit: true,
+          },
+        ),
+      );
+    }
+    parts.push(stateKey === null ? remedy.state : this.i18n.t(stateKey));
+    return parts.join(' · ');
+  }
+
+  private grantText(grant: CompensationCandidates['grants'][number]): string {
+    const statusKey = grantStatusKey(grant.status);
+    const value =
+      grant.benefitType === 'PERCENTAGE_OFF_ORDER'
+        ? `${grant.value / 100}%`
+        : grant.benefitType === 'FIXED_AMOUNT_OFF_ORDER' && grant.currency !== null
+          ? formatMoney(
+              { amountMinor: grant.value, currency: grant.currency },
+              this.i18n.locale(),
+              {
+                withUnit: true,
+              },
+            )
+          : '';
+    return [
+      [this.i18n.t(grantShapeKey(grant.benefitType)), value]
+        .filter((part) => part !== '')
+        .join(' '),
+      `…${grant.codeHint}`,
+      statusKey === null ? grant.status : this.i18n.t(statusKey),
+    ].join(' · ');
   }
 
   // ------------------------------------------------------------------------------------ plumbing
@@ -291,17 +556,21 @@ export class RecoveryCaseDrawer {
     });
   }
 
-  /** Runs one mutation, then reads the case again; a lost race reloads and says so. */
-  private async mutate(action: () => Promise<void>): Promise<void> {
+  /**
+   * Runs one mutation, then reads the case again; a lost race reloads and says so. Answers what the mutation
+   * answered, or nothing when it did not run or did not succeed (the reason is then in {@link errorText}).
+   */
+  private async mutate<T>(action: () => Promise<T>): Promise<T | undefined> {
     if (this.busy()) {
-      return;
+      return undefined;
     }
     this.busy.set(true);
     this.errorText.set(null);
     try {
-      await action();
+      const result = await action();
       await this.reload();
       this.changed.emit();
+      return result;
     } catch (error) {
       if (error instanceof ApiError) {
         this.errorText.set(
@@ -316,6 +585,7 @@ export class RecoveryCaseDrawer {
       } else {
         throw error;
       }
+      return undefined;
     } finally {
       this.busy.set(false);
     }
@@ -324,11 +594,19 @@ export class RecoveryCaseDrawer {
   private async load(summary: CaseSummary): Promise<void> {
     this.state.set('loading');
     this.detail.set(null);
+    this.candidates.set(null);
+    this.candidatesState.set('idle');
+    this.minted.set(null);
+    this.mintOpen.set(false);
+    this.mintAnchor = null;
     this.errorText.set(null);
     try {
       this.detail.set(await this.api.detail(this.scope(), summary.locationId, summary.id));
       this.state.set('ready');
       this.applyIntent();
+      if (!isClosed(this.current().state)) {
+        void this.loadCandidates();
+      }
     } catch (error) {
       if (!(error instanceof ApiError)) {
         throw error;

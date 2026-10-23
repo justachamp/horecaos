@@ -29,7 +29,7 @@
 }
 
 .wallboard__freshness {
-  margin-left: auto;
+  margin-inline-start: auto;
   padding: 4px 32px;
   border-radius: var(--q-radius);
   background: var(--q-surface-2);
@@ -109,7 +109,7 @@
 }
 
 .wallboard__error-ref {
-  margin-left: 12px;
+  margin-inline-start: 12px;
   color: var(--q-error-text);
 }
 
@@ -171,7 +171,7 @@
 
 .wallboard-mix-row__count {
   color: var(--q-ink-muted);
-  text-align: right;
+  text-align: end;
   min-width: 3ch;
 }
 
@@ -209,7 +209,7 @@
 }
 
 .wallboard-branch-table__num {
-  text-align: right;
+  text-align: end;
 }
 
 /* ---- shared empty / locked note --------------------------------------------- */

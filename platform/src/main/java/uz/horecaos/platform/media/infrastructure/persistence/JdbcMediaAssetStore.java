@@ -33,11 +33,11 @@ public class JdbcMediaAssetStore {
                     asset_id, tenant_id, owner_scope, owner_id, object_key, bucket,
                     status, visibility, declared_content_type, declared_size_bytes,
                     declared_checksum_sha256, original_filename, created_by, created_at,
-                    rendition_profile)
+                    rendition_profile, purpose)
                 VALUES (
                     :assetId, :tenantId, :ownerScope, :ownerId, :objectKey, :bucket,
                     :status, :visibility, :contentType, :sizeBytes,
-                    :checksum, :filename, :createdBy, :createdAt, :renditionProfile)
+                    :checksum, :filename, :createdBy, :createdAt, :renditionProfile, :purpose)
                 """)
                 .param("assetId", asset.assetId().value())
                 .param("tenantId", asset.tenantId())
@@ -54,6 +54,7 @@ public class JdbcMediaAssetStore {
                 .param("createdBy", asset.createdBy())
                 .param("createdAt", OffsetDateTime.ofInstant(asset.createdAt(), ZoneOffset.UTC))
                 .param("renditionProfile", asset.renditionProfile())
+                .param("purpose", asset.purpose())
                 .update();
     }
 
@@ -172,6 +173,18 @@ public class JdbcMediaAssetStore {
                 .param("durationMs", durationMs, java.sql.Types.INTEGER)
                 .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
                 .update();
+    }
+
+    /** The code a rejected asset was refused with; empty for any other asset and for one of another tenant. */
+    public Optional<String> rejectionCodeOf(UUID tenantId, MediaAssetId assetId) {
+        return jdbc.sql("""
+                SELECT rejection_code FROM media.assets
+                WHERE tenant_id = :tenantId AND asset_id = :assetId AND rejection_code IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("assetId", assetId.value())
+                .query(String.class)
+                .optional();
     }
 
     public void markRejected(MediaAssetId assetId, String code, String detail, Instant now) {
@@ -320,6 +333,7 @@ public class JdbcMediaAssetStore {
                         .orElse(null),
                 row.getObject("created_at", OffsetDateTime.class).toInstant(),
                 row.getString("rendition_profile"),
-                (Integer) row.getObject("duration_ms"));
+                (Integer) row.getObject("duration_ms"),
+                row.getString("purpose"));
     }
 }

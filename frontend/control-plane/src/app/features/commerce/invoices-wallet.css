@@ -5,7 +5,7 @@
 }
 
 .num {
-  text-align: right;
+  text-align: end;
 }
 
 .table tfoot td {
@@ -44,7 +44,7 @@ tr.void td {
 }
 
 .actions button + button {
-  margin-left: 6px;
+  margin-inline-start: 6px;
 }
 
 /* ---------------------------------------------------------- the wallet */
@@ -150,6 +150,6 @@ tr.void td {
 
 /* A table cell holding buttons stays a table cell, which `.actions` (a flex row) does not. */
 .rowActions {
-  text-align: right;
+  text-align: end;
   white-space: nowrap;
 }

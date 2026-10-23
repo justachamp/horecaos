@@ -78,7 +78,22 @@ describe('KioskCard (ADR 0162)', () => {
       imports: [KioskCard],
       providers: [
         provideRouter([]),
-        { provide: KioskApi, useValue: { channels: () => Promise.resolve(CHANNELS), ...api } },
+        {
+          provide: KioskApi,
+          useValue: {
+            channels: () => Promise.resolve(CHANNELS),
+            idleMedia: () =>
+              Promise.resolve({
+                channelId: 'c1',
+                version: 0,
+                items: [],
+                maximumCount: 8,
+                maximumBytes: 1_048_576,
+                ratio: '9:16',
+              }),
+            ...api,
+          },
+        },
         {
           provide: FeatureFlags,
           useValue: {
@@ -268,5 +283,46 @@ describe('KioskCard (ADR 0162)', () => {
     });
 
     expect(byId('kiosk-denied')).not.toBeNull();
+  });
+  it('draws the printer, bank terminal and marking block as a locked state that names what is not built (settings.md §10.5)', async () => {
+    await render({ devices: () => Promise.resolve([kiosk()]) });
+
+    const block = byId('kiosk-hardware') as HTMLElement;
+    expect(block.querySelector('[data-testid="q-locked-state"]')).not.toBeNull();
+    expect(block.textContent).toContain('Printer, bank terminal and marking scanner');
+    expect(block.textContent).toContain('not built');
+    // Not a field: the card draws no input for hardware the platform does not integrate.
+    expect(block.querySelector('input, select, textarea')).toBeNull();
+  });
+
+  it('mounts the idle pictures of the branch’s kiosk channels, and none of the form’s booking-profile field', async () => {
+    const idleMedia = vi.fn().mockResolvedValue({
+      channelId: 'c1',
+      version: 2,
+      items: [
+        { id: 'i1', assetId: 'a1', position: 0, url: '/api/v1/storefront/tenants/t1/media/a1' },
+      ],
+      maximumCount: 8,
+      maximumBytes: 1_048_576,
+      ratio: '9:16',
+    });
+    await render({ devices: () => Promise.resolve([kiosk()]), idleMedia });
+
+    expect(idleMedia).toHaveBeenCalledWith(SCOPE, 'c1');
+    expect(byId('kiosk-idle')).not.toBeNull();
+    expect(byId('kiosk-idle-list')).not.toBeNull();
+    // ADR 0187, D26: «customer profile orders are booked under» is struck from the form; nothing in it asks for a customer.
+    expect((fixture.nativeElement as HTMLElement).textContent?.toLowerCase()).not.toContain(
+      'booked under',
+    );
+  });
+
+  it('does not ask for a channel’s pictures while the flag is dark', async () => {
+    const idleMedia = vi.fn();
+    await render({ idleMedia }, { flag: false });
+
+    expect(idleMedia).not.toHaveBeenCalled();
+    expect(byId('kiosk-idle')).toBeNull();
+    expect(byId('kiosk-hardware')).toBeNull();
   });
 });

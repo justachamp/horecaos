@@ -1,0 +1,156 @@
+@if (canManage()) {
+  <section class="decommission" data-testid="stop-decommission">
+    <h3 class="q-subhead">{{ 'kitchen.stopList.decommission.title' | t }}</h3>
+    <p class="q-body-sm decommission__lead">{{ 'kitchen.stopList.decommission.lead' | t }}</p>
+
+    @if (error(); as message) {
+      <p class="q-body-sm decommission__problem" role="alert" data-testid="decommission-error">
+        {{ message }}
+      </p>
+    }
+
+    <div class="decommission__bar">
+      <button
+        type="button"
+        class="q-body-sm decommission__button decommission__button--primary"
+        [disabled]="starting() || acknowledging() || loading()"
+        (click)="start()"
+        data-testid="decommission-start"
+      >
+        {{
+          starting()
+            ? ('kitchen.stopList.decommission.starting' | t)
+            : ('kitchen.stopList.decommission.start' | t)
+        }}
+      </button>
+      <span class="q-caption decommission__hint">{{
+        'kitchen.stopList.decommission.startHint' | t
+      }}</span>
+    </div>
+
+    @if (loading()) {
+      <p class="q-body-sm" data-testid="decommission-loading">
+        {{ 'kitchen.stopList.decommission.loading' | t }}
+      </p>
+    } @else if (run(); as current) {
+      <div
+        class="decommission__run"
+        data-testid="decommission-run"
+        [attr.data-status]="current.status"
+      >
+        <p class="q-body-sm decommission__status" data-testid="decommission-status">
+          <strong>{{ statusLabel(current) }}</strong>
+          · {{ 'kitchen.stopList.decommission.started' | t: { when: when(current.startedAt) } }}
+          @if (current.completedAt) {
+            ·
+            {{ 'kitchen.stopList.decommission.completed' | t: { when: when(current.completedAt) } }}
+          }
+        </p>
+        <ul class="decommission__counts" data-testid="decommission-counts">
+          <li class="q-body-sm">
+            {{ 'kitchen.stopList.decommission.count.seen' | t: { count: current.stopsSeen } }}
+          </li>
+          <li class="q-body-sm">
+            {{
+              'kitchen.stopList.decommission.count.written' | t: { count: current.positionsWritten }
+            }}
+          </li>
+          <li class="q-body-sm">
+            {{
+              'kitchen.stopList.decommission.count.already'
+                | t: { count: current.positionsAlreadyUnavailable }
+            }}
+          </li>
+          <li class="q-body-sm" data-testid="decommission-not-carried">
+            {{
+              'kitchen.stopList.decommission.count.notCarried' | t: { count: current.notCarried }
+            }}
+          </li>
+        </ul>
+        @if (current.failedStops > 0) {
+          <p class="q-body-sm decommission__problem" role="alert" data-testid="decommission-failed">
+            {{ 'kitchen.stopList.decommission.failed' | t: { count: current.failedStops } }}
+          </p>
+        }
+
+        @if (lines().length > 0) {
+          <table class="decommission__table" data-testid="decommission-report">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'kitchen.stopList.decommission.column.dish' | t }}</th>
+                <th class="q-caption">{{ 'kitchen.stopList.decommission.column.scope' | t }}</th>
+                <th class="q-caption">{{ 'kitchen.stopList.decommission.column.branch' | t }}</th>
+                <th class="q-caption">{{ 'kitchen.stopList.decommission.column.reason' | t }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (line of lines(); track line.id) {
+                <tr data-testid="decommission-line" [attr.data-reason]="line.reasonCode">
+                  <td class="q-body-sm">{{ dishLabel(line) }}</td>
+                  <td class="q-body-sm">{{ scopeLabel(line) }}</td>
+                  <td class="q-body-sm">{{ branchLabel(line) }}</td>
+                  <td class="q-body-sm">{{ reasonLabel(line) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          @if (nextCursor() !== null) {
+            <button
+              type="button"
+              class="q-body-sm decommission__button"
+              [disabled]="loadingLines()"
+              (click)="more()"
+              data-testid="decommission-more"
+            >
+              {{ 'kitchen.stopList.decommission.more' | t }}
+            </button>
+          }
+        } @else if (current.status === 'COMPLETED') {
+          <p class="q-body-sm" data-testid="decommission-nothing-lost">
+            {{ 'kitchen.stopList.decommission.nothingLost' | t }}
+          </p>
+        }
+
+        @if (current.acknowledged) {
+          <p
+            class="q-body-sm decommission__done"
+            role="status"
+            data-testid="decommission-acknowledged"
+          >
+            {{
+              'kitchen.stopList.decommission.acknowledged'
+                | t: { when: when(current.acknowledgedAt) }
+            }}
+          </p>
+        } @else if (current.status === 'COMPLETED') {
+          <label class="decommission__accept">
+            <input
+              type="checkbox"
+              [checked]="accepted()"
+              (change)="toggleAccepted($any($event.target).checked)"
+              data-testid="decommission-accept"
+            />
+            <span class="q-body-sm">{{ 'kitchen.stopList.decommission.accept' | t }}</span>
+          </label>
+          <button
+            type="button"
+            class="q-body-sm decommission__button decommission__button--primary"
+            [disabled]="!canAcknowledge()"
+            (click)="acknowledge()"
+            data-testid="decommission-acknowledge"
+          >
+            {{
+              acknowledging()
+                ? ('kitchen.stopList.decommission.acknowledging' | t)
+                : ('kitchen.stopList.decommission.acknowledge' | t)
+            }}
+          </button>
+        }
+      </div>
+    } @else {
+      <p class="q-body-sm" data-testid="decommission-none">
+        {{ 'kitchen.stopList.decommission.none' | t }}
+      </p>
+    }
+  </section>
+}

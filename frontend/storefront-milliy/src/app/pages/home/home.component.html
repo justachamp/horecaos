@@ -10,6 +10,7 @@
   <span class="search__hint">{{ 'home.searchHint' | t }}</span>
 </div>
 
+<app-content-brand-switcher [entries]="brandSwitcher()" />
 <app-content-stories [stories]="stories()" />
 <app-content-carousel [items]="carousel()" />
 <app-content-promo-grid [items]="promoGrid()" />
@@ -33,6 +34,7 @@
         [sections]="items()"
         [currency]="currency()"
         [requestedCategoryId]="category() ?? null"
+        [layout]="layout()"
       />
     } @else {
       <p class="state">{{ 'home.emptyMenu' | t }}</p>

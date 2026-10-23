@@ -79,7 +79,15 @@ class OperatorOrderingServiceBranchOverrideTests {
     private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
 
     private final OperatorOrderingService service = new OperatorOrderingService(
-            carts, checkout, overrideReasons, branchResolution, addresses, orders, audit, clock);
+            carts,
+            checkout,
+            overrideReasons,
+            branchResolution,
+            addresses,
+            orders,
+            audit,
+            clock,
+            new uz.horecaos.platform.support.FakeConfigurationResolver());
 
     @Test
     void anOverrideThatCreatesTheOrderIsAuditedWithBeforeNullAfterTheChoice() {
@@ -336,7 +344,7 @@ class OperatorOrderingServiceBranchOverrideTests {
                         "Home",
                         new DeliveryDestination("Street 1", "", "Tashkent", "", "", "", "", "", "", 41.311, 69.240),
                         null)));
-        when(branchResolution.resolve(TENANT, BRAND, FulfillmentMode.DELIVERY, point, "call-centre"))
+        when(branchResolution.resolve(TENANT, BRAND, FulfillmentMode.DELIVERY, point, "call-centre", null))
                 .thenReturn(new BranchResolution(List.of(), PROPOSED_LOCATION));
 
         OperatorOrderingService.Destination destination =
@@ -373,7 +381,7 @@ class OperatorOrderingServiceBranchOverrideTests {
 
     /** Every existing test here places a PICKUP order over the "call-centre" channel with no point to resolve. */
     private void stubResolvedProposal(@Nullable UUID proposedLocationId) {
-        when(branchResolution.resolve(TENANT, BRAND, FulfillmentMode.PICKUP, null, "call-centre"))
+        when(branchResolution.resolve(TENANT, BRAND, FulfillmentMode.PICKUP, null, "call-centre", null))
                 .thenReturn(new BranchResolution(List.of(), proposedLocationId));
     }
 

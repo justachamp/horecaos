@@ -6,6 +6,11 @@ import { BrandScope, catalogPaths } from '../../../core/api/catalog-paths';
 import { IntentCommandRegistry, command } from '../../../core/api/idempotency';
 import { LocationScope, operationsPaths } from '../../../core/api/operations-paths';
 import { CursorState, Page } from '../../../core/api/page';
+import { Money } from '../../../core/format/money';
+import {
+  CustomerCoordinateSource,
+  SaveCustomerAddressRequest,
+} from '../../customers/customers-api';
 
 /**
  * Types mirror `OperationsOrderController`, `CatalogAuthoringController` and
@@ -38,6 +43,32 @@ export interface CustomerLookupCandidate {
 export interface CreateCustomerRequest {
   readonly phone: string;
   readonly displayName?: string | null;
+}
+
+/**
+ * ADR 0177: `CustomerProfileService.MaskedAddress` — a saved address as a phone-order operator may
+ * read it: the label, the street **without** its house number or flat, the city and district, the
+ * point and where it came from, and the version a pin is set at. There is no member for the
+ * entrance, floor, flat, landmark, second line, postal code or delivery instructions, because the
+ * server never sends them to a role that holds `customer.address.capture` and not
+ * `customer.pii.reveal`.
+ */
+export interface MaskedCustomerAddress {
+  readonly id: string;
+  readonly label: string;
+  readonly street: string;
+  readonly city: string;
+  readonly district: string;
+  readonly latitude: number | null;
+  readonly longitude: number | null;
+  readonly coordinateSource: CustomerCoordinateSource;
+  readonly version: number;
+}
+
+/** `OperationsCustomerController.PinRequest`. */
+export interface AddressPinRequest {
+  readonly latitude: number;
+  readonly longitude: number;
 }
 
 // -------------------------------------------------------- §5.5 menu and basket
@@ -148,12 +179,10 @@ export interface MenuProduct {
  */
 export interface CommentPresetOption {
   readonly code: string;
-  readonly labelRu: string;
-  readonly labelUz: string;
-  readonly labelEn: string;
   /**
    * Every wording the preset has, keyed by locale — the triple plus any language a tenant's
-   * brands offer beyond it (row 10.12). Optional so a fixture, or an older platform, still reads.
+   * brands offer beyond it (row 10.12; the only shape of it since V0678). Optional so a fixture,
+   * or an older platform, still reads.
    */
   readonly labels?: Readonly<Record<string, string>>;
   /** The wording the platform resolved for the language the menu was requested in, then the brand's default. */
@@ -304,6 +333,8 @@ export interface PlaceOrderRequest {
   readonly proposedLocationId?: string | null;
   readonly overrideReasonCode?: string | null;
   readonly overrideNote?: string | null;
+  /** ADR 0177: «Перезвонить клиенту» raised while the order is keyed in; omitted when not raised. */
+  readonly callbackRequested?: boolean | null;
   /**
    * DINE_IN only (ADR 0047): the live party whose bill the order goes on. The
    * platform puts the order on it inside the transaction that creates the order,
@@ -325,6 +356,19 @@ export interface PlaceOrderRequest {
    * `ruleId` that quote named. The cart never evaluates them into this order. Absent means none.
    */
   readonly declinedAutoAddRuleIds?: readonly string[];
+  /**
+   * ADR 0046 / ADR 0185: the points the customer pays part of the order with, in whole som. They are debited
+   * inside the transaction that creates the order, never after it, and the order's money leg is what is left.
+   * Absent or null when none are spent. The server refuses an amount the brand's rules do not allow, and refuses
+   * any amount without {@link operatorAttestsCustomerAgreement}.
+   */
+  readonly redeemFromBalanceMinor?: number | null;
+  /**
+   * ADR 0039: the operator's statement that the customer, on the phone, agreed to pay `redeemFromBalanceMinor`
+   * with their points. A person spending another person's points needs someone to answer for the consent; the
+   * order records who. True only with a redemption.
+   */
+  readonly operatorAttestsCustomerAgreement?: boolean | null;
 }
 
 // -------------------------------------------------------- §5.6 the server's price (row 1.3e)
@@ -396,6 +440,40 @@ export interface QuotedAutoAddLine {
   readonly taxAmountMinor: number;
 }
 
+// -------------------------------------------------------- X.1: spending points on the order (ADR 0185)
+
+/**
+ * `RedemptionOfferResponses.RedemptionOfferView` -- what the customer may spend of their points on this order.
+ * `maximum` is zero exactly when `redeemable` is false, and `refusal` then says why (`NO_ACCOUNT`,
+ * `REDEMPTION_NOT_ENABLED`, `CHANNEL_NOT_ELIGIBLE`, `ACCOUNT_NOT_ACTIVE`, `ORDER_NOT_ELIGIBLE`,
+ * `INSUFFICIENT_BALANCE`, `REDEMPTION_BLOCKED_BY_PROMOTION`).
+ */
+export interface RedemptionOffer {
+  readonly accountId: string | null;
+  readonly available: Money;
+  readonly maximum: Money;
+  readonly redeemable: boolean;
+  readonly refusal: string | null;
+}
+
+/**
+ * `OperationsRedemptionOfferController.OperatorRedemptionOfferResponse` -- the offer against the figure the
+ * order would be booked at, and, when the request names an amount, the cash the customer would still owe.
+ *
+ * @property requested the amount the request asked for, null when it asked for none.
+ * @property requestedRefusal `EXCEEDS_MAXIMUM` when `requested` is above what the offer permits.
+ * @property cashToCollect the order total less the accepted redemption; null when the request was refused.
+ */
+export interface OperatorRedemptionOffer {
+  readonly customerAccountId: string;
+  readonly orderTotal: Money;
+  readonly deliveryFee: Money;
+  readonly offer: RedemptionOffer;
+  readonly requested?: Money | null;
+  readonly requestedRefusal?: string | null;
+  readonly cashToCollect?: Money | null;
+}
+
 // -------------------------------------------------------- §5.4 branch resolution (row 1.3)
 
 /**
@@ -407,6 +485,8 @@ interface BranchResolutionRequest {
   readonly fulfillmentMode: string;
   readonly point?: { readonly latitude: number; readonly longitude: number } | null;
   readonly channelCode: string;
+  /** ADR 0177: the «Позже» time, so the branches are asked about that instant and not this one. */
+  readonly requestedFor?: string | null;
 }
 
 /**
@@ -425,6 +505,18 @@ export interface BranchCandidate {
   readonly zoneId: string | null;
   readonly zonePriority: number | null;
   readonly zoneAreaSquareMeters: number | null;
+  /** ADR 0177: when the branch next opens, and whether it takes a pre-order into a closed slot at all. */
+  readonly nextAvailableAt?: string | null;
+  readonly acceptsScheduledOrders?: boolean;
+  /** Straight-line metres from the delivery point; absent for a pickup. */
+  readonly distanceMeters?: number | null;
+}
+
+/** `OperatorOrderEntryPolicyController.EntryPolicyResponse` (ADR 0177): the three Card 5 toggles at this branch. */
+export interface EntryPolicy {
+  readonly promoCodeAllowed: boolean;
+  readonly callbackFlagAllowed: boolean;
+  readonly changeDueAllowed: boolean;
 }
 
 /** `OperationsOrderController.BranchResolutionResponse`. */
@@ -508,6 +600,7 @@ export class NewOrderApi {
   private readonly placeOrderIntents = new IntentCommandRegistry<PlaceOrderRequest>();
   private readonly aggregatorEntryIntents = new IntentCommandRegistry<AggregatorOrderRequest>();
   private readonly createCustomerIntents = new IntentCommandRegistry<CreateCustomerRequest>();
+  private readonly captureAddressIntents = new IntentCommandRegistry<SaveCustomerAddressRequest>();
 
   /** orders.md §5.3: a `POST` with the phone in the body, never a query string. */
   async lookupCustomerByPhone(
@@ -576,6 +669,7 @@ export class NewOrderApi {
     fulfillmentMode: string,
     point: { lat: number; lon: number } | null,
     channelCode: string,
+    requestedFor: string | null = null,
   ): Promise<BranchResolution> {
     return firstValueFrom(
       this.api.post<BranchResolutionRequest, BranchResolution>(
@@ -584,9 +678,18 @@ export class NewOrderApi {
           fulfillmentMode,
           point: point === null ? null : { latitude: point.lat, longitude: point.lon },
           channelCode,
+          ...(requestedFor === null ? {} : { requestedFor }),
         }),
       ),
     );
+  }
+
+  /** ADR 0177: what this branch lets an operator do while keying an order in; the server enforces the same three. */
+  async entryPolicy(scope: LocationScope): Promise<EntryPolicy> {
+    const result = await firstValueFrom(
+      this.api.get<EntryPolicy>(operationsPaths.orderEntryPolicy(scope)),
+    );
+    return result.value;
   }
 
   /** Row 1.3: the curated list the branch-override dialog picks from. */
@@ -636,6 +739,26 @@ export class NewOrderApi {
   }
 
   /**
+   * X.1 (ADR 0185) -- what the customer on the phone may spend of their points on the order being taken, and the
+   * cash they would still owe for `request.redeemFromBalanceMinor`: `POST .../orders/redemption-offer`,
+   * `ORDER_PLACE` at `LOCATION` scope. The body is the one {@link quote} takes, priced by the same path.
+   *
+   * Writes and holds nothing, so a fresh `Idempotency-Key` per call (the plain {@link command} helper) is right,
+   * exactly as for {@link quote}. The points are spent by {@link placeOrder}, inside its transaction.
+   */
+  redemptionOffer(
+    scope: LocationScope,
+    request: PlaceOrderRequest,
+  ): Promise<OperatorRedemptionOffer> {
+    return firstValueFrom(
+      this.api.post<PlaceOrderRequest, OperatorRedemptionOffer>(
+        `${operationsPaths.orders(scope)}/redemption-offer`,
+        command(request),
+      ),
+    );
+  }
+
+  /**
    * Row 1.3g (ADR 0040) — records an aggregator's own order under its
    * `AGGREGATOR`-type channel, with externally-set pricing, never run
    * through the ordinary cart/quote pipeline {@link placeOrder} uses.
@@ -679,6 +802,70 @@ export class NewOrderApi {
         .pipe(tap(() => this.createCustomerIntents.forget('draft'))),
     );
     return response.id;
+  }
+
+  /**
+   * ADR 0177: the resolved customer's saved addresses, masked — `OperationsCustomerController`'s
+   * `GET`, which `LOCATION_STAFF` and `LOCATION_MANAGER` reach (capability
+   * `customer.address.capture`, `LOCATION` scope). The tenant-scoped reveal the Customers screen
+   * reads stays behind `customer.pii.reveal`, which this screen's persona does not hold.
+   */
+  async capturedAddresses(
+    scope: LocationScope,
+    accountId: string,
+  ): Promise<readonly MaskedCustomerAddress[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly MaskedCustomerAddress[]>(
+        operationsPaths.orderIntakeCustomerAddresses(scope, accountId),
+      ),
+    );
+    return result.value ?? [];
+  }
+
+  /**
+   * ADR 0177: saves one delivery address for the customer, with the pin the operator confirmed.
+   * Held on {@link captureAddressIntents} like {@link createCustomer}: the write inserts
+   * unconditionally, so a retry that minted a fresh `Idempotency-Key` would save the same address
+   * twice when the first response was lost.
+   *
+   * @returns the new address's id, so the pane can select it
+   */
+  async captureAddress(
+    scope: LocationScope,
+    accountId: string,
+    request: SaveCustomerAddressRequest,
+  ): Promise<string> {
+    const intent = this.captureAddressIntents.next(accountId, request);
+    const response = await firstValueFrom(
+      this.api
+        .post<SaveCustomerAddressRequest, { id: string }>(
+          operationsPaths.orderIntakeCustomerAddresses(scope, accountId),
+          intent,
+        )
+        .pipe(tap(() => this.captureAddressIntents.forget(accountId))),
+    );
+    return response.id;
+  }
+
+  /**
+   * ADR 0177: places or moves the pin of one saved address, at the version the masked list
+   * returned (ADR 0031: another operator's pin in between is a refusal to read, not an overwrite).
+   * Writes the point and `OPERATOR_PIN` and nothing else; the address text is not this screen's.
+   */
+  async placeAddressPin(
+    scope: LocationScope,
+    accountId: string,
+    addressId: string,
+    pin: AddressPinRequest,
+    expectedVersion: number,
+  ): Promise<MaskedCustomerAddress> {
+    return firstValueFrom(
+      this.api.put<AddressPinRequest, MaskedCustomerAddress>(
+        operationsPaths.orderIntakeCustomerAddressPin(scope, accountId, addressId),
+        command(pin),
+        { expectedVersion },
+      ),
+    );
   }
 
   /**

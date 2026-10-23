@@ -26,10 +26,20 @@ import { OrderSummaryResponse } from './order-summary';
  *    «Курьер» column (`courierTypeName`). That roster is `COURIER_READ`'s, so the column is offered only to a
  *    person who holds it: without the roster every cell would be a dash.
  *  - «Скидка» reads `discountMinor`, with the order's currency.
- *  - `items` is in the platform's vocabulary and **not offered**: the board read carries no per-order item
- *    summary, so there is nothing to draw. It joins the picker when the read carries one.
- *  - `courierEta` and `source` are not in the vocabulary yet either (they need a read of their own and a
- *    product answer); row `1.1` keeps them as its residue.
+ *  - `items` reads `itemCount` and `firstItemName`, which the board read now carries for every row (one
+ *    batch over the live lines, ordering's own table): «4 поз · Лагман…». It is default-shown, so offering it
+ *    puts it on every board that has not hidden it.
+ *  - «Курьер ETA» reads `courierEtaAt`, the ETA the winning partner quote named. It answers only for a
+ *    partner-carried delivery and is a snapshot, not a live feed; for an order a house courier carries the
+ *    cell is a dash, because nothing computes an ETA for those and none is made up.
+ *  - «Источник» reads `channelSystemType`, resolved on the server (the roles that work the board do not hold
+ *    `CHANNEL_READ`), and draws one icon from a closed set the console owns with the channel's name as its
+ *    title.
+ *  - «Ф» reads `fiscalStatus` (the sale document's status), «Дистанция» `distanceMeters` and «Внешний №»
+ *    `externalNumber`.
+ *
+ *  The five optional columns above need a read of their own, so the board asks for them by name (`include`)
+ *  only while the person has the column on: {@link boardFactParams}. A column turned off costs no query.
  *
  * `channel` is the channel part of the «Тип / канал» cell: hiding it leaves the fulfilment mode alone.
  * «Филиал» exists only while the board reads «Все филиалы», so it is offered only there.
@@ -78,7 +88,7 @@ export const ORDER_BOARD_COLUMNS = {
     key: 'items',
     labelKey: 'orders.column.items',
     defaultShown: true,
-    reads: null,
+    reads: 'itemCount',
     needs: 'always',
   },
   payment: {
@@ -123,6 +133,41 @@ export const ORDER_BOARD_COLUMNS = {
     reads: 'discountMinor',
     needs: 'always',
   },
+  courierEta: {
+    key: 'courierEta',
+    labelKey: 'orders.column.courierEta',
+    defaultShown: false,
+    reads: 'courierEtaAt',
+    needs: 'always',
+  },
+  source: {
+    key: 'source',
+    labelKey: 'orders.column.source',
+    defaultShown: false,
+    reads: 'channelSystemType',
+    needs: 'always',
+  },
+  fiscal: {
+    key: 'fiscal',
+    labelKey: 'orders.column.fiscal',
+    defaultShown: false,
+    reads: 'fiscalStatus',
+    needs: 'always',
+  },
+  distance: {
+    key: 'distance',
+    labelKey: 'orders.column.distance',
+    defaultShown: false,
+    reads: 'distanceMeters',
+    needs: 'always',
+  },
+  externalNumber: {
+    key: 'externalNumber',
+    labelKey: 'orders.column.externalNumber',
+    defaultShown: false,
+    reads: 'externalNumber',
+    needs: 'always',
+  },
 } as const satisfies Record<OrderBoardColumnKey, OrderBoardColumnDefinition>;
 
 /** What the screen knows that decides whether a column can be drawn at all. */
@@ -164,4 +209,32 @@ export function columnVisibility(
   return Object.fromEntries(
     ORDER_BOARD_COLUMN_KEYS.map((key) => [key, offered.has(key) && isColumnShown(document, key)]),
   ) as Record<OrderBoardColumnKey, boolean>;
+}
+
+/**
+ * The optional columns whose facts the board read produces only when asked (`include=` on
+ * `GET .../orders/board`), by the key the platform spells them with. The payment method and the item summary
+ * are not here: they ride on every row because their columns are default-shown.
+ */
+export const BOARD_FACT_COLUMNS = [
+  'courierEta',
+  'source',
+  'fiscal',
+  'distance',
+  'externalNumber',
+] as const satisfies readonly OrderBoardColumnKey[];
+
+/** The facts the board must be asked for so that every column the person has on has something to draw. */
+export function requestedBoardFacts(
+  visibility: Readonly<Record<OrderBoardColumnKey, boolean>>,
+): readonly (typeof BOARD_FACT_COLUMNS)[number][] {
+  return BOARD_FACT_COLUMNS.filter((key) => visibility[key]);
+}
+
+/** The board request's `include` parameter for those facts: nothing at all when no optional column is on. */
+export function boardFactParams(
+  visibility: Readonly<Record<OrderBoardColumnKey, boolean>>,
+): Record<string, readonly string[]> {
+  const facts = requestedBoardFacts(visibility);
+  return facts.length === 0 ? {} : { include: facts };
 }

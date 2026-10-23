@@ -8,7 +8,12 @@ import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { I18n } from '../../../core/i18n/i18n';
 import { SavedTarget } from '../settings-saved';
 import { SettingsScope } from '../settings-scope';
-import { AssistantKnowledgeApi, KnowledgeEntry, KnowledgeVersion } from './assistant-knowledge-api';
+import {
+  AssistantKnowledgeApi,
+  AssistantLanguage,
+  KnowledgeEntry,
+  KnowledgeVersion,
+} from './assistant-knowledge-api';
 import { AssistantKnowledgePage } from './assistant-knowledge-page';
 
 const TENANT_ID = 'tenant-1';
@@ -53,6 +58,13 @@ const HISTORY: readonly KnowledgeVersion[] = [
   },
 ];
 
+/** What `GET .../assistant/languages` answers today: the detector's three vocabularies. */
+const LANGUAGES: readonly AssistantLanguage[] = [
+  { code: 'ru', locale: 'ru', disclosureKey: 'assistant.disclosure_text_ru' },
+  { code: 'uz', locale: 'uz-Latn', disclosureKey: 'assistant.disclosure_text_uz' },
+  { code: 'en', locale: 'en', disclosureKey: 'assistant.disclosure_text_en' },
+];
+
 class FakeSettingsScope {
   readonly brandId = signal<string | null>(BRAND_ID);
   readonly locationId = signal<string | null>(null);
@@ -78,7 +90,7 @@ async function flushMicrotasks(): Promise<void> {
 interface Harness {
   readonly fixture: ComponentFixture<AssistantKnowledgePage>;
   readonly api: Record<
-    'list' | 'versions' | 'create' | 'publish' | 'retire',
+    'list' | 'versions' | 'create' | 'publish' | 'retire' | 'languages',
     ReturnType<typeof vi.fn>
   >;
   readonly scope: FakeSettingsScope;
@@ -92,6 +104,7 @@ async function render(
     locationId?: string | null;
     listError?: Error;
     writeError?: Error;
+    languages?: readonly AssistantLanguage[];
   } = {},
 ): Promise<Harness> {
   const scope = new FakeSettingsScope();
@@ -111,6 +124,7 @@ async function render(
           : Promise.resolve(options.entries ?? [entry()]),
       ),
     versions: vi.fn().mockResolvedValue(HISTORY),
+    languages: vi.fn().mockResolvedValue(options.languages ?? LANGUAGES),
     create: written,
     publish: vi.fn().mockImplementation(written),
     retire: vi.fn().mockImplementation(written),
@@ -234,6 +248,39 @@ describe('AssistantKnowledgePage: a new note', () => {
       answerBody: 'Yes, ask for it.',
       reason: 'Asked every week',
     });
+  });
+
+  // ADR 0149, Decision 3: the assistant's languages are its detector's vocabulary, served by the
+  // backend, so the form offers what the platform answers with and names each in the console's language.
+  it('offers exactly the languages the platform says the assistant answers in, named by the registry', async () => {
+    const harness = await render({
+      languages: [
+        { code: 'ru', locale: 'ru', disclosureKey: 'assistant.disclosure_text_ru' },
+        { code: 'uz', locale: 'uz-Latn', disclosureKey: 'assistant.disclosure_text_uz' },
+      ],
+    });
+    byId(harness.host, 'note-new').click();
+    harness.fixture.detectChanges();
+
+    expect(harness.api.languages).toHaveBeenCalledTimes(1);
+    const options = Array.from(
+      (byId(harness.host, 'note-locale') as HTMLSelectElement).querySelectorAll('option'),
+    );
+    expect(options.map((option) => option.value)).toEqual(['ru', 'uz']);
+    expect(options.map((option) => option.textContent?.trim())).toEqual(['Russian', 'Uzbek']);
+  });
+
+  it('starts a new note in the registry’s fallback language when the assistant speaks it', async () => {
+    const harness = await render({
+      languages: [
+        { code: 'en', locale: 'en', disclosureKey: 'assistant.disclosure_text_en' },
+        { code: 'ru', locale: 'ru', disclosureKey: 'assistant.disclosure_text_ru' },
+      ],
+    });
+    byId(harness.host, 'note-new').click();
+    harness.fixture.detectChanges();
+
+    expect((byId(harness.host, 'note-locale') as HTMLSelectElement).value).toBe('ru');
   });
 
   it('defaults the branch to the one the bar is on, and can name another', async () => {

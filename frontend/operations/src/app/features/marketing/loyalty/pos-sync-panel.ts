@@ -8,8 +8,9 @@ import {
 } from '@angular/core';
 
 import { BrandScope } from '../../../core/api/catalog-paths';
-import { ApiError } from '../../../core/api/problem-details';
+import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { CurrentBrand } from '../../../core/auth/current-brand';
+import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { formatMoney } from '../../../core/format/money';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
@@ -20,6 +21,7 @@ import {
   PosSyncBindingView,
   PosSyncDiscrepancyKind,
   PosSyncDiscrepancyView,
+  PosSyncMode,
   PosSyncOverview,
   PosSyncResolutionCode,
   PosSyncRunReport,
@@ -39,6 +41,9 @@ const ALLOWED: Readonly<Record<PosSyncDiscrepancyKind, readonly PosSyncResolutio
   NOT_CONSENTED: ['ABSORB'],
   UNVERIFIABLE: ['ABSORB'],
 };
+
+/** The rollout's stages in order (ADR 0171): a tenant moves up one at a time and down at once. */
+const MODES: readonly PosSyncMode[] = ['REPORT_ONLY', 'PULL', 'PULL_AND_PUSH'];
 
 /** The two balances are shown for these; the others name no pair of numbers. */
 const SHOWS_BALANCES: ReadonlySet<PosSyncDiscrepancyKind> = new Set([
@@ -78,7 +83,12 @@ const SHOWS_BALANCES: ReadonlySet<PosSyncDiscrepancyKind> = new Set([
 export class PosSyncPanel implements OnInit {
   private readonly api = inject(PosSyncApi);
   private readonly brand = inject(CurrentBrand);
+  private readonly capabilities = inject(SessionCapabilities);
   protected readonly i18n = inject(I18n);
+
+  /** Staging the rollout and saying what the till keeps need `loyalty.sync.manage` at the brand; the server is the gate. */
+  protected readonly canManage = computed(() => this.capabilities.has('LOYALTY_SYNC_MANAGE'));
+  protected readonly modes = MODES;
 
   protected readonly loading = signal(true);
   protected readonly denied = signal(false);
@@ -94,6 +104,16 @@ export class PosSyncPanel implements OnInit {
   protected readonly resolvingId = signal<string | null>(null);
   protected readonly reasons = signal<Readonly<Record<string, string>>>({});
   protected readonly pendingApproval = signal<ReadonlySet<string>>(new Set());
+
+  // Staging (ADR 0171 rollout) and the till's own balance, each with the reason an ADR 0027 fact will carry.
+  protected readonly modeDrafts = signal<Readonly<Record<string, PosSyncMode>>>({});
+  protected readonly modeReasons = signal<Readonly<Record<string, string>>>({});
+  protected readonly modeBusyId = signal<string | null>(null);
+  protected readonly stagedNotice = signal<string | null>(null);
+
+  protected readonly keepsDraft = signal<boolean | null>(null);
+  protected readonly keepsReason = signal('');
+  protected readonly keepsBusy = signal(false);
 
   protected readonly bindings = computed(() => this.overview()?.bindings ?? []);
   protected readonly standingNotice = computed(() => this.overview()?.standingNotice === true);
@@ -182,6 +202,141 @@ export class PosSyncPanel implements OnInit {
 
   protected isAwaitingSignature(row: PosSyncDiscrepancyView): boolean {
     return this.pendingApproval().has(row.discrepancyId);
+  }
+
+  // ---------------------------------------------------------------- staging the rollout
+
+  protected modeOf(binding: PosSyncBindingView): PosSyncMode {
+    return this.modeDrafts()[binding.bindingId] ?? binding.mode;
+  }
+
+  protected chooseMode(binding: PosSyncBindingView, mode: string): void {
+    this.modeDrafts.update((current) => ({ ...current, [binding.bindingId]: mode as PosSyncMode }));
+  }
+
+  protected modeReasonOf(binding: PosSyncBindingView): string {
+    return this.modeReasons()[binding.bindingId] ?? '';
+  }
+
+  protected setModeReason(binding: PosSyncBindingView, value: string): void {
+    this.modeReasons.update((current) => ({ ...current, [binding.bindingId]: value }));
+  }
+
+  /** Whether the stage can be chosen: a step down always, a step up one stage, and anything above report-only needs a binding that syncs. */
+  protected modeAllowed(binding: PosSyncBindingView, target: PosSyncMode): boolean {
+    const from = MODES.indexOf(binding.mode);
+    const to = MODES.indexOf(target);
+    if (target !== 'REPORT_ONLY' && !binding.syncing) {
+      return false;
+    }
+    return to <= from + 1;
+  }
+
+  protected canStage(binding: PosSyncBindingView): boolean {
+    const target = this.modeOf(binding);
+    return (
+      this.modeBusyId() === null &&
+      target !== binding.mode &&
+      this.modeAllowed(binding, target) &&
+      this.modeReasonOf(binding).trim().length > 0
+    );
+  }
+
+  protected async stage(binding: PosSyncBindingView): Promise<void> {
+    if (!this.scope || !this.canStage(binding)) {
+      return;
+    }
+    this.actionError.set(null);
+    this.stagedNotice.set(null);
+    this.modeBusyId.set(binding.bindingId);
+    try {
+      const saved = await this.api.setMode(
+        this.scope,
+        binding,
+        this.modeOf(binding),
+        this.modeReasonOf(binding).trim(),
+      );
+      this.clearDraft(binding.bindingId);
+      this.stagedNotice.set(
+        this.i18n.t('marketing.loyalty.posSync.stage.saved', {
+          mode: this.i18n.t(this.modeLabelKey(saved.mode)),
+        }),
+      );
+      await this.refresh();
+    } catch (error) {
+      if (error instanceof ApiError && error.code === ApiErrorCode.STALE_VERSION) {
+        // Someone staged this binding first: show what is true now and ask for the change again.
+        this.clearDraft(binding.bindingId);
+        await this.refresh();
+        this.actionError.set(this.i18n.t('marketing.loyalty.posSync.stage.stale'));
+      } else {
+        this.actionError.set(this.describe(error));
+      }
+    } finally {
+      this.modeBusyId.set(null);
+    }
+  }
+
+  private clearDraft(bindingId: string): void {
+    this.modeDrafts.update((current) => {
+      const next = { ...current };
+      delete next[bindingId];
+      return next;
+    });
+    this.modeReasons.update((current) => {
+      const next = { ...current };
+      delete next[bindingId];
+      return next;
+    });
+  }
+
+  // ---------------------------------------------------------------- what the till keeps
+
+  protected keepsValue(): boolean {
+    return this.keepsDraft() ?? this.overview()?.tillKeepsBalance ?? false;
+  }
+
+  protected canSaveKeeps(): boolean {
+    const current = this.overview();
+    return (
+      current !== null &&
+      !this.keepsBusy() &&
+      this.keepsValue() !== current.tillKeepsBalance &&
+      this.keepsReason().trim().length > 0
+    );
+  }
+
+  protected async saveKeeps(): Promise<void> {
+    const current = this.overview();
+    if (!this.scope || current === null || !this.canSaveKeeps()) {
+      return;
+    }
+    this.actionError.set(null);
+    this.stagedNotice.set(null);
+    this.keepsBusy.set(true);
+    try {
+      this.overview.set(
+        await this.api.setTillKeepsBalance(
+          this.scope,
+          this.keepsValue(),
+          current.tillKeepsBalanceVersion,
+          this.keepsReason().trim(),
+        ),
+      );
+      this.keepsDraft.set(null);
+      this.keepsReason.set('');
+      this.stagedNotice.set(this.i18n.t('marketing.loyalty.posSync.keeps.saved'));
+    } catch (error) {
+      if (error instanceof ApiError && error.code === ApiErrorCode.STALE_VERSION) {
+        this.keepsDraft.set(null);
+        await this.refresh();
+        this.actionError.set(this.i18n.t('marketing.loyalty.posSync.stage.stale'));
+      } else {
+        this.actionError.set(this.describe(error));
+      }
+    } finally {
+      this.keepsBusy.set(false);
+    }
   }
 
   protected async reconcile(binding: PosSyncBindingView): Promise<void> {

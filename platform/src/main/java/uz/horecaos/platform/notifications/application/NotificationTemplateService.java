@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -22,12 +23,17 @@ import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.marketing.api.CampaignMessagePort;
+import uz.horecaos.platform.media.api.TenantImageCheck;
 import uz.horecaos.platform.notifications.domain.ContentHashes;
 import uz.horecaos.platform.notifications.domain.MessageLocale;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
+import uz.horecaos.platform.notifications.domain.NotificationVariableCatalog;
+import uz.horecaos.platform.notifications.domain.PlatformDefaultTemplates;
 import uz.horecaos.platform.notifications.domain.TemplateRenderer;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore;
+import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore.ShownVersionRow;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore.TemplateRow;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplateStore.VersionRow;
 import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
@@ -61,6 +67,18 @@ import uz.horecaos.platform.tenancy.api.TenantLocaleSet;
 @Service
 public class NotificationTemplateService {
 
+    // ADR 0184 gave this service three more rules, each with its decision:
+    //
+    //   * D19: a SECURITY template cannot be created. The one-time code sentence is the platform's
+    //     (customers.api.OtpWording) and nothing ever sends a SECURITY template.
+    //   * D20: which template wins is decided in JdbcTemplateStore.activeTemplate, lexicographically:
+    //     scope, then variant dimensions, then fulfilment mode over channel source. The platform
+    //     default is the last layer, below every tenant and brand template, and applies only when the
+    //     tenant has no active template at any scope for the key and channel.
+    //   * D21: a version may not declare a variable that is personal in the wrong place (customerPhone,
+    //     courierPhone and courierSurname anywhere; customerName outside a customer-addressed class;
+    //     courierFirstName outside ORDER_FULFILLING). See NotificationVariableCatalog#refusal.
+
     private static final TypeReference<Map<String, String>> SCHEMA_TYPE = new TypeReference<>() {};
 
     private final JdbcTemplateStore templates;
@@ -69,6 +87,7 @@ public class NotificationTemplateService {
     private final AuditRecorder audit;
     private final CurrentActor currentActor;
     private final BrandLocaleLookup brandLocales;
+    private final TenantImageCheck images;
 
     /** A service with no tenancy to ask: every brand counts the platform's content tier (tests, tools). */
     public NotificationTemplateService(
@@ -80,7 +99,7 @@ public class NotificationTemplateService {
         this(templates, objectMapper, clock, audit, currentActor, BrandLocaleLookup.platformFallback());
     }
 
-    @Autowired
+    /** A service that cannot vouch for a cover image: a push wording with one is refused (tests, tools). */
     public NotificationTemplateService(
             JdbcTemplateStore templates,
             ObjectMapper objectMapper,
@@ -88,12 +107,32 @@ public class NotificationTemplateService {
             AuditRecorder audit,
             CurrentActor currentActor,
             BrandLocaleLookup brandLocales) {
+        this(
+                templates,
+                objectMapper,
+                clock,
+                audit,
+                currentActor,
+                brandLocales,
+                (tenantId, assetId, ratioWidth, ratioHeight, maximumBytes) -> TenantImageCheck.Verdict.UNKNOWN_ASSET);
+    }
+
+    @Autowired
+    public NotificationTemplateService(
+            JdbcTemplateStore templates,
+            ObjectMapper objectMapper,
+            Clock clock,
+            AuditRecorder audit,
+            CurrentActor currentActor,
+            BrandLocaleLookup brandLocales,
+            TenantImageCheck images) {
         this.templates = templates;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.audit = audit;
         this.currentActor = currentActor;
         this.brandLocales = brandLocales;
+        this.images = images;
     }
 
     /**
@@ -167,6 +206,26 @@ public class NotificationTemplateService {
             @Nullable FulfillmentMode fulfillmentMode,
             @Nullable SalesChannelSystemType channelSource) {
 
+        if (notificationClass == NotificationClass.SECURITY) {
+            // ADR 0184, D19. The one-time code sentence is the platform's and is sent by the customers
+            // module without a template (OtpWording); a SECURITY template would be wording an operator
+            // can write and nothing ever sends, which is the silent failure the old console invited.
+            throw new IllegalArgumentException("A SECURITY template cannot be authored: the sentence a customer reads"
+                    + " with a one-time code belongs to the platform and is shown read-only (ADR 0184, D19)");
+        }
+        if (channel == NotificationChannel.EMAIL && notificationClass != NotificationClass.MARKETING) {
+            // ADR 0182, D13: the platform's relay carries campaign email and nothing else. Refused when
+            // the template is authored, so a tenant is not told only when a customer is waiting.
+            throw new IllegalArgumentException(
+                    "An EMAIL template is a MARKETING template: the platform sends campaign email only, " + "and not "
+                            + notificationClass);
+        }
+        if (channel == NotificationChannel.PUSH && notificationClass != NotificationClass.MARKETING) {
+            // ADR 0182, D14: Web Push carries campaigns and nothing else, for the reason email does.
+            throw new IllegalArgumentException(
+                    "A PUSH template is a MARKETING template: the platform sends campaign push only, " + "and not "
+                            + notificationClass);
+        }
         if (notificationClass.requiresConsent() && (consentPurpose == null || consentPurpose.isBlank())) {
             throw new IllegalArgumentException(notificationClass + " needs a consent purpose to check against");
         }
@@ -228,6 +287,25 @@ public class NotificationTemplateService {
             UUID templateId,
             Map<MessageLocale, Wording> wordings,
             Map<String, String> variablesSchema) {
+        return addVersion(tenantId, brandId, templateId, wordings, variablesSchema, false);
+    }
+
+    /**
+     * Saves one draft version, with the version's «show item prices» setting (ADR 0184).
+     *
+     * @param showItemPrices whether {@code {{productList}}} follows each item with its line total. One
+     *        value for the whole version, written on every locale row. Refused when no wording names
+     *        {@code {{productList}}}: a switch that changes nothing is a mistake the author should hear
+     *        about while writing
+     */
+    @Transactional
+    public int addVersion(
+            UUID tenantId,
+            UUID brandId,
+            UUID templateId,
+            Map<MessageLocale, Wording> wordings,
+            Map<String, String> variablesSchema,
+            boolean showItemPrices) {
 
         // Read for its side effect: a template id from another tenant, or a
         // sibling brand's own template, must not be given a version here — the
@@ -249,7 +327,39 @@ public class NotificationTemplateService {
                     "A version needs every locale this brand serves before it can be saved; missing " + missing);
         }
 
+        if (NotificationChannel.EMAIL.name().equals(owned.channel())
+                || NotificationChannel.PUSH.name().equals(owned.channel())) {
+            // An email without a subject is a message every inbox files under «no subject»; its
+            // absence is as much a missing translation as a missing body.
+            for (Map.Entry<MessageLocale, Wording> entry : wordings.entrySet()) {
+                String subject = entry.getValue().subject();
+                if (subject == null || subject.isBlank()) {
+                    throw new IllegalArgumentException("An %s wording needs a subject in every language; missing for %s"
+                            .formatted(owned.channel(), entry.getKey().tag()));
+                }
+            }
+        }
+
+        boolean push = NotificationChannel.PUSH.name().equals(owned.channel());
+        for (Map.Entry<MessageLocale, Wording> entry : wordings.entrySet()) {
+            checkPushFields(tenantId, push, entry.getKey(), entry.getValue());
+        }
+
         Set<String> declared = variablesSchema.keySet();
+        // ADR 0184, D21: a personal value in the wrong place is refused while somebody is writing,
+        // not discovered as an empty hole (or a leaked name) when a customer is waiting.
+        NotificationVariableCatalog.refusal(
+                        NotificationClass.valueOf(owned.notificationClass()), owned.templateKey(), declared)
+                .ifPresent(reason -> {
+                    throw new TemplateRenderer.TemplateContractException(reason);
+                });
+        if (showItemPrices
+                && wordings.values().stream()
+                        .noneMatch(wording ->
+                                TemplateRenderer.variablesUsedIn(wording.body()).contains("productList"))) {
+            throw new IllegalArgumentException(
+                    "«Show item prices» changes only {{productList}}, and no wording in this version uses it");
+        }
         int versionNumber = templates.nextVersionNumber(tenantId, templateId);
         Instant now = clock.instant();
         String schemaJson = objectMapper.writeValueAsString(variablesSchema);
@@ -274,8 +384,11 @@ public class NotificationTemplateService {
                     wording.subject(),
                     wording.body(),
                     schemaJson,
-                    contentHashOf(locale, wording),
+                    contentHashOf(locale, wording, showItemPrices),
                     awaitsGateway,
+                    showItemPrices,
+                    wording.coverAssetId(),
+                    wording.targetPath(),
                     now);
         }
 
@@ -285,6 +398,7 @@ public class NotificationTemplateService {
         added.put("versionNumber", versionNumber);
         // Not «awaiting…»: ChangeDocuments redacts any key containing «tin».
         added.put("gatewayReviewRequired", awaitsGateway);
+        added.put("showItemPrices", showItemPrices);
         for (Map.Entry<MessageLocale, Wording> entry : wordings.entrySet()) {
             added.put(
                     "characters." + entry.getKey().tag(),
@@ -393,6 +507,110 @@ public class NotificationTemplateService {
         return snapshot;
     }
 
+    /** The most a push notification's title and body may hold before a browser cuts them off anyway. */
+    static final int PUSH_TITLE_LIMIT = 100;
+
+    static final int PUSH_BODY_LIMIT = 400;
+
+    /** The cover is a 3:1 picture, and a notification is not the place for a large one. */
+    static final int PUSH_COVER_BYTES = 2 * 1024 * 1024;
+
+    /**
+     * A path on the storefront's own origin: one leading slash and not two (that would be a link to
+     * somebody else's site), printable ASCII, no spaces, no backslash. Query and fragment are allowed,
+     * because a promotion that opens a category with a code is a link like any other.
+     */
+    private static final java.util.regex.Pattern TARGET_PATH =
+            java.util.regex.Pattern.compile("/(?!/)[\\x21-\\x5B\\x5D-\\x7E]{0,198}|/");
+
+    /**
+     * What a push wording adds to the text (ADR 0182, D14), checked when it is authored so a marketer
+     * hears it from the editor and not from a customer: a title and a body a notification can hold, a
+     * cover that is this tenant's own public picture in the 3:1 shape, and a path that stays on the
+     * storefront. Any of the last two on another channel is refused, because nothing would show them.
+     */
+    private void checkPushFields(UUID tenantId, boolean push, MessageLocale locale, Wording wording) {
+        if (!push) {
+            if (wording.coverAssetId() != null || wording.targetPath() != null) {
+                throw new IllegalArgumentException("A cover and a target path belong to a PUSH wording only");
+            }
+            return;
+        }
+        String tag = locale.tag();
+        if (wording.subject() != null && wording.subject().length() > PUSH_TITLE_LIMIT) {
+            throw new IllegalArgumentException(
+                    "A push title is at most %d characters; too long for %s".formatted(PUSH_TITLE_LIMIT, tag));
+        }
+        if (wording.body().length() > PUSH_BODY_LIMIT) {
+            throw new IllegalArgumentException(
+                    "A push body is at most %d characters; too long for %s".formatted(PUSH_BODY_LIMIT, tag));
+        }
+        if (wording.targetPath() != null
+                && !TARGET_PATH.matcher(wording.targetPath()).matches()) {
+            throw new IllegalArgumentException(
+                    "A push target is a path on the storefront, starting with a single slash; not valid for " + tag);
+        }
+        if (wording.coverAssetId() != null) {
+            TenantImageCheck.Verdict verdict = images.check(tenantId, wording.coverAssetId(), 3, 1, PUSH_COVER_BYTES);
+            if (verdict != TenantImageCheck.Verdict.ACCEPTED) {
+                throw new IllegalArgumentException("The push cover for %s cannot be used: %s"
+                        .formatted(
+                                tag,
+                                verdict.name()
+                                        .toLowerCase(java.util.Locale.ROOT)
+                                        .replace('_', ' ')));
+            }
+        }
+    }
+
+    // ---------------------------------------------------- the wordings a dispatcher may broadcast
+
+    /**
+     * The SMS wordings of the class {@code COURIER_DISPATCH} that are in force for this brand (ADR 0182,
+     * D15): the only wordings a courier broadcast may name.
+     *
+     * <p>A brand's own template with a key replaces the tenant-wide one with the same key, as everywhere
+     * else. A wording is listed once it has an active version, whether or not the gateway has approved
+     * it: the dispatcher is told which are still waiting, so the refusal at send time is no surprise.
+     * Narrowed variants (a fulfilment mode, an inbound channel) are not offered, because a broadcast
+     * has neither.
+     */
+    @Transactional(readOnly = true)
+    public List<CampaignMessagePort.CourierTemplate> courierTemplates(UUID tenantId, UUID brandId) {
+        Map<String, TemplateRow> byKey = new LinkedHashMap<>();
+        for (TemplateRow template : templates.templatesForBrand(tenantId, brandId)) {
+            boolean courierWording = NotificationClass.COURIER_DISPATCH.name().equals(template.notificationClass())
+                    && NotificationChannel.SMS.name().equals(template.channel())
+                    && "ACTIVE".equals(template.status())
+                    && template.activeVersion() != null
+                    && template.fulfillmentMode() == null
+                    && template.channelSource() == null;
+            if (!courierWording) {
+                continue;
+            }
+            TemplateRow already = byKey.get(template.templateKey());
+            if (already == null || (already.brandId() == null && template.brandId() != null)) {
+                byKey.put(template.templateKey(), template);
+            }
+        }
+
+        List<CampaignMessagePort.CourierTemplate> offered = new ArrayList<>();
+        for (TemplateRow template : byKey.values()) {
+            Map<String, String> bodies = new LinkedHashMap<>();
+            java.util.TreeSet<String> variables = new java.util.TreeSet<>();
+            boolean awaiting = false;
+            for (VersionRow version :
+                    templates.versions(tenantId, template.id(), Objects.requireNonNull(template.activeVersion()))) {
+                bodies.put(version.locale(), version.bodyTemplate());
+                variables.addAll(TemplateRenderer.variablesUsedIn(version.bodyTemplate()));
+                awaiting |= TemplateProviderReviewService.withheld(version.providerReview());
+            }
+            offered.add(new CampaignMessagePort.CourierTemplate(
+                    template.templateKey(), List.copyOf(variables), bodies, awaiting));
+        }
+        return offered;
+    }
+
     // -------------------------------------------------------------- resolution
 
     /**
@@ -431,30 +649,103 @@ public class NotificationTemplateService {
             @Nullable FulfillmentMode fulfillmentMode,
             @Nullable SalesChannelSystemType channelSource) {
 
-        // ADR 0149, Decision 4: a customer whose language the brand does not serve is written to in
-        // the brand's default, and where that wording is missing too, in the registry's fallback. The
-        // brand-scoped "required" rule is checked when a version is activated; this is its send-time
-        // partner, which is what lets a brand add a language after a template went live without that
-        // template going silent for the customers who read it.
-        TenantLocaleSet served = brandLocales.brandLocaleSet(tenantId, brandId);
-        List<String> chain = new ArrayList<>();
-        chain.add(served.locales().contains(locale.tag()) ? locale.tag() : served.defaultLocale());
-        chain.add(served.defaultLocale());
-        chain.add(MessageLocale.FALLBACK.tag());
+        List<MessageLocale> chain = localeChain(tenantId, brandId, locale);
 
         Resolution last = Resolution.noTemplate();
-        for (String tag : chain.stream().distinct().toList()) {
-            Optional<MessageLocale> candidate = MessageLocale.parse(tag);
-            if (candidate.isEmpty()) {
-                continue;
-            }
-            last = resolveExact(
-                    tenantId, brandId, templateKey, channel, candidate.get(), fulfillmentMode, channelSource);
+        for (MessageLocale candidate : chain) {
+            last = resolveExact(tenantId, brandId, templateKey, channel, candidate, fulfillmentMode, channelSource);
             if (last.isFound() || last.outcome() == Resolution.Outcome.NO_ACTIVE_TEMPLATE) {
                 return last;
             }
         }
         return last;
+    }
+
+    /**
+     * The wording this order message will use, brand then tenant then the platform's own (ADR 0020's
+     * resolution order, whose last step ADR 0184 builds).
+     *
+     * <p>The platform default answers only when the tenant has <em>no active template at any scope</em>
+     * for this key and channel, whatever variant it is pinned to: a template written for delivery orders
+     * only, met by a pickup order, is the tenant's decision about pickup and not an absence, and answers
+     * {@code NO_ACTIVE_TEMPLATE} without the platform's sentence. A tenant that wrote a template, and wrote
+     * it for the wrong set of
+     * languages, hears about it through the suppression reason {@code NO_TEMPLATE_FOR_LOCALE}, as before;
+     * quietly replacing its wording with the platform's would hide the gap it can fix. It answers only
+     * for a customer-addressed message of exactly the class the platform wrote the wording for: a row of
+     * the class {@code OPERATIONS_ALERT} shares these template keys (the same fact fans out to the
+     * branch's operations chat), and a sentence written for the customer must never be sent to a group.
+     *
+     * @param notificationClass the class of the message being sent; null means «no platform default»,
+     *        which is every caller that is not an order message
+     */
+    @Transactional(readOnly = true)
+    public Resolution resolve(
+            UUID tenantId,
+            UUID brandId,
+            String templateKey,
+            NotificationChannel channel,
+            MessageLocale locale,
+            @Nullable FulfillmentMode fulfillmentMode,
+            @Nullable SalesChannelSystemType channelSource,
+            @Nullable NotificationClass notificationClass) {
+
+        Resolution own = resolve(tenantId, brandId, templateKey, channel, locale, fulfillmentMode, channelSource);
+        if (own.outcome() != Resolution.Outcome.NO_ACTIVE_TEMPLATE || notificationClass == null) {
+            return own;
+        }
+        // NO_ACTIVE_TEMPLATE says that no template matches this order's variant, which is not the same
+        // as the tenant having written none: a template pinned to delivery only answers a pickup order
+        // with this outcome too, and that silence is the tenant's decision. D20.3 asks the wider
+        // question, whatever the variant.
+        if (templates.hasActiveTemplate(tenantId, brandId, templateKey, channel.name())) {
+            return own;
+        }
+        return platformDefault(tenantId, brandId, templateKey, channel, locale, notificationClass)
+                .orElse(own);
+    }
+
+    private Optional<Resolution> platformDefault(
+            UUID tenantId,
+            UUID brandId,
+            String templateKey,
+            NotificationChannel channel,
+            MessageLocale locale,
+            NotificationClass notificationClass) {
+        Optional<PlatformDefaultTemplates.Entry> entry = PlatformDefaultTemplates.forKey(templateKey);
+        if (entry.isEmpty()
+                || entry.get().notificationClass() != notificationClass
+                || !PlatformDefaultTemplates.offeredOn(channel)) {
+            return Optional.empty();
+        }
+        for (MessageLocale candidate : localeChain(tenantId, brandId, locale)) {
+            Optional<String> body = entry.get().body(candidate.tag());
+            if (body.isPresent()) {
+                return Optional.of(Resolution.platformDefault(new PlatformWording(
+                        entry.get(), candidate.tag(), PlatformDefaultTemplates.VERSION, body.get())));
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * The languages to try, in order (ADR 0149, Decision 4): a customer whose language the brand does
+     * not serve is written to in the brand's default, and where that wording is missing too, in the
+     * registry's fallback. The brand-scoped "required" rule is checked when a version is activated; this
+     * is its send-time partner, which is what lets a brand add a language after a template went live
+     * without that template going silent for the customers who read it.
+     */
+    private List<MessageLocale> localeChain(UUID tenantId, UUID brandId, MessageLocale locale) {
+        TenantLocaleSet served = brandLocales.brandLocaleSet(tenantId, brandId);
+        List<String> chain = new ArrayList<>();
+        chain.add(served.locales().contains(locale.tag()) ? locale.tag() : served.defaultLocale());
+        chain.add(served.defaultLocale());
+        chain.add(MessageLocale.FALLBACK.tag());
+        return chain.stream()
+                .distinct()
+                .map(MessageLocale::parse)
+                .flatMap(Optional::stream)
+                .toList();
     }
 
     /**
@@ -509,10 +800,96 @@ public class NotificationTemplateService {
         return objectMapper.readValue(version.variablesSchemaJson(), SCHEMA_TYPE);
     }
 
+    /**
+     * Whether the SMS gateway this tenant sends through refuses wordings it has not approved (ADR 0091).
+     * The question behind the one-time-code card of Tab 1: the sentence is the platform's, and a gateway
+     * that moderates must have approved it (ADR 0184, D19). It is also the question eligibility asks
+     * before it sends the platform's order wording over SMS: those sentences are not template versions,
+     * so nothing else says whether the gateway has approved them.
+     */
+    @Transactional(readOnly = true)
+    public boolean smsGatewayModerates(UUID tenantId) {
+        return templates.smsWordingAwaitsGateway(tenantId);
+    }
+
     @Transactional(readOnly = true)
     public List<TemplateRow> forBrand(UUID tenantId, UUID brandId) {
         return templates.templatesForBrand(tenantId, brandId);
     }
+
+    /**
+     * The templates that apply at this brand with what the list screen needs beside each: the
+     * languages the version it is showing has, the languages it ought to have, and the worst
+     * moderation state among them (ADR 0184, row 10.9a's Tab 1).
+     *
+     * <p>The version shown is the active one, or for a template with none the newest draft, so a
+     * template nobody has activated still tells its author which language is missing. One read of the
+     * version rows for the whole list, whatever its length.
+     */
+    @Transactional(readOnly = true)
+    public List<Listing> listing(UUID tenantId, UUID brandId) {
+        Map<UUID, List<ShownVersionRow>> shown = new LinkedHashMap<>();
+        for (ShownVersionRow row : templates.shownVersions(tenantId, brandId)) {
+            shown.computeIfAbsent(row.templateId(), id -> new ArrayList<>()).add(row);
+        }
+        // Two answers at most: this brand's set, and the union a tenant-wide template serves.
+        List<String> brandRequired = null;
+        List<String> tenantRequired = null;
+        List<Listing> listing = new ArrayList<>();
+        for (TemplateRow row : templates.templatesForBrand(tenantId, brandId)) {
+            List<String> required;
+            if (row.brandId() == null) {
+                tenantRequired = tenantRequired != null
+                        ? tenantRequired
+                        : requiredLocales(tenantId, null).stream()
+                                .map(MessageLocale::tag)
+                                .toList();
+                required = tenantRequired;
+            } else {
+                brandRequired = brandRequired != null
+                        ? brandRequired
+                        : requiredLocales(tenantId, row.brandId()).stream()
+                                .map(MessageLocale::tag)
+                                .toList();
+                required = brandRequired;
+            }
+            List<ShownVersionRow> rows = shown.getOrDefault(row.id(), List.of());
+            listing.add(new Listing(
+                    row,
+                    rows.isEmpty() ? null : rows.get(0).versionNumber(),
+                    rows.stream().map(ShownVersionRow::locale).sorted().toList(),
+                    required,
+                    worstReview(rows)));
+        }
+        return listing;
+    }
+
+    private static String worstReview(List<ShownVersionRow> rows) {
+        List<String> worstFirst = List.of("REJECTED", "PENDING", "APPROVED", "NOT_REQUIRED");
+        return rows.stream()
+                .map(ShownVersionRow::providerReview)
+                .min(java.util.Comparator.comparingInt(review -> {
+                    int rank = worstFirst.indexOf(review);
+                    return rank < 0 ? worstFirst.size() : rank;
+                }))
+                .orElse("NOT_REQUIRED");
+    }
+
+    /**
+     * One template as the list screen shows it.
+     *
+     * @param shownVersion the active version, or the newest draft when none is active; null when the
+     *        template has no version at all
+     * @param locales the languages {@code shownVersion} has a wording in
+     * @param requiredLocales the languages this template's brand serves, which an activation needs
+     * @param providerReview the worst ADR 0091 state among {@code shownVersion}'s languages
+     */
+    public record Listing(
+            TemplateRow template,
+            @Nullable Integer shownVersion,
+            List<String> locales,
+            List<String> requiredLocales,
+            String providerReview) {}
 
     @Transactional(readOnly = true)
     public List<VersionRow> versions(UUID tenantId, UUID brandId, UUID templateId, int versionNumber) {
@@ -561,11 +938,22 @@ public class NotificationTemplateService {
         return owned;
     }
 
-    private String contentHashOf(MessageLocale locale, Wording wording) {
+    private String contentHashOf(MessageLocale locale, Wording wording, boolean showItemPrices) {
         Map<String, String> parts = new LinkedHashMap<>();
         parts.put("locale", locale.tag());
         parts.put("subject", wording.subject() == null ? "" : wording.subject());
         parts.put("body", wording.body());
+        if (showItemPrices) {
+            // Part of the proof only when on, so every version authored before the switch existed keeps
+            // the hash it was frozen with.
+            parts.put("showItemPrices", "true");
+        }
+        if (wording.coverAssetId() != null) {
+            parts.put("cover", wording.coverAssetId().toString());
+        }
+        if (wording.targetPath() != null) {
+            parts.put("path", wording.targetPath());
+        }
         return ContentHashes.ofVariables(parts);
     }
 
@@ -576,18 +964,37 @@ public class NotificationTemplateService {
      *                Null rather than blank so "this channel has no subject" and
      *                "the author left it empty" stay distinguishable
      */
-    public record Wording(@Nullable String subject, String body) {
+    public record Wording(
+            @Nullable String subject,
+            String body,
+            @Nullable UUID coverAssetId,
+            @Nullable String targetPath) {
 
         public Wording {
             if (body == null || body.isBlank()) {
                 throw new IllegalArgumentException("A template version needs a body");
             }
         }
+
+        /** A wording with no push fields: every channel but push. */
+        public Wording(@Nullable String subject, String body) {
+            this(subject, body, null, null);
+        }
     }
 
-    /** Either the wording, or which of the two ways it was missing. */
+    /**
+     * Either the wording, or which of the two ways it was missing.
+     *
+     * <p>A found wording is one of two things: a tenant's template row and version, or the platform's
+     * bundled default ({@link #platformDefault()}), never both. The two travel in different fields because
+     * they are frozen differently: a template row by its id and version number, the platform's wording by
+     * {@link PlatformDefaultTemplates#VERSION}.
+     */
     public record Resolution(
-            @Nullable TemplateRow template, @Nullable VersionRow version, Outcome outcome) {
+            @Nullable TemplateRow template,
+            @Nullable VersionRow version,
+            @Nullable PlatformWording platformDefault,
+            Outcome outcome) {
 
         public enum Outcome {
             FOUND,
@@ -596,21 +1003,39 @@ public class NotificationTemplateService {
         }
 
         static Resolution found(TemplateRow template, VersionRow version) {
-            return new Resolution(template, version, Outcome.FOUND);
+            return new Resolution(template, version, null, Outcome.FOUND);
+        }
+
+        static Resolution platformDefault(PlatformWording wording) {
+            return new Resolution(null, null, wording, Outcome.FOUND);
         }
 
         static Resolution noTemplate() {
-            return new Resolution(null, null, Outcome.NO_ACTIVE_TEMPLATE);
+            return new Resolution(null, null, null, Outcome.NO_ACTIVE_TEMPLATE);
         }
 
         static Resolution noLocale() {
-            return new Resolution(null, null, Outcome.NO_TEMPLATE_FOR_LOCALE);
+            return new Resolution(null, null, null, Outcome.NO_TEMPLATE_FOR_LOCALE);
         }
 
         public boolean isFound() {
             return outcome == Outcome.FOUND;
         }
+
+        /** Whether the wording is the platform's own, found below every tenant and brand template. */
+        public boolean isPlatformDefault() {
+            return platformDefault != null;
+        }
     }
+
+    /**
+     * The platform's own sentence for one language, as it was when it was resolved.
+     *
+     * @param locale the language the sentence is actually in, which is the fallback's and not the
+     *        customer's when the platform wrote nothing in the customer's
+     * @param version {@link PlatformDefaultTemplates#VERSION}, the handle a notification freezes
+     */
+    public record PlatformWording(PlatformDefaultTemplates.Entry entry, String locale, int version, String body) {}
 
     /** A version does not exist in every locale HorecaOS sends in. */
     public static class IncompleteTranslationException extends RuntimeException {

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
@@ -48,11 +49,20 @@ public class CartPaymentOptions {
     private final CartService carts;
     private final SalesChannelLookup channels;
     private final PaymentIntentPort payments;
+    private final MarkedCartLines markedLines;
 
+    /** Without marked goods: every method the channel sells and a merchant account backs. */
     public CartPaymentOptions(CartService carts, SalesChannelLookup channels, PaymentIntentPort payments) {
+        this(carts, channels, payments, MarkedCartLines.NONE);
+    }
+
+    @Autowired
+    public CartPaymentOptions(
+            CartService carts, SalesChannelLookup channels, PaymentIntentPort payments, MarkedCartLines markedLines) {
         this.carts = carts;
         this.channels = channels;
         this.payments = payments;
+        this.markedLines = markedLines;
     }
 
     /**
@@ -111,6 +121,20 @@ public class CartPaymentOptions {
                 offerable = settledAtHandover;
             }
 
+            // ADR 0038 stage 6, ADR 0166 Decision 7. A basket holding a marked good is sold only by a method
+            // whose receipt can carry the code: Payme's detail object has no field for one, so it is
+            // removed here, while the customer is still choosing, and not discovered when the money is
+            // being taken. The same refusal stands at checkout for a client that names the method anyway.
+            if (markedLines.requiresMarkingCapablePayment(tenantId, brandId, view.lines())) {
+                List<String> capable = offerable.stream()
+                        .filter(code -> payments.carriesMarkingCodes(tenantId, code))
+                        .toList();
+                if (capable.size() < offerable.size()) {
+                    warnings.add(MARKED_GOODS_NEED_MARKING_CAPABLE_PAYMENT);
+                }
+                offerable = capable;
+            }
+
             return new PaymentOptions(
                     cart.cartId(),
                     cart.locationId(),
@@ -127,6 +151,12 @@ public class CartPaymentOptions {
      * holds a line sold by weight, which is paid for at handover (ADR 0137).
      */
     public static final String WEIGHED_LINES_PAY_AT_HANDOVER = "WEIGHED_LINES_PAY_AT_HANDOVER";
+
+    /**
+     * The warning that says why a method the channel sells is absent from the list: the basket holds a
+     * marked good, and that method's receipt has no field for the marking code (ADR 0038, ADR 0166).
+     */
+    public static final String MARKED_GOODS_NEED_MARKING_CAPABLE_PAYMENT = "MARKED_GOODS_NEED_MARKING_CAPABLE_PAYMENT";
 
     /**
      * The gaps that apply to this answer, in the same shape every other ordering

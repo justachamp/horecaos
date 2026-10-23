@@ -16,11 +16,11 @@ MVN ?= $(PLATFORM_DIR)tools/mvn-serial
 # src/main/java/uz/horecaos/platform/configuration/OpenApiSurface.java — the
 # membership test in OpenApiContractTests fails the build if a path fits none
 # of them, but nothing enforces this list matching that one automatically.
-OPENAPI_GROUPS := storefront control-plane operations providers
+OPENAPI_GROUPS := storefront control-plane operations providers courier
 
 .DEFAULT_GOAL := help
 
-.PHONY: help verify test arch build lint format run up down logs eval fmt-check hooks-test bands-test shards-test print-agent-test makefile-test doc-links openapi-client-check openapi-baseline seed-payments pay-fake-click ci
+.PHONY: help verify test arch build lint format run up down logs eval fmt-check hooks-test bands-test shards-test print-agent-test makefile-test routing-gate-test geo-bakeoff-test hygiene-map-key-test doc-links openapi-client-check openapi-baseline seed-payments pay-fake-click ci seed-marketplace seed-card-provider
 
 help: ## List targets
 	@grep -hE '^[a-z][a-zA-Z0-9_-]*:.*?## ' $(MAKEFILE_LIST) \
@@ -41,7 +41,7 @@ build: ## Compile and package without running tests
 format: ## Reformat Java sources (ADR 0054)
 	$(MVN) spotless:apply
 
-lint: fmt-check doc-links hooks-test bands-test shards-test print-agent-test makefile-test routing-gate-test ## Static checks an agent must pass before review
+lint: fmt-check doc-links hooks-test bands-test shards-test print-agent-test makefile-test routing-gate-test geo-bakeoff-test hygiene-map-key-test ## Static checks an agent must pass before review
 
 fmt-check: ## Repository hygiene checks that need no JVM
 	@python3 tools/checks/repo_hygiene.py
@@ -58,6 +58,12 @@ shards-test: ## Prove CI's Java test shards cover every test class exactly once,
 
 routing-gate-test: ## Prove the routing accuracy gate can say no (ADR 0147)
 	@cd tools/routing && python3 -m unittest test_accuracy_gate
+
+geo-bakeoff-test: ## Prove the map-provider bake-off can say no (ADR 0145 decision 3)
+	@cd tools/geo && python3 -m unittest test_bake_off
+
+hygiene-map-key-test: ## Prove the committed-map-key and one-status-block-per-ADR guards can say no (ADR 0145)
+	@cd tools/checks && python3 -m unittest test_repo_hygiene_map_key test_repo_hygiene_adr_statuses
 
 print-agent-test: ## Prove the reference print agent against a fake platform and a fake printer (ADR 0154; needs Node 20+)
 	@node --test tools/print-agent/print-agent.test.mjs
@@ -121,6 +127,12 @@ eval: ## Run the agent-configuration regression suite
 
 seed-payments: ## Seed a local dev CLICK payment setup for the docs/local-fixtures.md demo tenant
 	@./tools/seed-payments
+
+seed-marketplace: ## Seed a local fake aggregator (stop propagation, stale alert, dry run) for the demo tenant
+	@./tools/seed-marketplace
+
+seed-card-provider: ## Point the local database at the fake Click card API so the wallet's card flow can be walked on a laptop
+	@./tools/seed-card-provider
 
 pay-fake-click: ## Pay an order's open CLICK checkout as a fake customer (ORDER_ID=<uuid> [TENANT_ID=<uuid>])
 	@./tools/pay-fake-click $(ORDER_ID) $(TENANT_ID)

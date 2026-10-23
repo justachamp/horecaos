@@ -69,16 +69,36 @@ public class JdbcAggregatorOrderStore {
         this.jdbc = jdbc;
     }
 
-    /** One line an operator typed in from the aggregator's own order screen. */
+    /**
+     * One line an operator typed in from the aggregator's own order screen.
+     *
+     * @param stopped true when the variant could not be sold on this channel at this branch when the
+     *                order was entered; the line is then flagged {@code STOPPED} for the pass (ADR 0141
+     *                Decision 6) and the order is entered all the same. Never true with no variant
+     */
     public record Line(
             @Nullable UUID variantId,
             String nameSnapshot,
             BigDecimal quantity,
             long unitAmountMinor,
-            @Nullable String externalItemReference) {
+            @Nullable String externalItemReference,
+            boolean stopped) {
 
         public Line {
             quantity = Quantities.normalise(quantity);
+            if (stopped && variantId == null) {
+                throw new IllegalArgumentException("A line with no variant cannot be stopped; it is unmapped");
+            }
+        }
+
+        /** A line that was sellable when it was entered, which is every line there was before ADR 0180. */
+        public Line(
+                @Nullable UUID variantId,
+                String nameSnapshot,
+                BigDecimal quantity,
+                long unitAmountMinor,
+                @Nullable String externalItemReference) {
+            this(variantId, nameSnapshot, quantity, unitAmountMinor, externalItemReference, false);
         }
 
         /** A whole number of units, which is every line there was before ADR 0137. */
@@ -88,7 +108,12 @@ public class JdbcAggregatorOrderStore {
                 int quantity,
                 long unitAmountMinor,
                 @Nullable String externalItemReference) {
-            this(variantId, nameSnapshot, BigDecimal.valueOf(quantity), unitAmountMinor, externalItemReference);
+            this(variantId, nameSnapshot, BigDecimal.valueOf(quantity), unitAmountMinor, externalItemReference, false);
+        }
+
+        /** The value {@code ordering.order_lines.external_mapping_status} takes for this line. */
+        public String mappingStatus() {
+            return variantId == null ? "UNMAPPED" : stopped ? "STOPPED" : "MAPPED";
         }
 
         /** The unit price times the quantity, rounded once to a whole minor unit (ADR 0137). */
@@ -259,7 +284,7 @@ public class JdbcAggregatorOrderStore {
             lineRow.put("unit", line.unitAmountMinor());
             lineRow.put("amount", lineAmount);
             lineRow.put("externalItemReference", line.externalItemReference());
-            lineRow.put("mappingStatus", line.variantId() == null ? "UNMAPPED" : "MAPPED");
+            lineRow.put("mappingStatus", line.mappingStatus());
 
             jdbc.sql("""
                     INSERT INTO ordering.order_lines (

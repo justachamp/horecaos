@@ -113,6 +113,24 @@ class LocaleTranslationTablesMigrationTests {
                     .isEmpty();
             assertThat(rows(
                             old,
+                            "SELECT locale, display_name FROM fulfillment.platform_region_names WHERE region_id = :id",
+                            platformRegion))
+                    .as("its names are in the platform table, copied from the columns V0679 then dropped")
+                    .containsOnly(
+                            Map.entry("ru", "Узбекистан"),
+                            Map.entry("uz-Latn", "Oʻzbekiston"),
+                            Map.entry("en", "Uzbekistan"));
+            assertThat(old.sql("""
+                            SELECT count(*) FROM information_schema.columns
+                             WHERE (table_schema, table_name) IN
+                                   (('fulfillment', 'regions'), ('fulfillment', 'service_zones'),
+                                    ('catalog', 'comment_presets'), ('catalog', 'product_comment_presets'))
+                               AND (column_name LIKE 'display_name\\_%' OR column_name LIKE 'label\\_%')
+                            """).query(Long.class).single())
+                    .as("the fixed-language columns are gone once the translation tables hold every name")
+                    .isZero();
+            assertThat(rows(
+                            old,
                             "SELECT locale, display_name FROM fulfillment.service_zone_translations WHERE zone_id = :id",
                             zone))
                     .containsOnly(Map.entry("ru", "Центр"), Map.entry("uz-Latn", "Markaz"), Map.entry("en", "Centre"));

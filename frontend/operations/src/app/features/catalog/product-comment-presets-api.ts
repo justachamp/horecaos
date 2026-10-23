@@ -31,9 +31,8 @@ function path(scope: BrandScope, productId: string): string {
 export interface ProductPresetResponse {
   readonly presetId: string;
   readonly code: string;
-  readonly labelRu: string;
-  readonly labelUz: string;
-  readonly labelEn: string;
+  /** Every language the preset has wording in, the platform triple first (row 10.12; the only shape since V0678). */
+  readonly labels: Readonly<Record<string, string>>;
   readonly posModifierCode: string | null;
   readonly sortOrder: number;
   /** `ACTIVE` or `ARCHIVED` — the preset's own status, not this attachment's (there is no separate one). */

@@ -1,0 +1,40 @@
+.closed-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 16px;
+  border-block-end: 1px solid var(--q-error-text);
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.closed-strip__label {
+  font-weight: 600;
+}
+
+.closed-strip__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* No expiry: the branch stays shut until a person remembers, so it is the loudest part of the strip. */
+.closed-strip__until--open-ended {
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.closed-strip__reopen {
+  padding: 2px 10px;
+  border: 1px solid var(--q-error-text);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-error-text);
+  cursor: pointer;
+}
+
+.closed-strip__reopen:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

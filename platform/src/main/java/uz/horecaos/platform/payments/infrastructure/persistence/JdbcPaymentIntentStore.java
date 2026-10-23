@@ -181,6 +181,39 @@ public class JdbcPaymentIntentStore {
     }
 
     /**
+     * The payment method each of {@code orderIds} is paid by, one statement for a board page (gap map
+     * row {@code 1.1}'s payment icon).
+     *
+     * <p>An order normally has one live intent ({@code ux_payment_intent_live_per_order}); after a
+     * failed or expired attempt it may carry older, closed ones as well. The live one wins, and among
+     * the closed ones the newest does, so a re-presented order names the method it is being paid by
+     * now. Ties on the instant fall to the id, which only has to be stable.
+     */
+    public Map<UUID, String> paymentMethodsByOrders(UUID tenantId, Collection<UUID> orderIds) {
+        if (orderIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> byOrder = new HashMap<>();
+        jdbc.sql("""
+                        SELECT DISTINCT ON (i.order_id) i.order_id, i.payment_method_code
+                        FROM payments.payment_intents i
+                        WHERE i.tenant_id = :tenantId
+                          AND i.order_id IN (:orderIds)
+                        ORDER BY i.order_id,
+                                 (i.status IN ('PENDING', 'AUTHORIZING', 'PAID')) DESC,
+                                 i.created_at DESC,
+                                 i.id DESC
+                        """)
+                .param("tenantId", tenantId)
+                .param("orderIds", orderIds)
+                .query((row, number) ->
+                        Map.entry(row.getObject("order_id", UUID.class), row.getString("payment_method_code")))
+                .list()
+                .forEach(entry -> byOrder.put(entry.getKey(), entry.getValue()));
+        return byOrder;
+    }
+
+    /**
      * Moves an intent from one status to another, and only from that status.
      *
      * @return the new version when this caller won, or empty when it lost

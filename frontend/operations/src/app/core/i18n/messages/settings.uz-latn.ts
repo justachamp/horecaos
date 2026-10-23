@@ -385,6 +385,38 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.channelSetup.status.notConfigured': 'Sozlanmagan',
   'settings.channelSetup.noFacets': 'Bu kanal turi uchun hali sozlamalar yoʻq.',
   'settings.channelSetup.telegram.title': 'Telegram bot',
+  'settings.telegram.title': 'Menyu tugmasi, Mini App va salomlashish',
+  'settings.telegram.loading': 'Telegram sozlamalari yuklanmoqda…',
+  'settings.telegram.denied': 'Bu kanalning Telegram sozlamalariga ruxsatingiz yoʻq.',
+  'settings.telegram.error': 'Telegram sozlamalarini yuklab boʻlmadi.',
+  'settings.telegram.lead':
+    'Bu sozlamalar shu Telegram kanaliga tegishli. Mini App vitrinangizni ochadi, shuning uchun manzilni kiritmaysiz: bu ishchi brend vitrinasining tasdiqlangan manzili.',
+  'settings.telegram.miniApp.enabled': 'Menyu tugmasi Mini App ni ochadi',
+  'settings.telegram.miniApp.address': 'Mini App manzili',
+  'settings.telegram.miniApp.unavailable.BRAND_NOT_CHOSEN':
+    'Ishchi brend vitrinasini tanlash uchun Mini App yoqilgan holda saqlang.',
+  'settings.telegram.miniApp.unavailable.HOSTNAME_NOT_CLAIMED':
+    'Bu brend filiallari hozircha manzili bor birorta veb-kanal orqali sotmaydi. Veb-kanal sozlamasida manzil belgilang.',
+  'settings.telegram.miniApp.unavailable.HOSTNAME_NOT_VERIFIED':
+    'Veb-kanal manzili hali tasdiqlanmagan, shuning uchun undan foydalanib boʻlmaydi. DNS yozuvini joylashtiring va manzilni tasdiqlang.',
+  'settings.telegram.miniApp.unavailable.HOSTNAME_AMBIGUOUS':
+    'Bu brend filiallarida ikkita tasdiqlangan manzil orqali sotiladi va platforma qaysi biri vitrina ekanini taxmin qilmaydi. Bittasini qoldiring.',
+  'settings.telegram.shortName': 'Mini App qisqa nomi',
+  'settings.telegram.shortName.hint':
+    'BotFather Mini App ingizga bergan qisqa nom (/newapp): harflar, raqamlar va pastki chiziq. Mini App havolalari uchun kerak.',
+  'settings.telegram.menuButton.title': 'Menyu tugmasi yozuvi',
+  'settings.telegram.menuButton.hint':
+    'Har bir til uchun 64 belgigacha. Telegram har bir botga bitta yozuv saqlaydi: bosqichma-bosqich sozlash brendning asosiy tilidagi yozuvni qoʻllaydi, mijoz esa botni ishga tushirganda oʻz tilidagi yozuvni koʻradi.',
+  'settings.telegram.welcome.title': 'Salomlashish',
+  'settings.telegram.welcome.hint':
+    'Mijoz botni ishga tushirganda bot nima deb javob beradi. Boʻsh qoldirilsa, platformaning odatiy salomi yuboriladi.',
+  'settings.telegram.offer':
+    'Foydalanish shartlarimni salomlashishda ommaviy oferta sifatida taklif qilish',
+  'settings.telegram.save': 'Saqlash',
+  'settings.telegram.saved': 'Saqlandi.',
+  'settings.telegram.stale':
+    'Kanal boshqa oynada oʻzgartirilgan, maʻlumotlar qayta yuklandi. Oʻzgartirishni takrorlang.',
+  'settings.telegram.guided': 'Mini App ni bosqichma-bosqich sozlash',
   'settings.channelSetup.hostname.title': 'Sayt manzili',
   'settings.channelSetup.hostname.verified': 'tasdiqlangan',
   'settings.channelSetup.hostname.unverified': 'tasdiqlanmagan',
@@ -418,6 +450,27 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.channelSetup.pages.slug.privacyOffer': 'Maxfiylik / oferta',
   'settings.channelSetup.dineIn.title': 'QR buyurtma rejimi',
   'settings.channelSetup.dineIn.edit': 'Filialni ochish →',
+  // ------------------------------------------------------------------- the rest of the hub (ADR 0187, D28; settings.md §10.5)
+  'settings.channelSetup.installationFailed.title': 'Bu kanal uchun ulanish amalga oshmadi',
+  'settings.channelSetup.installationFailed.body':
+    '«{name}» ulanishining oxirgi tekshiruvi muvaffaqiyatsiz tugadi, shuning uchun bu kanal orqali buyurtmalar yoki xabarlar kelmayotgan boʻlishi mumkin. Qayta ulash uchun «Integratsiyalar»ni oching.',
+  'settings.channelSetup.integrations': '«Integratsiyalar»ni ochish',
+  'settings.channelSetup.preview': 'Oldindan koʻrish',
+  'settings.channelSetup.aggregator.title': 'Agregator',
+  'settings.channelSetup.aggregator.body':
+    'Agregator kanali vitrina emas, moslashtirishlarga ega ulanishdir. U «Integratsiyalar»da sozlanadi; bu yerda faqat koʻrish mumkin.',
+  'settings.channelSetup.aggregator.installation': 'Ulanish: {name} ({status})',
+  'settings.channelSetup.aggregator.noInstallation': 'Bu kanalga hali ulanish biriktirilmagan.',
+  'settings.channelSetup.callCentre.title': 'Call-markaz',
+  'settings.channelSetup.callCentre.body':
+    'Bu yerda faqat koʻrish mumkin. Operator kiritadigan buyurtmalar qoidalari «Buyurtma qoidalari» ekranining 5-kartasida belgilanadi.',
+  'settings.channelSetup.callCentre.unreadable': 'Joriy qiymatni oʻqib boʻlmadi.',
+  'settings.channelSetup.callCentre.yes': 'ha',
+  'settings.channelSetup.callCentre.no': 'yoʻq',
+  'settings.channelSetup.callCentre.link': '«Buyurtma qoidalari»ni ochish',
+  'settings.channelSetup.mobile.title': 'Mobil ilovani sozlash hozircha mavjud emas',
+  'settings.channelSetup.mobile.body':
+    'Mehmonlar uchun mobil ilova toʻxtatib turilgan, shuning uchun doʻkon havolalari, versiya cheklovi va push kalitlarini sozlash shart emas. Bu shakl ilova qaytganda paydo boʻladi. Tillar brend sozlamasi boʻlib qoladi.',
   'settings.channelSetup.kiosk.title': 'Kiosk ulash',
   'settings.channelSetup.kiosk.locked': 'Hali qurilmagan.',
 
@@ -465,7 +518,7 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.field.notifyCustomer': 'Kutish paytida mijozga xabar berish',
   'settings.orderPolicy.mode.AUTO_CONFIRM': 'Avtomatik tasdiqlash',
   'settings.orderPolicy.mode.RESTAURANT_APPROVAL': 'Restoran tasdiqlashi',
-  'settings.orderPolicy.approvalChannel.NONE': 'Hech kim (avtomatik tasdiqlashda ishlatilmaydi)',
+  'settings.orderPolicy.approvalChannel.NONE': 'Hech kim (har bir buyurtma avtomatik tasdiqlanadi)',
   'settings.orderPolicy.approvalChannel.HORECAOS_OPERATIONS': 'HorecaOS operatsiyalari',
   'settings.orderPolicy.approvalChannel.POS': 'POS',
   'settings.orderPolicy.approvalChannel.EITHER': 'Ikkalasidan biri',
@@ -484,11 +537,6 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.dispatchSummary.link': 'Dispetcherlik qoidalarini ochish',
   'settings.orderPolicy.card4.title': 'Shartlar',
   'settings.orderPolicy.card5.title': 'Operator tomonidan buyurtma kiritish',
-  'settings.orderPolicy.field.businessDayStartHour': 'Ish kuni boshlanishi (soat)',
-  'settings.orderPolicy.field.averageOrderMinutes': 'Oʻrtacha buyurtma vaqti (daqiqa)',
-  'settings.orderPolicy.field.maximumOrderMinutes': 'Maksimal buyurtma vaqti (daqiqa)',
-  'settings.orderPolicy.notApplied.hint':
-    'Hozircha qoʻllanilmaydi: bu qiymatni hech narsa oʻqimaydi, shuning uchun uni oʻzgartirish hech narsani oʻzgartirmaydi.',
   'settings.orderPolicy.field.lateOrderThresholdMinutes':
     'Belgilangan vaqti yoʻq buyurtma kechikadi (daqiqa)',
   'settings.orderPolicy.lateOrderThresholdMinutes.hint':
@@ -507,12 +555,9 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.field.minimumOrderAmount': 'Buyurtmaning eng kam summasi',
   'settings.orderPolicy.minimumOrderAmount.hint':
     'Faqat oʻzi olib ketish va zalda — yetkazib berishning oʻz minimal summasi xizmat zonasida belgilanadi.',
-  'settings.orderPolicy.field.vatRatePercent': 'QQS stavkasi (%)',
-  'settings.orderPolicy.field.routingPollIntervalMinutes':
-    'Marshrutlashni soʻrash intervali (daqiqa)',
   'settings.orderPolicy.field.autoAcceptEligibleChannels': 'Avtomatik qabul uchun kanallar',
   'settings.orderPolicy.autoAcceptEligibleChannels.hint':
-    '"ALL" yoki sotuv kanali kodlarining vergul bilan ajratilgan roʻyxati. Hali qoʻllanilmaydi.',
+    '"ALL" yoki sotuv kanali kodlarining vergul bilan ajratilgan roʻyxati. Boshqa kanaldagi buyurtma oʻzi tasdiqlanmaydi: u yuqoridagi «Buyurtmani qabul qilish»da belgilangan yoʻl boʻyicha kutadi.',
   'settings.orderPolicy.field.autoAcceptMinPriorOrders':
     'Oldingi muvaffaqiyatli buyurtmalar minimumi',
   'settings.orderPolicy.field.preorderBranchResolution': 'Oldindan buyurtma uchun filial tanlash',
@@ -520,6 +565,68 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.preorderBranchResolution.BY_OPENING_TIME': 'Eng tez ochiladigan',
   'settings.orderPolicy.field.operatorPromoCodeAllowed': 'Operator promokod kiritishi mumkin',
   'settings.orderPolicy.revertReason': 'Meros qiymatga qaytarildi',
+  'settings.orderPolicy.holdBack.title': 'Avtomatik qabul darvozasi ushlab qoladigan buyurtmalar',
+  'settings.orderPolicy.holdBack.hint':
+    'Avtomatik tasdiqlashda quyidagi «Avtomatlashtirish»dagi darvoza ushlab qolgan buyurtma (roʻyxatda yoʻq kanal yoki yakunlangan buyurtmalari kam mijoz) shu odamni shuncha vaqt kutadi, soʻng vaqt tugagandagi amal bajariladi. «Kim tasdiqlaydi»ni «Hech kim» qoldiring — darvozalar hech narsani ushlab qolmaydi.',
+  'settings.orderPolicy.holdBack.none':
+    'Ushlab qolingan buyurtmalar uchun yoʻl yoʻq: quyidagi «Avtomatlashtirish»dagi darvozalar buyurtmani ushlab qola olmaydi.',
+  'settings.orderPolicy.autoAcceptMinPriorOrders.hint':
+    'Bu brendda yakunlangan buyurtmalari bundan kam mijoz qaror kutadi; mehmon buyurtmasi yoʻq deb hisoblanadi. 0 — cheklov yoʻq.',
+  'settings.orderPolicy.gates.noPath':
+    'Yuqoridagi «Buyurtmani qabul qilish»da ushlab qolingan buyurtmani tasdiqlaydigan hech kim yoʻq, shuning uchun bu darvozalar hech narsani ushlab qola olmaydi: bunday buyurtma baribir tasdiqlanadi. Avval u yerda kim tasdiqlashini tanlang.',
+  'settings.orderPolicy.preorderBranchResolution.hint':
+    'Oldindan buyurtma birorta ham nomzod filial ochiq boʻlmagan vaqtga berilganda qoʻllanadi. Oʻzi olib ketishda masofa oʻlchanadigan mijoz manzili yoʻq, shuning uchun u uchun «eng yaqin» oʻrniga «tezroq ochiladigan» olinadi. Qoida butun brend uchun belgilanadi: alohida filialning oʻz qiymati yoʻq.',
+  'settings.orderPolicy.field.operatorCallbackFlagAllowed':
+    'Operator buyurtmaga «mijozga qayta qoʻngʻiroq qilish» belgisini qoʻya oladi',
+  'settings.orderPolicy.field.operatorChangeDueAllowed':
+    'Operator mijoz beradigan naqd pulni yoza oladi',
+  'settings.orderPolicy.operatorPromoCodeAllowed.hint':
+    'Oʻchirilganda operator buyurtmasidagi promokod rad etiladi — narx hisoblanganda ham, buyurtma berilganda ham.',
+  'settings.orderPolicy.operatorCallbackFlagAllowed.hint':
+    'Oʻchirilganda «Yangi buyurtma» ekrani belgini yashiradi, server esa belgini rad etadi.',
+  'settings.orderPolicy.operatorChangeDueAllowed.hint':
+    'Oʻchirilganda «Yangi buyurtma» ekrani qaytim hisobini yashiradi, server esa naqd summani rad etadi.',
+  'settings.orderPolicy.neighbours.title': 'Boshqa joyda turadigan sozlamalar',
+  'settings.orderPolicy.neighbours.lead':
+    'Bular ham buyurtmaga taʻsir qiladi, lekin har birining oʻz ekrani bor. Hozir amal qilayotgani koʻrsatilgan; oʻzgartirish uchun ekranni oching.',
+  'settings.orderPolicy.neighbours.open': 'Ochish',
+  'settings.orderPolicy.neighbours.loading': 'Yuklanmoqda…',
+  'settings.orderPolicy.neighbours.unreadable': 'Koʻrsatilmadi: rolingiz uni oʻqiy olmaydi',
+  'settings.orderPolicy.neighbours.distanceMode.label': 'Yetkazib berish qanday oʻlchanadi',
+  'settings.orderPolicy.neighbours.distanceMode.RADIUS': 'Toʻgʻri chiziqda (standart tarif)',
+  'settings.orderPolicy.neighbours.distanceMode.ROAD': 'Yoʻl boʻyicha (standart tarif)',
+  'settings.orderPolicy.neighbours.distanceMode.none':
+    'Bu brend uchun amaldagi standart tarif yoʻq',
+  'settings.orderPolicy.neighbours.branchLimit.label':
+    'Filial bir vaqtda nechta buyurtma qabul qiladi',
+  'settings.orderPolicy.neighbours.branchLimit.value': '{count}',
+  'settings.orderPolicy.neighbours.branchLimit.none': 'Cheklov yoʻq',
+  'settings.orderPolicy.neighbours.branchLimit.perBranch':
+    'Har bir filial uchun alohida belgilanadi — chegarasini koʻrish uchun yuqoridagi panelda filialni tanlang.',
+  'settings.orderPolicy.neighbours.outOfZone.label':
+    'Hech bir yetkazib berish zonasiga kirmaydigan manzil',
+  'settings.orderPolicy.neighbours.outOfZone.REJECT': 'Rad etish',
+  'settings.orderPolicy.neighbours.outOfZone.OFFER_PICKUP': 'Oʻzi olib ketishni taklif qilish',
+  'settings.orderPolicy.neighbours.outOfZone.MANUAL_REVIEW': 'Qoʻlda tekshirishga qoldirish',
+  'settings.orderPolicy.neighbours.outOfZone.notApplied':
+    'Hozircha qoʻllanilmaydi: yetkazib berish narxini hisoblash bunday manzilni bu yerda nima tanlangan boʻlishidan qatʻiy nazar baribir rad etadi.',
+  'settings.orderPolicy.neighbours.courierVisibility.label': 'Kuryer nimani koʻradi',
+  'settings.orderPolicy.neighbours.courierVisibility.READY_ONLY':
+    'Faqat oshxona tayyorlab boʻlgan buyurtmalarni',
+  'settings.orderPolicy.neighbours.courierVisibility.ANY':
+    'Hali tayyorlanayotgan buyurtmalarni ham',
+  'settings.orderPolicy.neighbours.paidHold.label': 'Oshxona toʻlovni kutadi',
+  'settings.orderPolicy.neighbours.paidHold.SHADOW': 'Sinov: faqat nimani ushlab qolishini sanaydi',
+  'settings.orderPolicy.neighbours.paidHold.HOLD_UNTIL_PAID':
+    'Toʻlanmagan buyurtmani ushlab turadi',
+  'settings.orderPolicy.neighbours.paidHold.OFF': 'Oʻchiq',
+  'settings.orderPolicy.neighbours.callCentre.label': 'Call-markaz kanali',
+  'settings.orderPolicy.neighbours.callCentre.none': 'Faol call-markaz kanali yoʻq',
+  'settings.orderPolicy.neighbours.callCentre.value':
+    'Toʻlov usullari: {payments} · buyurtma turlari: {modes}',
+  'settings.orderPolicy.neighbours.mode.PICKUP': 'Oʻzi olib ketish',
+  'settings.orderPolicy.neighbours.mode.DELIVERY': 'Yetkazib berish',
+  'settings.orderPolicy.neighbours.mode.DINE_IN': 'Zalda',
 
   // Rows X.39 / 10.3b — ordering.lateness hujjati tahrirlovchisi
   'settings.latenessPolicy.title': 'Buyurtma qachon kechikkan hisoblanadi',
@@ -667,6 +774,8 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.terminals.retire': 'Hisobdan chiqarish',
 
   'settings.fiscalization.classification.title': 'Mahsulotlar tasnifi',
+  'settings.fiscalization.classification.receiptLines':
+    'Chek buyurtmaning oʻz qatorlaridan tuziladi: taom, har bir pullik opsiya va yetkazib berish, har biri oʻz tasnifi bilan. Toʻliq tasnifi (IKPU, qadoq kodi, birlik kodi va fiskal nom) yoʻq pozitsiya shu buyurtma chekini toʻxtatadi: hech narsa yuborilmaydi va vaqtincha kod hech qachon qoʻyilmaydi.',
   'settings.fiscalization.classification.headline':
     'Tasniflanmagan: {total} tadan {unclassified} tasi',
   'settings.fiscalization.classification.empty': 'Hammasi tasniflangan.',
@@ -709,7 +818,7 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.backfill.lead':
     '{count} ta pozitsiyada IKPU yoki qadoq kodi yetishmaydi. Kodlarni qoʻlda kiriting yoki jadvaldan ustunni nusxalab, birinchi katakka joylang — qiymatlar pastga qarab joylashadi. Pozitsiyada allaqachon bor kod oʻz holicha koʻrsatiladi va bu yerda oʻzgarmaydi; uni mahsulot muharririda oʻzgartiring.',
   'settings.fiscalization.backfill.referenceNote':
-    'IKPUning rasmiy roʻyxati hali yuklanmagan, shuning uchun kod faqat formati boʻyicha tekshiriladi (17 raqam) va uni nomi boʻyicha qidirib boʻlmaydi. Oʻlchov birligi va fiskal nom katalogning fiskal ish stolida belgilanadi.',
+    'IKPUning rasmiy roʻyxati hali yuklanmagan, shuning uchun kod faqat formati boʻyicha tekshiriladi (17 raqam) va uni nomi boʻyicha qidirib boʻlmaydi. Oʻlchov birligi va fiskal nom jadval ostidagi boʻlimda yoki katalogning fiskal ish stolida toʻldiriladi.',
   'settings.fiscalization.backfill.empty': 'Barcha pozitsiyalarda IKPU va qadoq kodi bor.',
   'settings.fiscalization.backfill.column.mxik': 'IKPU (17 raqam)',
   'settings.fiscalization.backfill.column.packageCode': 'Qadoq kodi',
@@ -736,6 +845,41 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.backfill.status.conflict':
     'Pozitsiyada allaqachon boshqa kod bor; u oʻzgartirilmadi. Roʻyxat yangilandi.',
   'settings.fiscalization.backfill.status.failed': 'Saqlanmadi. Qayta urinib koʻring.',
+  'settings.fiscalization.gaps.title': 'Birlik kodi yoki chekdagi nomi yoʻq pozitsiyalar',
+  'settings.fiscalization.gaps.lead':
+    '{count} ta pozitsiyada IKPU va qadoq kodi bor, lekin birlik kodi yoki chek qatorida chop etiladigan nom yoʻq. Ular qamrov hisobida qoladi va ular uchun chek tuzib boʻlmaydi. Ularni shu yerda toʻldiring yoki katalogning barcha toʻrt maydonni tahrirlaydigan fiskal ish stolini oching.',
+  'settings.fiscalization.gaps.workbench': 'Fiskal ish stolini ochish',
+  'settings.fiscalization.gaps.column.unit': 'Birlik kodi',
+  'settings.fiscalization.gaps.column.fiscalName': 'Chekdagi nom',
+  'settings.fiscalization.gaps.useReferenceUnit': 'IKPU roʻyxatidan birlik',
+  'settings.fiscalization.gaps.fillUnits':
+    'Boʻsh birliklarni IKPU roʻyxatidan toʻldirish ({count})',
+  'settings.fiscalization.gaps.useItemName': 'Pozitsiya nomini olish',
+  'settings.fiscalization.gaps.fillNames':
+    'Boʻsh chek nomlari uchun pozitsiya nomlarini olish ({count})',
+  'settings.fiscalization.gaps.unitChoices': 'Roʻyxatda bir nechta birlik bor:',
+  'settings.fiscalization.gaps.noReferenceUnit': 'IKPU roʻyxatida bu kod uchun birlik yoʻq.',
+  'settings.fiscalization.gaps.referenceUnavailable': 'IKPU roʻyxatini oʻqib boʻlmadi.',
+  'settings.fiscalization.gaps.fillSummary':
+    'Roʻyxatdan toʻldirilgan birliklar: {filled}; yana {open} tasini tanlash yoki kiritish kerak.',
+  'settings.fiscalization.gaps.error.unit': 'Birlik kodi musbat butun son.',
+  'settings.fiscalization.gaps.error.name': 'Chekdagi nom 1 dan 63 gacha belgi.',
+  'settings.fiscalization.backfill.bulk.title': 'Ommaviy tayinlash',
+  'settings.fiscalization.backfill.bulk.lead':
+    'Jadvalni filtrlang, qatorlarni belgilang, bitta IKPU va bitta qadoq kodini tanlang va qoʻllang. Ular faqat belgilangan qatorlarning boʻsh kataklariga, saqlanmagan tahrir sifatida tushadi: pastda tekshirib, «Saqlash» tugmasi bilan yuboring. Kodi bor katak almashtirilmaydi.',
+  'settings.fiscalization.backfill.bulk.counts':
+    '{total} tadan {shown} tasi koʻrsatilgan; {selected} tasi belgilangan.',
+  'settings.fiscalization.backfill.bulk.selectAll': 'Koʻrsatilgan barcha qatorlarni belgilash',
+  'settings.fiscalization.backfill.bulk.selectRow': 'Belgilash: {name}',
+  'settings.fiscalization.backfill.bulk.apply': 'Belgilangan qatorlarga qoʻllash ({count})',
+  'settings.fiscalization.backfill.bulk.applied':
+    'Toʻldirilgan boʻsh kataklar: {cells}, qatorlar: {rows}; kodi allaqachon bor kataklar: {kept}, ularga tegilmadi. Pastda tekshirib, saqlang.',
+  'settings.fiscalization.backfill.filter.all': 'Barchasi',
+  'settings.fiscalization.backfill.filter.noCategory': 'Kategoriyasiz',
+  'settings.fiscalization.backfill.filter.name': 'Nomida bor',
+  'settings.fiscalization.backfill.filter.locations': 'Kamida shuncha filialda sotiladi',
+  'settings.fiscalization.backfill.filter.clear': 'Filtrlarni tozalash',
+  'settings.fiscalization.backfill.filter.noMatch': 'Filtrga hech narsa mos kelmadi.',
 
   // 10.9 Bildirishnomalar
   'settings.notifications.title': 'Bildirishnomalar',
@@ -762,7 +906,7 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.notifications.field.status': 'Faol',
   'settings.notifications.field.activeVersion': 'Versiya',
   'settings.notifications.field.channel.hint':
-    'Bugun faqat SMS va Telegram haqiqatda yuboradi. Email va Push sxema hamda shablon kalitida eʻlon qilingan, lekin ularni hech qanday adapter yetkazmaydi.',
+    'Hozir SMS, Telegram, Email va Push haqiqatan yuboriladi. Email va Push faqat kampaniyalar uchun. Emailda har bir tilda mavzu, Pushda har bir tilda sarlavha talab qilinadi. Push faqat vitrinada uni yoqqan mijozlarga va platformaning push kaliti oʻrnatilgandan keyingina yetib boradi.',
   'settings.notifications.field.variant': 'Variant',
   'settings.notifications.field.fulfilmentMode': 'Bajarish usuli',
   'settings.notifications.field.channelSource': 'Kanal manbasi',
@@ -789,6 +933,17 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.notifications.moderation.APPROVED': 'Tasdiqlangan',
   'settings.notifications.moderation.REJECTED': 'Shlyuz rad etdi',
   'settings.notifications.editor.subject': 'Mavzu',
+  'settings.notifications.editor.title': 'Sarlavha',
+  'settings.notifications.editor.push.target': 'Bosilganda ochiladi',
+  'settings.notifications.editor.push.target.hint':
+    'Vitrinadagi yoʻl, masalan /menu yoki /category/pizza. Boʻsh qolsa, bosh sahifa ochiladi.',
+  'settings.notifications.editor.push.target.invalid':
+    'Bitta slesh bilan boshlang va boʻsh joy qoʻymang: /menu, menu yoki //menu emas.',
+  'settings.notifications.editor.push.cover': 'Muqova rasmi',
+  'settings.notifications.editor.push.cover.hint':
+    'Majburiy emas. Mijoz matn tagida koʻradigan 3:1 rasm. Saqlashdan oldin uni 3:1 ga kesing.',
+  'settings.notifications.editor.push.cover.set': 'Muqova tanlangan',
+  'settings.notifications.editor.push.cover.remove': 'Muqovani olib tashlash',
   'settings.notifications.editor.body': 'Matn',
   'settings.notifications.editor.variables': 'Oʻzgaruvchi qoʻshish',
   'settings.notifications.editor.variables.empty':
@@ -841,6 +996,49 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.notifications.routing.topic.prompt':
     'Forum mavzusi IDsi — oddiy chat uchun boʻsh qoldiring',
   'settings.notifications.routing.topic.save': 'Saqlash',
+  'settings.notifications.field.notificationClass.hint':
+    'Bir martalik kodli xabar platformaga tegishli va bu yerda tahrirlanmaydi; u quyida faqat oʻqish uchun koʻrsatilgan.',
+  'settings.notifications.field.consentPurpose': 'Rozilik maqsadi',
+  'settings.notifications.field.consentPurpose.hint':
+    'Yuborishdan oldin mijozning roziligi shu maqsad boʻyicha tekshiriladi. Maqsadsiz ixtiyoriy xabar rad etiladi. Buyurtma holati xabarlari ORDER_PROGRESS_UPDATES dan foydalanadi.',
+  'settings.notifications.marketing.notice': 'Faqat rozilik bergan mijozlarga yuboriladi.',
+  'settings.notifications.marketing.evidence':
+    'Obunani bekor qilish keyingi yuborishlarga taʻsir qiladi va allaqachon yetkazilganlarning izini hech qachon oʻchirmaydi.',
+  'settings.notifications.marketing.link': 'Mijozning roziligini uning kartasida koʻring',
+  'settings.notifications.marketing.chip': 'faqat rozilik bilan',
+  'settings.notifications.column.languages': 'Tillar',
+  'settings.notifications.column.moderation': 'Moderatsiya',
+  'settings.notifications.column.origin': 'Manba',
+  'settings.notifications.languages.missing': 'til yetishmaydi',
+  'settings.notifications.origin.BRAND': 'Brend',
+  'settings.notifications.origin.TENANT': 'Tashkilot',
+  'settings.notifications.origin.PLATFORM': 'Platforma',
+  'settings.notifications.defaults.title': 'Platformaning standart matni',
+  'settings.notifications.defaults.lead':
+    'Brend ham, tashkilot ham hech narsa yozmagan boʻlsa, mijoz shu hodisalar boʻyicha nimani oladi. Bu oxirgi qatlam: siz faollashtirgan shablon uni darhol bosib oʻtadi. Uni tahrirlab boʻlmaydi; «Moslash» uni shu brendning shabloniga nusxalaydi.',
+  'settings.notifications.defaults.customise': 'Moslash',
+  'settings.notifications.defaults.editOwn': 'Shabloningizni ochish',
+  'settings.notifications.defaults.overridden': 'bosib oʻtilgan',
+  'settings.notifications.otp.title': 'Bir martalik kodli xabar',
+  'settings.notifications.otp.lead':
+    'Mijoz kirish kodi bilan birga oʻqiydigan gap platformaga tegishli: u bitta SMS ga sigʻishi uchun ataylab qisqa va u shablon emas, shuning uchun bu yerda yaratadigan yoki faollashtiradigan narsa yoʻq.',
+  'settings.notifications.otp.gateway.GATEWAY_MODERATES':
+    'SMS shlyuzingiz matnlarni tasdiqlaydi: kodlar telefonga yetishidan oldin platforma gaplarini shlyuz tasdiqlagan boʻlishi kerak',
+  'settings.notifications.otp.gateway.NOT_MODERATED':
+    'SMS shlyuzingiz matnlarni moderatsiya qilmaydi',
+  'settings.notifications.otp.characters': '{count} belgi',
+  'settings.notifications.testSend.chat': 'Bogʻlangan chat',
+  'settings.notifications.testSend.chat.choose': 'Shu brendning chatlaridan birini tanlang…',
+  'settings.notifications.testSend.chat.none':
+    'Hali hech bir chat bogʻlanmagan — uni «Marshrutlash» boʻlimida bogʻlang.',
+  'settings.notifications.editor.copy.label': 'Boshqa tilni shu matndan boshlash:',
+  'settings.notifications.editor.copy.into': '{locale} ga nusxalash',
+  'settings.notifications.editor.copy.replace': '{locale} ni shu matn bilan almashtirish',
+  'settings.notifications.editor.personal.note':
+    'Mijozning ismi va kuryerning ismi xabar yuborilayotganda qoʻyiladi va hech qayerda saqlanmaydi.',
+  'settings.notifications.editor.showItemPrices': 'Mahsulotlar roʻyxatida narxlarni koʻrsatish',
+  'settings.notifications.editor.showItemPrices.unused':
+    'Hech bir til {{productList}} dan foydalanmaydi, shuning uchun bu tugma hech narsani oʻzgartirmaydi.',
 
   // 10.10 Maʻlumotnoma maʻlumotlari
   'settings.referenceData.title': 'Maʻlumotnoma maʻlumotlari',
@@ -861,9 +1059,7 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.referenceData.empty': 'Hali yoʻq.',
   'settings.referenceData.field.internalName': 'Ichki nomi',
   'settings.referenceData.field.customerText': 'Mijoz uchun matn',
-  'settings.referenceData.field.customerTextRu': 'Mijoz uchun matn (rus tilida)',
-  'settings.referenceData.field.customerTextUz': 'Mijoz uchun matn (oʻzbek tilida)',
-  'settings.referenceData.field.customerTextEn': 'Mijoz uchun matn (ingliz tilida)',
+  'settings.referenceData.field.customerTextIn': 'Mijoz uchun matn ({language})',
   'settings.referenceData.field.systemCategory': 'Platforma kategoriyasi',
   'settings.referenceData.field.stockDisposition': 'Ombordan yechish',
   'settings.referenceData.field.liabilityParty': 'Kim xarajatni koʻtaradi',
@@ -1179,7 +1375,7 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
     'HorecaOSʻda ishga qabul yoki nomzodlar uchun maʻlumot modeli yoʻq — bu yerda saqlash uchun hech narsa yoʻq.',
   'settings.dataPrivacy.retention.status.notApplicable': 'Tegishli emas',
   'settings.dataPrivacy.retention.lead':
-    'Har bir maʻlumot turi qancha vaqt saqlanishini belgilang. Quyidagi har bir qiymatni faqat butun platforma uchun oshirish mumkin — qisqaroq qiymat boshqa kompaniyaning maʻlumotini muddatidan oldin hech qachon oʻchirmaydi.',
+    'Har bir maʻlumot turi qancha vaqt saqlanishini belgilang. Qiymat ostida platforma uni kompaniyangiz uchun nima qilayotgani koʻrsatiladi: tozalash hozir qoʻllaydigan muddat va platformaning pastki chegarasi — juda qisqa qiymat shu chegaragacha koʻtariladi. Tashlab ketilgan savatlar va tasdiqlanmagan kuryer arizalari sizning muddatingiz boʻyicha tozalanadi; kuryer joylashuvi tarixi barcha kompaniyalar uchun umumiy, shuning uchun ularga kerak boʻlgan eng uzun muddat boʻyicha tozalanadi.',
   'settings.dataPrivacy.retention.column.value': 'Joriy qiymat',
   'settings.dataPrivacy.retention.column.enforcedBy': 'Kim amalga oshiradi',
   'settings.dataPrivacy.retention.unit.days': 'kun',
@@ -1195,6 +1391,13 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.dataPrivacy.retention.invalidValue': 'Noldan katta butun son kiriting',
   'settings.dataPrivacy.retention.staleVersion':
     'Boshqa kimdir bu qiymatni allaqachon oʻzgartirdi — joriy qiymat koʻrsatilgan; hali ham kerak boʻlsa, qayta oʻzgartiring.',
+  'settings.dataPrivacy.retention.effective': 'Kompaniyangiz uchun amalda: {value} {unit}',
+  'settings.dataPrivacy.retention.floor':
+    'Platformaning pastki chegarasi: {value} {unit}. Kichikroq qiymat shu chegaragacha koʻtariladi.',
+  'settings.dataPrivacy.retention.scope.perTenant': 'Faqat kompaniyangizga tegishli.',
+  'settings.dataPrivacy.retention.scope.allTenants':
+    'Barcha kompaniyalar uchun umumiy muddat: kuryer tarixi hamma kompaniyalar maʻlumoti birga turadigan kunlik boʻlimlarda saqlanadi, shuning uchun boʻlim kerak boʻlgan eng uzun muddat boʻyicha oʻchiriladi. Bu yerdagi qisqaroq qiymat uni qisqartirmaydi.',
+  'settings.dataPrivacy.retention.provisional': 'Dastlabki qiymat — yuristlar tasdigʻini kutmoqda',
   'settings.dataPrivacy.consent.title': 'Rozilik',
   'settings.dataPrivacy.consent.lead':
     'Rozilik qarori bugun mijozning oʻz hisobida nimani qayd eta oladi.',
@@ -1205,20 +1408,32 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.dataPrivacy.consent.channelSpecific.yes': 'Ha',
   'settings.dataPrivacy.consent.channelSpecific.no': 'Yoʻq',
   'settings.dataPrivacy.requests.title': 'Maʻlumot subyekti soʻrovlari',
-  'settings.dataPrivacy.erasure.title': 'Oʻchirish soʻrovlari',
-  'settings.dataPrivacy.erasure.lead':
-    'Butun kompaniya boʻyicha shaxsiy maʻlumotni oʻchirish soʻrovlari. Soʻrovni berish, bajarish yoki bekor qilish mijozning shaxsiy yozuvida amalga oshiriladi.',
-  'settings.dataPrivacy.erasure.filter.label': 'Holat',
-  'settings.dataPrivacy.erasure.filter.all': 'Barchasi',
-  'settings.dataPrivacy.erasure.status.pending': 'Kutilmoqda',
-  'settings.dataPrivacy.erasure.status.completed': 'Bajarildi',
-  'settings.dataPrivacy.erasure.status.cancelled': 'Bekor qilindi',
-  'settings.dataPrivacy.erasure.column.status': 'Holat',
-  'settings.dataPrivacy.erasure.column.customer': 'Mijoz hisobi',
-  'settings.dataPrivacy.erasure.column.requestedVia': 'Qayerdan soʻralgan',
-  'settings.dataPrivacy.erasure.column.requestedAt': 'Soʻralgan sana',
-  'settings.dataPrivacy.erasure.column.resolvedAt': 'Hal qilingan sana',
-  'settings.dataPrivacy.erasure.empty': 'Bu kompaniyada hali oʻchirish soʻrovi berilmagan.',
+  'settings.dataPrivacy.requests.lead':
+    "Butun tashkilot bo'yicha ma'lumot egalarining barcha so'rovlari, istalgan turdagi: o'chirish, ma'lumot nusxasi va tuzatishlar. Ularni mijoz kartasidan yarating, tayyorlang, tuzating va bajaring.",
+  'settings.dataPrivacy.requests.filter.kind': 'Turi',
+  'settings.dataPrivacy.requests.filter.status': 'Holat',
+  'settings.dataPrivacy.requests.filter.all': 'Hammasi',
+  'settings.dataPrivacy.requests.kind.erasure': "O'chirish",
+  'settings.dataPrivacy.requests.kind.export': "Ma'lumot nusxasi",
+  'settings.dataPrivacy.requests.kind.correction': 'Tuzatish',
+  'settings.dataPrivacy.requests.status.pending': 'Kutilmoqda',
+  'settings.dataPrivacy.requests.status.completed': 'Bajarilgan',
+  'settings.dataPrivacy.requests.status.cancelled': 'Qaytarib olingan',
+  'settings.dataPrivacy.requests.via.storefront': "Mijozning o'zi",
+  'settings.dataPrivacy.requests.via.operations': 'Xodim',
+  'settings.dataPrivacy.requests.column.kind': 'Turi',
+  'settings.dataPrivacy.requests.column.status': 'Holat',
+  'settings.dataPrivacy.requests.column.customer': 'Mijoz hisobi',
+  'settings.dataPrivacy.requests.column.requestedVia': 'Qayerdan',
+  'settings.dataPrivacy.requests.column.requestedAt': "So'ralgan",
+  'settings.dataPrivacy.requests.column.resolvedAt': 'Yakunlangan',
+  'settings.dataPrivacy.requests.column.detail': 'Tafsilot',
+  'settings.dataPrivacy.requests.subject.DISPLAY_NAME': 'Ism',
+  'settings.dataPrivacy.requests.subject.DATE_OF_BIRTH': "Tug'ilgan sana",
+  'settings.dataPrivacy.requests.subject.CONTACT_POINT': 'Aloqa',
+  'settings.dataPrivacy.requests.subject.ADDRESS': 'Manzil',
+  'settings.dataPrivacy.requests.dueBy': 'Javob muddati: {date}',
+  'settings.dataPrivacy.requests.empty': "Tashkilotda ma'lumot egalarining so'rovi bo'lmagan.",
   'settings.dataPrivacy.egress.title': 'Shaxsiy maʻlumotni koʻrish va eksport qilish jurnali',
   'settings.dataPrivacy.egress.lead':
     'Soʻnggi 90 kun ichida xodim mijozning shaxsiy maʻlumotini koʻrgan yoki eksport qilgan har bir holat, platformaning oʻz audit jurnalidan.',
@@ -1235,6 +1450,8 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.dataPrivacy.egress.action.blacklistRevealed': 'Bloklash sababi koʻrsatildi',
   'settings.dataPrivacy.egress.action.listExported':
     'Filtrlangan mijozlar roʻyxati eksport qilindi',
+  'settings.dataPrivacy.egress.action.dsarExported': "Mijoz ma'lumotlarini unga nusxa qilib yig'di",
+  'settings.dataPrivacy.egress.action.dsarBundleRevealed': "Mijoz ma'lumotlari nusxasini ochdi",
   'settings.dataPrivacy.egress.action.audienceExported': 'Marketing auditoriyasi eksport qilindi',
   'settings.dataPrivacy.egress.action.lineNoteRevealed': 'Mijozning buyurtmadagi izohi koʻrsatildi',
   'settings.dataPrivacy.egress.action.orderPhoneRevealed':
@@ -1304,6 +1521,14 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.integrations.detail.bindings.suspend.reasonPrompt':
     'Ushbu bogʻlanishni toʻxtatib turish sababi:',
   'settings.integrations.detail.bindings.empty': 'Hozircha bogʻlanishlar yoʻq.',
+  'settings.integrations.detail.ruleset.title': 'Marketpleys kontent qoidalari',
+  'settings.integrations.detail.ruleset.lead':
+    'Filial menyusi bu marketpleysga berilishidan oldin tekshiriladigan qoidalar. «Faqat umumiy qoidalar» marketpleysga xos hech narsani tekshirmaydi.',
+  'settings.integrations.detail.ruleset.noneAuthored':
+    'Marketpleys qoidalari hali yozilmagan, shuning uchun har bir bogʻlanish faqat umumiy qoidalar boʻyicha tekshiriladi. Marketpleysning kontent talablari kelishilganda qoidalar toʻplami qoʻshiladi.',
+  'settings.integrations.detail.ruleset.label': 'Marketpleys qoidalari toʻplami',
+  'settings.integrations.detail.ruleset.universalOnly': 'Faqat umumiy qoidalar',
+  'settings.integrations.detail.ruleset.clear': 'Tozalash',
   'settings.integrations.detail.bindings.wholeTenant': 'Butun kompaniya',
   'settings.integrations.detail.cloposSettings.title': 'Buyurtmani qabul qilish',
   'settings.integrations.detail.cloposSettings.requireClerkApproval':
@@ -1333,6 +1558,8 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.integrations.detail.mapping.entityType.DISCOUNT': 'Chegirmalar',
   'settings.integrations.detail.mapping.entityType.COURIER': 'Kuryerlar',
   'settings.integrations.detail.mapping.entityType.OPERATOR': 'Operatorlar',
+  'settings.integrations.detail.mapping.operatorNotReceived':
+    'Bu kassa hali operatorni qabul qilmaydi. Hamkasblarni kassa operatorlari bilan bogʻlab qoʻyish mumkin va bogʻlanish saqlanadi, lekin kassaning buyurtma interfeysi operatorni uzata olmaguncha u hech bir buyurtmaga yetib bormaydi.',
   'settings.integrations.detail.mapping.entityType.CANCELLATION_REASON': 'Bekor qilish sabablari',
   'settings.integrations.detail.mapping.entityType.CHANNEL_POS_CODE': 'Kanal → POS kodi',
 
@@ -1380,6 +1607,28 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
     'Nuqtani filial eshigiga olib keling: xaritani bosing, nuqtani sudrang yoki koordinatalarni kiriting. Nuqta faqat siz surgan boʻlsangiz saqlanadi; filial nuqtasini koʻchirish mumkin, oʻchirib boʻlmaydi.',
   'settings.dataPrivacy.egress.action.orderMapPointsRevealed':
     'Kunlik yetkazib berish nuqtalari xaritada ochildi',
+  'settings.dataPrivacy.egress.action.leadRevealed':
+    'Qoʻngʻiroq markazidan qoʻngʻiroq qilgan odamning ismi yoki raqami koʻrsatildi',
+  'settings.dataPrivacy.egress.action.redemptionCustomerRevealed':
+    'Aksiyadan kim foydalangani koʻrsatildi',
+  'settings.dataPrivacy.egress.action.dropoffRevealed':
+    'Guruhlangan buyurtmalarning yetkazish manzillari koʻrsatildi',
+  'settings.dataPrivacy.egress.action.courierCustomerLocationRevealed':
+    'Kuryerga mijozning joylashuvi koʻrsatildi',
+  'settings.dataPrivacy.egress.action.fiscalEvidenceRevealed':
+    'Fiskal chekning saqlangan soʻrovi yoki javobi koʻrsatildi',
+  'settings.dataPrivacy.egress.action.reservationGuestRevealed':
+    'Bron mehmonining ismi yoki raqami koʻrsatildi',
+  'settings.dataPrivacy.egress.action.callerNumberRevealed':
+    'Qoʻngʻiroq kartochkasida qoʻngʻiroq qiluvchining raqami koʻrsatildi',
+  'settings.dataPrivacy.egress.action.reportExported': 'Hisobot yuklab olindi',
+  'settings.dataPrivacy.egress.action.courierTrackRevealed': 'Kuryer treki koʻrsatildi',
+  'settings.dataPrivacy.egress.action.courierRegistrationRevealed':
+    'Kuryerning roʻyxatdan oʻtish raqami koʻrsatildi',
+  'settings.dataPrivacy.egress.action.courierComplianceRevealed':
+    'Kuryerning hujjatlari koʻrsatildi',
+  'settings.dataPrivacy.egress.action.invitationRecipientRevealed':
+    'Taklif kimga yuborilgani koʻrsatildi',
 
   // Chat assistant (ADR 0069).
   'settings.nav.assistant': 'Chat yordamchisi',
@@ -1422,9 +1671,7 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
     'Suhbatdagi birinchi javobidan oldin yordamchi buni mijoz tilida aytadi. Matnni oʻz mijozlaringiz uchun yozing. Boʻsh qoldirilsa, HorecaOS iborasi ishlatiladi; bu xabarni oʻchirib boʻlmaydi.',
   'settings.assistant.disclosure.legal':
     'HorecaOS ning standart iborasi huquqiy maslahat emas. Avtomatik javoblar va tashqi qayta ishlovchilar haqida mijozlarga nimani aytishingiz kerakligi oʻzingizning majburiyatingiz.',
-  'settings.assistant.disclosure.field.ru': 'Rus tilida aytadi',
-  'settings.assistant.disclosure.field.uz': 'Oʻzbek tilida aytadi',
-  'settings.assistant.disclosure.field.en': 'Ingliz tilida aytadi',
+  'settings.assistant.disclosure.field': 'Aytiladigan til: {language}',
   'settings.assistant.disclosure.blank': 'HorecaOS ning standart iborasi',
   'settings.assistant.disclosure.default': 'Standart ibora: {text}',
   'settings.assistant.disclosure.counter': '{max} belgidan {count} tasi',
@@ -1462,9 +1709,6 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.assistant.notes.history.reason': 'Sababi: {reason}',
   'settings.assistant.notes.version': '{version}-versiya',
   'settings.assistant.notes.by': '{author}, {when}',
-  'settings.assistant.notes.locale.ru': 'Rus tili',
-  'settings.assistant.notes.locale.uz': 'Oʻzbek tili',
-  'settings.assistant.notes.locale.en': 'Ingliz tili',
   'settings.assistant.notes.scope.TENANT': 'Butun kompaniya',
   'settings.assistant.notes.scope.BRAND': 'Butun brend',
   'settings.assistant.notes.scope.LOCATION': '«{name}» filiali',
@@ -1548,6 +1792,51 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.kiosk.replace.hint':
     'Kioskni almashtirish uchun uni oʻchiring va yangisini ulang. Kiosk kodni oʻz ekranida koʻrsatadi, konsol kod bermaydi.',
   'settings.kiosk.revoked.title': 'Oʻchirilgan kiosklar',
+  // ------------------------------------------------------------------- kiosk idle media and the hardware block (ADR 0187)
+  'settings.kiosk.idle.title': 'Kutish ekrani rasmlari',
+  'settings.kiosk.idle.lead':
+    'Hech kim buyurtma bermayotganda kiosk koʻrsatadigan rasmlar. 8 tagacha, har biri 9:16 va 1 MB dan oshmasligi kerak, koʻrsatilgan tartibda. Faqat rasmlar, video yoʻq.',
+  'settings.kiosk.idle.shared':
+    'Butun kanal uchun bitta roʻyxat: bu rasmlarni kanal sotadigan har bir filialdagi barcha kiosklar koʻrsatadi.',
+  'settings.kiosk.idle.channel': 'Sotuv kanali',
+  'settings.kiosk.idle.noChannels':
+    'Bu filialda faol kiosk kanali yoʻq, shuning uchun kutish ekranini sozlash shart emas.',
+  'settings.kiosk.idle.loading': 'Rasmlar yuklanmoqda',
+  'settings.kiosk.idle.denied': 'Bu kanal rasmlariga ruxsat yoʻq',
+  'settings.kiosk.idle.error': 'Rasmlarni yuklab boʻlmadi. Birozdan soʻng qayta urining.',
+  'settings.kiosk.idle.preview': 'Kiosk ekranidagi birinchi rasm',
+  'settings.kiosk.idle.previewEmpty': 'Hozircha rasm yoʻq. Kiosk holat ekranini koʻrsatadi.',
+  'settings.kiosk.idle.count': '{count} / {max} rasm',
+  'settings.kiosk.idle.empty': 'Hozircha rasm yoʻq.',
+  'settings.kiosk.idle.position': '{n}-rasm',
+  'settings.kiosk.idle.up': 'Yuqoriga',
+  'settings.kiosk.idle.down': 'Pastga',
+  'settings.kiosk.idle.remove': 'Olib tashlash',
+  'settings.kiosk.idle.full':
+    'Roʻyxatda allaqachon {max} ta rasm bor. Yangisini qoʻshish uchun birini olib tashlang.',
+  'settings.kiosk.idle.hint':
+    'JPEG, PNG yoki WebP tanlab, 9:16 kadrga moslang. Moslangan rasm 1 MB dan oshmasligi kerak.',
+  'settings.kiosk.idle.uploading': 'Rasm yuklanmoqda va tekshirilmoqda…',
+  'settings.kiosk.idle.added': 'Rasm roʻyxatga qoʻshildi.',
+  'settings.kiosk.idle.tooLarge':
+    'Moslangandan keyin ham rasm 1 MB dan katta. Soddaroq yoki kichikroq rasm tanlang.',
+  'settings.kiosk.idle.rejected': 'Platforma bu rasmni qabul qilmadi.',
+  'settings.kiosk.idle.timedOut':
+    'Platforma rasmni tekshirib ulgurmadi. Birozdan soʻng qayta urining.',
+  'settings.kiosk.idle.stale':
+    'Roʻyxatni avval boshqa kishi oʻzgartirgan. U yangilandi; oʻzgarishingizni qaytadan kiriting.',
+  'settings.kiosk.idle.refused.WRONG_ASPECT_RATIO': 'Rasm 9:16 emas.',
+  'settings.kiosk.idle.refused.TOO_LARGE': 'Rasm 1 MB dan katta.',
+  'settings.kiosk.idle.refused.NOT_A_RASTER_IMAGE':
+    'Kiosk ekraniga faqat JPEG, PNG va WebP qoʻyish mumkin.',
+  'settings.kiosk.idle.refused.NOT_AVAILABLE':
+    'Rasm hali tekshirilmagan. Biroz kutib, qayta urining.',
+  'settings.kiosk.idle.refused.UNKNOWN_ASSET': 'Bu rasmni bu yerda ishlatib boʻlmaydi.',
+  'settings.kiosk.idle.refused.LIMIT': 'Roʻyxatda allaqachon 8 ta rasm bor.',
+  'settings.kiosk.idle.refused.DUPLICATE': 'Bu rasm roʻyxatda bor.',
+  'settings.kiosk.hardware.title': 'Printer, bank terminali va markirovka skaneri: qurilmagan',
+  'settings.kiosk.hardware.body':
+    'HorecaOS kiosk uskunasini yetkazmaydi, sertifikatlamaydi va qoʻllab-quvvatlamaydi. Kiosk korpusidagi chek printeri filialdagi har qanday printer kabi sozlanadi (Sozlamalar, Chop etish); bank terminali va markirovka skaneri ulanmagan, kioskning oʻzi esa hozircha buyurtma qabul qilmaydi.',
   'settings.kioskPairing.title': 'Kioskni ulash',
   'settings.kioskPairing.lead':
     'Bu sahifani kioskdagi QR orqali oching yoki u koʻrsatgan kodni kiriting. Quyida tasdiqlamaguningizcha hech narsa ulanmaydi.',
@@ -1744,9 +2033,6 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.printing.profile.logo': 'Brend logotipini yuqorida chop etish',
   'settings.printing.profile.logoNote':
     'U qora-oq nuqtalarga aylantiriladi. Oddiy, kontrastli logotip eng yaxshi chop etiladi.',
-  'settings.printing.profile.locale.ru': 'Ruscha',
-  'settings.printing.profile.locale.uzLatn': 'Oʻzbekcha (lotin)',
-  'settings.printing.profile.locale.en': 'Inglizcha',
   'settings.printing.profile.footerLine': 'Pastki matn {n}-qator',
   'settings.printing.profile.footerNote':
     'Har bir til uchun uchtagacha qator, har biri {max} belgigacha, shunda qator 80 mm lentaga sigʻadi. Hujjat bitta tilda — filial tilida chop etiladi, mijoz tilida emas.',

@@ -55,18 +55,34 @@
       }
     </section>
 
+    @if (pointsLines(); as lines) {
+      <section class="rate-card" data-testid="profile-points">
+        <h2 class="rate-card__title">{{ 'points.profileTitle' | t }}</h2>
+        <p class="points__line" data-testid="profile-points-spendable">
+          {{ 'points.profileSpendable' | t: { amount: lines.spendable } }}
+        </p>
+        @if (lines.total) {
+          <p class="rate-card__sub" data-testid="profile-points-total">
+            {{ 'points.profileTotal' | t: { amount: lines.total } }}
+          </p>
+        }
+      </section>
+    }
+
     <section class="lang-row">
       <app-icon name="flagUz" [size]="24" />
       <span class="lang-row__label">{{ 'profile.languageSwitchLabel' | t }}</span>
       <div class="lang-chips">
-        @for (code of languages; track code) {
+        @for (option of languages(); track option.id) {
           <button
             type="button"
             class="lang-chip"
-            [class.is-active]="lang.langId() === code"
-            (click)="setLang(code)"
+            [class.is-active]="lang.langId() === option.id"
+            [attr.title]="option.label"
+            [attr.lang]="option.tag"
+            (click)="setLang(option.id)"
           >
-            {{ code.toUpperCase() }}
+            {{ option.id.toUpperCase() }}
           </button>
         }
       </div>
@@ -145,6 +161,9 @@
     }
 
     <app-my-reviews [refresh]="reviewsRefresh()" />
+
+    <!-- ADR 0182, D14: the explicit opt-in to Web Push; renders nothing where push cannot be offered. -->
+    <app-push-subscribe />
 
     <button type="button" class="signout" (click)="signOut()">{{ 'profile.logout' | t }}</button>
   }

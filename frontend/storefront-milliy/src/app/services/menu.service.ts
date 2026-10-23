@@ -59,6 +59,8 @@ export class MenuService {
   private readonly config = inject(APP_CONFIG);
 
   readonly currency = signal<string | null>(null);
+  /** ADR 0137, row 4.2c: whether the menu last read asks for the КБЖУ accuracy line. Off until it says so. */
+  readonly nutritionAccuracyNotice = signal(false);
 
   /**
    * Every modifier option of the menu last read, by id, with the name the customer reads on it (its
@@ -102,6 +104,7 @@ export class MenuService {
       },
     );
     this.currency.set(menu.currency);
+    this.nutritionAccuracyNotice.set(menu.nutritionAccuracyNotice === true);
     this.optionLabels.set(
       new Map(
         menu.modifierGroups.flatMap((group) =>
@@ -467,6 +470,11 @@ export interface PublishedMenu {
   readonly modifierGroups: readonly PublishedModifierGroup[];
   /** ADR 0136: the choices every combo on this menu asks for; absent from a platform that sells none. */
   readonly comboGroups?: readonly PublishedComboGroup[];
+  /**
+   * ADR 0137, row 4.2c: whether the code-owned accuracy line is drawn under a nutrition table. Resolved by the
+   * platform when the menu is read (`catalog.nutrition_accuracy_line_enabled`), absent from one that predates it.
+   */
+  readonly nutritionAccuracyNotice?: boolean;
 }
 
 /** `StorefrontCatalogQuery.MenuComboGroup`, transcribed. The container is the combo's own variant: never priced, never sold directly. */

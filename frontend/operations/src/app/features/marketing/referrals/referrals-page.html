@@ -235,7 +235,27 @@
           @for (link of links(); track link.linkId) {
             <tr data-testid="attribution-link-row">
               <td>{{ link.label }}</td>
-              <td class="q-tnum">{{ renderedLink(link) }}</td>
+              <td class="q-tnum referrals__link">
+                @if (link.url; as url) {
+                  <code data-testid="attribution-link-url">{{ url }}</code>
+                  <button
+                    type="button"
+                    data-testid="attribution-link-copy"
+                    (click)="copyLink(link)"
+                  >
+                    {{
+                      (copiedLinkId() === link.linkId
+                        ? 'marketing.attributionLinks.copied'
+                        : 'marketing.attributionLinks.copy'
+                      ) | t
+                    }}
+                  </button>
+                } @else if (linkUnavailableKey(link); as reason) {
+                  <span class="q-body-sm" data-testid="attribution-link-unavailable">{{
+                    reason | t
+                  }}</span>
+                }
+              </td>
               <td class="q-tnum">{{ link.clickCount }}</td>
               <td>{{ link.status }}</td>
               <td>
@@ -262,6 +282,10 @@
         </tbody>
       </table>
     </section>
+  }
+
+  @if (brandScope(); as scope) {
+    <q-mini-app-setup-card [scope]="scope" />
   }
 
   @if (showForm()) {

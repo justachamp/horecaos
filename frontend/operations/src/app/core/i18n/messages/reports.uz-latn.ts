@@ -445,6 +445,11 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.customers.funnel.stage.ORDERED': 'Buyurtma berdi',
   'reports.customers.funnel.visits.notMeasured':
     'Tashriflar: oʻlchanmaydi. Bu hisobot uchun brauzerdan, ilovadan yoki botdan hech narsa yigʻilmaydi, shuning uchun tashriflar nol deb koʻrsatilmaydi va taxmin qilinmaydi. Tashriflarni xohlagan restoran ularni oʻzining Google Analytics orqali oʻqiy oladi.',
+  'reports.customers.funnel.pageLoads.label': 'sahifa yuklanishlari, odamlar emas',
+  'reports.customers.funnel.pageLoads.note':
+    'Brauzer oynasi doʻkonni ochgan har safar bitta yuklanish sanaladi, cookie va identifikatorsiz. Bir kishi ikki marta ochsa, bu ikkita yuklanish, shuning uchun raqam voronkaning birinchi ustuni sifatida emas, uning yonida koʻrsatiladi: keyingi bosqichlar uning ulushi emas.',
+  'reports.customers.funnel.pageLoads.unrecorded':
+    'Bu davrning {days} kuni hisoblagich yoqilishidan oldin edi, shuning uchun jami toʻliq emas.',
   'reports.customers.funnel.reason.NOT_BY_CHANNEL':
     'Roʻyxatdan oʻtishlarning savdo kanali yoʻq, shuning uchun kanal kesimi ularni qamramaydi.',
   'reports.customers.funnel.unrecorded':
@@ -563,8 +568,12 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.marketing.campaigns.count.deferred': 'Kechiktirilgan (tinch soatlar)',
   'reports.marketing.campaigns.count.refused': 'Rad etilgan',
   'reports.marketing.campaigns.count.total': 'Jami qabul qiluvchilar',
-  'reports.marketing.campaigns.readReceiptsNotBuilt':
-    'Oʻqilganlik belgilari koʻrsatilmaydi: hozircha na oʻqilgan holat, na oʻqilgan vaqt yozib borilmaydi — bu oʻlchanmagan, nolga teng emas.',
+  'reports.marketing.campaigns.column.messages': 'Xabarlar',
+  'reports.marketing.campaigns.column.delivered': 'Yetkazilgan',
+  'reports.marketing.campaigns.column.failed': 'Yetkazilmagan',
+  'reports.marketing.campaigns.column.withheld': 'Ushlab qolingan',
+  'reports.marketing.campaigns.column.notReported': 'maʻlum emas',
+  'reports.marketing.campaigns.delivery.title': 'Xabarlar nima boʻldi',
 
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
   'reports.forecast.title': 'Talab bashorati',

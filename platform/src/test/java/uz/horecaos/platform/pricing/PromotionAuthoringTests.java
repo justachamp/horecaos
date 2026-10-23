@@ -87,6 +87,77 @@ class PromotionAuthoringTests {
                 List.of(action(1, Promotion.Action.Type.ORDER_PERCENTAGE_DISCOUNT, "basisPoints", 1_000L)));
     }
 
+    // ---------------------------------------------------------------- titles
+
+    @Test
+    @DisplayName("a customer-facing title per locale is part of the definition: stored, read back, and recorded"
+            + " with the version")
+    void titlesAreStoredReadBackAndVersioned() {
+        PromotionDefinition titled =
+                withTitles(tenPercent("TITLED10"), Map.of("ru", "  Скидка на ланч  ", "en", "Lunch"));
+
+        var drafted = fixture.authoring.create(TENANT, BRAND, titled);
+        var read = fixture.promotionStore.find(TENANT, BRAND, drafted.id()).orElseThrow();
+
+        assertThat(read.definition().titles())
+                .as("stray whitespace is stripped, nothing else is changed")
+                .containsExactlyInAnyOrderEntriesOf(Map.of("ru", "Скидка на ланч", "en", "Lunch"));
+
+        var validated = fixture.authoring.validate(TENANT, BRAND, drafted.id(), drafted.version());
+        assertThat(validated.report().isValid()).isTrue();
+        var activated = fixture.authoring.activate(
+                TENANT, BRAND, drafted.id(), validated.promotion().version(), "go live");
+        var detail = fixture.authoring.get(TENANT, BRAND, drafted.id());
+        assertThat(detail.versions())
+                .isNotEmpty()
+                .allSatisfy(version -> assertThat(version.definition().titles()).containsEntry("en", "Lunch"));
+        assertThat(promotionOf(activated).status()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    @DisplayName("editing the titles replaces them, and a blank title is no title")
+    void editingTheTitlesReplacesThem() {
+        var drafted = fixture.authoring.create(
+                TENANT, BRAND, withTitles(tenPercent("TITLED11"), Map.of("ru", "Скидка", "en", "Offer")));
+
+        var edited = fixture.authoring.update(
+                TENANT,
+                BRAND,
+                drafted.id(),
+                drafted.version(),
+                withTitles(tenPercent("TITLED11"), Map.of("en", "Better offer", "ru", "   ")));
+
+        assertThat(fixture.promotionStore
+                        .find(TENANT, BRAND, edited.id())
+                        .orElseThrow()
+                        .definition()
+                        .titles())
+                .containsExactlyInAnyOrderEntriesOf(Map.of("en", "Better offer"));
+    }
+
+    private static PromotionDefinition withTitles(PromotionDefinition base, Map<String, String> titles) {
+        return new PromotionDefinition(
+                base.code(),
+                base.name(),
+                base.kind(),
+                base.scope(),
+                base.stackingGroup(),
+                base.exclusive(),
+                base.priority(),
+                base.requiresCoupon(),
+                base.maximumDiscountMinor(),
+                base.currency(),
+                base.validFrom(),
+                base.validUntil(),
+                base.maximumRedemptions(),
+                base.maximumPerCustomer(),
+                base.loyaltyAccrual(),
+                base.loyaltyRedemption(),
+                base.conditions(),
+                base.actions(),
+                titles);
+    }
+
     // ------------------------------------------------------------- lifecycle
 
     @Test
@@ -359,6 +430,84 @@ class PromotionAuthoringTests {
 
         var small = fixture.activate(tenPercent("SMALL10"));
         assertThat(small.approvalId()).as("10% activates directly").isNull();
+    }
+
+    @Test
+    @DisplayName("a gift worth more than the amount threshold waits for a second person; a cheaper one does not")
+    void aGiftIsJudgedByItsValueNotByTheAbsenceOfAnAmount() {
+        // A FREE_ITEM carries neither basisPoints nor amountMinor, so the activation gate used to wave it
+        // through whatever it gave away. Margherita is 45 000 som: two are 90 000 (under the 100 000 default),
+        // three are 135 000 (over).
+        var cheap = fixture.activate(definition(
+                "GIFT2",
+                Promotion.Scope.ITEM,
+                "gift2",
+                List.of(),
+                List.of(action(
+                        1,
+                        Promotion.Action.Type.FREE_ITEM,
+                        "variantIds",
+                        List.of(fixture.margheritaVariant.toString()),
+                        "quantity",
+                        2L))));
+        assertThat(cheap.approvalId())
+                .as("2 x 45 000 = 90 000 activates directly")
+                .isNull();
+
+        var dear = fixture.authoring.create(
+                TENANT,
+                BRAND,
+                definition(
+                        "GIFT3",
+                        Promotion.Scope.ITEM,
+                        "gift3",
+                        List.of(),
+                        List.of(action(
+                                1,
+                                Promotion.Action.Type.FREE_ITEM,
+                                "variantIds",
+                                List.of(fixture.margheritaVariant.toString()),
+                                "quantity",
+                                3L))));
+        var validated = fixture.authoring.validate(TENANT, BRAND, dear.id(), dear.version());
+        var pending = fixture.authoring.activate(
+                TENANT, BRAND, dear.id(), validated.promotion().version(), "three free pizzas");
+        assertThat(pending.isPending())
+                .as("3 x 45 000 = 135 000 is over the 100 000 default")
+                .isTrue();
+        assertThat(fixture.promotionStore
+                        .find(TENANT, BRAND, dear.id())
+                        .orElseThrow()
+                        .status())
+                .isEqualTo("VALIDATED");
+    }
+
+    @Test
+    @DisplayName("a gift offering several variants is judged by the dearest one")
+    void aGiftIsJudgedByTheDearestVariantItMayGive() {
+        var dear = fixture.authoring.create(
+                TENANT,
+                BRAND,
+                definition(
+                        "GIFTMIX",
+                        Promotion.Scope.ITEM,
+                        "giftmix",
+                        List.of(),
+                        List.of(action(
+                                1,
+                                Promotion.Action.Type.FREE_ITEM,
+                                "variantIds",
+                                List.of(fixture.colaVariant.toString(), fixture.margheritaVariant.toString()),
+                                "quantity",
+                                3L))));
+        var validated = fixture.authoring.validate(TENANT, BRAND, dear.id(), dear.version());
+
+        var pending = fixture.authoring.activate(
+                TENANT, BRAND, dear.id(), validated.promotion().version(), "pizza or cola");
+
+        assertThat(pending.isPending())
+                .as("three Colas would be 36 000, but the customer may be given three Margheritas: 135 000")
+                .isTrue();
     }
 
     @Test

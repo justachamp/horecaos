@@ -67,6 +67,7 @@ public class StorefrontCatalogQuery {
     private final Clock clock;
     private final uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore commentPresets;
     private final BrandLocaleLookup brandLocales;
+    private final uz.horecaos.platform.catalog.api.NutritionNoticeSwitch nutritionNotice;
     private final String defaultLocale;
 
     /**
@@ -86,7 +87,9 @@ public class StorefrontCatalogQuery {
             Clock clock,
             uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore commentPresets,
             BrandLocaleLookup brandLocales,
+            uz.horecaos.platform.catalog.api.NutritionNoticeSwitch nutritionNotice,
             @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
+        this.nutritionNotice = nutritionNotice;
         this.store = store;
         this.prices = prices;
         this.availability = availability;
@@ -96,6 +99,30 @@ public class StorefrontCatalogQuery {
         this.commentPresets = commentPresets;
         this.brandLocales = brandLocales;
         this.defaultLocale = defaultLocale;
+    }
+
+    /** The read as it was before the accuracy-line switch: nobody asked for the line. */
+    public StorefrontCatalogQuery(
+            JdbcCatalogStore store,
+            MenuPriceLookup prices,
+            MenuAvailabilityLookup availability,
+            JdbcMenuStore menus,
+            CatalogTenantContext tenantContext,
+            Clock clock,
+            uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore commentPresets,
+            BrandLocaleLookup brandLocales,
+            String defaultLocale) {
+        this(
+                store,
+                prices,
+                availability,
+                menus,
+                tenantContext,
+                clock,
+                commentPresets,
+                brandLocales,
+                uz.horecaos.platform.catalog.api.NutritionNoticeSwitch.OFF,
+                defaultLocale);
     }
 
     /** A storefront read for callers with no tenancy to ask: no brand has a default language of its own. */
@@ -160,7 +187,8 @@ public class StorefrontCatalogQuery {
                 assembled.categories(),
                 assembled.products(),
                 assembled.modifierGroups(),
-                assembled.comboGroups()));
+                assembled.comboGroups(),
+                nutritionNotice.enabled(tenantId, brandId)));
     }
 
     /**
@@ -260,7 +288,12 @@ public class StorefrontCatalogQuery {
         List<MenuProduct> products = new ArrayList<>();
         for (PublicationItem item : productItems) {
             List<MenuVariant> variants = variantsOf(
-                    item, offeringByVariant, channelExcludedVariantIds, outOfWindowVariantIds, namePreference);
+                    tenantId,
+                    item,
+                    offeringByVariant,
+                    channelExcludedVariantIds,
+                    outOfWindowVariantIds,
+                    namePreference);
             if (variants.isEmpty()) {
                 // Not offered at this location at all. Absent rather than shown
                 // as unavailable: the location genuinely does not sell it.
@@ -310,7 +343,11 @@ public class StorefrontCatalogQuery {
                         intOf(item.content(), "sortOrder"),
                         idList(item.content(), "productIds").stream()
                                 .filter(servedProducts::contains)
-                                .toList()))
+                                .toList(),
+                        // ADR 0138 step 4: the images this channel shows for the category, written into
+                        // the channel's publication when it has any; empty otherwise.
+                        mediaIds(item.content()),
+                        imageUrls(tenantId, mediaIds(item.content()))))
                 // A category whose every product is unavailable here is not an
                 // empty shelf to show the customer; it is not part of this
                 // location's menu. Parents are kept: one holds children, not
@@ -549,6 +586,7 @@ public class StorefrontCatalogQuery {
 
     @SuppressWarnings("unchecked")
     private static List<MenuVariant> variantsOf(
+            UUID tenantId,
             PublicationItem item,
             Map<UUID, OfferingStatus> offeringByVariant,
             Set<UUID> channelExcludedVariantIds,
@@ -607,7 +645,11 @@ public class StorefrontCatalogQuery {
                     // ADR 0174: the name the author gave this size or form, in the customer's language,
                     // else the brand's default. Null on a variant nobody named, and on a publication that
                     // predates names: the client falls back to the unit code, as it always did.
-                    nameIn(variant.get("names"), namePreference)));
+                    nameIn(variant.get("names"), namePreference),
+                    // ADR 0138 step 4: the images this channel shows for the variant, written into the
+                    // channel's publication when it has any; empty otherwise.
+                    mediaIds(variant),
+                    imageUrls(tenantId, mediaIds(variant))));
         }
         return variants;
     }
@@ -618,19 +660,10 @@ public class StorefrontCatalogQuery {
             List<String> preference) {
         return rows.stream()
                 .map(row -> {
-                    Map<String, String> labels = LocalizedLabels.merge(
-                            row.labelRu(),
-                            row.labelUz(),
-                            row.labelEn(),
-                            translations.getOrDefault(row.presetId(), Map.of()));
+                    Map<String, String> labels =
+                            LocalizedLabels.merge(translations.getOrDefault(row.presetId(), Map.of()));
                     String label = LocalizedLabels.pick(labels, preference);
-                    return new CommentPresetOption(
-                            row.code(),
-                            row.labelRu(),
-                            row.labelUz(),
-                            row.labelEn(),
-                            labels,
-                            label == null ? row.code() : label);
+                    return new CommentPresetOption(row.code(), labels, label == null ? row.code() : label);
                 })
                 .toList();
     }
@@ -921,7 +954,11 @@ public class StorefrontCatalogQuery {
             // ADR 0136: the choices every combo asks for, empty when the menu sells none. A
             // combo's container is the product variant a group names as its container; the
             // customer never buys it directly, only picks from these.
-            List<MenuComboGroup> comboGroups) {}
+            List<MenuComboGroup> comboGroups,
+            // ADR 0137, row 4.2c: whether a client draws the code-owned accuracy line under a nutrition
+            // table. Resolved when the menu is read, not published with it: the wording is a content
+            // question that must be answerable without a republish.
+            boolean nutritionAccuracyNotice) {}
 
     /**
      * One choice a combo asks the customer to make (ADR 0136).
@@ -1019,6 +1056,10 @@ public class StorefrontCatalogQuery {
      * One shelf of the menu, holding only what this location serves.
      *
      * @param productIds in the category's own order, filtered to what this location serves
+     * @param mediaAssetIds the images this channel shows for the category (ADR 0138 step 4: the
+     *     channel's override, else its per-channel relation, else the category's own), empty when
+     *     it has none
+     * @param imageUrls one platform URL per entry of {@code mediaAssetIds}, in the same order
      */
     public record MenuCategory(
             UUID categoryId,
@@ -1026,7 +1067,21 @@ public class StorefrontCatalogQuery {
             String name,
             @Nullable UUID parentCategoryId,
             int sortOrder,
-            List<UUID> productIds) {}
+            List<UUID> productIds,
+            List<String> mediaAssetIds,
+            List<String> imageUrls) {
+
+        /** A category with no image of its own: every category published before the layer reached the menu. */
+        public MenuCategory(
+                UUID categoryId,
+                String code,
+                String name,
+                @Nullable UUID parentCategoryId,
+                int sortOrder,
+                List<UUID> productIds) {
+            this(categoryId, code, name, parentCategoryId, sortOrder, productIds, List.of(), List.of());
+        }
+    }
 
     /**
      * One dish as the customer sees it, variants and pictures included.
@@ -1190,16 +1245,13 @@ public class StorefrontCatalogQuery {
     /**
      * One preset a product offers on a line, every locale so the storefront renders its own.
      *
-     * @param labelRu/labelUz/labelEn the platform triple's columns, kept for a client that
-     *     reads only them
-     * @param labels every wording the preset has, keyed by locale -- the triple plus any locale
-     *     a tenant's brands support beyond it (row 10.12, V0430)
+     * @param labels every wording the preset has, keyed by locale (row 10.12, V0430; the only
+     *     shape of it since V0678)
      * @param label the wording resolved for the locale the menu was requested in, then the
      *     brand's default, then whichever exists; the preset's code only if it has no wording
      *     at all, which the schema does not allow
      */
-    public record CommentPresetOption(
-            String code, String labelRu, String labelUz, String labelEn, Map<String, String> labels, String label) {}
+    public record CommentPresetOption(String code, Map<String, String> labels, String label) {}
 
     /**
      * One orderable size or form of a product.
@@ -1239,7 +1291,43 @@ public class StorefrontCatalogQuery {
             // ADR 0174: the name the author gave this size or form, resolved for the requested
             // language then the brand default; null when it has none (the client shows the unit
             // code). A product with a single orderable variant shows no picker and no label.
-            @Nullable String name) {
+            @Nullable String name,
+            // ADR 0138 step 4: the images this channel shows for this size or form (its channel
+            // override, else its per-channel relation, else its own), one platform URL per asset in
+            // the same order. Empty when the variant has none: the product's pictures stand for it.
+            List<String> mediaAssetIds,
+            List<String> imageUrls) {
+
+        /** A variant with no images of its own: every variant published before the layer reached the menu. */
+        public MenuVariant(
+                UUID variantId,
+                @Nullable String sku,
+                @Nullable String unitCode,
+                boolean isDefault,
+                boolean orderable,
+                boolean onSaleNow,
+                @Nullable Long amountMinor,
+                @Nullable BigDecimal remainingQuantity,
+                @Nullable PhysicalFacts physical,
+                List<UUID> modifierGroupIds,
+                List<MenuModifierGroupPolicy> modifierGroupPolicies,
+                @Nullable String name) {
+            this(
+                    variantId,
+                    sku,
+                    unitCode,
+                    isDefault,
+                    orderable,
+                    onSaleNow,
+                    amountMinor,
+                    remainingQuantity,
+                    physical,
+                    modifierGroupIds,
+                    modifierGroupPolicies,
+                    name,
+                    List.of(),
+                    List.of());
+        }
 
         /** A variant with no published name: every variant that predates them. */
         public MenuVariant(
@@ -1306,7 +1394,9 @@ public class StorefrontCatalogQuery {
                     physical,
                     modifierGroupIds,
                     modifierGroupPolicies,
-                    name);
+                    name,
+                    mediaAssetIds,
+                    imageUrls);
         }
 
         /**
@@ -1328,7 +1418,9 @@ public class StorefrontCatalogQuery {
                     physical,
                     modifierGroupIds,
                     modifierGroupPolicies,
-                    name);
+                    name,
+                    mediaAssetIds,
+                    imageUrls);
         }
     }
 

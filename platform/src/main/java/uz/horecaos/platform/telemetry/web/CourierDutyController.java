@@ -238,6 +238,12 @@ public class CourierDutyController {
             @Min(0) @Max(100) Integer batteryPercent,
             Boolean deviceCharging) {
 
+        @Override
+        public String toString() {
+            // A reading is a named courier's position: it prints as nothing (ADR 0029).
+            return "ObservationRequest[REDACTED]";
+        }
+
         TrackObservation toDomain() {
             try {
                 return new TrackObservation(

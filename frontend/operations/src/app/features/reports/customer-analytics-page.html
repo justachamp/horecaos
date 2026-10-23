@@ -72,6 +72,27 @@
               {{ 'reports.customers.funnel.visits.notMeasured' | t }}
             </p>
           }
+          @if (pageLoads(); as loads) {
+            <div class="page-loads" data-testid="funnel-page-loads">
+              <p class="q-body-sm">
+                <strong class="q-tnum" data-testid="funnel-page-loads-count">{{
+                  loads.count
+                }}</strong>
+                <span data-testid="funnel-page-loads-label">{{
+                  'reports.customers.funnel.pageLoads.label' | t
+                }}</span>
+              </p>
+              <p class="q-caption">{{ 'reports.customers.funnel.pageLoads.note' | t }}</p>
+              @if (loads.unrecordedDays > 0) {
+                <p class="q-caption gap-note" data-testid="funnel-page-loads-unrecorded">
+                  {{
+                    'reports.customers.funnel.pageLoads.unrecorded'
+                      | t: { days: loads.unrecordedDays }
+                  }}
+                </p>
+              }
+            </div>
+          }
           @if (!funnelHasCounts()) {
             <p class="q-body-sm empty" data-testid="funnel-empty">
               {{ 'reports.customers.funnel.empty' | t }}

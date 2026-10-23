@@ -8,8 +8,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * The OpenAPI gate's one allowance (ADR 0137) is only worth having if it stays narrow: a quantity
- * may become a number, and nothing else may.
+ * The OpenAPI gate's allowances (ADR 0137, ADR 0150, ADR 0182) are only worth having if they stay
+ * narrow: a quantity may become a number, one fallback may be left blank, one request may swap free
+ * text for an approved wording, and nothing else may.
  */
 class AcceptedContractWideningsTests {
 
@@ -81,6 +82,63 @@ class AcceptedContractWideningsTests {
             })
     @DisplayName("nothing else may make a required field optional: not the grace, not the reply, not another route")
     void nothingElseMayBecomeOptional(String context) {
+        assertThat(AcceptedContractWidenings.mayBecomeOptional(context)).isEmpty();
+    }
+
+    // ------------------------------------------ ADR 0182: a courier broadcast names an approved wording
+
+    private static final String DRAFT_REQUEST =
+            "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/courier-broadcasts post request";
+
+    @Test
+    @DisplayName("the courier broadcast draft may require a wording's key and may drop the free text it replaced")
+    void theCourierDraftMaySwapFreeTextForAWording() {
+        assertThat(AcceptedContractWidenings.mayBecomeRequired(DRAFT_REQUEST)).containsExactly("templateKey");
+        assertThat(AcceptedContractWidenings.mayBeRemoved(DRAFT_REQUEST)).containsExactly("message");
+        assertThat(AcceptedContractWidenings.mayBecomeOptional(DRAFT_REQUEST)).containsExactly("message");
+    }
+
+    // ----------------------------------------------------- ADR 0183: the pickup search's optional point
+
+    private static final String PICKUP_SEARCH_REQUEST = "/api/v1/storefront/pickup-locations post request";
+
+    @Test
+    @DisplayName("the public pickup search may leave the customer's point out")
+    void thePickupSearchPointMayBecomeOptional() {
+        assertThat(AcceptedContractWidenings.mayBecomeOptional(PICKUP_SEARCH_REQUEST))
+                .containsExactly("point");
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/courier-broadcasts post request.targetKind",
+                "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/courier-broadcasts post response 201",
+                "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/courier-broadcasts get response 200[]",
+                "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/courier-broadcasts/{broadcastId}/sends post request",
+                "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns post request",
+                "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts post request"
+            })
+    @DisplayName(
+            "no other schema may gain a required field, lose a property or stop requiring one on the strength of it")
+    void nothingElseMaySwapAField(String context) {
+        assertThat(AcceptedContractWidenings.mayBecomeRequired(context)).isEmpty();
+        assertThat(AcceptedContractWidenings.mayBeRemoved(context)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "/api/v1/storefront/pickup-locations post request.point",
+                "/api/v1/storefront/pickup-locations post request.point.latitude",
+                "/api/v1/storefront/pickup-locations post response 200",
+                "/api/v1/storefront/pickup-locations get request",
+                "/api/v1/storefront/serviceability post request",
+                "/api/v1/operations/tenants/{tenantId}/pickup-locations post request"
+            })
+    @DisplayName(
+            "nothing around the pickup search may make a required field optional: not its point's parts, its answer, or a sibling route")
+    void nothingAroundThePickupSearchMayBecomeOptional(String context) {
         assertThat(AcceptedContractWidenings.mayBecomeOptional(context)).isEmpty();
     }
 }

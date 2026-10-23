@@ -31,6 +31,25 @@ export const staffPaths = {
   },
 
   /**
+   * `TenantRoleController` (ADR 0186) — the jobs a company defines for itself. The same path as
+   * {@link roles}: `POST` defines one, `PUT .../{code}` edits it under `If-Match`, `DELETE .../{code}`
+   * closes it.
+   */
+  role(tenantId: string, roleCode: string): string {
+    return `${this.roles(tenantId)}/${enc(roleCode)}`;
+  },
+
+  /** `TenantRoleController.capabilities` — the vocabulary a job is built from, with what the caller holds. */
+  capabilities(tenantId: string): string {
+    return `${CONTROL_PLANE}/tenants/${enc(tenantId)}/capabilities`;
+  },
+
+  /** `StaffPasswordController` — whether the password reset can reach the caller by email (ADR 0098). */
+  passwordHandoff(tenantId: string): string {
+    return `${OPERATIONS}/operations/tenants/${enc(tenantId)}/staff/me/password`;
+  },
+
+  /**
    * `ScopedGrantController` (ADR 0103) — a branch or brand manager's own team. The
    * tenant-wide `grants` route above needs `iam.grant.manage` at TENANT scope, which
    * a grant at her branch never covers (ADR 0025); these name the place in the path,

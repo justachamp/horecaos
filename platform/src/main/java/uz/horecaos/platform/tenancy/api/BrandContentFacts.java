@@ -1,8 +1,10 @@
 package uz.horecaos.platform.tenancy.api;
 
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The few facts about a brand and its tenant that storefront content needs and nothing else (ADR
@@ -38,4 +40,43 @@ public interface BrandContentFacts {
      * stops being linkable on the next read.
      */
     Set<String> verifiedChannelHostnames(UUID tenantId);
+
+    /**
+     * The name a customer sees for this brand, for the brand switcher (ADR 0183 D17). Empty for a brand that is not this
+     * tenant's. Defaulted so the test doubles that predate the switcher are untouched.
+     */
+    default java.util.Optional<String> brandDisplayName(UUID tenantId, UUID brandId) {
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * The hostname of one WEB channel of this tenant, only while it is <em>verified</em> and the channel is active: what a
+     * brand switcher entry links to, asked on every read so a released or un-verified hostname stops being linkable at once.
+     * Defaulted for the same reason as {@link #brandDisplayName}.
+     */
+    default java.util.Optional<String> verifiedWebHostname(UUID tenantId, UUID channelId) {
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * One of the tenant's other brands and one of its website channels: what a brand switcher entry can name (ADR 0183 D17).
+     *
+     * @param hostname the channel's verified hostname, or null while it has none (an entry can be added and is then not
+     *                 shown until the hostname is verified)
+     */
+    record SiblingStorefront(
+            UUID brandId,
+            String brandName,
+            UUID channelId,
+            String channelCode,
+            @Nullable String hostname) {}
+
+    /**
+     * The tenant's other active brands that sell through an active website channel at one of their own active branches, one
+     * row per brand and channel, by brand name then channel code. Defaulted empty for the same reason as
+     * {@link #brandDisplayName}.
+     */
+    default List<SiblingStorefront> siblingStorefronts(UUID tenantId, UUID excludingBrandId) {
+        return List.of();
+    }
 }

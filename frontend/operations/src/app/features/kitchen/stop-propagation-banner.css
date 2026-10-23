@@ -14,3 +14,44 @@
 .propagation__line--attention {
   color: var(--q-warning-text, var(--q-ink));
 }
+
+.propagation__toggle {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--q-primary);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.propagation__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.propagation__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 12px;
+  padding-block: 4px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.propagation__dish {
+  color: var(--q-ink);
+}
+
+.propagation__decision {
+  color: var(--q-ink-muted);
+  text-align: end;
+}
+
+.propagation__partner {
+  grid-column: 1 / -1;
+  color: var(--q-ink-muted);
+}

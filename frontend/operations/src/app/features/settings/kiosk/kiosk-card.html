@@ -211,6 +211,15 @@
             }
           </ul>
         }
+
+        <q-kiosk-idle-media [scope]="scope()" [channels]="channels()" [canManage]="canManage()" />
+
+        <div class="hardware" data-testid="kiosk-hardware">
+          <q-locked-state
+            titleKey="settings.kiosk.hardware.title"
+            askKey="settings.kiosk.hardware.body"
+          />
+        </div>
       }
     }
   }

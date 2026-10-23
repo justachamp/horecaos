@@ -142,7 +142,9 @@ import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
+import uz.horecaos.platform.support.CommentPresetRows;
 import uz.horecaos.platform.support.FakeConfigurationResolver;
+import uz.horecaos.platform.support.LocaleNames;
 import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
@@ -201,6 +203,9 @@ class CartCheckoutAndOrderTests {
      */
     private MutableConfigurationResolver orderingConfig;
 
+    /** Where the auto-accept gate counts the orders it held and the ones it could not (ADR 0177). */
+    private final SimpleMeterRegistry autoAcceptMeters = new SimpleMeterRegistry();
+
     private CheckoutService checkout;
     private OrderStateService orderState;
     private PosApprovalDecisionPortAdapter posDecisions;
@@ -234,6 +239,8 @@ class CartCheckoutAndOrderTests {
     private uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService loyaltyAdjustments;
     private uz.horecaos.platform.loyalty.application.LoyaltyMaintenanceService loyaltySweep;
     private uz.horecaos.platform.loyalty.application.LoyaltyQueryService loyaltyBalances;
+    private uz.horecaos.platform.ordering.application.CartRedemptionOffers cartRedemptionOffers;
+    private uz.horecaos.platform.ordering.application.OperatorRedemptionOffers operatorRedemptionOffers;
     private uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore loyaltyStore;
 
     /** ADR 0037 authoring, real classes over the real schema — see {@code seedDefaultDeliveryZone}. */
@@ -392,7 +399,7 @@ class CartCheckoutAndOrderTests {
                         clock),
                 // No expiry-warning assertion lives in this suite — it is about
                 // the hold/settlement boundary, not the pre-expiry message.
-                (tenantId, accountId, lotId, expiresAt, remainingMinor, daysRemaining) -> {},
+                (tenantId, brandId, customerAccountId, accountId, currency, lots, now) -> true,
                 new TransactionTemplate(new DataSourceTransactionManager(dataSource)),
                 clock);
         confirmationSettles = new OrderConfirmedSettlementTrigger(settlementPlanner);
@@ -493,7 +500,11 @@ class CartCheckoutAndOrderTests {
                 objectMapper,
                 clock,
                 customerBlacklist,
-                new PromoCodeEligibilityService(promoCodeStore),
+                new PromoCodeEligibilityService(
+                        promoCodeStore,
+                        new uz.horecaos.platform.pricing.application.BenefitGrantEligibility(
+                                new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcBenefitGrantStore(
+                                        jdbc))),
                 new FakeConfigurationResolver(),
                 saleWindowRules,
                 commentPresetLookup,
@@ -511,7 +522,7 @@ class CartCheckoutAndOrderTests {
                 new JdbcAuditRecorder(jdbc, objectMapper),
                 published,
                 clock,
-                new PromoCodeRedemptionService(promoCodeStore, clock));
+                grantAwareRedemptions(promoCodeStore));
         // The ordering.api face a POS integration reaches OrderStateService.decide
         // through (ADR 0002, ADR 0011 §6.4) — a translation layer only, so it is
         // built directly over the same orderState this suite already wires by
@@ -560,7 +571,15 @@ class CartCheckoutAndOrderTests {
                         org.mockito.Mockito.mock(OrderLatenessPolicyService.class),
                         org.mockito.Mockito.mock(uz.horecaos.platform.ordering.api.MarketplaceBindingLookup.class),
                         clock),
-                org.mockito.Mockito.mock(uz.horecaos.platform.iam.api.staff.StaffDirectory.class));
+                org.mockito.Mockito.mock(uz.horecaos.platform.iam.api.staff.StaffDirectory.class),
+                new uz.horecaos.platform.ordering.application.OrderBoardEnrichment(
+                        orderStore,
+                        UNWIRED_PAYMENTS,
+                        org.mockito.Mockito.mock(uz.horecaos.platform.fulfillment.api.CourierEtaPort.class),
+                        org.mockito.Mockito.mock(uz.horecaos.platform.tenancy.api.SalesChannelLookup.class),
+                        org.mockito.Mockito.mock(uz.horecaos.platform.ordering.api.OrderFiscalStatusPort.class),
+                        org.mockito.Mockito.mock(uz.horecaos.platform.fulfillment.api.DeliveryDistancePort.class),
+                        org.mockito.Mockito.mock(uz.horecaos.platform.ordering.api.OrderReprintPort.class)));
         // ADR 0074, production classes end to end: the real publication reader,
         // the real price lookup pricing implements, and the real InventoryService
         // behind InventoryReservationPort. A stub for any of the three would let
@@ -596,7 +615,7 @@ class CartCheckoutAndOrderTests {
                 serviceability,
                 quotes,
                 inventory,
-                new PromoCodeRedemptionService(new JdbcPromoCodeStore(jdbc, objectMapper), clock),
+                grantAwareRedemptions(new JdbcPromoCodeStore(jdbc, objectMapper)),
                 catalogSnapshot,
                 tenantContext,
                 policies,
@@ -618,7 +637,8 @@ class CartCheckoutAndOrderTests {
                                 jdbc, objectMapper)),
                 new uz.horecaos.platform.pricing.application.PromotionRedemptionService(
                         new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromotionStore(
-                                jdbc, objectMapper)));
+                                jdbc, objectMapper)),
+                autoAcceptMeters);
 
         checkout = checkoutWith.apply(UNWIRED_PAYMENTS);
         // ADR 0075's port over the same services, so a bot repeat and a
@@ -657,12 +677,21 @@ class CartCheckoutAndOrderTests {
                         serviceability,
                         channelStore,
                         orderStore,
-                        clock),
+                        clock,
+                        orderingConfig),
                 new uz.horecaos.platform.ordering.infrastructure.customer.JdbcCustomerAddressBook(
                         jdbc, protection, objectMapper),
                 orderStore,
                 new JdbcAuditRecorder(jdbc, objectMapper),
-                clock);
+                clock,
+                orderingConfig);
+
+        // ADR 0185: the offer a screen shows, over the same ledger and the same quote the checkout accepts.
+        var offerPort = new uz.horecaos.platform.loyalty.application.LoyaltyRedemptionOffers(redemption);
+        cartRedemptionOffers = new uz.horecaos.platform.ordering.application.CartRedemptionOffers(
+                carts, quotes, channelStore, offerPort, clock);
+        operatorRedemptionOffers = new uz.horecaos.platform.ordering.application.OperatorRedemptionOffers(
+                operatorOrdering, new TransactionTemplate(new DataSourceTransactionManager(dataSource)), offerPort);
 
         seedTenancyAndCatalog();
         seedPublication("STOREFRONT");
@@ -1034,12 +1063,14 @@ class CartCheckoutAndOrderTests {
                         new ServiceabilityService(new JdbcServiceabilityStore(jdbc), clock),
                         new JdbcSalesChannelStore(jdbc),
                         orderStore,
-                        clock),
+                        clock,
+                        orderingConfig),
                 new uz.horecaos.platform.ordering.infrastructure.customer.JdbcCustomerAddressBook(
                         jdbc, protection, objectMapper),
                 orderStore,
                 new JdbcAuditRecorder(jdbc, objectMapper),
-                clock);
+                clock,
+                orderingConfig);
 
         var withCode = new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
                 TENANT,
@@ -1479,6 +1510,77 @@ class CartCheckoutAndOrderTests {
         assertThat(redeemedCount(drafted.couponId()))
                 .as("an order that never completed must not permanently burn the customer's redemption")
                 .isEqualTo(0L);
+    }
+
+    /**
+     * The redemption port as production wires it: a shared code claims the coupon, and a customer's one-off
+     * grant (ADR 0140) is spent by the same checkout transaction and given back by the same compensation.
+     */
+    private PromoCodeRedemptionService grantAwareRedemptions(JdbcPromoCodeStore promoCodeStore) {
+        var grantStore = new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcBenefitGrantStore(jdbc);
+        return new PromoCodeRedemptionService(
+                promoCodeStore,
+                clock,
+                uz.horecaos.platform.pricing.application.PromotionMetrics.none(),
+                new uz.horecaos.platform.pricing.application.BenefitGrantService(
+                        grantStore, uz.horecaos.platform.support.AuditTrail.recorder(jdbc), clock));
+    }
+
+    @Test
+    @DisplayName("a customer's one-off code is priced, spent by checkout and given back when the order is cancelled")
+    void aOneOffGrantIsSpentByCheckoutAndGivenBackOnCancellation() {
+        requireApproval();
+        var grants = new uz.horecaos.platform.pricing.application.BenefitGrantService(
+                new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcBenefitGrantStore(jdbc),
+                uz.horecaos.platform.support.AuditTrail.recorder(jdbc),
+                clock);
+        var minted = grants.mint(
+                TENANT,
+                BRAND,
+                new uz.horecaos.platform.pricing.application.BenefitGrantService.MintRequest(
+                        CUSTOMER,
+                        uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.DiscountShape
+                                .PERCENTAGE_OFF_ORDER,
+                        1_500L,
+                        null,
+                        "UZS",
+                        0L,
+                        "RECOVERY_CASE",
+                        UUID.randomUUID(),
+                        null,
+                        null),
+                uz.horecaos.platform.audit.api.ActorRef.user("promo-author", null),
+                "test");
+
+        UUID cart = openCart();
+        putLine(cart, "a", burgerVariant, 1);
+        tx(() -> carts.applyPromoCode(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), minted.plaintextCode()));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-grant-checkout")));
+
+        assertThat(result.created()).isTrue();
+        UUID order = orderIdOf(result);
+        assertThat(orderStore.find(TENANT, order).orElseThrow().discountMinor())
+                .as("15% of the 50 000 burger")
+                .isEqualTo(7_500L);
+        var held = jdbc.sql("SELECT status, order_id FROM pricing.benefit_grants WHERE id = :id")
+                .param("id", minted.grantId())
+                .query()
+                .singleRow();
+        assertThat(held.get("status")).isEqualTo("REDEEMED");
+        assertThat(held.get("order_id")).isEqualTo(order);
+
+        int version = orderStore.find(TENANT, order).orElseThrow().version();
+        tx(() -> orderState.cancel(
+                TENANT, order, version, "CUSTOMER_CHANGED_MIND", "CUSTOMER", CUSTOMER.toString(), null));
+
+        assertThat(jdbc.sql("SELECT status FROM pricing.benefit_grants WHERE id = :id")
+                        .param("id", minted.grantId())
+                        .query(String.class)
+                        .single())
+                .as("an order that never completed does not burn the customer's apology")
+                .isEqualTo("ACTIVE");
     }
 
     private long redeemedCount(UUID couponId) {
@@ -3152,6 +3254,9 @@ class CartCheckoutAndOrderTests {
                 .anyMatch(event -> event instanceof OrderAwaitingApproval awaiting
                         && awaiting.orderId().equals(orderIdOf(placed))
                         && awaiting.approvalDeadlineAt().equals(captureInstant.plus(Duration.ofMinutes(5))));
+        assertThat(heldReason(orderIdOf(placed)))
+                .as("no gate held this order -- the restaurant asks about every order -- so the payment is the reason")
+                .isEqualTo("PAYMENT_CAPTURED");
     }
 
     @Test
@@ -3776,7 +3881,7 @@ class CartCheckoutAndOrderTests {
                         .extracting(
                                 JdbcOrderStore.OrderCommentPresetRow::sourcePresetId,
                                 JdbcOrderStore.OrderCommentPresetRow::code,
-                                JdbcOrderStore.OrderCommentPresetRow::labelRu)
+                                snapshot -> snapshot.labels().get("ru"))
                         .containsExactly(
                                 tuple(noOnions, "NO_ONIONS", "Без лука"),
                                 tuple(extraSpicy, "EXTRA_SPICY", "Поострее")));
@@ -3832,14 +3937,13 @@ class CartCheckoutAndOrderTests {
                                     .containsOnlyKeys("ru", "uz-Latn", "en", "kaa")
                                     .containsEntry("kaa", "Piyazsiz")
                                     .containsEntry("ru", "Без лука");
-                            assertThat(snapshot.labelRu()).isEqualTo("Без лука");
                         }));
         assertThat(jdbc.sql("""
                                 SELECT locale FROM ordering.order_line_comment_preset_labels
                                 WHERE tenant_id = :tenantId
                                 """).param("tenantId", TENANT).query(String.class).list())
-                .as("the triple stays in the snapshot's own columns, not stored twice")
-                .containsExactly("kaa");
+                .as("every wording the preset had is stored in the labels table, the triple included (V0678)")
+                .containsExactlyInAnyOrder("ru", "uz-Latn", "en", "kaa");
     }
 
     @Test
@@ -7149,16 +7253,34 @@ class CartCheckoutAndOrderTests {
     }
 
     @Test
-    @DisplayName("a completed order publishes OrderCompleted, and the three non-terminal steps still publish nothing")
+    @DisplayName("each kitchen step publishes its own fact, and a completion publishes OrderCompleted (ADR 0184)")
     void completionPublishesItsOwnEvent() {
         UUID order = orderIdOf(placeOrder("idem-completed-event"));
         published.clear();
 
         advance(order, OrderStatus.PREPARING);
         advance(order, OrderStatus.READY);
+        // PREPARING and READY had no reader until ADR 0184: ADR 0045 tells the customer each milestone, and
+        // notifications cannot trigger a message from a row in a history table.
         assertThat(published.ordering())
-                .as("PREPARING and READY still have no reader, and this comment's own reason still holds")
-                .isEmpty();
+                .extracting(OrderingEvent::eventType)
+                .containsExactly("OrderPreparing", "OrderReady");
+        assertThat(published.ordering().get(0))
+                .isInstanceOfSatisfying(uz.horecaos.platform.ordering.api.OrderPreparing.class, preparing -> {
+                    assertThat(preparing.orderId()).isEqualTo(order);
+                    assertThat(preparing.tenantId().value()).isEqualTo(TENANT);
+                    assertThat(preparing.fulfillmentMode()).isEqualTo("PICKUP");
+                    assertThat(preparing.preparingAt()).isEqualTo(clock.instant());
+                    assertThat(preparing.payload().toString())
+                            .as("no customer on a milestone: ADR 0029 keeps personal data off every topic")
+                            .doesNotContain(CUSTOMER.toString());
+                });
+        assertThat(published.ordering().get(1))
+                .isInstanceOfSatisfying(uz.horecaos.platform.ordering.api.OrderReady.class, ready -> {
+                    assertThat(ready.fulfillmentMode()).isEqualTo("PICKUP");
+                    assertThat(ready.orderVersion()).isGreaterThan(1);
+                });
+        published.clear();
 
         advance(order, OrderStatus.COMPLETED);
 
@@ -7172,6 +7294,62 @@ class CartCheckoutAndOrderTests {
                     // of every payload, and a rating prompt resolves the chat from
                     // the order id through an authorized call.
                     assertThat(completed.payload().toString()).doesNotContain(CUSTOMER.toString());
+                });
+    }
+
+    @Test
+    @DisplayName("the facts an order message may say are read from the real tables, and carry no customer (ADR 0184)")
+    void anOrderMessageReadsItsFactsFromTheRealTables() {
+        UUID order = orderIdOf(placeOrder("idem-notification-facts"));
+        var directory = new JdbcOrderDirectory(orderStore, jdbc);
+
+        var facts = directory.notificationFacts(TENANT, order).orElseThrow();
+
+        assertThat(facts.brandDisplayName())
+                .as("the brand's own name, which is what a customer calls the restaurant")
+                .isEqualTo("Brand");
+        assertThat(facts.timezone())
+                .as("the location's zone, so the promised time reads on the branch's clock")
+                .isEqualTo("Asia/Tashkent");
+        assertThat(facts.currency()).isEqualTo("UZS");
+        var stored = orderStore.find(TENANT, order).orElseThrow();
+        assertThat(facts.discountMinor()).isEqualTo(stored.discountMinor());
+        assertThat(facts.feeMinor()).isEqualTo(stored.feeMinor());
+        assertThat(facts.promisedAt()).isEqualTo(stored.promise().promisedAt());
+        assertThat(facts.prepMinutes()).isEqualTo(stored.promise().prepMinutes());
+        assertThat(facts.lines()).singleElement().satisfies(line -> {
+            assertThat(line.name()).isEqualTo("Qo'y burger");
+            assertThat(line.quantity()).isEqualByComparingTo("2");
+            assertThat(line.lineTotalMinor()).isPositive();
+        });
+        assertThat(facts.toString())
+                .as("nothing about the person who ordered travels with the order's facts")
+                .doesNotContain(CUSTOMER.toString());
+        assertThat(directory.notificationFacts(UUID.randomUUID(), order))
+                .as("another tenant is told nothing")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a delivery order publishes OrderFulfilling at the handover, and no completion yet (ADR 0184)")
+    void aDeliveryHandoverPublishesFulfilling() {
+        UUID order = orderIdOf(placeDeliveryOrder("idem-fulfilling-event"));
+        published.clear();
+
+        advance(order, OrderStatus.PREPARING);
+        advance(order, OrderStatus.READY);
+        advance(order, OrderStatus.FULFILLING);
+
+        assertThat(published.ordering())
+                .extracting(OrderingEvent::eventType)
+                .containsExactly("OrderPreparing", "OrderReady", "OrderFulfilling");
+        assertThat(published.ordering().get(2))
+                .isInstanceOfSatisfying(uz.horecaos.platform.ordering.api.OrderFulfilling.class, fulfilling -> {
+                    assertThat(fulfilling.fulfillmentMode()).isEqualTo("DELIVERY");
+                    assertThat(fulfilling.handedOverAt()).isEqualTo(clock.instant());
+                    assertThat(fulfilling.payload().toString())
+                            .as("no courier and no customer on the fact: the consumer resolves the first name itself")
+                            .doesNotContain(CUSTOMER.toString());
                 });
     }
 
@@ -7383,8 +7561,8 @@ class CartCheckoutAndOrderTests {
         // ceiling (r=10 km is ~314 km²) while covering every fixed test address
         // in this suite by a wide margin.
         UUID tariffId = seedFlatTariff("DEFAULT-ZERO", 10_000, 0L);
-        UUID zoneId =
-                zoneAuthoring.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "DEFAULT", "Default", "Default", "Default");
+        UUID zoneId = zoneAuthoring.createZone(
+                TENANT, BRAND, ZoneRole.DELIVERY, "DEFAULT", LocaleNames.triple("Default", "Default", "Default"));
         var drafted = zoneAuthoring.draftCircleVersion(
                 new ServiceZoneService.NewVersion(
                         TENANT, BRAND, zoneId, ZoneRole.DELIVERY, null, 0, "UZS", tariffId, null, null, DELIVERY_ACTOR),
@@ -7438,7 +7616,8 @@ class CartCheckoutAndOrderTests {
             int radiusMeters,
             @Nullable Long minBasketMinor,
             @Nullable Long freeDeliveryFromMinor) {
-        UUID zoneId = zoneAuthoring.createZone(TENANT, BRAND, ZoneRole.DELIVERY, code, code, code, code);
+        UUID zoneId =
+                zoneAuthoring.createZone(TENANT, BRAND, ZoneRole.DELIVERY, code, LocaleNames.triple(code, code, code));
         var drafted = zoneAuthoring.draftCircleVersion(
                 new ServiceZoneService.NewVersion(
                         TENANT,
@@ -7526,6 +7705,362 @@ class CartCheckoutAndOrderTests {
                 .param("source", latitude == null ? "LANDMARK_ONLY" : "CUSTOMER_PIN")
                 .update();
         return addressId;
+    }
+
+    // ------------------------------- ADR 0185: points at order entry, and what can be offered before it
+
+    /**
+     * Takes the second ACTIVE branch of the fixture out of the resolver's reach. The operator path re-resolves the
+     * branch itself and ranks a PICKUP order's candidates by load, so the moment one order stands at {@link #LOCATION}
+     * the quieter {@code MAIN02} becomes the proposal and a second placement at {@code LOCATION} would need a branch
+     * override reason. A test that places two orders to prove something about points is not about that rule.
+     */
+    private void onlyTheOrderingBranchIsActive() {
+        jdbc.sql("UPDATE tenant.locations SET status = 'SUSPENDED' WHERE tenant_id = :tenantId AND id = :id")
+                .param("tenantId", TENANT)
+                .param("id", OTHER_LOCATION)
+                .update();
+    }
+
+    /** Two burgers at 50 000 each, for the customer the call is from, with part paid from their points. */
+    private uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand operatorOrder(
+            String idempotencyKey, long redeemMinor, boolean attested, @Nullable Long cashTenderedMinor) {
+        return new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
+                TENANT,
+                BRAND,
+                LOCATION,
+                CUSTOMER,
+                "STOREFRONT",
+                FulfillmentMode.PICKUP,
+                List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
+                        burgerVariant, 2, List.of(), List.of(), null)),
+                null,
+                "CASH",
+                null,
+                idempotencyKey,
+                "operator-subject-9",
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                cashTenderedMinor,
+                List.of(),
+                redeemMinor,
+                attested);
+    }
+
+    @Test
+    @DisplayName("an operator-taken order redeems the identified customer's points at entry: the points are held, "
+            + "the cash to collect and the tenders follow, and the operator's attestation is audited once")
+    void anOperatorOrderRedeemsPointsAtEntry() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+
+        var result = tx(() -> operatorOrdering.place(operatorOrder("idem-op-redeem", 10_000L, true, null)));
+
+        assertThat(result.created()).isTrue();
+        UUID orderId = orderIdOf(result);
+        assertThat(tenderAmounts(orderId)).containsExactly(10_000L, 90_000L);
+        assertThat(tenderStatuses(orderId)).containsExactly(TenderStatus.RESERVED, TenderStatus.PLANNED);
+        assertThat(settlements.cashDueMinor(TENANT, orderId, "CASH"))
+                .as("the operator reads the customer the cash they still owe, not the total")
+                .isEqualTo(90_000L);
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor())
+                .as("the points left the balance inside the checkout transaction")
+                .isEqualTo(20_000L);
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().createdByActorId())
+                .isEqualTo("operator-subject-9");
+        assertThat(auditFactCount("ordering.order.redemption_attested")).isEqualTo(1);
+        assertThat(jdbc.sql("SELECT change_document::text FROM audit.audit_events WHERE action_code = :code")
+                        .param("code", "ordering.order.redemption_attested")
+                        .query(String.class)
+                        .single())
+                .contains("10000")
+                .contains("customerAgreementAttested");
+    }
+
+    @Test
+    @DisplayName("a second placement under the same Idempotency-Key takes no second hold and writes no second "
+            + "attestation: the key was spent by the order that exists")
+    void aSecondPlacementUnderTheSameKeyTakesNoSecondHold() {
+        onlyTheOrderingBranchIsActive();
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+        var command = operatorOrder("idem-op-redeem-replay", 10_000L, true, null);
+
+        var first = tx(() -> operatorOrdering.place(command));
+        // A client that retried would be answered from the stored response by the HTTP idempotency layer. This is
+        // the service under a key somebody reused for a basket it has priced afresh: the attempt ledger refuses it
+        // by name, and the refusal must not have held points or recorded a second consent.
+        var again = tx(() -> operatorOrdering.place(command));
+
+        assertThat(first.outcome()).isEqualTo(CheckoutService.CheckoutResult.Outcome.CREATED);
+        assertThat(again.outcome()).isEqualTo(CheckoutService.CheckoutResult.Outcome.REJECTED);
+        assertThat(again.rejectionCode()).isEqualTo("IDEMPOTENCY_KEY_REUSED");
+        assertThat(countOrders()).isEqualTo(1L);
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor()).isEqualTo(20_000L);
+        assertThat(auditFactCount("ordering.order.redemption_attested")).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("an operator cannot spend a customer's points without saying the customer agreed, and nothing is "
+            + "created or held when they do not")
+    void anOperatorCannotRedeemWithoutTheCustomersAgreement() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+
+        Throwable refused = catchThrowable(
+                () -> tx(() -> operatorOrdering.place(operatorOrder("idem-op-unattested", 10_000L, false, null))));
+
+        assertThat(refused)
+                .isInstanceOfSatisfying(
+                        uz.horecaos.platform.web.api.ApiException.class,
+                        exception -> assertThat(exception.properties())
+                                .containsEntry(
+                                        "reason",
+                                        uz.horecaos.platform.ordering.application.OperatorOrderingService
+                                                .REDEMPTION_NEEDS_CUSTOMER_AGREEMENT));
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor()).isEqualTo(30_000L);
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.orders")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(auditFactCount("ordering.order.redemption_attested")).isZero();
+    }
+
+    @Test
+    @DisplayName("an operator redemption beyond what the brand permits is refused whole: no order, no hold, no fact")
+    void anOperatorRedemptionBeyondTheCapIsRefusedWhole() {
+        seedRedemptionPolicy();
+        seedBalance(90_000L);
+
+        // 50% of 100 000 is the cap; 60 000 is beyond it.
+        Throwable refused = catchThrowable(
+                () -> tx(() -> operatorOrdering.place(operatorOrder("idem-op-over-cap", 60_000L, true, null))));
+
+        assertThat(refused).isInstanceOf(uz.horecaos.platform.web.api.ApiException.class);
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor()).isEqualTo(90_000L);
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.orders")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(auditFactCount("ordering.order.redemption_attested")).isZero();
+    }
+
+    @Test
+    @DisplayName("an operator order redeems only against the customer it was taken for: another customer's points "
+            + "are not reachable from it")
+    void anOperatorRedemptionReachesOnlyTheIdentifiedCustomersAccount() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+
+        // The call is from OTHER_CUSTOMER, who has no points, even though CUSTOMER has plenty at the same brand.
+        var command = new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
+                TENANT,
+                BRAND,
+                LOCATION,
+                OTHER_CUSTOMER,
+                "STOREFRONT",
+                FulfillmentMode.PICKUP,
+                List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
+                        burgerVariant, 2, List.of(), List.of(), null)),
+                null,
+                "CASH",
+                null,
+                "idem-op-other-customer",
+                "operator-subject-9",
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                10_000L,
+                true);
+
+        Throwable refused = catchThrowable(() -> tx(() -> operatorOrdering.place(command)));
+
+        assertThat(refused).isInstanceOf(uz.horecaos.platform.web.api.ApiException.class);
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor())
+                .as("CUSTOMER's points were never within reach of an order taken for somebody else")
+                .isEqualTo(30_000L);
+    }
+
+    @Test
+    @DisplayName(
+            "the cash tendered is compared with the cash the customer still owes after their points, not the total")
+    void theCashTenderedIsComparedWithTheMoneyLeg() {
+        onlyTheOrderingBranchIsActive();
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+
+        var enough = tx(() -> operatorOrdering.place(operatorOrder("idem-op-tender-enough", 10_000L, true, 90_000L)));
+        var shortTender =
+                tx(() -> operatorOrdering.place(operatorOrder("idem-op-tender-short", 10_000L, true, 89_999L)));
+
+        assertThat(enough.warnings())
+                .as("90 000 covers the 90 000 still owed, though it is short of the 100 000 total")
+                .doesNotContain("CASH_TENDERED_INSUFFICIENT");
+        assertThat(shortTender.warnings()).contains("CASH_TENDERED_INSUFFICIENT");
+    }
+
+    @Test
+    @DisplayName("the operator's offer names what the customer can spend and the cash they would owe, from the "
+            + "figure the order would be booked at, and creates and holds nothing")
+    void theOperatorsOfferReadsTheBookedFigureAndHoldsNothing() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+
+        var offer = operatorRedemptionOffers.offer(operatorOrder("idem-op-offer", 0L, false, null));
+
+        assertThat(offer.currency()).isEqualTo("UZS");
+        assertThat(offer.orderTotalMinor()).isEqualTo(100_000L);
+        assertThat(offer.offer().availableMinor()).isEqualTo(30_000L);
+        assertThat(offer.offer().maximumMinor())
+                .as("the smaller of the 50% cap (50 000) and what they hold (30 000)")
+                .isEqualTo(30_000L);
+        assertThat(offer.offer().redeemable()).isTrue();
+        assertThat(uz.horecaos.platform.ordering.application.CartRedemptionOffers.cashToCollect(
+                        offer.orderTotalMinor(), offer.offer(), 30_000L))
+                .isEqualTo(70_000L);
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.orders")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.carts")
+                        .query(Long.class)
+                        .single())
+                .as("the basket was priced and the pricing undone")
+                .isZero();
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor()).isEqualTo(30_000L);
+        assertThat(jdbc.sql("SELECT count(*) FROM loyalty.reservations")
+                        .query(Long.class)
+                        .single())
+                .as("a quote holds nothing: the hold is the checkout's")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("the operator's offer says why nothing is redeemable, in a code")
+    void theOperatorsOfferSaysWhyNothingIsRedeemable() {
+        // No policy: redemption is enabled for a brand by a deliberate act, and until then the answer is no.
+        seedBalance(30_000L);
+        assertThat(operatorRedemptionOffers
+                        .offer(operatorOrder("idem-op-offer-nopolicy", 0L, false, null))
+                        .offer())
+                .satisfies(offer -> {
+                    assertThat(offer.redeemable()).isFalse();
+                    assertThat(offer.refusal()).isEqualTo("REDEMPTION_NOT_ENABLED");
+                    assertThat(offer.availableMinor())
+                            .as("what they hold is still theirs to see")
+                            .isEqualTo(30_000L);
+                });
+
+        seedRedemptionPolicy();
+        var nobody = operatorOrder("idem-op-offer-nobody", 0L, false, null);
+        var offer = operatorRedemptionOffers.offer(
+                new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
+                        nobody.tenantId(),
+                        nobody.brandId(),
+                        nobody.locationId(),
+                        OTHER_CUSTOMER,
+                        nobody.channelCode(),
+                        nobody.fulfillmentMode(),
+                        nobody.lines(),
+                        null,
+                        nobody.paymentMethodCode(),
+                        null,
+                        nobody.idempotencyKey(),
+                        nobody.operatorSubject(),
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null));
+        assertThat(offer.offer().refusal()).isEqualTo("NO_ACCOUNT");
+    }
+
+    @Test
+    @DisplayName("a customer's cart offer is the maximum the checkout then accepts, and one som more is refused")
+    void theCartOfferIsTheCheckoutsOwnMaximum() {
+        seedRedemptionPolicy();
+        seedBalance(70_000L);
+        UUID cart = readyCart();
+
+        var offer = cartRedemptionOffers.forCart(TENANT, BRAND, CUSTOMER, cart).orElseThrow();
+
+        assertThat(offer.priced()).isTrue();
+        assertThat(offer.orderTotalMinor()).isEqualTo(100_000L);
+        assertThat(offer.offer().availableMinor()).isEqualTo(70_000L);
+        assertThat(offer.offer().maximumMinor()).as("50% of 100 000").isEqualTo(50_000L);
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor())
+                .as("asking holds nothing")
+                .isEqualTo(70_000L);
+
+        Throwable over = catchThrowable(
+                () -> tx(() -> checkout.checkout(checkoutCommand(cart, "idem-cart-offer-over", "CASH", 50_001L))));
+        assertThat(over).isInstanceOf(uz.horecaos.platform.web.api.ApiException.class);
+        assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor())
+                .as("the refused checkout took nothing")
+                .isEqualTo(70_000L);
+
+        var placed = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-cart-offer-max", "CASH", 50_000L)));
+        assertThat(placed.created()).isTrue();
+        assertThat(tenderAmounts(orderIdOf(placed))).containsExactly(50_000L, 50_000L);
+    }
+
+    @Test
+    @DisplayName("a cart that is not the caller's offers the caller nothing, and one that was never priced says so")
+    void aStrangersCartAndAnUnpricedCartOfferNothing() {
+        seedRedemptionPolicy();
+        seedBalance(70_000L);
+        UUID priced = readyCart();
+        UUID unpriced = openCart();
+        putLine(unpriced, "a", burgerVariant, 2);
+
+        assertThat(cartRedemptionOffers.forCart(TENANT, BRAND, OTHER_CUSTOMER, priced))
+                .isEmpty();
+        assertThat(cartRedemptionOffers.forCart(TENANT, BRAND, CUSTOMER, UUID.randomUUID()))
+                .isEmpty();
+        assertThat(cartRedemptionOffers
+                        .forCart(TENANT, BRAND, CUSTOMER, unpriced)
+                        .orElseThrow())
+                .satisfies(offer -> {
+                    assertThat(offer.priced()).isFalse();
+                    assertThat(offer.offer().refusal()).isEqualTo("CART_NOT_PRICED");
+                });
+
+        // A quote that has aged out is no figure to offer against.
+        clock.advance(Duration.ofMinutes(16));
+        assertThat(cartRedemptionOffers
+                        .forCart(TENANT, BRAND, CUSTOMER, priced)
+                        .orElseThrow()
+                        .offer()
+                        .refusal())
+                .isEqualTo("QUOTE_EXPIRED");
     }
 
     /** A delivery cart with a destination, priced, checked out. */
@@ -7687,13 +8222,31 @@ class CartCheckoutAndOrderTests {
 
     /** Switches the location to RESTAURANT_APPROVAL with a five-minute deadline. */
     private void requireApproval() {
-        var policy = new OrderAcceptancePolicy(
+        activateAcceptance(new OrderAcceptancePolicy(
                 AcceptanceMode.RESTAURANT_APPROVAL,
                 ApprovalChannel.HORECAOS_OPERATIONS,
                 300,
                 ApprovalTimeoutAction.AUTO_REJECT,
                 true,
-                true);
+                true));
+    }
+
+    /**
+     * ADR 0177: {@code AUTO_CONFIRM} that carries the approval path an order an auto-accept gate holds
+     * back follows -- the operations console, five minutes, then reject. Without a gate set it confirms
+     * every order exactly as a plain {@code AUTO_CONFIRM} does.
+     */
+    private void autoConfirmWithAHoldBackPath() {
+        activateAcceptance(new OrderAcceptancePolicy(
+                AcceptanceMode.AUTO_CONFIRM,
+                ApprovalChannel.HORECAOS_OPERATIONS,
+                300,
+                ApprovalTimeoutAction.AUTO_REJECT,
+                true,
+                true));
+    }
+
+    private void activateAcceptance(OrderAcceptancePolicy policy) {
         UUID policyId = UUID.randomUUID();
         var from = java.time.OffsetDateTime.ofInstant(NOW.minus(Duration.ofDays(1)), ZoneOffset.UTC);
 
@@ -7722,6 +8275,298 @@ class CartCheckoutAndOrderTests {
                 .param("locationId", LOCATION)
                 .param("policyId", policyId)
                 .update();
+    }
+
+    // ===================== ADR 0177 decision 3: the two auto-accept gates, read at checkout
+
+    @Test
+    @DisplayName(
+            "an AUTO_CONFIRM order on a channel outside the eligible list waits on the document's own approval path")
+    void aChannelTheGateDoesNotListWaitsForApproval() {
+        autoConfirmWithAHoldBackPath();
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_ELIGIBLE_CHANNELS_CODE, "call-centre");
+
+        var placed = placeOrder("idem-gate-channel");
+
+        assertThat(placed.status())
+                .as("the storefront is not in the list, so the platform does not accept it on its own")
+                .isEqualTo(OrderStatus.AWAITING_APPROVAL);
+        var order = orderStore.find(TENANT, orderIdOf(placed)).orElseThrow();
+        assertThat(order.acceptanceMode())
+                .as("what actually governed this order; the pinned policy is still AUTO_CONFIRM")
+                .isEqualTo("RESTAURANT_APPROVAL");
+        assertThat(order.approvalChannel()).isEqualTo("HORECAOS_OPERATIONS");
+        assertThat(order.approvalTimeoutAction()).isEqualTo("AUTO_REJECT");
+        assertThat(order.approvalDeadlineAt()).isEqualTo(clock.instant().plus(Duration.ofMinutes(5)));
+        assertThat(pendingApprovalTimers(orderIdOf(placed))).isEqualTo(1L);
+        assertThat(jdbc.sql("""
+                                SELECT reason_code FROM ordering.order_state_history
+                                WHERE order_id = :id AND to_status = 'AWAITING_APPROVAL'
+                                """)
+                        .param("id", orderIdOf(placed))
+                        .query(String.class)
+                        .single())
+                .as("why this order is waiting, in the history that answers 'why is it stuck'")
+                .isEqualTo("AUTO_ACCEPT_HELD_CHANNEL");
+        assertThat(published.events)
+                .anyMatch(event -> event instanceof OrderAwaitingApproval awaiting
+                        && awaiting.orderId().equals(orderIdOf(placed))
+                        && "HORECAOS_OPERATIONS".equals(awaiting.approvalChannel()));
+        assertThat(published.events)
+                .as(
+                        "the event says what the order row says: a consumer must not read AUTO_CONFIRM for an order a person decides")
+                .anyMatch(event -> event instanceof OrderReceived received
+                        && received.orderId().equals(orderIdOf(placed))
+                        && "RESTAURANT_APPROVAL".equals(received.acceptanceMode()));
+        assertThat(autoAcceptMeters
+                        .counter("horecaos.order.auto_accept_gate", "outcome", "held", "reason", "CHANNEL_NOT_ELIGIBLE")
+                        .count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName(
+            "an order on an eligible channel is auto-confirmed, whatever the case of the list, and ALL gates nothing")
+    void anEligibleChannelAndAnEmptyGateAreStillAutoConfirmed() {
+        autoConfirmWithAHoldBackPath();
+
+        var noGate = placeOrder("idem-gate-none");
+        assertThat(noGate.status())
+                .as("a hold-back path with no gate set confirms exactly as a plain AUTO_CONFIRM does")
+                .isEqualTo(OrderStatus.CONFIRMED);
+
+        orderingConfig.override(
+                OrderingConfigurationKeys.AUTO_ACCEPT_ELIGIBLE_CHANNELS_CODE, "call-centre, Storefront");
+        var listed = placeOrder("idem-gate-listed");
+        assertThat(listed.status()).isEqualTo(OrderStatus.CONFIRMED);
+
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_ELIGIBLE_CHANNELS_CODE, "ALL");
+        assertThat(placeOrder("idem-gate-all").status()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(jdbc.sql("""
+                                SELECT count(*) FROM ordering.order_state_history
+                                WHERE tenant_id = :t AND reason_code LIKE 'AUTO_ACCEPT_HELD%'
+                                """).param("t", TENANT).query(Long.class).single()).isZero();
+    }
+
+    @Test
+    @DisplayName("a customer with fewer completed orders than the minimum waits; a rejected order is not a success")
+    void theMinimumOfPriorSuccessfulOrdersIsCountedFromCompletedOrdersOnly() {
+        autoConfirmWithAHoldBackPath();
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_MIN_PRIOR_ORDERS_CODE, 1);
+
+        var first = placeOrder("idem-prior-1");
+        assertThat(first.status())
+                .as("a customer with no completed order is not yet trusted")
+                .isEqualTo(OrderStatus.AWAITING_APPROVAL);
+        assertThat(heldReason(orderIdOf(first))).isEqualTo("AUTO_ACCEPT_HELD_PRIOR_ORDERS");
+
+        tx(() -> orderState.decide(
+                TENANT, orderIdOf(first), decision("d-prior-reject", OrderStateService.DecisionAction.REJECT)));
+        assertThat(orderStore.find(TENANT, orderIdOf(first)).orElseThrow().status())
+                .isEqualTo(OrderStatus.REJECTED);
+        assertThat(placeOrder("idem-prior-2").status())
+                .as("a rejected order does not count as a prior success")
+                .isEqualTo(OrderStatus.AWAITING_APPROVAL);
+
+        orderingConfig.overrideAll(Map.of());
+        var trusted = placeOrder("idem-prior-3");
+        assertThat(trusted.status()).isEqualTo(OrderStatus.CONFIRMED);
+        handOver(orderIdOf(trusted));
+        assertThat(orderStore.countCompletedForCustomer(TENANT, BRAND, CUSTOMER))
+                .isEqualTo(1L);
+
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_MIN_PRIOR_ORDERS_CODE, 1);
+        assertThat(placeOrder("idem-prior-4").status())
+                .as("one completed order is a prior successful order")
+                .isEqualTo(OrderStatus.CONFIRMED);
+
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_MIN_PRIOR_ORDERS_CODE, 2);
+        assertThat(placeOrder("idem-prior-5").status()).as("but not two").isEqualTo(OrderStatus.AWAITING_APPROVAL);
+    }
+
+    @Test
+    @DisplayName(
+            "a completed order of another customer, or of the same customer at a sister brand, does not make a new customer trusted")
+    void priorOrdersAreCountedForTheSameAccountInTheSameBrandOnly() {
+        autoConfirmWithAHoldBackPath();
+        UUID sisterBrand = UUID.randomUUID();
+        UUID sisterLocation = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, 'SISTER', 'sister', 'Sister brand', 'ACTIVE', 0)
+                """).param("id", sisterBrand).param("tenantId", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
+                    timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, 'SISTER01', 'sister-01', 'SISTER01', 'Asia/Tashkent',
+                    'ACTIVE', 0)
+                """)
+                .param("id", sisterLocation)
+                .param("tenantId", TENANT)
+                .param("brandId", sisterBrand)
+                .update();
+        var earlier = placeOrder("idem-scope-earlier");
+        assertThat(earlier.status()).isEqualTo(OrderStatus.CONFIRMED);
+        handOver(orderIdOf(earlier));
+        UUID completed = orderIdOf(earlier);
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_MIN_PRIOR_ORDERS_CODE, 1);
+
+        // Another customer of the same brand has a completed order; CUSTOMER has none. The tenant, the
+        // brand and the status all match, so only the account predicate of the count tells them apart.
+        moveCompletedOrder(completed, OTHER_CUSTOMER, BRAND, LOCATION);
+        assertThat(orderStore.countCompletedForCustomer(TENANT, BRAND, OTHER_CUSTOMER))
+                .isEqualTo(1L);
+        assertThat(orderStore.countCompletedForCustomer(TENANT, BRAND, CUSTOMER))
+                .as("someone else's completed order is not CUSTOMER's history")
+                .isZero();
+        var firstOrderBesideAnotherCustomer = placeOrder("idem-scope-other-customer");
+        assertThat(firstOrderBesideAnotherCustomer.status())
+                .as("CUSTOMER's first order waits for a person however many orders other customers completed")
+                .isEqualTo(OrderStatus.AWAITING_APPROVAL);
+        assertThat(heldReason(orderIdOf(firstOrderBesideAnotherCustomer))).isEqualTo("AUTO_ACCEPT_HELD_PRIOR_ORDERS");
+
+        // CUSTOMER's own completed order, but at a sister brand of the same tenant: the account is shared
+        // across a tenant's brands under TENANT_SHARED, and only the brand predicate tells them apart.
+        moveCompletedOrder(completed, CUSTOMER, sisterBrand, sisterLocation);
+        assertThat(orderStore.countCompletedForCustomer(TENANT, sisterBrand, CUSTOMER))
+                .isEqualTo(1L);
+        assertThat(orderStore.countCompletedForCustomer(TENANT, BRAND, CUSTOMER))
+                .as("a sister brand's history is not this brand's")
+                .isZero();
+        var firstOrderBesideASisterBrand = placeOrder("idem-scope-sister-brand");
+        assertThat(firstOrderBesideASisterBrand.status())
+                .as("CUSTOMER's first order in BRAND waits for a person although a sister brand knows them")
+                .isEqualTo(OrderStatus.AWAITING_APPROVAL);
+        assertThat(heldReason(orderIdOf(firstOrderBesideASisterBrand))).isEqualTo("AUTO_ACCEPT_HELD_PRIOR_ORDERS");
+
+        // The control: the very same row, back where it belongs, is what the gate trusts. Without it
+        // the two refusals above could be a gate that holds everybody.
+        moveCompletedOrder(completed, CUSTOMER, BRAND, LOCATION);
+        assertThat(orderStore.countCompletedForCustomer(TENANT, BRAND, CUSTOMER))
+                .isEqualTo(1L);
+        assertThat(placeOrder("idem-scope-own-history").status())
+                .as("CUSTOMER's own completed order in BRAND is a prior success")
+                .isEqualTo(OrderStatus.CONFIRMED);
+    }
+
+    /** Where a completed order's account and branch are, for a test that needs the same row to be someone else's. */
+    private void moveCompletedOrder(UUID orderId, UUID customerAccountId, UUID brandId, UUID locationId) {
+        assertThat(jdbc.sql("""
+                                UPDATE ordering.orders
+                                SET customer_account_id = :accountId, brand_id = :brandId, location_id = :locationId
+                                WHERE tenant_id = :tenantId AND id = :orderId AND status = 'COMPLETED'
+                                """)
+                        .param("accountId", customerAccountId)
+                        .param("brandId", brandId)
+                        .param("locationId", locationId)
+                        .param("tenantId", TENANT)
+                        .param("orderId", orderId)
+                        .update())
+                .as("exactly the one completed order is moved")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a guest counts as having no prior orders")
+    void aGuestHasNoPriorOrders() {
+        autoConfirmWithAHoldBackPath();
+        allowGuestOrders();
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_MIN_PRIOR_ORDERS_CODE, 1);
+
+        var guest = tx(() -> checkout.checkout(guestCheckoutCommand(readyGuestCart(), "idem-guest-gate")));
+
+        assertThat(guest.status()).isEqualTo(OrderStatus.AWAITING_APPROVAL);
+        assertThat(heldReason(orderIdOf(guest))).isEqualTo("AUTO_ACCEPT_HELD_PRIOR_ORDERS");
+    }
+
+    @Test
+    @DisplayName(
+            "a gate with no approval channel to hold on does not strand the order: it confirms, and the platform says so")
+    void aGateWithNowhereToSendTheOrderIsCountedAndTheOrderConfirms() {
+        // The platform default: AUTO_CONFIRM with no approval channel.
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_ELIGIBLE_CHANNELS_CODE, "call-centre");
+
+        var placed = placeOrder("idem-gate-unenforceable");
+
+        assertThat(placed.status())
+                .as("a customer is never left waiting on a decision nobody was asked to make")
+                .isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(autoAcceptMeters
+                        .counter(
+                                "horecaos.order.auto_accept_gate",
+                                "outcome",
+                                "unenforceable",
+                                "reason",
+                                "CHANNEL_NOT_ELIGIBLE")
+                        .count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName(
+            "a held order whose payment lands stays held for a decision, and one nobody decides follows the document's timeout action")
+    void aHeldOrderStaysHeldAfterItsPaymentAndExpiresAsTheDocumentSays() {
+        autoConfirmWithAHoldBackPath();
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_ELIGIBLE_CHANNELS_CODE, "call-centre");
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-gate-paid", "CLICK")));
+        assertThat(placed.status()).isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
+
+        UUID attempt = reservedAttempt(orderIdOf(placed), PaymentProviderType.CLICK, Duration.ofHours(12));
+        capturePayment(orderIdOf(placed), attempt);
+
+        var afterCapture = orderStore.find(TENANT, orderIdOf(placed)).orElseThrow();
+        assertThat(afterCapture.status())
+                .as(
+                        "the money is in, and a person still has to say yes: the pinned policy says AUTO_CONFIRM, the order's own mode does not")
+                .isEqualTo(OrderStatus.AWAITING_APPROVAL);
+        assertThat(pendingApprovalTimers(orderIdOf(placed))).isEqualTo(1L);
+        assertThat(heldReason(orderIdOf(placed)))
+                .as("the payment moved the order into AWAITING_APPROVAL, but the gate is why it is held, and "
+                        + "the history that answers 'why is it stuck' has to say so")
+                .isEqualTo("AUTO_ACCEPT_HELD_CHANNEL");
+
+        clock.advance(Duration.ofMinutes(6));
+        var lapsed = tx(() -> orderState.approvalDeadlineReached(TENANT, orderIdOf(placed)));
+
+        assertThat(lapsed.applied()).isTrue();
+        assertThat(lapsed.status())
+                .as("the document's timeout action is AUTO_REJECT")
+                .isEqualTo(OrderStatus.EXPIRED);
+    }
+
+    @Test
+    @DisplayName("a held order paid online names the gate that held it, whichever gate it was, from checkout on")
+    void aHeldOrderPaidOnlineKeepsThePriorOrdersReason() {
+        autoConfirmWithAHoldBackPath();
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_MIN_PRIOR_ORDERS_CODE, 1);
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-gate-paid-prior", "CLICK")));
+        assertThat(placed.status()).isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
+
+        assertThat(jdbc.sql("""
+                                SELECT reason_code FROM ordering.order_state_history
+                                WHERE order_id = :id AND to_status = 'PAYMENT_AUTHORIZING'
+                                """)
+                        .param("id", orderIdOf(placed))
+                        .query(String.class)
+                        .single())
+                .as("the gate decided at checkout, so checkout's own transition remembers it until the money lands")
+                .isEqualTo("AUTO_ACCEPT_HELD_PRIOR_ORDERS");
+
+        UUID attempt = reservedAttempt(orderIdOf(placed), PaymentProviderType.CLICK, Duration.ofHours(12));
+        capturePayment(orderIdOf(placed), attempt);
+
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().status())
+                .isEqualTo(OrderStatus.AWAITING_APPROVAL);
+        assertThat(heldReason(orderIdOf(placed))).isEqualTo("AUTO_ACCEPT_HELD_PRIOR_ORDERS");
+    }
+
+    private String heldReason(UUID orderId) {
+        return jdbc.sql("""
+                        SELECT reason_code FROM ordering.order_state_history
+                        WHERE order_id = :id AND to_status = 'AWAITING_APPROVAL'
+                        """).param("id", orderId).query(String.class).single();
     }
 
     private <T> T tx(java.util.function.Supplier<T> work) {
@@ -8502,18 +9347,8 @@ class CartCheckoutAndOrderTests {
      */
     private UUID seedCommentPresetForBurger(String code, String labelRu) {
         UUID presetId = UUID.randomUUID();
-        jdbc.sql("""
-                INSERT INTO catalog.comment_presets (
-                    id, tenant_id, code, label_ru, label_uz, label_en, sort_order, status, version)
-                VALUES (:id, :tenantId, :code, :labelRu, :labelUz, :labelEn, 0, 'ACTIVE', 1)
-                """)
-                .param("id", presetId)
-                .param("tenantId", TENANT)
-                .param("code", code)
-                .param("labelRu", labelRu)
-                .param("labelUz", labelRu + " (uz)")
-                .param("labelEn", labelRu + " (en)")
-                .update();
+        CommentPresetRows.insertPreset(
+                jdbc, presetId, TENANT, code, CommentPresetRows.triple(labelRu, labelRu + " (uz)", labelRu + " (en)"));
         jdbc.sql("""
                 INSERT INTO catalog.product_comment_presets (
                     id, tenant_id, brand_id, product_id, preset_id, sort_order, version)
@@ -8698,6 +9533,10 @@ class CartCheckoutAndOrderTests {
 
         void override(String keyCode, Object value) {
             delegate = new FakeConfigurationResolver(Map.of(keyCode, value));
+        }
+
+        void overrideAll(Map<String, Object> values) {
+            delegate = new FakeConfigurationResolver(values);
         }
 
         @Override

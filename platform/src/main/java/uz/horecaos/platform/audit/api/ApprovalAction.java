@@ -202,7 +202,26 @@ public enum ApprovalAction {
      * platform-scope floor {@code V0642} seeds; the attachment is the tenant's own decision, raised in a
      * tenant-owned scope and listed on that tenant's worklist.
      */
-    FISCAL_CORRECTION_ATTACH("fiscal.correction.attach", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY);
+    FISCAL_CORRECTION_ATTACH("fiscal.correction.attach", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
+
+    /**
+     * ADR 0029, batch 21: placing a legal hold on a customer account. While a hold stands the account's erasure
+     * is refused and the retention jobs that expire her data skip her, so one person placing it on their own word
+     * is a way to refuse a data subject's request unseen.
+     *
+     * <p>Fail-closed, like {@link #FISCAL_CORRECTION_REQUEST}, and governed from the first day by the
+     * platform-scope floor {@code V0682} seeds; the decision is the tenant's own, raised in a tenant-owned scope
+     * and listed on that tenant's worklist. A deployment that deleted the policy should stop holds, not let one
+     * person place them alone.
+     */
+    CUSTOMER_LEGAL_HOLD_PLACE("customer.legal-hold.place", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
+
+    /**
+     * ADR 0029, batch 21: lifting a legal hold, which releases the account to the erasure request that was
+     * waiting behind it. The opposite risk to {@link #CUSTOMER_LEGAL_HOLD_PLACE}: one person lifting a hold alone
+     * can destroy the data a claim needed. Fail-closed on the floor {@code V0682} seeds, for the same reason.
+     */
+    CUSTOMER_LEGAL_HOLD_LIFT("customer.legal-hold.lift", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY);
 
     /**
      * Which worklist a request for the action reaches once it is {@code PENDING}.

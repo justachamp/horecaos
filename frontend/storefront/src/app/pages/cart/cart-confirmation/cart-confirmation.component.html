@@ -199,6 +199,12 @@
     <div class="mt-4 flex flex-col gap-3">
       <app-gift-offers />
       <app-promo-code />
+      <!-- X.1 (ADR 0046, ADR 0185): part of the order paid with points -->
+      <app-points-redemption
+        [cartId]="cart.priced()?.cartId ?? null"
+        [quoteId]="cart.priced()?.quoteId ?? null"
+        (selectionChange)="onPointsChanged($event)"
+      />
     </div>
 
     <!-- To'lov summasi: goods, tax, delivery and total, so the lines add up -->
@@ -228,7 +234,7 @@
           class="flex items-center justify-between pt-1 text-sm text-white"
           data-testid="discount-row"
         >
-          <span>{{ row.labelKey | t }}</span>
+          <span>{{ row.title ?? (row.labelKey | t) }}</span>
           <span>-{{ row.amount }}</span>
         </div>
       }
@@ -257,6 +263,24 @@
         <div class="flex items-center justify-between pt-1 text-sm text-white">
           <span>{{ 'cart.packaging' | t }}</span>
           <span>{{ cart.packagingFormatted() }}</span>
+        </div>
+      }
+      @if (pointsSpent; as spent) {
+        <div
+          class="mt-2 flex items-center justify-between border-t border-white/20 pt-2 text-sm text-white"
+          data-testid="summary-points"
+        >
+          <span>{{ 'points.spent' | t }}</span>
+          <span>-{{ spent }}</span>
+        </div>
+      }
+      @if (cashToPay; as cash) {
+        <div
+          class="flex items-center justify-between pt-1 text-sm font-bold text-white"
+          data-testid="summary-cash"
+        >
+          <span>{{ 'points.cashToPay' | t }}</span>
+          <span>{{ cash }}</span>
         </div>
       }
     </div>
@@ -298,7 +322,8 @@
         !cart.cartData() ||
         !selectedPaymentId ||
         noPaymentMethods() ||
-        !canPlaceOrder
+        !canPlaceOrder ||
+        redemption().blocked
       "
       class="flex w-full items-center justify-center rounded-xl bg-brand-accent py-3.5 text-base font-bold text-white transition-opacity hover:opacity-95 disabled:opacity-50"
     >

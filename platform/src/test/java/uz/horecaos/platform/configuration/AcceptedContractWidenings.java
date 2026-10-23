@@ -1,10 +1,12 @@
 package uz.horecaos.platform.configuration;
 
+import java.util.List;
 import java.util.Set;
 
 /**
  * The released-contract changes an Accepted ADR decided, and the only ones the OpenAPI
- * compatibility gate lets through (a type change, or a required request field made optional).
+ * compatibility gate lets through (a type change, a required request field made optional, or one
+ * request that swaps a published field for another).
  *
  * <p>{@link OpenApiContractTests} refuses any change of a published property's type, because
  * a client generated from the released document is entitled to it. ADR 0137 is a decision
@@ -21,6 +23,30 @@ import java.util.Set;
  * required, so relaxing it is the one place the gate's "cannot make a published required field
  * optional" is lifted. Relaxing a request is safe for a client generated from the released document
  * (it can still send the number); the response gains no required field and loses none.
+ *
+ * <p>ADR 0149 (Decision 3, and the headers of V0430, V0433 and V0678) is the third, and the first
+ * <em>removal</em>: a preset comment's wording was three fixed fields ({@code labelRu}, {@code labelUz},
+ * {@code labelEn}) beside a {@code labels} map for any further language, and the three fixed fields left the
+ * wire when the columns behind them were dropped, so that the map is the only shape of the wording. The
+ * allowance names the three properties and the surfaces that carried them (the control-plane preset
+ * endpoints, a product's offered presets, the storefront menu's {@code commentPresets[]} and an order
+ * line's {@code commentPresets[]}); V0679 does the same for a region's and a service zone's name
+ * ({@code displayNameRu/Uz/En}) and the dispatch editor's zone options ({@code nameRu/Uz/En}), which are
+ * now the {@code displayNames} / {@code names} maps alone; no other schema may lose a property. No production tenant exists
+ * (ADR 0055), so a client generated from the released document has nobody to break.
+ *
+ * <p>ADR 0182 (D15) is the fourth, and the only one that changes a request's shape rather than relaxing
+ * it. A courier broadcast used to be drafted from free text ({@code message}); the SMS gateway
+ * approves wordings in advance (ADR 0091), so text typed into a form could never have been approved,
+ * and the draft now names an approved wording ({@code templateKey}) with its variables. The one
+ * client of that request is the operations console, which moved in the same change, so on that one
+ * request {@code message} may leave and {@code templateKey} may be required. The response keeps
+ * {@code message} (nullable) so a broadcast drafted before the change still reads.
+ *
+ * <p>ADR 0183 (D17) is the fifth. The public pickup search took the customer's {@code point} as required; a
+ * customer who shared no location is now answered in the brand's own branch order, so the field is optional.
+ * Relaxing a request is safe for a client generated from the released document (it can still send the point, and
+ * with one the order is still by distance); the response gains no required field and loses none.
  *
  * <p>The allowance is deliberately narrow. It names the properties, it admits one direction
  * of one type change, and it needs the property to be the one being compared rather than a
@@ -39,19 +65,78 @@ final class AcceptedContractWidenings {
 
     private static final Set<String> ADR_0150_MODES = Set.of("delivery", "pickup", "dineIn");
 
+    /** ADR 0149: the three fixed-language fields a preset comment's wording no longer has. */
+    private static final Set<String> ADR_0149_PRESET_LEGACY_LABELS = Set.of("labelRu", "labelUz", "labelEn");
+
+    /**
+     * ADR 0149: the fixed-language name fields a region, a service zone and a dispatch-rule zone option no
+     * longer have (V0679). {@code displayNameRu/Uz/En} on the region and zone surfaces, {@code nameEn/Ru/Uz} on
+     * the dispatch editor's zone options.
+     */
+    private static final Set<String> ADR_0149_NAME_LEGACY_FIELDS =
+            Set.of("displayNameRu", "displayNameUz", "displayNameEn", "nameRu", "nameUz", "nameEn");
+
+    /** The surfaces that carried them; a path fragment is enough, the property names do the narrowing. */
+    private static final List<String> ADR_0149_NAME_SURFACES =
+            List.of("/regions", "/service-zones", "/zones", "/dispatch-rules/options");
+
+    /** ADR 0182: the courier broadcast's draft, where free text gave way to an approved wording. */
+    private static final String ADR_0182_DRAFT_REQUEST =
+            "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/courier-broadcasts post request";
+
+    /** ADR 0183 D17: the public pickup search, where the customer's point may now be left out. */
+    private static final String ADR_0183_PICKUP_SEARCH_REQUEST = "/api/v1/storefront/pickup-locations post request";
+
     private AcceptedContractWidenings() {}
+
+    /**
+     * The properties of the schema at {@code context} that the released contract carried and that may be gone
+     * now. Empty everywhere but the preset comment surfaces (ADR 0149, V0678: the control-plane endpoints
+     * under {@code /comment-presets} and every {@code commentPresets[]} array a response carries) and the
+     * region and zone surfaces (V0679: the regions, service zones and the dispatch editor's zone options), and ADR 0182's
+     * courier broadcast draft, where the free text gave way to an approved wording.
+     */
+    static Set<String> mayBeRemoved(String context) {
+        if (context.contains("/comment-presets") || context.endsWith("commentPresets[]")) {
+            return ADR_0149_PRESET_LEGACY_LABELS;
+        }
+        if (ADR_0149_NAME_SURFACES.stream().anyMatch(context::contains)) {
+            return ADR_0149_NAME_LEGACY_FIELDS;
+        }
+        if (ADR_0182_DRAFT_REQUEST.equals(context)) {
+            // ADR 0182: the courier broadcast draft's free text, which the gateway could never have approved.
+            return Set.of("message");
+        }
+        return Set.of();
+    }
 
     /**
      * The properties of the schema at {@code context} that were required in the released contract and
      * may be optional now. Empty everywhere but the three per-mode objects of the lateness editor's
-     * request, where it is the one field ADR 0150 relaxed.
+     * request, where it is the one field ADR 0150 relaxed, and the public pickup search's request, where ADR 0183 relaxed
+     * the customer's point.
      */
     static Set<String> mayBecomeOptional(String context) {
         if (context.startsWith(ADR_0150_EDITOR_REQUEST)
                 && ADR_0150_MODES.contains(context.substring(ADR_0150_EDITOR_REQUEST.length()))) {
             return Set.of("noPromiseFallbackSeconds");
         }
+        if (ADR_0182_DRAFT_REQUEST.equals(context)) {
+            return Set.of("message");
+        }
+        if (ADR_0183_PICKUP_SEARCH_REQUEST.equals(context)) {
+            return Set.of("point");
+        }
         return Set.of();
+    }
+
+    /**
+     * The properties of the schema at {@code context} that were optional or absent in the released
+     * contract and may be required now. Empty everywhere but ADR 0182's courier broadcast draft,
+     * where it is the approved wording's key.
+     */
+    static Set<String> mayBecomeRequired(String context) {
+        return ADR_0182_DRAFT_REQUEST.equals(context) ? Set.of("templateKey") : Set.of();
     }
 
     /**

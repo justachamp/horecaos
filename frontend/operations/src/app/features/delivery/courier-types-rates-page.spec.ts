@@ -469,6 +469,137 @@ describe('CourierTypesRatesPage', () => {
     }
   });
 
+  // ------------------------------------------------ ADR 0178: the rule simulator
+
+  async function openWiredPenaltyForm(
+    simulateRule: CouriersApi['simulateRule'],
+  ): Promise<HTMLElement> {
+    await render({
+      types: () => Promise.resolve([]),
+      rateCards: () => Promise.resolve([]),
+      adjustmentReasons: () => Promise.resolve([]),
+      simulateRule,
+    });
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="rates-add-reason"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="new-reason-wire-toggle"]') as HTMLInputElement).click();
+    fixture.detectChanges();
+    const threshold = host.querySelector(
+      '[data-testid="new-reason-threshold"]',
+    ) as HTMLInputElement;
+    threshold.valueAsNumber = 2;
+    threshold.dispatchEvent(new Event('input'));
+    const amount = host.querySelector('[data-testid="new-reason-amount"]') as HTMLInputElement;
+    amount.valueAsNumber = 20_000;
+    amount.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    return host;
+  }
+
+  it('previews who a wired rule would have hit, by reference, before it is saved', async () => {
+    const simulateRule = vi.fn().mockResolvedValue({
+      lookbackDays: 7,
+      window: 'SHIFT',
+      windowsReplayed: 12,
+      couriersHit: 1,
+      totalAmountMinor: 20_000,
+      currency: 'UZS',
+      truncated: false,
+      includesOpenPeriods: false,
+      hits: [
+        {
+          courierId: 'c1',
+          courierReference: 'K-014',
+          windowId: 'shift-1',
+          windowEnd: '2026-10-20T17:00:00Z',
+          value: 3,
+          amountMinor: 20_000,
+          currency: 'UZS',
+          windowStatus: 'CLOSED',
+          windowStillOpen: false,
+        },
+      ],
+    });
+    const host = await openWiredPenaltyForm(simulateRule);
+
+    (host.querySelector('[data-testid="rule-simulation-run"]') as HTMLButtonElement).click();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(host.querySelector('[data-testid="rule-simulation-hit"]')).not.toBeNull();
+    });
+
+    expect(simulateRule).toHaveBeenCalledWith('t1', {
+      outcomeBasis: 'DELIVERED_VOLUME',
+      ruleComparator: 'GTE',
+      ruleThreshold: 2,
+      ruleWindow: 'SHIFT',
+      ruleAmountMinor: 20_000,
+      ruleCurrency: 'UZS',
+      lookbackDays: 7,
+    });
+    // The rule is a tenant-level registry row evaluated at every branch's shift close, so the
+    // preview must replay every branch's shifts. The operator's own branch (`l1` in this scope)
+    // is not sent: with it the platform narrows SHIFT windows to that one branch and the preview
+    // understates who the saved rule will hit. toHaveBeenCalledWith ignores an undefined key,
+    // so the absence is asserted on the request itself.
+    const request = simulateRule.mock.calls[0][1] as Record<string, unknown>;
+    expect(request['locationId'] ?? null).toBeNull();
+    expect(JSON.stringify(request)).not.toContain('l1');
+    expect(host.querySelector('[data-testid="rule-simulation-hit"]')?.textContent).toContain(
+      'K-014',
+    );
+    expect(host.querySelector('q-rule-simulator')?.textContent).toContain('1 couriers');
+  });
+
+  it('says «nobody» and how many shifts it looked at, so an empty answer is not an empty week', async () => {
+    const simulateRule = vi.fn().mockResolvedValue({
+      lookbackDays: 7,
+      window: 'SHIFT',
+      windowsReplayed: 5,
+      couriersHit: 0,
+      totalAmountMinor: 0,
+      currency: 'UZS',
+      truncated: false,
+      includesOpenPeriods: false,
+      hits: [],
+    });
+    const host = await openWiredPenaltyForm(simulateRule);
+
+    (host.querySelector('[data-testid="rule-simulation-run"]') as HTMLButtonElement).click();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(host.querySelector('q-rule-simulator')?.textContent).toContain('Nobody');
+    });
+
+    expect(host.querySelector('q-rule-simulator')?.textContent).toContain('5');
+    expect(host.querySelector('[data-testid="rule-simulation-hits"]')).toBeNull();
+  });
+
+  it('offers no preview for a manual-only reason, which has no rule to replay', async () => {
+    await render({
+      types: () => Promise.resolve([]),
+      rateCards: () => Promise.resolve([]),
+      adjustmentReasons: () => Promise.resolve([]),
+    });
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="rates-add-reason"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="rule-simulation"]')).toBeNull();
+  });
+
+  it('shows why a preview could not run instead of an empty list', async () => {
+    const host = await openWiredPenaltyForm(vi.fn().mockRejectedValue(new Error('down')));
+
+    (host.querySelector('[data-testid="rule-simulation-run"]') as HTMLButtonElement).click();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(host.querySelector('[data-testid="rule-simulation-error"]')).not.toBeNull();
+    });
+    expect(host.querySelector('[data-testid="rule-simulation-hit"]')).toBeNull();
+  });
+
   it('shows the denied state when the location grant is missing', async () => {
     await TestBed.configureTestingModule({
       imports: [CourierTypesRatesPage],

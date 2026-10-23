@@ -155,6 +155,15 @@ public class PaymentFiscalService {
     }
 
     /**
+     * Whether this provider takes the receipt lines with the checkout (ADR 0166 Decision 9); false for a provider
+     * with no port.
+     */
+    public boolean linesTravelWithTheCheckout(@Nullable PaymentProviderType providerType) {
+        FiscalReceiptPort port = providerType == null ? null : receiptPorts.get(providerType);
+        return port != null && port.takesLinesWithTheCheckout();
+    }
+
+    /**
      * Asks the provider for a receipt and records whatever comes back.
      *
      * <p>An uncertain submission is not resubmitted. Whether Click's
@@ -166,16 +175,6 @@ public class PaymentFiscalService {
      */
     @Transactional
     public FiscalStatus submit(FiscalDocument document, ProviderBinding binding, Instant now) {
-        return submit(document, binding, now, false);
-    }
-
-    /**
-     * {@link #submit(FiscalDocument, ProviderBinding, Instant)}, saying whether the lines are the
-     * bridge's one-line placeholder, so the evidence of what was filed says it was a stand-in and
-     * not a sale (ADR 0166, Decision 6).
-     */
-    @Transactional
-    public FiscalStatus submit(FiscalDocument document, ProviderBinding binding, Instant now, boolean linesSynthetic) {
         FiscalReceiptPort port = receiptPorts.get(binding.providerType());
         if (port == null || !binding.supportsPartnerFiscalization()) {
             log.warn(
@@ -186,14 +185,61 @@ public class PaymentFiscalService {
             return document.status();
         }
 
-        FiscalSubmission submission = port.submit(document, binding);
+        return apply(document, binding, port.submit(document, binding), now);
+    }
 
+    /**
+     * Records the receipt the provider already holds for this document, if it holds one.
+     *
+     * <p>The read-back made on its own, for the caller that cannot submit: the receipt could not be rebuilt, and
+     * the question is whether the earlier request, whose reply was lost, in fact filed it. Nothing is sent. When
+     * the provider answers with a receipt it is recorded exactly as a submission's answer is, so the document
+     * leaves {@code SUBMITTED} or {@code BLOCKED} for {@code ISSUED} and carries the evidence.
+     *
+     * @return true when the provider held the receipt and it is now recorded
+     */
+    @Transactional
+    public boolean recordReceiptAlreadyHeld(FiscalDocument document, ProviderBinding binding, Instant now) {
+        FiscalReceiptPort port = receiptPorts.get(binding.providerType());
+        if (port == null || !binding.supportsPartnerFiscalization()) {
+            return false;
+        }
+        Optional<FiscalSubmission> held = port.heldReceipt(document, binding);
+        if (held.isEmpty() || held.get().status() != FiscalStatus.ISSUED) {
+            return false;
+        }
+        apply(document, binding, held.get(), now);
+        return true;
+    }
+
+    /**
+     * Records what the tenant's own fiscal terminal answered (ADR 0166 «Providers»): the same bookkeeping as a
+     * provider's answer, with no merchant account to name and no provider liveness watermark to move.
+     *
+     * <p>The terminal bridge has already asked; this keeps the request that left, then moves the document, in one
+     * transaction, so an issued receipt and the lines it was issued for are never apart.
+     */
+    @Transactional
+    public FiscalStatus recordTerminalSubmission(
+            FiscalDocument document, UUID terminalId, FiscalSubmission submission, Instant now) {
+        // The terminal is named before the status moves: an issued document must name what issued it, and the
+        // database checks that on the move (V0688).
+        documents.recordTerminal(document.tenantId(), document.id(), terminalId);
+        return apply(document, null, submission, now);
+    }
+
+    private FiscalStatus apply(
+            FiscalDocument document, @Nullable ProviderBinding binding, FiscalSubmission submission, Instant now) {
         // The request that left is kept before the status moves, whatever the provider answered:
         // an answer that was lost, or refused, is exactly when "what did we send" is asked.
         SentReceipt wire = submission.sent();
         if (wire != null) {
             try {
-                sentEvidence.record(document, binding, wire, linesSynthetic, now);
+                if (binding != null) {
+                    sentEvidence.record(document, binding, wire, now);
+                } else {
+                    sentEvidence.recordTerminal(document, wire, now);
+                }
             } catch (RuntimeException unrecorded) {
                 // Losing the record costs the detail and not the answer. The request has left; the
                 // provider's reply is the outcome that must survive, and a failure here that rolled
@@ -213,7 +259,7 @@ public class PaymentFiscalService {
                             document.tenantId(),
                             document.id(),
                             FiscalStatus.ISSUED,
-                            FiscalReason.PARTNER_FISCALIZED,
+                            binding == null ? FiscalReason.TERMINAL_FISCALIZED : FiscalReason.PARTNER_FISCALIZED,
                             submission.evidence(),
                             null,
                             submission.submittedAt());
@@ -234,15 +280,18 @@ public class PaymentFiscalService {
                 // FISCAL category), so this binding's watermark is the same
                 // integration.bindings row payments already fiscalises
                 // through — read by the Integrations health panel alongside
-                // POS and marketplace, with no new table.
-                activity.recordSuccess(
-                        document.tenantId(),
-                        binding.integrationBindingId(),
-                        null,
-                        "OUTBOUND",
-                        fiscalReference(submission, document),
-                        FISCAL_SUBMISSION_STALE_AFTER_SECONDS,
-                        submission.submittedAt());
+                // POS and marketplace, with no new table. A terminal has no such binding
+                // here; its liveness is its own health check.
+                if (binding != null) {
+                    activity.recordSuccess(
+                            document.tenantId(),
+                            binding.integrationBindingId(),
+                            null,
+                            "OUTBOUND",
+                            fiscalReference(submission, document),
+                            FISCAL_SUBMISSION_STALE_AFTER_SECONDS,
+                            submission.submittedAt());
+                }
             }
             case REJECTED -> {
                 documents.recordEvidence(
@@ -261,14 +310,16 @@ public class PaymentFiscalService {
                                 submission.providerMessage()),
                         null,
                         now);
-                activity.recordFailure(
-                        document.tenantId(),
-                        binding.integrationBindingId(),
-                        null,
-                        "OUTBOUND",
-                        submission.providerStatusCode() != null ? submission.providerStatusCode() : "REJECTED",
-                        FISCAL_SUBMISSION_STALE_AFTER_SECONDS,
-                        submission.submittedAt());
+                if (binding != null) {
+                    activity.recordFailure(
+                            document.tenantId(),
+                            binding.integrationBindingId(),
+                            null,
+                            "OUTBOUND",
+                            submission.providerStatusCode() != null ? submission.providerStatusCode() : "REJECTED",
+                            FISCAL_SUBMISSION_STALE_AFTER_SECONDS,
+                            submission.submittedAt());
+                }
             }
             // A non-answer leaves the document exactly where it was, in SUBMITTED,
             // and the read-back is what settles it. Recording it as FAILED would

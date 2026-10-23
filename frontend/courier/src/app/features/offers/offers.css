@@ -1,0 +1,22 @@
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.where {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-block: 8px;
+  border-block: 1px solid var(--q-hairline);
+}
+
+.textlink {
+  color: var(--q-primary);
+}

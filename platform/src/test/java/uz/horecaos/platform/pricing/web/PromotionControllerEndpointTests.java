@@ -41,6 +41,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.pricing.PromotionDbFixture;
+import uz.horecaos.platform.support.ApprovalWorklistProof;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
@@ -339,6 +340,76 @@ class PromotionControllerEndpointTests {
                         .query(String.class)
                         .single())
                 .isEqualTo("VALIDATED");
+    }
+
+    /**
+     * Row 9.4, ADR 0140, ADR 0181: the activation reaches the worklist the console reads, under a policy the
+     * tenant published through the console's own route, and a second owner's decision lets the same call through.
+     * The sibling above proves the request is raised; this proves it can be seen and decided, which is what a
+     * checker needs before the threshold means anything.
+     */
+    @Test
+    @DisplayName("a large discount waits on the worklist, and activates once a second owner decides it")
+    void aLargeDiscountIsDecidedFromTheWorklistAndThenActivates() throws Exception {
+        String secondOwner = "promotion-second-owner";
+        grant(secondOwner, PlatformRole.TENANT_OWNER, PromotionDbFixture.TENANT);
+        ApprovalWorklistProof.publishPolicy(
+                mvc,
+                PromotionDbFixture.TENANT,
+                tokenFor(OWNER),
+                "pricing.promotion.activate",
+                "pricing.promotion.manage",
+                key());
+
+        JsonNode drafted = json(
+                post(BASE)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, key())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("BIGWORK", 4_000)),
+                201);
+        String id = drafted.get("promotionId").asString();
+        MvcResult validate = mvc.perform(post(BASE + "/" + id + "/validate")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, key())
+                        .header("If-Match", etag(drafted)))
+                .andReturn();
+        String validatedEtag =
+                java.util.Objects.requireNonNull(validate.getResponse().getHeader("ETag"));
+
+        MvcResult waiting = mvc.perform(post(BASE + "/" + id + "/activate")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, key())
+                        .header("If-Match", validatedEtag))
+                .andReturn();
+        assertThat(waiting.getResponse().getStatus()).isEqualTo(202);
+
+        JsonNode entry = ApprovalWorklistProof.listed(
+                mvc, PromotionDbFixture.TENANT, tokenFor(secondOwner), "pricing.promotion.activate");
+        assertThat(entry.get("id").asString())
+                .isEqualTo(mapper().readTree(waiting.getResponse().getContentAsString())
+                        .get("approvalRequestId")
+                        .asString());
+        assertThat(entry.get("mayDecide").asBoolean()).isTrue();
+        assertThat(ApprovalWorklistProof.approve(
+                        mvc,
+                        PromotionDbFixture.TENANT,
+                        tokenFor(secondOwner),
+                        UUID.fromString(entry.get("id").asString()),
+                        key()))
+                .isEqualTo("APPROVED");
+
+        MvcResult activated = mvc.perform(post(BASE + "/" + id + "/activate")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, key())
+                        .header("If-Match", validatedEtag))
+                .andReturn();
+        assertThat(activated.getResponse().getStatus()).isEqualTo(200);
+        assertThat(jdbc.sql("SELECT status FROM pricing.promotions WHERE id = :id")
+                        .param("id", UUID.fromString(id))
+                        .query(String.class)
+                        .single())
+                .isEqualTo("ACTIVE");
     }
 
     @Test

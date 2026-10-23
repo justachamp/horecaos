@@ -561,9 +561,9 @@ class MixedOwnershipReferenceTests {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO fulfillment.regions (
-                    id, tenant_id, code, display_name_ru, display_name_uz, display_name_en,
+                    id, tenant_id, code,
                     centre_lat, centre_lon, bbox_sw_lat, bbox_sw_lon, bbox_ne_lat, bbox_ne_lon)
-                VALUES (:id, :tenantId, :code, 'RU', 'UZ', 'EN',
+                VALUES (:id, :tenantId, :code,
                     41.31, 69.24, 41.0, 69.0, 41.6, 69.5)
                 """)
                 .param("id", id)
@@ -596,9 +596,8 @@ class MixedOwnershipReferenceTests {
         UUID zoneId = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO fulfillment.service_zones (
-                    id, tenant_id, brand_id, zone_role, code,
-                    display_name_ru, display_name_uz, display_name_en)
-                VALUES (:id, :tenantId, :brandId, 'DELIVERY', :code, 'RU', 'UZ', 'EN')
+                    id, tenant_id, brand_id, zone_role, code)
+                VALUES (:id, :tenantId, :brandId, 'DELIVERY', :code)
                 """)
                 .param("id", zoneId)
                 .param("tenantId", tenantId)

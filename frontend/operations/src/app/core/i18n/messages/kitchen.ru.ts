@@ -54,6 +54,9 @@ export const kitchenRu: AreaMessages<typeof kitchenEn> = {
   'kitchen.item.column.quantity': 'Кол-во',
   'kitchen.item.column.status': 'Статус',
   'kitchen.item.lineUnresolved': 'Позиция —',
+  'kitchen.item.intake.stopped': 'На стопе: заказ принят, проверьте перед приготовлением',
+  'kitchen.item.intake.unmapped': 'Нет в каталоге: уточните позицию у агрегатора',
+  'kitchen.item.intake.reference': 'Позиция агрегатора {reference}',
   'kitchen.item.combo': 'Комбо',
   'kitchen.item.comboCaption': 'каждая часть идёт на свою станцию',
   'kitchen.item.status.QUEUED': 'В очереди',
@@ -160,6 +163,51 @@ export const kitchenRu: AreaMessages<typeof kitchenEn> = {
   'kitchen.stopList.scope.brand': 'Весь бренд',
   'kitchen.stopList.scope.menu': 'Меню',
   'kitchen.stopList.scope.channel': 'Один канал',
+  'kitchen.stopList.decommission.title': 'Отключение стоп-листа',
+  'kitchen.stopList.decommission.lead':
+    'Отключение стопов вернёт в продажу каждое блюдо на стопе. Прежде чем администратор платформы это сделает, запустите материализацию: она записывает каждый стоп в позицию блюда там, где это возможно точно, и перечисляет стопы, которые не удалось перенести. Прочитайте отчёт, примите его и сообщите администратору.',
+  'kitchen.stopList.decommission.start': 'Запустить материализацию',
+  'kitchen.stopList.decommission.starting': 'Выполняется…',
+  'kitchen.stopList.decommission.startHint':
+    'Можно повторять. Блюдо на стопе остаётся на стопе; запуск только записывает стоп в позицию блюда.',
+  'kitchen.stopList.decommission.loading': 'Загружаем последний запуск…',
+  'kitchen.stopList.decommission.none': 'Запусков ещё не было.',
+  'kitchen.stopList.decommission.status.running': 'Выполняется',
+  'kitchen.stopList.decommission.status.completed': 'Завершён, отчёт не принят',
+  'kitchen.stopList.decommission.status.acknowledged': 'Принят',
+  'kitchen.stopList.decommission.status.failed': 'Не удался',
+  'kitchen.stopList.decommission.started': 'начат {when}',
+  'kitchen.stopList.decommission.completed': 'завершён {when}',
+  'kitchen.stopList.decommission.count.seen': 'Просмотрено стопов: {count}',
+  'kitchen.stopList.decommission.count.written': 'Записано в позицию: {count}',
+  'kitchen.stopList.decommission.count.already': 'Уже недоступно там: {count}',
+  'kitchen.stopList.decommission.count.notCarried': 'Не перенесено: {count}',
+  'kitchen.stopList.decommission.failed':
+    'Не удалось записать стопов: {count}. Пока следующий запуск их не перенесёт, отключение заблокировано: запустите ещё раз.',
+  'kitchen.stopList.decommission.column.dish': 'Блюдо',
+  'kitchen.stopList.decommission.column.scope': 'Охват стопа',
+  'kitchen.stopList.decommission.column.branch': 'Филиал',
+  'kitchen.stopList.decommission.column.reason': 'Почему не перенесён',
+  'kitchen.stopList.decommission.everyBranch': 'Все филиалы',
+  'kitchen.stopList.decommission.more': 'Показать ещё',
+  'kitchen.stopList.decommission.nothingLost':
+    'Ничего не потеряно: каждый действующий стоп теперь записан и в позицию.',
+  'kitchen.stopList.decommission.accept':
+    'Я прочитал отчёт и принимаю, что блюда из него вернутся в продажу после отключения стопов.',
+  'kitchen.stopList.decommission.acknowledge': 'Принять отчёт',
+  'kitchen.stopList.decommission.acknowledging': 'Сохраняем…',
+  'kitchen.stopList.decommission.acknowledged':
+    'Принят {when}. Теперь администратор платформы может отключить стопы. Стоп, поставленный после этого запуска, блокирует отключение, пока не принят новый запуск.',
+  'kitchen.stopList.decommission.reason.UNTRACKED_ITEM':
+    'Блюдо не ведёт учёт остатков, записывать в позицию нечего: оно снова продаётся',
+  'kitchen.stopList.decommission.reason.QUANTITY_ITEM':
+    'У блюда с учётом по количеству нет состояния «на стопе» для записи: оно снова продаётся',
+  'kitchen.stopList.decommission.reason.CHANNEL_SCOPE':
+    'Стоп для одного канала: запись остановила бы блюдо и в каналах, которых стоп не касался',
+  'kitchen.stopList.decommission.reason.MENU_NOT_EVERY_CHANNEL':
+    'Меню опубликовано здесь не во всех каналах: запись остановила бы блюдо в остальных',
+  'kitchen.stopList.decommission.reason.WRITE_FAILED':
+    'Запись не удалась: отключение заблокировано, пока запуск не перенесёт этот стоп',
   'kitchen.stopList.stop.until': 'до {when}',
   'kitchen.stopList.stop.indefinite': 'пока не снимут',
   'kitchen.stopList.stop.lift': 'Снять этот стоп',
@@ -187,6 +235,22 @@ export const kitchenRu: AreaMessages<typeof kitchenEn> = {
   'kitchen.stopList.propagation.pending':
     '{name}: {count} позиций не подтверждены с {since} — обновите в партнёрском кабинете',
   'kitchen.stopList.propagation.inSync': '{name}: синхронизировано',
+  'kitchen.stopList.propagation.dryRun':
+    '{name}: пробный режим — было бы отправлено позиций: {count}, ничего не отправлено. Сверьте с партнёрским кабинетом, прежде чем включать',
+  'kitchen.stopList.propagation.dryRun.show': 'Показать все блюда: {count}',
+  'kitchen.stopList.propagation.dryRun.hide': 'Скрыть список из {count} блюд',
+  'kitchen.stopList.propagation.dryRun.loading': 'Загружаем…',
+  'kitchen.stopList.propagation.dryRun.more': 'Показать ещё',
+  'kitchen.stopList.propagation.dryRun.failed': 'Не удалось загрузить список. Попробуйте ещё раз.',
+  'kitchen.stopList.propagation.dryRun.available': 'будет доступно',
+  'kitchen.stopList.propagation.dryRun.stopped': 'будет на стопе',
+  'kitchen.stopList.propagation.dryRun.unnamed': 'Блюда уже нет в меню',
+  'kitchen.stopList.propagation.dryRun.reference': 'Позиция партнёра {reference}',
+  'kitchen.stopList.propagation.dryRun.partnerUnknown': 'что сейчас у партнёра, неизвестно',
+  'kitchen.stopList.propagation.dryRun.partnerAvailable': 'у партнёра известно: доступно',
+  'kitchen.stopList.propagation.dryRun.partnerStopped': 'у партнёра известно: на стопе',
+  'kitchen.stopList.propagation.incident':
+    '{name}: партнёр не подтверждает с {since}. Это остаётся открытым, пока он не подтвердит, и закроется само.',
 
   // Мощность и настройки буфера (2.6) — волна 43
   'kitchen.capacity.title': 'Мощность и настройки буфера',

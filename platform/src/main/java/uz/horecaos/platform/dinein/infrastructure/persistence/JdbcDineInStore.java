@@ -1172,6 +1172,57 @@ public class JdbcDineInStore {
                 .update();
     }
 
+    /**
+     * ADR 0029 erasure: overwrites the guest name, numbers and note on every booking an erased customer made.
+     *
+     * <p>Two kinds of booking are hers: one made with her account, and one a host typed for a guest who quoted a number
+     * the account held ({@code customer_account_id} null, the keyed lookup hash equal to one of {@code phoneLookupHashes}),
+     * which is the same person on the phone. A booking made with a <em>different</em> account is that account's,
+     * whatever number it holds. The booking itself (party size, window, status, table) stays: the restaurant's
+     * floor history is not hers. The lookup hash is replaced, or a search for her old number would still find the row.
+     *
+     * @param tombstone the ciphertext to write for a given booking and column
+     * @return how many bookings were overwritten
+     */
+    public int eraseReservationsOf(
+            UUID tenantId,
+            UUID accountId,
+            java.util.Collection<String> phoneLookupHashes,
+            java.util.function.BiFunction<UUID, String, String> tombstone) {
+        String byNumber = phoneLookupHashes.isEmpty()
+                ? ""
+                : " OR (customer_account_id IS NULL AND guest_phone_lookup_hash IN (:hashes))";
+        var select = jdbc.sql("SELECT id FROM dinein.reservations WHERE tenant_id = :tenantId "
+                        + "AND (customer_account_id = :accountId" + byNumber + ")")
+                .param("tenantId", tenantId)
+                .param("accountId", accountId);
+        if (!phoneLookupHashes.isEmpty()) {
+            select = select.param("hashes", phoneLookupHashes);
+        }
+        List<UUID> ids = select.query(UUID.class).list();
+        for (UUID id : ids) {
+            jdbc.sql("""
+                    UPDATE dinein.reservations
+                       SET guest_name_encrypted = :name, guest_phone_encrypted = :phone,
+                           guest_phone_lookup_hash = :hash,
+                           secondary_phone_encrypted =
+                               CASE WHEN secondary_phone_encrypted IS NULL THEN NULL ELSE :secondary END,
+                           note_encrypted = CASE WHEN note_encrypted IS NULL THEN NULL ELSE :note END,
+                           customer_account_id = NULL, updated_at = now()
+                     WHERE tenant_id = :tenantId AND id = :id
+                    """)
+                    .param("name", tombstone.apply(id, "guest_name_encrypted"))
+                    .param("phone", tombstone.apply(id, "guest_phone_encrypted"))
+                    .param("hash", UUID.randomUUID().toString())
+                    .param("secondary", tombstone.apply(id, "secondary_phone_encrypted"))
+                    .param("note", tombstone.apply(id, "note_encrypted"))
+                    .param("tenantId", tenantId)
+                    .param("id", id)
+                    .update();
+        }
+        return ids.size();
+    }
+
     /** Every table this session has sat at, including any it has already left. */
     public List<UUID> tablesForSession(UUID tenantId, UUID sessionId) {
         return jdbc.sql("""

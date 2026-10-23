@@ -7,7 +7,7 @@ import { InjectionToken } from '@angular/core';
  * is loaded from the vendor's own origin the first time a map screen opens and is never bundled
  * (`frontend/operations` has an initial-bundle budget; a map SDK in the initial chunk is not an
  * option), and the only code that touches its types is the adapter that owns them
- * (`yandex-map-provider.ts`). A component asks for a pin, a polygon or a rectangle and is told
+ * (`yandex-map-provider.ts`). A component asks for a pin, a polygon, a rectangle or a line and is told
  * when a person moved one; which vendor drew it is a configuration fact read from
  * `GET .../map-config`.
  *
@@ -105,11 +105,46 @@ export interface RectangleHandle {
   remove(): void;
 }
 
+/**
+ * What a line stands for, so a map with two kinds of leg on it (the dispatch board's branch to
+ * courier and courier to door) can tell them apart without any component naming a colour. The
+ * adapter turns each into the vendor's own look; a screen that draws one kind of line leaves it out.
+ */
+export type LineTone = 'default' | 'courier' | 'order';
+
+/**
+ * A line between points, display only (row `X.4`, ADR 0145 decision 8). It is deliberately not
+ * editable: the only lines the console draws are the straight legs of the dispatch board, which
+ * join points that already exist, and a line a person could drag would be a claim about a road
+ * that nobody has made.
+ */
+export interface PolylineOptions {
+  /** Two or more points, in order. A line is open: the last point is not joined back to the first. */
+  readonly path: readonly LatLng[];
+  /** Already translated, or tenant data; shown as the line's hint. */
+  readonly label?: string;
+  readonly tone?: LineTone;
+  /** Dashes say "this is a straight line between two points, not the road". */
+  readonly dashed?: boolean;
+}
+
+export interface PolylineHandle {
+  setPath(path: readonly LatLng[]): void;
+  /** Restyles the line; a field left out keeps what it had. */
+  setLook(look: {
+    readonly label?: string;
+    readonly tone?: LineTone;
+    readonly dashed?: boolean;
+  }): void;
+  remove(): void;
+}
+
 /** One live map. Everything drawn on it is removed with it. */
 export interface MapHandle {
   addPin(options: PinOptions): PinHandle;
   addPolygon(options: PolygonOptions): PolygonHandle;
   addRectangle(options: RectangleOptions): RectangleHandle;
+  addPolyline(options: PolylineOptions): PolylineHandle;
   fitBounds(bounds: MapBounds): void;
   setCenter(center: LatLng, zoom?: number): void;
   /** Fires when a person clicks (or taps) empty map. */

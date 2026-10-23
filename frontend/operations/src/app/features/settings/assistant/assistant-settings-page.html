@@ -154,12 +154,12 @@
     <p class="q-body-sm">{{ 'settings.assistant.disclosure.body' | t }}</p>
     <p class="q-caption hint">{{ 'settings.assistant.disclosure.legal' | t }}</p>
 
-    @for (field of disclosureFields; track field.code) {
+    @for (field of disclosureFields(); track field.code) {
       <div class="field-row" [attr.data-testid]="'assistant-disclosure-' + field.locale">
         @if (editingCode() === field.code) {
           <div class="form">
             <label class="q-caption" [for]="'assistant-text-' + field.locale">{{
-              field.labelKey | t
+              fieldLabel(field)
             }}</label>
             <textarea
               [id]="'assistant-text-' + field.locale"
@@ -184,11 +184,11 @@
           </div>
         } @else {
           <q-inherited-field
-            [label]="field.labelKey | t"
+            [label]="fieldLabel(field)"
             [resolution]="resolutionFor(field.code)"
             [currentScopeType]="level()"
             [settableScopes]="settableScopes"
-            [formatValue]="disclosureFormatter(field)"
+            [formatValue]="formatDisclosure"
             (override)="startEditingDisclosure(field)"
             (setValueRequested)="startEditingDisclosure(field)"
             (revertToInherit)="revert(field.code)"

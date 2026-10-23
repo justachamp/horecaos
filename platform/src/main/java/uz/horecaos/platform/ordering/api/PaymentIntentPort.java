@@ -1,6 +1,7 @@
 package uz.horecaos.platform.ordering.api;
 
 import java.util.Collection;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -46,6 +47,21 @@ public interface PaymentIntentPort {
      */
     default boolean takesMoneyBeforeHandover(UUID tenantId, String paymentMethodCode) {
         return false;
+    }
+
+    /**
+     * Whether the receipt this method produces can carry a marking code per unit of a marked good (ADR 0038
+     * stage 6, ADR 0166 Decision 7). Click's receipt line can; Payme's {@code detail} object has no field
+     * for one, so Payme is the method a basket holding a marked good must not be offered.
+     *
+     * <p>A method with no partner receipt to refuse the code (cash, whose receipt is the tenant's own
+     * equipment's, and an unknown code) answers true: the exclusion is about a receipt that provably cannot
+     * carry the code, not about every method that is not Click.
+     *
+     * <p>Defaults to true so a build with no payments module behaves exactly as it did.
+     */
+    default boolean carriesMarkingCodes(UUID tenantId, String paymentMethodCode) {
+        return true;
     }
 
     /**
@@ -109,6 +125,24 @@ public interface PaymentIntentPort {
      */
     default Set<UUID> ordersWithPresentablePayment(UUID tenantId, Collection<UUID> orderIds) {
         return Set.of();
+    }
+
+    /**
+     * The payment method code each of these orders is paid by, for the order board's payment icon
+     * (gap map row {@code 1.1}, orders.md §2.5 column 10): one statement for a whole page.
+     *
+     * <p>The method of the order's live intent, or of its newest one when none is live any more
+     * (a cancelled or expired attempt still says how the customer chose to pay). An order with no
+     * intent at all -- one that took no payment through this module -- is absent from the result and
+     * the console draws no icon rather than guessing one. The code is the platform's own {@code
+     * PaymentMethod} vocabulary, so the console draws it from a set it owns and never asks the
+     * payment-method registry (which {@code PAYMENT_METHOD_READ} guards) on behalf of an operator
+     * who may not read it.
+     *
+     * <p>Defaults to "none" for the reason {@link #ordersWithPresentablePayment} does.
+     */
+    default Map<UUID, String> paymentMethodsByOrders(UUID tenantId, Collection<UUID> orderIds) {
+        return Map.of();
     }
 
     /**

@@ -21,7 +21,7 @@
 }
 
 .q-money-or-percent__kind-button + .q-money-or-percent__kind-button {
-  border-left: 1px solid var(--q-hairline);
+  border-inline-start: 1px solid var(--q-hairline);
 }
 
 .q-money-or-percent__kind-button--active {

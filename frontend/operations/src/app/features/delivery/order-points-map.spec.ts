@@ -179,4 +179,41 @@ describe('OrderPointsMap (rows 7.10a, 3.1; ADR 0145 decision 8)', () => {
     expect(api.reveal).toHaveBeenCalledTimes(1);
     expect(button.disabled).toBe(false);
   });
+
+  it('hands the revealed points to the host once, so it can draw what depends on them', async () => {
+    const fixture = create();
+    const heard: OrderMapPointsResponse[] = [];
+    fixture.componentInstance.pointsRevealed.subscribe((answer) => heard.push(answer));
+    expect(heard).toEqual([]);
+
+    (el(fixture, 'order-points-reveal') as HTMLButtonElement).click();
+    await settle(fixture);
+
+    expect(heard).toHaveLength(1);
+    expect(heard[0].points.map((p) => p.orderId)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('draws the lines the host gives it and says what they are, but only when there are some', async () => {
+    const fixture = create({ alwaysShowMap: true, linesNote: 'Straight lines, not the road' });
+    await settle(fixture);
+    expect(provider.map.livePolylines).toHaveLength(0);
+    expect(el(fixture, 'order-points-lines-note')).toBeNull();
+
+    fixture.componentRef.setInput('lines', [
+      {
+        id: 'leg:1',
+        path: [
+          { latitude: 41.3, longitude: 69.2 },
+          { latitude: 41.31, longitude: 69.24 },
+        ],
+        tone: 'order',
+        dashed: true,
+      },
+    ]);
+    await settle(fixture);
+
+    expect(provider.map.livePolylines).toHaveLength(1);
+    expect(provider.map.livePolylines[0].dashed).toBe(true);
+    expect(el(fixture, 'order-points-lines-note')?.textContent).toContain('not the road');
+  });
 });

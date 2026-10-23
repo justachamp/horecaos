@@ -66,6 +66,9 @@ class LocalFixtureStorefrontTests {
         // or a developer's running `make run`) racing one fixed port is a
         // context-load failure that reads as five errored tests.
         registry.add("horecaos.fake-providers.click.port", () -> "0");
+        // The fake aggregator (ADR 0141) is the same case at 18090: batch 21's integration found two forks
+        // loading the local profile at once failing this class's context on "Address already in use".
+        registry.add("horecaos.fake-providers.aggregator.port", () -> "0");
     }
 
     @Autowired

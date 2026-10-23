@@ -83,7 +83,7 @@ describe('OrderDetailLines', () => {
 
   it('words the comment presets in the operator’s language', () => {
     const presets = [
-      { code: 'NO_SPICE', labelRu: 'Не остро', labelUz: 'Achchiq emas', labelEn: 'Not spicy' },
+      { code: 'NO_SPICE', labels: { ru: 'Не остро', 'uz-Latn': 'Achchiq emas', en: 'Not spicy' } },
     ];
     const en = render({ lines: [line({ commentPresets: presets })] });
     expect(en.row().querySelector('.pane__preset-chip')?.textContent?.trim()).toBe('Not spicy');
@@ -309,6 +309,35 @@ describe('OrderDetailLines', () => {
       const { row } = render({ lines: [line()] });
 
       expect(row(0).querySelector('[data-testid="order-detail-line-weight"]')).toBeNull();
+    });
+  });
+
+  describe('an aggregator line that arrived flagged (ADR 0040, ADR 0141)', () => {
+    it('says a dish stopped here was accepted anyway, and names the aggregator’s item', () => {
+      const { row } = render({
+        lines: [line({ intake: { status: 'STOPPED', externalItemReference: 'ye-4411' } })],
+      });
+
+      const flag = row(0).querySelector('[data-testid="order-detail-line-intake"]')!;
+      expect(flag.textContent).toContain('Stopped here');
+      expect(flag.textContent).toContain('ye-4411');
+    });
+
+    it('says an item the catalogue does not carry needs confirming with the aggregator', () => {
+      const { row } = render({
+        lines: [line({ intake: { status: 'UNMAPPED', externalItemReference: null } })],
+      });
+
+      const flag = row(0).querySelector('[data-testid="order-detail-line-intake"]')!;
+      expect(flag.textContent).toContain('Not in the catalogue');
+      expect(flag.textContent).not.toContain('Stopped here');
+    });
+
+    it('says nothing on a line that arrived sellable and mapped, or on a native one', () => {
+      const { row } = render({ lines: [line({ intake: null }), line({ lineId: 'l2' })] });
+
+      expect(row(0).querySelector('[data-testid="order-detail-line-intake"]')).toBeNull();
+      expect(row(1).querySelector('[data-testid="order-detail-line-intake"]')).toBeNull();
     });
   });
 

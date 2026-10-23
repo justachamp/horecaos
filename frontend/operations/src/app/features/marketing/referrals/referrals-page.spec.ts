@@ -1,11 +1,14 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { describe, expect, it, vi } from 'vitest';
+import { provideRouter } from '@angular/router';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BrandScope } from '../../../core/api/catalog-paths';
 import { CurrentBrand } from '../../../core/auth/current-brand';
 import { I18n } from '../../../core/i18n/i18n';
 import { AttributionLinkView, MarketingApi } from '../marketing-api';
+import { TelegramSettingsApi } from '../../settings/telegram/telegram-settings-api';
+import { MiniAppSetupApi, MiniAppSetupView } from './mini-app-setup-api';
 import { ReferralProgramView, ReferralRedemptionView, ReferralsApi } from './referrals-api';
 import { ReferralsPage } from './referrals-page';
 
@@ -25,6 +28,20 @@ const LINK: AttributionLinkView = {
   clickCount: 0,
   createdBy: 'actor-1',
   createdAt: '2026-09-14T00:00:00Z',
+  url: 'https://shop.example.uz/?ref=aB3dE7fGhJ',
+  unavailable: null,
+};
+
+const SETUP_VIEW: MiniAppSetupView = {
+  steps: [{ code: 'CONNECT_BOT', state: 'TODO', detail: null }],
+  botUsername: null,
+  miniAppUrl: null,
+  miniAppShortName: null,
+  channelId: null,
+  channelVersion: null,
+  menuButtonLabel: null,
+  menuButtonUrl: null,
+  testLink: null,
 };
 
 function fakeMarketingApi(overrides: Partial<MarketingApi> = {}): Partial<MarketingApi> {
@@ -86,6 +103,11 @@ function fakeApi(overrides: Partial<ReferralsApi> = {}): Partial<ReferralsApi> {
 
 describe('ReferralsPage', () => {
   let fixture: ComponentFixture<ReferralsPage>;
+  const setupApi = { status: vi.fn(), applyMenuButton: vi.fn() };
+
+  beforeEach(() => {
+    setupApi.status.mockReset().mockResolvedValue(SETUP_VIEW);
+  });
 
   async function render(
     api: Partial<ReferralsApi>,
@@ -94,6 +116,7 @@ describe('ReferralsPage', () => {
     await TestBed.configureTestingModule({
       imports: [ReferralsPage],
       providers: [
+        provideRouter([]),
         {
           provide: CurrentBrand,
           useValue: {
@@ -104,6 +127,8 @@ describe('ReferralsPage', () => {
         },
         { provide: ReferralsApi, useValue: api },
         { provide: MarketingApi, useValue: marketingApi },
+        { provide: MiniAppSetupApi, useValue: setupApi },
+        { provide: TelegramSettingsApi, useValue: {} },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -247,7 +272,9 @@ describe('ReferralsPage', () => {
 
   // ------------------------------------------------------- T18 attribution links
 
-  it('lists a minted acquisition link and renders it as a website ?ref= URL', async () => {
+  it('lists a minted acquisition link with the URL the platform built, ready to copy', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     await render(
       fakeApi(),
       fakeMarketingApi({ listAttributionLinks: vi.fn().mockResolvedValue([LINK]) }),
@@ -255,8 +282,66 @@ describe('ReferralsPage', () => {
     const host = fixture.nativeElement as HTMLElement;
 
     expect(host.querySelectorAll('[data-testid="attribution-link-row"]')).toHaveLength(1);
-    expect(host.textContent).toContain(LINK.token);
-    expect(host.textContent).toContain('?ref=');
+    expect(host.querySelector('[data-testid="attribution-link-url"]')?.textContent).toContain(
+      'https://shop.example.uz/?ref=aB3dE7fGhJ',
+    );
+    // The console no longer prints a placeholder where a hostname or a bot should be.
+    expect(host.textContent).not.toContain('{tenant-domain}');
+    expect(host.textContent).not.toContain('{bot}');
+
+    (host.querySelector('[data-testid="attribution-link-copy"]') as HTMLButtonElement).click();
+    await vi.waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith('https://shop.example.uz/?ref=aB3dE7fGhJ'),
+    );
+  });
+
+  it.each([
+    ['WEB_HOSTNAME_NOT_VERIFIED', 'website address is not verified'],
+    ['TELEGRAM_BOT_NOT_CONNECTED', 'No Telegram bot is connected'],
+    ['TELEGRAM_MINI_APP_NOT_SET_UP', 'Mini App is not set up yet'],
+    ['MOBILE_APP_ON_HOLD', 'mobile app is on hold'],
+  ])(
+    'says what is missing, and prints no URL, when the link cannot be built (%s)',
+    async (code, words) => {
+      await render(
+        fakeApi(),
+        fakeMarketingApi({
+          listAttributionLinks: vi
+            .fn()
+            .mockResolvedValue([{ ...LINK, url: null, unavailable: code }]),
+        }),
+      );
+      const host = fixture.nativeElement as HTMLElement;
+
+      expect(host.querySelector('[data-testid="attribution-link-url"]')).toBeNull();
+      expect(host.querySelector('[data-testid="attribution-link-copy"]')).toBeNull();
+      expect(
+        host.querySelector('[data-testid="attribution-link-unavailable"]')?.textContent,
+      ).toContain(words);
+    },
+  );
+
+  it('offers the website, the bot and the Mini App for a new link, and no longer the mobile app', async () => {
+    await render(fakeApi());
+    (fixture.componentInstance as unknown as { openLinkForm(): void }).openLinkForm();
+    fixture.detectChanges();
+    const channelSelect = (fixture.nativeElement as HTMLElement).querySelectorAll(
+      '.dialog select',
+    )[0] as HTMLSelectElement;
+    expect(Array.from(channelSelect.options).map((option) => option.value)).toEqual([
+      'WEB',
+      'TELEGRAM_BOT',
+      'TELEGRAM_MINI_APP',
+    ]);
+  });
+
+  it('mounts the guided Mini App setup for the working brand', async () => {
+    await render(fakeApi());
+
+    expect(setupApi.status).toHaveBeenCalledWith(BRAND_SCOPE);
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="mini-app-setup"]'),
+    ).not.toBeNull();
   });
 
   it('mints a link with the form fields, reloads the list, and closes the dialog', async () => {

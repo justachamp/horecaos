@@ -1,0 +1,66 @@
+@if (visible()) {
+  <section class="rounded-2xl bg-surface-raised px-4 py-4" data-testid="points-redemption">
+    <p class="text-sm font-bold text-text-primary">{{ 'points.title' | t }}</p>
+
+    @if (!redeemable()) {
+      <p class="mt-2 text-xs text-zinc-400" role="status" data-testid="points-blocked">
+        {{ 'points.blockedByPromotion' | t }}
+      </p>
+    } @else {
+      <p class="mt-1 text-xs text-zinc-400" data-testid="points-summary">
+        {{ 'points.summary' | t: { available: availableText(), maximum: maximumText() } }}
+      </p>
+
+      <label class="mt-3 flex items-center gap-3">
+        <input
+          type="checkbox"
+          data-testid="points-toggle"
+          class="h-5 w-5 shrink-0 accent-brand-accent"
+          [checked]="enabled()"
+          (change)="toggle()"
+        />
+        <span class="text-sm text-text-primary">{{ 'points.use' | t }}</span>
+      </label>
+
+      @if (enabled()) {
+        <div class="mt-3 flex gap-2">
+          <input
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            data-testid="points-amount"
+            class="min-w-0 flex-1 rounded-lg bg-surface-raised-2 px-3 py-2 text-sm text-text-primary"
+            [attr.aria-label]="'points.amount' | t"
+            [value]="amountMinor() || ''"
+            (input)="onAmountInput($any($event.target).value)"
+          />
+          <button
+            type="button"
+            data-testid="points-use-maximum"
+            class="shrink-0 rounded-lg bg-surface-raised-2 px-3 py-2 text-xs font-medium text-text-primary transition-colors hover:bg-surface-hover"
+            (click)="useMaximum()"
+          >
+            {{ 'points.useMaximum' | t }}
+          </button>
+        </div>
+
+        @if (!amountValid()) {
+          <p class="mt-2 text-xs text-red-400" role="status" data-testid="points-exceeds">
+            {{ 'points.exceeds' | t: { maximum: maximumText() } }}
+          </p>
+        }
+        @if (adjusted()) {
+          <p class="mt-2 text-xs text-amber-400" role="status" data-testid="points-adjusted">
+            {{ 'points.adjusted' | t }}
+          </p>
+        }
+        @if (cashToPayText(); as cash) {
+          <p class="mt-2 flex items-center justify-between text-sm" data-testid="points-cash">
+            <span class="text-text-primary">{{ 'points.cashToPay' | t }}</span>
+            <span class="font-medium text-text-primary">{{ cash }}</span>
+          </p>
+        }
+      }
+    }
+  </section>
+}

@@ -252,11 +252,56 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
         settleWhenMoneyArrives(tenantId, orderId, CaptureTiming.ON_HANDOVER, actor);
     }
 
+    /** ADR 0185: see {@link OrderSettlementService#balanceHeldMinor}. */
+    @Override
+    @Transactional(readOnly = true)
+    public long balanceHeldMinor(UUID tenantId, UUID orderId) {
+        return settlements.balanceHeldMinor(tenantId, orderId);
+    }
+
     /** ADR 0137: see {@link OrderSettlementService#restateTotal}. */
     @Override
     @Transactional
     public boolean restateTotal(UUID tenantId, UUID orderId, long newTotalMinor, String actor) {
         return settlements.restateTotal(tenantId, orderId, newTotalMinor, actor);
+    }
+
+    /**
+     * ADR 0039 {@code CHANGE_PAYMENT_METHOD}: see {@link OrderSettlementService#replanMoneyLeg}.
+     *
+     * <p>The new method's registry row is registered on first use exactly as checkout does, with the same
+     * fiscal responsibility, so a tender re-pointed here is indistinguishable from one planned there. A code this
+     * build cannot tender against is refused: the amendment fails rather than leaving a settlement that names a
+     * method the money does not use.
+     */
+    @Override
+    @Transactional
+    public MoneyLegReplan replanMoneyLeg(
+            UUID tenantId,
+            UUID orderId,
+            UUID locationId,
+            long newTotalMinor,
+            String newPaymentMethodCode,
+            String actor) {
+        Optional<SettlementRow> found = store.findSettlement(tenantId, orderId);
+        if (found.isEmpty()) {
+            return MoneyLegReplan.noSettlement();
+        }
+        Optional<PaymentMethod> method =
+                PaymentMethod.fromCode(newPaymentMethodCode.strip().toUpperCase(Locale.ROOT));
+        if (method.isEmpty()) {
+            return MoneyLegReplan.refused();
+        }
+        UUID methodId = registryIdOf(
+                tenantId,
+                method.get().code(),
+                method.get().code(),
+                responsibilityOf(tenantId, locationId, method.get()),
+                false);
+        java.util.OptionalLong due = settlements.replanMoneyLeg(tenantId, orderId, newTotalMinor, methodId, actor);
+        return due.isPresent()
+                ? new MoneyLegReplan(MoneyLegReplan.Status.REPLANNED, due.getAsLong())
+                : MoneyLegReplan.refused();
     }
 
     /**

@@ -20,6 +20,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.configuration.RetentionWindow;
+import uz.horecaos.platform.courier.api.CourierConfigurationKeys;
 import uz.horecaos.platform.courier.domain.EngagementStatus;
 import uz.horecaos.platform.courier.domain.RegistrationWarningState;
 import uz.horecaos.platform.courier.domain.VerificationMethod;
@@ -43,6 +45,8 @@ import uz.horecaos.platform.support.TestDatabase;
  * registration writes them, and the sweep's clock is moved past them.
  */
 class CourierApplicantRetentionSweeperTests {
+
+    private static final String KEY = CourierConfigurationKeys.APPLICANT_RETENTION_MONTHS_CODE;
 
     private static TestDatabase.Handle db;
 
@@ -132,36 +136,81 @@ class CourierApplicantRetentionSweeperTests {
     }
 
     @Test
-    @DisplayName("a tenant's own configured retention lengthens the window, never shortens it")
-    void aTenantsLongerRetentionGovernsItsOwnApplicants() {
-        CourierApplicantRetentionSweeper sweeper = sweeperAt(Instant.now());
-        assertThat(sweeper.effectiveRetentionMonths())
-                .as("no stored row: the platform default from @Value governs")
-                .isEqualTo(12);
+    @DisplayName(
+            "a tenant that sets a shorter window has its dead applications erased at that window, and its neighbour keeps twelve months")
+    void aShorterTenantWindowIsHonoured() {
+        UUID neighbourTenant = seedTenant("neighbour");
+        UUID neighbourType = typeOf(neighbourTenant);
+        storeTenantMonths(tenantId, 6);
+        UUID shortWindow = registerIn(tenantId, typeId, "K-010", "Short Window", false);
+        UUID defaultWindow = registerIn(neighbourTenant, neighbourType, "K-011", "Default Window", false);
 
-        jdbc.sql("""
-                INSERT INTO tenant.configuration_values (id, key_code, scope_type, tenant_id,
-                    value_type, integer_value, set_by)
-                VALUES (:id, :keyCode, 'TENANT', :tenantId, 'INTEGER', 24, 'a-test')
-                """)
-                .param("id", UUID.randomUUID())
-                .param(
-                        "keyCode",
-                        uz.horecaos.platform.courier.api.CourierConfigurationKeys.APPLICANT_RETENTION_MONTHS_CODE)
-                .param("tenantId", tenantId)
-                .update();
-        assertThat(sweeper.effectiveRetentionMonths())
-                .as("the tenant asked for a longer window than the platform default")
-                .isEqualTo(24);
+        assertThat(sweeperAt(Instant.now().plus(200, ChronoUnit.DAYS)).runOnce())
+                .as("this tenant asked for six months; before batch 21 the sweep took the longer of twelve and the "
+                        + "largest stored value and kept this application for six months more without saying so")
+                .isEqualTo(1);
+        assertThat(statusOf(shortWindow)).isEqualTo("ARCHIVED");
+        assertThat(statusOf(defaultWindow))
+                .as("the neighbour asked for nothing and keeps the platform's twelve months")
+                .isEqualTo("ACTIVE");
 
-        jdbc.sql("UPDATE tenant.configuration_values SET integer_value = 3 WHERE key_code = :keyCode")
-                .param(
-                        "keyCode",
-                        uz.horecaos.platform.courier.api.CourierConfigurationKeys.APPLICANT_RETENTION_MONTHS_CODE)
+        assertThat(sweeperAt(Instant.now().plus(370, ChronoUnit.DAYS)).runOnce())
+                .isEqualTo(1);
+        assertThat(statusOf(defaultWindow)).isEqualTo("ARCHIVED");
+    }
+
+    @Test
+    @DisplayName("a longer tenant window is honoured too, and a value below the floor is raised to it")
+    void aLongerWindowAndTheFloor() {
+        storeTenantMonths(tenantId, 24);
+        UUID applicant = register("K-012", "Long Window", false);
+        assertThat(sweeperAt(Instant.now().plus(400, ChronoUnit.DAYS)).runOnce())
+                .as("twenty-four months were asked for")
+                .isZero();
+        assertThat(sweeperAt(Instant.now().plus(740, ChronoUnit.DAYS)).runOnce())
+                .isEqualTo(1);
+        assertThat(statusOf(applicant)).isEqualTo("ARCHIVED");
+
+        jdbc.sql("UPDATE tenant.configuration_values SET integer_value = 0 WHERE key_code = :keyCode")
+                .param("keyCode", KEY)
                 .update();
-        assertThat(sweeper.effectiveRetentionMonths())
-                .as("a value below the platform default never shortens the shared sweep")
-                .isEqualTo(12);
+        UUID fresh = register("K-013", "Floor", false);
+        assertThat(sweeperAt(Instant.now().plus(10, ChronoUnit.DAYS)).runOnce())
+                .as("a stored zero is raised to the one-month floor, so an application touched ten days ago is safe")
+                .isZero();
+        assertThat(statusOf(fresh)).isEqualTo("ACTIVE");
+        assertThat(sweeperAt(Instant.now().plus(40, ChronoUnit.DAYS)).runOnce()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("the window the card shows is the window the sweep uses")
+    void theWindowForATenantIsWhatTheSweepUses() {
+        RetentionWindow inherited = sweeperAt(Instant.now()).windowFor(tenantId);
+        assertThat(inherited.code()).isEqualTo(KEY);
+        assertThat(inherited.unit()).isEqualTo(RetentionWindow.Unit.MONTHS);
+        assertThat(inherited.configured()).isNull();
+        assertThat(inherited.effective()).isEqualTo(12);
+        assertThat(inherited.floor()).isEqualTo(CourierConfigurationKeys.APPLICANT_RETENTION_FLOOR_MONTHS);
+        assertThat(inherited.scope()).isEqualTo(RetentionWindow.Scope.PER_TENANT);
+
+        storeTenantMonths(tenantId, 6);
+        RetentionWindow own = sweeperAt(Instant.now()).windowFor(tenantId);
+        assertThat(own.configured()).isEqualTo(6);
+        assertThat(own.effective())
+                .as("a shorter value is the effective one now")
+                .isEqualTo(6);
+    }
+
+    @Test
+    @DisplayName("report-only mode counts what it would erase and erases nothing")
+    void reportOnlyErasesNothing() {
+        UUID applicant = register("K-014", "Report Only", false);
+        Instant later = Instant.now().plus(400, ChronoUnit.DAYS);
+
+        assertThat(reportOnlyAt(later).runOnce()).isZero();
+        assertThat(statusOf(applicant)).isEqualTo("ACTIVE");
+        assertThat(couriers.countUnverifiedApplicants(later, 12, 1)).isEqualTo(1);
+        assertThat(sweeperAt(later).runOnce()).isEqualTo(1);
     }
 
     // ------------------------------------------------------------- fixtures
@@ -170,12 +219,68 @@ class CourierApplicantRetentionSweeperTests {
         return new CourierApplicantRetentionSweeper(
                 new CourierApplicantRetentionSweeper.Eraser(couriers, protection, facts::add),
                 jdbc,
+                couriers,
                 Clock.fixed(now, ZoneOffset.UTC),
                 12,
-                100);
+                100,
+                false);
+    }
+
+    private CourierApplicantRetentionSweeper reportOnlyAt(Instant now) {
+        return new CourierApplicantRetentionSweeper(
+                new CourierApplicantRetentionSweeper.Eraser(couriers, protection, facts::add),
+                jdbc,
+                couriers,
+                Clock.fixed(now, ZoneOffset.UTC),
+                12,
+                100,
+                true);
+    }
+
+    private void storeTenantMonths(UUID tenant, int months) {
+        jdbc.sql("""
+                INSERT INTO tenant.configuration_values (id, key_code, scope_type, tenant_id,
+                    value_type, integer_value, set_by)
+                VALUES (:id, :keyCode, 'TENANT', :tenantId, 'INTEGER', :months, 'a-test')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("keyCode", KEY)
+                .param("tenantId", tenant)
+                .param("months", (long) months)
+                .update();
+    }
+
+    private UUID seedTenant(String slug) {
+        UUID tenant = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.tenants (id, slug, legal_name, display_name, default_currency,
+                    default_timezone, status, version)
+                VALUES (:id, :slug, 'Legal', 'Pilot', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
+                """).param("id", tenant).param("slug", slug).update();
+        return tenant;
+    }
+
+    private UUID typeOf(UUID tenant) {
+        UUID type = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO fulfillment.courier_types (id, tenant_id, code, display_name, vehicle_class)
+                VALUES (:id, :t, 'FOOT', 'On foot', 'FOOT')
+                """).param("id", type).param("t", tenant).update();
+        return type;
+    }
+
+    private String statusOf(UUID courier) {
+        return jdbc.sql("SELECT status FROM fulfillment.couriers WHERE id = :id")
+                .param("id", courier)
+                .query(String.class)
+                .single();
     }
 
     private UUID register(String reference, String fullName, boolean verified) {
+        return registerIn(tenantId, typeId, reference, fullName, verified);
+    }
+
+    private UUID registerIn(UUID tenantId, UUID typeId, String reference, String fullName, boolean verified) {
         UUID courierId = UUID.randomUUID();
         String protectedName = protection
                 .protect(

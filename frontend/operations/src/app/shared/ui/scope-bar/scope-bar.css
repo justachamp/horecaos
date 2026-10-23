@@ -59,7 +59,7 @@
 }
 
 .scopeBar__tenantToggle-btn + .scopeBar__tenantToggle-btn {
-  border-left: 1px solid var(--q-hairline);
+  border-inline-start: 1px solid var(--q-hairline);
 }
 
 .scopeBar__tenantToggle-btn--active {
@@ -69,7 +69,7 @@
 }
 
 .scopeBar__level {
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--q-ink-muted);
 }
 

@@ -105,4 +105,83 @@ describe('TimeInput', () => {
 
     expect(input.value).toBe('09:00');
   });
+
+  // ---- brands-and-locations.md §4.7: «Typing 1000 in a time field means 10:00»
+
+  it('takes four typed digits as HHmm: 1000 is 10:00, and the field shows it', () => {
+    const fixture = render();
+    let emitted: string | undefined;
+    fixture.componentInstance.valueChange.subscribe((v) => (emitted = v));
+    const input = field(fixture);
+
+    input.value = '1000';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(emitted).toBe('10:00');
+    expect(input.value).toBe('10:00');
+  });
+
+  it('refuses four digits that are not a time, and says nothing until they are', () => {
+    const fixture = render();
+    const emitted: string[] = [];
+    fixture.componentInstance.valueChange.subscribe((v) => emitted.push(v));
+    const input = field(fixture);
+
+    for (const typed of ['2460', '1075', '9999']) {
+      input.value = typed;
+      input.dispatchEvent(new Event('input'));
+    }
+
+    expect(emitted).toEqual([]);
+  });
+
+  it('completes three digits on leaving the field: 930 is 09:30 -- not before, because 100 may be on its way to 1000', () => {
+    const fixture = render();
+    fixture.componentRef.setInput('value', '08:00');
+    fixture.detectChanges();
+    const emitted: string[] = [];
+    fixture.componentInstance.valueChange.subscribe((v) => emitted.push(v));
+    const input = field(fixture);
+
+    input.value = '930';
+    input.dispatchEvent(new Event('input'));
+    expect(emitted, 'still typing').toEqual([]);
+    input.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    expect(emitted).toEqual(['09:30']);
+    expect(input.value).toBe('09:30');
+  });
+
+  it('completes one or two digits on leaving the field to the whole hour: 9 is 09:00, 21 is 21:00', () => {
+    const fixture = render();
+    const emitted: string[] = [];
+    fixture.componentInstance.valueChange.subscribe((v) => emitted.push(v));
+    const input = field(fixture);
+
+    input.value = '9';
+    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new Event('blur'));
+    input.value = '21';
+    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new Event('blur'));
+
+    expect(emitted).toEqual(['09:00', '21:00']);
+  });
+
+  it('puts back the last good value for digits that make no time, as it does for any other text', () => {
+    const fixture = render();
+    fixture.componentRef.setInput('value', '08:15');
+    fixture.detectChanges();
+    const input = field(fixture);
+
+    input.value = '99';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    input.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    expect(input.value).toBe('08:15');
+  });
 });

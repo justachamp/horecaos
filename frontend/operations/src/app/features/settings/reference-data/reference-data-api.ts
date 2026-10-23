@@ -5,6 +5,7 @@ import { ApiClient } from '../../../core/api/api-client';
 import { command } from '../../../core/api/idempotency';
 import { LocationScope } from '../../../core/api/operations-paths';
 import { settingsPaths } from '../../../core/api/settings-paths';
+import { LocaleSetView } from '../../../core/i18n/locale-labels';
 import {
   SlaBucketDefinition,
   SlaBucketSetApi,
@@ -65,6 +66,18 @@ export class ReferenceDataApi {
       }),
     );
     return result.value ?? [];
+  }
+
+  /**
+   * The languages a reason's customer wording must be written in: what the write side refuses to leave
+   * a text out of (row 10.12, ADR 0149 Decisions 4 and 5), so a form built on it never sends a body the
+   * service answers with a 400 for a missing language.
+   */
+  async localeSet(scope: LocationScope): Promise<LocaleSetView> {
+    const result = await firstValueFrom(
+      this.api.get<LocaleSetView>(settingsPaths.orderOutcomeReasonLocaleSet(scope)),
+    );
+    return result.value;
   }
 
   async categories(scope: LocationScope, kind: OutcomeReasonKind): Promise<readonly string[]> {

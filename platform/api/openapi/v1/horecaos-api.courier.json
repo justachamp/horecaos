@@ -1,0 +1,1854 @@
+{
+  "components" : {
+    "schemas" : {
+      "AcknowledgeNoticeRequest" : {
+        "properties" : {
+          "version" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "pattern" : "^[A-Za-z0-9._-]+$",
+            "type" : "string"
+          }
+        },
+        "required" : [ "version" ],
+        "type" : "object"
+      },
+      "CashDeclarationRequest" : {
+        "properties" : {
+          "declaredMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CheckResponse" : {
+        "properties" : {
+          "kind" : {
+            "type" : "string"
+          },
+          "outcome" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CloseResponse" : {
+        "properties" : {
+          "breakSeconds" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cashHandoverId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "paidSeconds" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CloseShiftRequest" : {
+        "properties" : {
+          "currency" : {
+            "maxLength" : 3,
+            "minLength" : 3,
+            "type" : "string"
+          },
+          "point" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierAcceptOfferRequest" : {
+        "properties" : {
+          "position" : {
+            "$ref" : "#/components/schemas/CourierPositionBody"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierAcceptOfferResponse" : {
+        "properties" : {
+          "delivery" : {
+            "$ref" : "#/components/schemas/CourierDeliveryResponse"
+          },
+          "outcome" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierAdvanceDeliveryRequest" : {
+        "properties" : {
+          "position" : {
+            "$ref" : "#/components/schemas/CourierPositionBody"
+          },
+          "step" : {
+            "enum" : [ "PICKUP_PENDING", "PICKED_UP", "DELIVERED" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "step" ],
+        "type" : "object"
+      },
+      "CourierBranchView" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "primary" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierCurrentDutyResponse" : {
+        "properties" : {
+          "session" : {
+            "$ref" : "#/components/schemas/CourierDutySessionView"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierCustomerLocationResponse" : {
+        "properties" : {
+          "addressLine" : {
+            "type" : "string"
+          },
+          "apartment" : {
+            "type" : "string"
+          },
+          "entrance" : {
+            "type" : "string"
+          },
+          "floor" : {
+            "type" : "string"
+          },
+          "instructions" : {
+            "type" : "string"
+          },
+          "latitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "longitude" : {
+            "format" : "double",
+            "type" : "number"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierDeclineOfferResponse" : {
+        "properties" : {
+          "outcome" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierDeliveryResponse" : {
+        "properties" : {
+          "assignedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "cashDueMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "checks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CheckResponse"
+            },
+            "type" : "array"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "deliveredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "destinationLabel" : {
+            "type" : "string"
+          },
+          "distanceMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "kitchenReady" : {
+            "type" : "boolean"
+          },
+          "orderReference" : {
+            "type" : "string"
+          },
+          "orderTotalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "paymentConfirmationRequired" : {
+            "type" : "boolean"
+          },
+          "paymentConfirmedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "paymentConfirmedMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "pickedUpAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "pickup" : {
+            "$ref" : "#/components/schemas/CourierPickupResponse"
+          },
+          "pickupWindowEnd" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "pickupWindowStart" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "prepaid" : {
+            "type" : "boolean"
+          },
+          "promisedDeliveryEnd" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "shipmentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierDutySessionView" : {
+        "properties" : {
+          "batchCadenceSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "collectionGate" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "maximumBatchSize" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "registrationValidUntil" : {
+            "type" : "string"
+          },
+          "sessionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "shiftId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "startedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierEngagementView" : {
+        "properties" : {
+          "dispatchable" : {
+            "type" : "boolean"
+          },
+          "registrationValidUntil" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "warningState" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierGateStepRequest" : {
+        "properties" : {
+          "position" : {
+            "$ref" : "#/components/schemas/CourierPositionBody"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierObservationBatchRequest" : {
+        "properties" : {
+          "activeAssignmentCount" : {
+            "format" : "int32",
+            "maximum" : 50,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "observations" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CourierObservationBody"
+            },
+            "maxItems" : 60,
+            "minItems" : 0,
+            "type" : "array"
+          }
+        },
+        "required" : [ "observations" ],
+        "type" : "object"
+      },
+      "CourierObservationBody" : {
+        "properties" : {
+          "accuracyMeters" : {
+            "format" : "double",
+            "minimum" : 0,
+            "type" : "number"
+          },
+          "batteryPercent" : {
+            "format" : "int32",
+            "maximum" : 100,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "capturedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "deviceCharging" : {
+            "type" : "boolean"
+          },
+          "headingDegrees" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "latitude" : {
+            "format" : "double",
+            "maximum" : 90,
+            "minimum" : -90,
+            "type" : "number"
+          },
+          "longitude" : {
+            "format" : "double",
+            "maximum" : 180,
+            "minimum" : -180,
+            "type" : "number"
+          },
+          "speedMps" : {
+            "format" : "double",
+            "type" : "number"
+          }
+        },
+        "required" : [ "accuracyMeters", "capturedAt", "latitude", "longitude" ],
+        "type" : "object"
+      },
+      "CourierObservationsResponse" : {
+        "properties" : {
+          "collectionGate" : {
+            "type" : "string"
+          },
+          "livePositionMoved" : {
+            "type" : "boolean"
+          },
+          "nextBatchAfterSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "observationsAccepted" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "suspended" : {
+            "type" : "boolean"
+          },
+          "windowsWritten" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierOfferResponse" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "customerLocationRevealable" : {
+            "type" : "boolean"
+          },
+          "destinationLabel" : {
+            "type" : "string"
+          },
+          "distanceMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "kitchenReady" : {
+            "type" : "boolean"
+          },
+          "offerId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "offeredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "orderReference" : {
+            "type" : "string"
+          },
+          "orderTotalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "payBasis" : {
+            "type" : "string"
+          },
+          "pickup" : {
+            "$ref" : "#/components/schemas/CourierPickupResponse"
+          },
+          "pickupWindowEnd" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "pickupWindowStart" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "prepaid" : {
+            "type" : "boolean"
+          },
+          "promisedDeliveryEnd" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "quoteCurrency" : {
+            "type" : "string"
+          },
+          "quotedDistanceMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "quotedEarningMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierOpenDutyRequest" : {
+        "properties" : {
+          "deviceId" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "deviceId" ],
+        "type" : "object"
+      },
+      "CourierOpenShiftView" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "dutyState" : {
+            "type" : "string"
+          },
+          "enforcementMode" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationName" : {
+            "type" : "string"
+          },
+          "openedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "shiftId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierPaymentConfirmationRequest" : {
+        "properties" : {
+          "collectedMinor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "collectedMinor" ],
+        "type" : "object"
+      },
+      "CourierPickupResponse" : {
+        "properties" : {
+          "addressLine" : {
+            "type" : "string"
+          },
+          "landmark" : {
+            "type" : "string"
+          },
+          "latitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "longitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierPositionBody" : {
+        "properties" : {
+          "accuracyMeters" : {
+            "format" : "double",
+            "minimum" : 0,
+            "type" : "number"
+          },
+          "latitude" : {
+            "format" : "double",
+            "maximum" : 90,
+            "minimum" : -90,
+            "type" : "number"
+          },
+          "longitude" : {
+            "format" : "double",
+            "maximum" : 180,
+            "minimum" : -180,
+            "type" : "number"
+          }
+        },
+        "required" : [ "accuracyMeters", "latitude", "longitude" ],
+        "type" : "object"
+      },
+      "CourierSelfResponse" : {
+        "properties" : {
+          "branches" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CourierBranchView"
+            },
+            "type" : "array"
+          },
+          "courierId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "displayReference" : {
+            "type" : "string"
+          },
+          "engagement" : {
+            "$ref" : "#/components/schemas/CourierEngagementView"
+          },
+          "openShift" : {
+            "$ref" : "#/components/schemas/CourierOpenShiftView"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierShiftControllerShiftResponse" : {
+        "properties" : {
+          "dutyState" : {
+            "type" : "string"
+          },
+          "enforcementMode" : {
+            "type" : "string"
+          },
+          "shiftId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "NoticeAcknowledgementResponse" : {
+        "properties" : {
+          "acknowledgedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OpenShiftRequest" : {
+        "properties" : {
+          "currency" : {
+            "maxLength" : 3,
+            "minLength" : 3,
+            "type" : "string"
+          },
+          "point" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      }
+    },
+    "securitySchemes" : {
+      "bearerAuth" : {
+        "bearerFormat" : "JWT",
+        "description" : "Keycloak access token issued for the horecaos-api audience",
+        "scheme" : "bearer",
+        "type" : "http"
+      }
+    }
+  },
+  "info" : {
+    "description" : "Tenant-aware APIs for the HorecaOS SaaS commerce and delivery platform.",
+    "title" : "HorecaOS Platform API",
+    "version" : "v1"
+  },
+  "openapi" : "3.1.0",
+  "paths" : {
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/cash-handovers/{handoverId}/declaration" : {
+      "post" : {
+        "description" : "The courier's statement about the bag. A branch cashier confirms what was received separately, and each gap becomes its own variance entry.",
+        "operationId" : "declareCash",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "handoverId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CashDeclarationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Declare the cash I am handing over",
+        "tags" : [ "Courier shift" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries" : {
+      "get" : {
+        "description" : "Assigned, waiting at the pickup, or on the road. Only this courier's own deliveries are ever returned.",
+        "operationId" : "courierListDeliveries",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/CourierDeliveryResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What I am carrying at this branch",
+        "tags" : [ "Courier deliveries" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}" : {
+      "get" : {
+        "description" : "Any status. A delivery that is not this courier's answers 404, exactly as one that does not exist. Returns an ETag to send back as If-Match.",
+        "operationId" : "courierGetDelivery",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "shipmentId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierDeliveryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One of my deliveries",
+        "tags" : [ "Courier deliveries" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/advance" : {
+      "post" : {
+        "description" : "Requires If-Match with the delivery's version. step is PICKUP_PENDING (arrived), PICKED_UP or DELIVERED. When the tenant's GPS gate is on, the body carries the courier's own position and the step is refused (422) when it is further than the status-change radius from the branch (arrival, pickup) or the customer's door (handover): reasons GPS_POSITION_REQUIRED, GPS_ACCURACY_INSUFFICIENT, TOO_FAR_FROM_PICKUP, TOO_FAR_FROM_DROPOFF. DELIVERED is also refused (PAYMENT_CONFIRMATION_REQUIRED) while the tenant requires the cash to be confirmed and cash is due and unconfirmed. The position is measured and discarded. PICKED_UP and DELIVERED are the older door to the steps POST .../pickup and .../handover take, held to the same pickup and handover mode: a position check that fails under HARD is refused here with 422 and the reason, where those answer 409 GATE_FAILED; under SOFT it is recorded and the step goes ahead.",
+        "operationId" : "courierAdvanceDelivery",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "shipmentId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CourierAdvanceDeliveryRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierDeliveryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Move my delivery to the next step",
+        "tags" : [ "Courier deliveries" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/customer-location-reveals" : {
+      "post" : {
+        "description" : "Always an audit fact naming the courier, the order and the shipment, and never the address. Refused once the delivery is finished or cancelled.",
+        "operationId" : "courierRevealDeliveryCustomerLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "shipmentId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierCustomerLocationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Open the customer's address for a delivery I carry",
+        "tags" : [ "Courier deliveries" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/handover" : {
+      "post" : {
+        "description" : "Requires If-Match with the delivery's version; the body may be empty or carry the courier's own position, measured against the customer's door. Held to the location's handover mode exactly as the pickup is (SOFT records and proceeds with checks; HARD refuses a failed position check with 409 GATE_FAILED). The cash step never softens: while the tenant requires the cash to be confirmed and cash is due and unconfirmed the handover is refused (422, PAYMENT_CONFIRMATION_REQUIRED), and a confirmed one reports PAYMENT PASSED in checks.",
+        "operationId" : "courierHandOverDelivery",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "shipmentId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CourierGateStepRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierDeliveryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "I have given it to the customer: hand over my delivery",
+        "tags" : [ "Courier deliveries" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/payment-confirmation" : {
+      "post" : {
+        "description" : "Requires If-Match with the delivery's version. Only on a delivery that has been picked up. The amount must equal what the settlement says is due (zero for an order the platform already holds the money for); anything else is refused (422, PAYMENT_AMOUNT_MISMATCH) and nothing is stored.",
+        "operationId" : "courierConfirmDeliveryPayment",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "shipmentId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CourierPaymentConfirmationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierDeliveryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Confirm the cash I collected at the door",
+        "tags" : [ "Courier deliveries" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/deliveries/{shipmentId}/pickup" : {
+      "post" : {
+        "description" : "Requires If-Match with the delivery's version; the body may be empty or carry the courier's own position. Held to the location's pickup mode (courier policy pickupHandoverGate): SOFT, the default, takes the step whatever the position check came to and answers 200 with checks, [{kind, outcome}] for each check the location asks for (GEO while the GPS switch is on), so a check that failed is told to the courier and recorded for the accrual; HARD refuses a failed check with 409 GATE_FAILED whose detail is the failed check kinds, and nothing changes. Also refused (422) with reason STEP_NOT_ALLOWED when the delivery is not waiting at the pickup. The position is measured and discarded.",
+        "operationId" : "courierPickUpDelivery",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "shipmentId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CourierGateStepRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierDeliveryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "I have the bag: pick up my delivery",
+        "tags" : [ "Courier deliveries" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/duty-session" : {
+      "get" : {
+        "description" : "Answers 200 with a null session when the courier is not on duty here, so a handset that has just started, or just reconnected, learns whether collection is running without reading an error. Carries the cadence the handset must obey: the platform owns the lever over battery, data cost and write volume.",
+        "operationId" : "courierGetDutySession",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierCurrentDutyResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "My duty session at this branch, if one is open",
+        "tags" : [ "Courier duty and telemetry (self)" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/duty-sessions" : {
+      "post" : {
+        "description" : "Refused (409) unless the courier has an open shift at this branch and a valid self-employment registration, with a stable reason: NO_OPEN_SHIFT, REGISTRATION_LAPSED. Opening twice returns the session already open. The collection gate is not the courier's to choose; it resolves at the branch.",
+        "operationId" : "courierOpenDutySession",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CourierOpenDutyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierDutySessionView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Go on duty: open the window in which my position is collected",
+        "tags" : [ "Courier duty and telemetry (self)" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/duty-sessions/{sessionId}/closures" : {
+      "post" : {
+        "description" : "Only my own open session can be closed; any other id answers 404. Closing the shift closes the session too, so this is for a courier who wants collection to stop while the shift stays open.",
+        "operationId" : "courierCloseDutySession",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "sessionId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Sign off: collection stops",
+        "tags" : [ "Courier duty and telemetry (self)" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/offers" : {
+      "get" : {
+        "description" : "Soonest to lapse first. With the tenant's kitchen-ready-only switch on, an order the kitchen has not finished is not listed. Carries no name, telephone number or address of the customer; the address is a separate, audited reveal.",
+        "operationId" : "courierListOffers",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/CourierOfferResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The offers I can still take at this branch",
+        "tags" : [ "Courier deliveries" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/offers/{offerId}/accept" : {
+      "post" : {
+        "description" : "Requires If-Match with the offer's version. When the tenant's GPS gate is on, the body carries the courier's own position and acceptance is refused (422, reason TOO_FAR_FROM_PICKUP) beyond the accept radius of the branch. Refused with KITCHEN_NOT_READY when the tenant takes only finished orders. An offer that lapsed, was taken by another courier, or was never this courier's answers 200 with outcome NO_LONGER_AVAILABLE, never an error.",
+        "operationId" : "courierAcceptOffer",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "offerId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CourierAcceptOfferRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierAcceptOfferResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Take an offer",
+        "tags" : [ "Courier deliveries" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/offers/{offerId}/customer-location-reveals" : {
+      "post" : {
+        "description" : "Refused (422, reason LOCATION_NOT_YET_REVEALED) unless the tenant reveals the customer's location before acceptance. Always an audit fact naming the courier, the order and the offer, and never the address. A courier who has accepted uses the delivery's own reveal.",
+        "operationId" : "courierRevealOfferCustomerLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "offerId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierCustomerLocationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Open the customer's address while I only hold the offer",
+        "tags" : [ "Courier deliveries" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/offers/{offerId}/decline" : {
+      "post" : {
+        "description" : "Requires If-Match with the offer's version. Sourcing asks the next courier at once rather than when this offer would have lapsed.",
+        "operationId" : "courierDeclineOffer",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "offerId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierDeclineOfferResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Turn an offer down",
+        "tags" : [ "Courier deliveries" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts" : {
+      "post" : {
+        "description" : "Refused while the engagement is not ACTIVE. A lapsed registration cannot open a shift; work already accepted still finishes and everything already accrued is still owed.",
+        "operationId" : "open",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OpenShiftRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierShiftControllerShiftResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Open my shift",
+        "tags" : [ "Courier shift" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/breaks" : {
+      "post" : {
+        "description" : "ADR 0045 stops collecting telemetry for the duration, so a courier on break is not tracked at all. A dispatcher loses the pin, which is correct: a courier on break is not assignable, so the pin had no operational use.",
+        "operationId" : "startBreak",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "shiftId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Start my break",
+        "tags" : [ "Courier shift" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/breaks/end" : {
+      "post" : {
+        "operationId" : "endBreak",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "shiftId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "End my break",
+        "tags" : [ "Courier shift" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/close" : {
+      "post" : {
+        "description" : "Ends any open break first, so its seconds are not paid.",
+        "operationId" : "close",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "shiftId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CloseShiftRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CloseResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Close my shift",
+        "tags" : [ "Courier shift" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/telemetry/observations" : {
+      "post" : {
+        "description" : "Posted every cadence seconds while a duty session is open, carrying the readings buffered since the last batch. A batch with no open session at this branch is refused with 422 (reason NO_OPEN_DUTY_SESSION) and stored nowhere. While a break is running the answer is 202 with suspended = true and nothing is stored. Idempotent on a natural key rather than on an Idempotency-Key record, the narrow exemption ADR 0045 names. The courier is the caller; no courier id is accepted.",
+        "operationId" : "courierPostObservations",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CourierObservationBatchRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierObservationsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A batch of buffered observations from my handset",
+        "tags" : [ "Courier duty and telemetry (self)" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/me" : {
+      "get" : {
+        "description" : "Answers 404 for an account that is not a courier of this tenant, exactly as for a tenant that does not exist. Carries no legal name, registration number or telephone number; the registration's validity date and warning state are there so the app can tell a courier why they cannot take work.",
+        "operationId" : "courierGetMe",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierSelfResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Who the platform says I am: my branches, my open shift, my duty state",
+        "tags" : [ "Courier self" ]
+      }
+    },
+    "/api/v1/courier/tenants/{tenantId}/telemetry-notice-acknowledgements" : {
+      "post" : {
+        "description" : "ADR 0045 makes the notice the precondition for collecting a courier's position. The app shows it, and on acceptance posts the version it showed; the platform writes an audit fact naming the courier, the version and the time. A new version is a new acknowledgement. Answers 404 for an account that is not a courier of this tenant. The version is a short identifier, never free text.",
+        "operationId" : "courierAcknowledgeTelemetryNotice",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AcknowledgeNoticeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/NoticeAcknowledgementResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record that I was shown this version of the location transparency notice",
+        "tags" : [ "Courier self" ]
+      }
+    }
+  },
+  "security" : [ {
+    "bearerAuth" : [ ]
+  } ],
+  "servers" : [ {
+    "description" : "Generated server url",
+    "url" : "http://localhost"
+  } ],
+  "tags" : [ {
+    "description" : "A courier's own offers and deliveries, held to the courier policy",
+    "name" : "Courier deliveries"
+  }, {
+    "description" : "A courier's own record, branches and open shift",
+    "name" : "Courier self"
+  }, {
+    "description" : "A courier's own duty session and observations, from their own handset",
+    "name" : "Courier duty and telemetry (self)"
+  }, {
+    "description" : "A courier's own shift, breaks, and cash declaration",
+    "name" : "Courier shift"
+  } ]
+}

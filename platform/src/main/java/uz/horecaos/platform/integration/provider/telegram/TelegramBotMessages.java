@@ -98,6 +98,37 @@ public final class TelegramBotMessages {
                 "Linked. Your order updates and receipts will arrive here.");
     }
 
+    // ------------------------------------- ADR 0183 D27: the channel's own welcome
+
+    /**
+     * What a bot answers a customer's {@code /start} with when the tenant has written no welcome text of its own for
+     * their language (ADR 0183). Said only for a Telegram channel somebody has configured; an unconfigured bot stays as
+     * silent as it always was.
+     */
+    public static String welcomeDefault(String locale, boolean miniAppOffered) {
+        String greeting = pick(locale, "Xush kelibsiz!", "Добро пожаловать!", "Welcome!");
+        if (!miniAppOffered) {
+            return greeting;
+        }
+        return greeting
+                + " "
+                + pick(
+                        locale,
+                        "Buyurtma berish uchun pastdagi menyu tugmasini bosing.",
+                        "Чтобы сделать заказ, нажмите кнопку меню ниже.",
+                        "Tap the menu button below to order.");
+    }
+
+    /** The label on the menu button when the tenant has written none: the platform's own word for the storefront. */
+    public static String menuButtonDefault(String locale) {
+        return pick(locale, "Menyu", "Меню", "Menu");
+    }
+
+    /** The label in front of the public-offer address in the welcome message. */
+    public static String publicOfferLabel(String locale) {
+        return pick(locale, "Ommaviy oferta", "Публичная оферта", "Public offer");
+    }
+
     // -------------------------------------------------- ADR 0063 auth sign-in
 
     static String authLinkInvalidOrExpiredCode() {

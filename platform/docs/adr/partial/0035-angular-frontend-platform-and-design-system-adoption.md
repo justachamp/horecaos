@@ -644,3 +644,12 @@ wave 7. "The frontend" is no longer one deployable, so:
   covered, against the new platform APIs.
 - `git clone --recursive` of the platform repository produces four populated
   application working trees.
+
+## Status addition (2026-10-14)
+
+"A courier application is a different product … it is out of scope here and belongs to whatever
+ADR 0042 settles" stays as decided on that date, and ADR 0042 did not settle it. [ADR 0179](../partial/0179-the-courier-client.md)
+does: the courier client is an Angular PWA in `frontend/courier` on this record's platform (the
+storefronts' toolchain, the vendored design tokens diffed in CI, ru / uz-Latn / en), signing in
+with Keycloak Authorization Code + PKCE as a public client. The Flutter application stays the
+customer ordering app this record says it is; no courier surface is added to it.

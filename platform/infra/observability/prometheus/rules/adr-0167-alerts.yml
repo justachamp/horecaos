@@ -1,0 +1,49 @@
+# ADR 0167's one alert and its companion, in their own file rather than appended to
+# adr-0023-alerts.yml: that file's header says every threshold in it is copied from
+# ADR 0023's table and may be changed in only two places, and these belong to a
+# different record. prometheus.yml's `*-alerts.yml` glob picks this file up.
+#
+# Both read the two gauges FunnelHealthProbe publishes every hour
+# (horecaos.reporting.funnel.days_without_row and .unrecorded_days). Neither carries a
+# tenant or a subject as a label (ADR 0023/0033): the tenant is found from the log line
+# the probe writes, never from the metric.
+#
+# Both are morning-digest tier. The loss they describe is real and unrepairable once it
+# has happened, but it is a day's basket count and not an order: a cart is deleted 90 days
+# after it was last touched (ADR 0092), so the window to repair a missed capture is weeks
+# long and a 03:00 page cannot shorten it. ADR 0034's three-alert ceiling for the night tier
+# is untouched.
+groups:
+  - name: adr-0167-morning
+    rules:
+      - alert: HorecaosFunnelDayWithoutRow
+        # "A day with no funnel row at all is an alert, because it is the one loss that
+        # cannot be repaired once the carts are gone." The probe counts closed business
+        # days that hold orders, are past the one-week grace, and have no row in
+        # reporting.fact_funnel_day; any positive value is therefore already a persistent
+        # condition. The 15m is only so one scrape taken mid-refresh does not flap.
+        expr: max(horecaos_reporting_funnel_days_without_row) > 0
+        for: 15m
+        labels:
+          tier: morning
+        annotations:
+          summary: >-
+            {{ $value | printf "%.0f" }} closed business day(s) hold orders and have no customer-funnel row; their
+            basket counts are unrecoverable once the carts are swept
+          runbook: docs/runbooks/customer-funnel-gap.md
+
+      - alert: HorecaosFunnelUnrecordedDaysGrowing
+        # A funnel row older than a week that still carries a «not recorded» basket or checkout
+        # count is a day whose carts were gone before the capture ran. A plateau is expected
+        # history (a tenant's backfill of days before the funnel existed lands there by
+        # design) and is not an alert; a number that GROWS over a day means days are going
+        # unrecorded now, which is a close that failed.
+        expr: max(delta(horecaos_reporting_funnel_unrecorded_days[1d])) > 0
+        for: 15m
+        labels:
+          tier: morning
+        annotations:
+          summary: >-
+            customer-funnel days past the first week with a basket or checkout count that was
+            never recorded grew by {{ $value | printf "%.0f" }} in the last day
+          runbook: docs/runbooks/customer-funnel-gap.md

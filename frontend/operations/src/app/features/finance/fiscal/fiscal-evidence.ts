@@ -108,9 +108,21 @@ export function correctionKindKey(kind: string): MessageKey | null {
   return (KIND_KEYS as Readonly<Record<string, MessageKey>>)[kind] ?? null;
 }
 
+/**
+ * Reasons only the platform writes: a request it opened itself because an order was amended after its receipt was
+ * filed (ADR 0166 Decision 8). They are not in the list an operator chooses from, but a worklist draws them.
+ */
+const PLATFORM_REASON_KEYS: Readonly<Record<string, MessageKey>> = {
+  AMENDED_AFTER_ISSUE: 'finance.fiscalEvidence.correction.reason.AMENDED_AFTER_ISSUE',
+};
+
 /** The words for a correction reason; null for a reason this client does not know, which the caller shows raw. */
 export function correctionReasonKey(reason: string): MessageKey | null {
-  return (REASON_KEYS as Readonly<Record<string, MessageKey>>)[reason] ?? null;
+  return (
+    (REASON_KEYS as Readonly<Record<string, MessageKey>>)[reason] ??
+    PLATFORM_REASON_KEYS[reason] ??
+    null
+  );
 }
 
 /** The tender-and-document pair the payments page links with: the document a tender's receipt is. */

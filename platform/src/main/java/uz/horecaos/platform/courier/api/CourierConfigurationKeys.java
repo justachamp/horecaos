@@ -28,16 +28,18 @@ public final class CourierConfigurationKeys {
     public static final String APPLICANT_RETENTION_MONTHS_CODE = "courier.applicant_retention_months";
 
     /**
-     * Months an unverified courier applicant's engagement is kept before
-     * their name is overwritten and the application archived. Twelve,
-     * matching {@code CourierApplicantRetentionSweeper}'s own {@code @Value}
-     * default exactly. Settable at the platform and per tenant, and only
-     * ever lengthened by {@code CourierApplicantRetentionSweeper}, which
-     * sweeps on the longer of the platform default and the largest
-     * tenant-configured value — the same rule {@code
-     * TrackRetentionSweeper.effectiveRetentionDays} already uses for courier
-     * location tracks, so a shorter stored value can never erase another
-     * tenant's applicant early.
+     * The shortest applicant window the platform acts on (months). A value below it is raised to it. One month keeps the sweep
+     * clear of an application still being worked: an applicant is erased only after a full window without any touch, and an
+     * engagement touched inside the window protects them. Provisional until legal sets the periods (ADR 0029).
+     */
+    public static final int APPLICANT_RETENTION_FLOOR_MONTHS = 1;
+
+    /**
+     * Months an unverified courier applicant's engagement is kept before their name is overwritten and the application
+     * archived. Twelve, matching {@code CourierApplicantRetentionSweeper}'s own {@code @Value} default exactly. Settable at
+     * the platform and per tenant, and honoured per tenant since batch 21: the sweeper resolves each tenant's window (its own
+     * value, else the platform's, else this default), raised to {@link #APPLICANT_RETENTION_FLOOR_MONTHS}. It used to sweep on
+     * the longer of the platform default and the largest tenant value, which silently ignored a shorter one (ADR 0109).
      */
     public static final ConfigurationKey<Integer> APPLICANT_RETENTION_MONTHS = ConfigurationKey.of(
                     APPLICANT_RETENTION_MONTHS_CODE, Integer.class)

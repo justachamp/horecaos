@@ -137,7 +137,7 @@
 }
 
 .table thead th {
-  text-align: left;
+  text-align: start;
   color: var(--q-ink-muted);
   padding: 8px 12px;
   border-bottom: 1px solid var(--q-hairline);
@@ -149,7 +149,7 @@
 }
 
 .num {
-  text-align: right;
+  text-align: end;
 }
 
 .cohort-sizes {
@@ -162,7 +162,7 @@
 }
 
 .row-header {
-  text-align: left;
+  text-align: start;
   color: var(--q-ink-muted);
   white-space: nowrap;
 }
@@ -213,4 +213,11 @@
   color: var(--q-ink-muted);
   margin: 0 0 6px;
   font-weight: 600;
+}
+
+.page-loads {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-block: 8px;
 }

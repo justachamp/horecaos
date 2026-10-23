@@ -19,6 +19,8 @@
  * order it belongs to instead of the binding it was sent through.
  */
 
+import { LocationScope } from './operations-paths';
+
 const CONTROL_PLANE = '/api/v1/control-plane';
 const OPERATIONS = '/api/v1/operations';
 
@@ -100,6 +102,28 @@ export const posPaths = {
    */
   orderPosExport(scope: TenantScope, orderId: string): string {
     return `${OPERATIONS}${tenant(scope)}/orders/${encodeURIComponent(orderId)}/pos-export`;
+  },
+
+  /**
+   * `OrderPosRevisionController` (ADR 0137, gap map row `4.2c`): an order the till already holds whose
+   * total changed after a weight was captured, and what the till holds against what the order is worth.
+   *
+   * A branch route, unlike the export above: the banner it feeds sits on the pass and the order detail of
+   * a branch, whose people hold `pos.export.read` and `pos.export.resolve` at the branch and never at the
+   * tenant, so a tenant-level path answered every one of them 403.
+   */
+  orderTillRevision(scope: LocationScope, orderId: string): string {
+    return `${OPERATIONS}${tenant(scope)}/brands/${encodeURIComponent(scope.brandId)}/locations/${encodeURIComponent(scope.locationId)}/orders/${encodeURIComponent(orderId)}/till-revision`;
+  },
+
+  /** Tell the till the revised total, where its binding can take one. Mutation: key required. */
+  orderTillRevisionSend(scope: LocationScope, orderId: string): string {
+    return `${posPaths.orderTillRevision(scope, orderId)}/send`;
+  },
+
+  /** Say the till was changed by hand. Mutation: key required. */
+  orderTillRevisionAcknowledge(scope: LocationScope, orderId: string): string {
+    return `${posPaths.orderTillRevision(scope, orderId)}/acknowledge`;
   },
 
   /** Push a pending export, or retry one the state machine still permits sending. Mutation: key and reason required. */

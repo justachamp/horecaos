@@ -9,8 +9,8 @@ import org.springframework.stereotype.Component;
 import uz.horecaos.platform.media.api.MediaUsageProbe;
 
 /**
- * Tenancy's answer to "do you still use this asset?" (ADR 0157): a brand's logo or banner, and a sales
- * channel's share image.
+ * Tenancy's answer to "do you still use this asset?" (ADR 0157): a brand's logo or banner, a sales
+ * channel's share image, and a KIOSK channel's idle-loop pictures (ADR 0187).
  */
 @Component
 public class TenancyMediaUsageProbe implements MediaUsageProbe {
@@ -37,6 +37,9 @@ public class TenancyMediaUsageProbe implements MediaUsageProbe {
                 UNION
                 SELECT og_image_asset_id FROM tenant.channel_presentation
                 WHERE tenant_id = :tenantId AND og_image_asset_id = ANY(:ids)
+                UNION
+                SELECT asset_id FROM tenant.kiosk_idle_media
+                WHERE tenant_id = :tenantId AND asset_id = ANY(:ids)
                 """)
                 .param("tenantId", tenantId)
                 .param("ids", assetIds.toArray(UUID[]::new))

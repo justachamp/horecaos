@@ -56,7 +56,7 @@
 
 .q-catalog-import-page__language-input {
   width: 90px;
-  margin-left: 6px;
+  margin-inline-start: 6px;
 }
 
 .q-catalog-import-page__table {
@@ -65,7 +65,7 @@
 }
 
 .q-catalog-import-page__table th {
-  text-align: left;
+  text-align: start;
   color: var(--q-ink-muted);
   padding: 4px 8px;
   border-bottom: 1px solid var(--q-hairline);

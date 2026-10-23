@@ -99,6 +99,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Маркетинг курьер рассылка отправлено',
       'uz-Latn': 'Marketing kuryer ommaviy xabar yuborildi',
     },
+    MARKETING_COURIER_CONTACTS_CHECKED: {
+      en: 'Marketing courier numbers checked for a broadcast',
+      ru: 'Маркетинг номера курьеров проверены для рассылки',
+      'uz-Latn': 'Marketing kuryer raqamlari xabarnoma uchun tekshirildi',
+    },
+    MARKETING_COURIER_CONTACT_REVEALED: {
+      en: 'Marketing courier number read to send a message',
+      ru: 'Маркетинг номер курьера прочитан для отправки сообщения',
+      'uz-Latn': 'Marketing kuryer raqami xabar yuborish uchun oʻqildi',
+    },
     MARKETING_LINK_ARCHIVED: {
       en: 'Marketing link archived',
       ru: 'Маркетинг ссылка архивировано',
@@ -200,6 +210,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       'uz-Latn': 'Tasdiqlash soʻralindi',
     },
     'audit.read': { en: 'Audit read', ru: 'Журнал просмотр', 'uz-Latn': 'Jurnal koʻrish' },
+    'brand.storefront_branch_order.changed': {
+      en: 'Order of branches on the storefront changed',
+      ru: 'Изменён порядок филиалов на витрине',
+      'uz-Latn': 'Vitrinadagi filiallar tartibi oʻzgartirildi',
+    },
     'catalog.autoAddRule.activated': {
       en: 'Auto-add rule activated',
       ru: 'Правило автодобавления активировано',
@@ -284,6 +299,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Tag changed',
       ru: 'Тег изменён',
       'uz-Latn': 'Teg oʻzgartirildi',
+    },
+    'courier.telemetry_notice.acknowledged': {
+      en: 'A courier acknowledged the location notice',
+      ru: 'Курьер подтвердил уведомление о геолокации',
+      'uz-Latn': 'Kuryer geolokatsiya haqidagi ogohlantirishni tasdiqladi',
+    },
+    'courier.updated': {
+      en: 'A courier’s details were corrected',
+      ru: 'Данные курьера исправлены',
+      'uz-Latn': 'Kuryer maʻlumotlari tuzatildi',
     },
     'inventory.stock.disposed': {
       en: 'Stock put back or written off after a sale',
@@ -525,6 +550,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Изменены ссылки на соцсети канала',
       'uz-Latn': 'Kanalning ijtimoiy tarmoq havolalari oʻzgartirildi',
     },
+    'channel.telegram.updated': {
+      en: 'Telegram channel settings edited',
+      ru: 'Изменены настройки Telegram-канала',
+      'uz-Latn': 'Telegram kanali sozlamalari tahrirlandi',
+    },
     'channel.updated': {
       en: 'Sales channel edited',
       ru: 'Изменён канал продаж',
@@ -735,6 +765,26 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Изменён порядок контента витрины',
       'uz-Latn': 'Vitrina kontenti tartibi oʻzgartirildi',
     },
+    'content.switcher_entry.added': {
+      en: 'A brand was added to the storefront brand switcher',
+      ru: 'Бренд добавлен в переключатель брендов витрины',
+      'uz-Latn': 'Vitrinaning brendlar almashtirgichiga brend qoʻshildi',
+    },
+    'content.switcher_entry.removed': {
+      en: 'A brand was removed from the storefront brand switcher',
+      ru: 'Бренд убран из переключателя брендов витрины',
+      'uz-Latn': 'Vitrinaning brendlar almashtirgichidan brend olib tashlandi',
+    },
+    'content.switcher_entry.reordered': {
+      en: 'Storefront brand switcher reordered',
+      ru: 'Изменён порядок переключателя брендов витрины',
+      'uz-Latn': 'Vitrina brendlar almashtirgichi tartibi oʻzgartirildi',
+    },
+    'content.switcher_entry.updated': {
+      en: 'A brand in the storefront brand switcher was shown or hidden',
+      ru: 'Показ бренда в переключателе брендов витрины изменён',
+      'uz-Latn': 'Vitrina brendlar almashtirgichidagi brend koʻrinishi oʻzgartirildi',
+    },
     'conversation.closed': {
       en: 'Conversation closed',
       ru: 'Переписка закрыто',
@@ -795,6 +845,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Курьер заявитель удалено',
       'uz-Latn': 'Kuryer nomzod oʻchirildi',
     },
+    'courier.archived': {
+      en: 'A courier was archived',
+      ru: 'Курьер перенесён в архив',
+      'uz-Latn': 'Kuryer arxivga olindi',
+    },
     'courier.branch.bound': {
       en: 'Courier branch bound',
       ru: 'Курьер филиал привязано',
@@ -840,6 +895,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Курьер подтвердил полученные наличные',
       'uz-Latn': 'Kuryer olingan naqd pulni tasdiqladi',
     },
+    'courier.engagement.ended': {
+      en: 'A courier’s engagement was ended',
+      ru: 'Сотрудничество с курьером завершено',
+      'uz-Latn': 'Kuryer bilan hamkorlik tugatildi',
+    },
     'courier.engagement.opened': {
       en: 'Courier engagement opened',
       ru: 'Курьер привлечение открыто',
@@ -849,6 +909,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Courier engagement suspended',
       ru: 'Курьер привлечение приостановлено',
       'uz-Latn': 'Kuryer jalb qilish toʻxtatib turildi',
+    },
+    'courier.first_name.disclosed_to_customer': {
+      en: 'A courier’s first name was shown to the customer in an order message',
+      ru: 'Имя курьера показано клиенту в сообщении о заказе',
+      'uz-Latn': 'Kuryerning ismi mijozga buyurtma xabarida koʻrsatildi',
     },
     'courier.group.archived': {
       en: 'Courier group archived',
@@ -909,6 +974,71 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Courier settlement closed',
       ru: 'Курьер расчёт закрыто',
       'uz-Latn': 'Kuryer hisob-kitob yopildi',
+    },
+    'customer.erasure.requested': {
+      en: 'Customer erasure requested',
+      ru: 'Запрошено удаление данных клиента',
+      'uz-Latn': 'Mijoz maʻlumotlarini oʻchirish soʻraldi',
+    },
+    'customer.erasure.completed': {
+      en: 'Customer erased',
+      ru: 'Данные клиента удалены',
+      'uz-Latn': 'Mijoz maʻlumotlari oʻchirildi',
+    },
+    'customer.erasure.cancelled': {
+      en: 'Customer erasure withdrawn',
+      ru: 'Запрос на удаление данных клиента отозван',
+      'uz-Latn': 'Mijoz maʻlumotlarini oʻchirish soʻrovi qaytarib olindi',
+    },
+    'customer.legal-hold.placed': {
+      en: 'Legal hold placed on a customer',
+      ru: 'На клиента наложена юридическая блокировка',
+      'uz-Latn': 'Mijozga huquqiy cheklov qoʻyildi',
+    },
+    'customer.legal-hold.lifted': {
+      en: 'Legal hold lifted from a customer',
+      ru: 'С клиента снята юридическая блокировка',
+      'uz-Latn': 'Mijozdan huquqiy cheklov olib tashlandi',
+    },
+    'customer.dsar.requested': {
+      en: 'Copy of a customer’s data requested',
+      ru: 'Запрошена копия данных клиента',
+      'uz-Latn': 'Mijoz maʻlumotlari nusxasi soʻraldi',
+    },
+    'customer.dsar.cancelled': {
+      en: 'Request for a copy of a customer’s data withdrawn',
+      ru: 'Запрос копии данных клиента отозван',
+      'uz-Latn': 'Mijoz maʻlumotlari nusxasi soʻrovi qaytarib olindi',
+    },
+    'customer.dsar.exported': {
+      en: 'Customer’s data gathered into a copy',
+      ru: 'Данные клиента собраны в копию',
+      'uz-Latn': 'Mijoz maʻlumotlari nusxaga jamlandi',
+    },
+    'customer.dsar.bundle_revealed': {
+      en: 'Customer’s data copy opened',
+      ru: 'Открыта копия данных клиента',
+      'uz-Latn': 'Mijoz maʻlumotlari nusxasi ochildi',
+    },
+    'customer.correction.applied': {
+      en: 'Customer’s data corrected against evidence',
+      ru: 'Данные клиента исправлены на основании подтверждения',
+      'uz-Latn': 'Mijoz maʻlumotlari dalil asosida tuzatildi',
+    },
+    'customer.address.captured': {
+      en: 'Operator saved a delivery address for a customer',
+      ru: 'Оператор сохранил адрес доставки клиента',
+      'uz-Latn': 'Operator mijoz uchun yetkazib berish manzilini saqladi',
+    },
+    'customer.address.listed_masked': {
+      en: 'Operator read a customer’s saved addresses (masked)',
+      ru: 'Оператор просмотрел сохранённые адреса клиента (с маской)',
+      'uz-Latn': 'Operator mijozning saqlangan manzillarini koʻrdi (niqoblangan)',
+    },
+    'customer.address.pin_set': {
+      en: 'Operator placed the pin of a saved address',
+      ru: 'Оператор поставил точку на карте для сохранённого адреса',
+      'uz-Latn': 'Operator saqlangan manzil uchun xaritada nuqta belgiladi',
     },
     'customer.blacklist.revealed': {
       en: 'Customer blacklist revealed',
@@ -1175,6 +1305,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Контактные лица филиала изменены',
       'uz-Latn': 'Filialning aloqa shaxslari oʻzgartirildi',
     },
+    'integration.binding.marketplaceRulesetSet': {
+      en: 'Marketplace content rules of a binding named or cleared',
+      ru: 'Правила содержания маркетплейса для привязки назначены или сняты',
+      'uz-Latn': 'Bogʻlanishning marketplace kontent qoidalari tayinlandi yoki olib tashlandi',
+    },
     'integration.installation_created': {
       en: 'Provider installation created',
       ru: 'Подключение провайдера создано',
@@ -1219,6 +1354,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Integration telegram link code issued',
       ru: 'Интеграция Telegram ссылка код выдано',
       'uz-Latn': 'Integratsiya Telegram havola kod berildi',
+    },
+    'integration.telegram_menu_button_applied': {
+      en: 'Telegram menu button set on the bot',
+      ru: 'Кнопка меню бота Telegram установлена',
+      'uz-Latn': 'Telegram botining menyu tugmasi oʻrnatildi',
+    },
+    'integration.telegram_menu_button_reset': {
+      en: 'Telegram menu button taken off the bot',
+      ru: 'Кнопка меню бота Telegram снята',
+      'uz-Latn': 'Telegram botining menyu tugmasi olib tashlandi',
     },
     'integration.telegram_staff_link_code_issued': {
       en: 'Integration telegram staff link code issued',
@@ -1385,6 +1530,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Правило начисления баллов выведено из действия',
       'uz-Latn': 'Ballar hisoblash qoidasi bekor qilindi',
     },
+    'loyalty.pos_sync.consent_resumed': {
+      en: 'Till balance sync resumed for a customer who consented',
+      ru: 'Синхронизация баланса с кассой возобновлена для клиента, давшего согласие',
+      'uz-Latn': 'Rozilik bergan mijoz uchun kassa balansi sinxronizatsiyasi qayta tiklandi',
+    },
+    'loyalty.pos_sync.consent_suspended': {
+      en: 'Till balance sync stopped for a customer without consent',
+      ru: 'Синхронизация баланса с кассой остановлена для клиента без согласия',
+      'uz-Latn': 'Roziligi yoʻq mijoz uchun kassa balansi sinxronizatsiyasi toʻxtatildi',
+    },
     'loyalty.pos_sync.held': {
       en: 'Loyalty points earned at the till held for review',
       ru: 'Баллы, начисленные на кассе, задержаны до проверки',
@@ -1399,6 +1554,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Till customer matched to a loyalty account',
       ru: 'Клиент кассы сопоставлен со счётом баллов',
       'uz-Latn': 'Kassadagi mijoz ball hisobiga bogʻlandi',
+    },
+    'loyalty.pos_sync.mode.changed': {
+      en: 'Till balance sync moved to another stage',
+      ru: 'Синхронизация баланса с кассой переведена на другую стадию',
+      'uz-Latn': 'Kassa balansi sinxronizatsiyasi boshqa bosqichga oʻtkazildi',
     },
     'loyalty.pos_sync.resolved': {
       en: 'Difference between the till and the loyalty ledger settled',
@@ -1439,6 +1599,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Notification template created',
       ru: 'Создан шаблон уведомления',
       'uz-Latn': 'Bildirishnoma shabloni yaratildi',
+    },
+    'notification.template.test_sent': {
+      en: 'Notification template test message sent',
+      ru: 'Отправлено тестовое сообщение по шаблону уведомления',
+      'uz-Latn': 'Bildirishnoma shabloni boʻyicha sinov xabari yuborildi',
     },
     'notification.template.version_activated': {
       en: 'Notification template version activated',
@@ -1505,6 +1670,12 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Promotions of a scheduled order checked again, the order unchanged',
       ru: 'Акции запланированного заказа проверены повторно, заказ не изменён',
       'uz-Latn': 'Rejalashtirilgan buyurtma aksiyalari qayta tekshirildi, buyurtma oʻzgarmadi',
+    },
+    'ordering.order.redemption_attested': {
+      en: 'The operator confirmed the customer agreed to pay part of an order with their points',
+      ru: 'Оператор подтвердил согласие клиента оплатить часть заказа баллами',
+      'uz-Latn':
+        'Operator mijoz buyurtmaning bir qismini ballar bilan toʻlashga rozi ekanini tasdiqladi',
     },
     'ordering.outcome-reason.archived': {
       en: 'Order outcome reason retired',
@@ -1660,6 +1831,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'POS mapping retired',
       ru: 'Касса сопоставление выведено из эксплуатации',
       'uz-Latn': 'Kassa moslashtirish chiqarib tashlandi',
+    },
+    'pos.order_revision_acknowledged': {
+      en: 'A person confirmed the till was changed to the revised order total',
+      ru: 'Сотрудник подтвердил, что в кассе исправлена сумма заказа',
+      'uz-Latn': 'Xodim kassada buyurtma summasi oʻzgartirilganini tasdiqladi',
     },
     'pricing.price_book.activated': {
       en: 'Pricing price book activated',
@@ -1910,6 +2086,21 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Kiosk revoked',
       ru: 'Киоск отключён',
       'uz-Latn': 'Kiosk oʻchirildi',
+    },
+    'kiosk.idle_media.attached': {
+      en: 'Picture added to a kiosk channel’s idle screen',
+      ru: 'Картинка добавлена на экран ожидания канала киоска',
+      'uz-Latn': 'Kiosk kanalining kutish ekraniga rasm qoʻshildi',
+    },
+    'kiosk.idle_media.reordered': {
+      en: 'Idle screen pictures of a kiosk channel put in another order',
+      ru: 'Порядок картинок экрана ожидания канала киоска изменён',
+      'uz-Latn': 'Kiosk kanali kutish ekrani rasmlari tartibi oʻzgartirildi',
+    },
+    'kiosk.idle_media.removed': {
+      en: 'Picture removed from a kiosk channel’s idle screen',
+      ru: 'Картинка убрана с экрана ожидания канала киоска',
+      'uz-Latn': 'Kiosk kanalining kutish ekranidan rasm olib tashlandi',
     },
     'terminal.device.configured': {
       en: 'Terminal name or sign-in mode changed',

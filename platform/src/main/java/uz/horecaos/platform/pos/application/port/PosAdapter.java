@@ -82,6 +82,24 @@ public interface PosAdapter {
     ReferenceListRead discoverDiscounts(PosContext context);
 
     /**
+     * Discovers the vendor's own operators (waiters, cashiers, staff users), for the tenant-facing
+     * mapping pane's right-hand side when a person is paired with a till operator (gap-map row
+     * {@code 9.2c}). See {@link #discoverPaymentTypes} for the {@code NOT_SUPPORTED} contract.
+     *
+     * <p>Listing a vendor's operators is not the same fact as the vendor's order API carrying one:
+     * a till can list its users and still receive no operator on an order. That second fact is
+     * {@link PosCapability#ORDER_OPERATOR_ATTRIBUTION}, and the pane says which of the two is true.
+     * The entries are names and ids only; a user's login, email and phone are never read into one.
+     *
+     * <p>Defaulted to "not supported" so an adapter whose vendor exposes no such list compiles and
+     * behaves as before: an empty success would read as "everyone is paired".
+     */
+    default ReferenceListRead discoverOperators(PosContext context) {
+        return new ReferenceListRead(
+                ProviderOutcome.rejected("NOT_SUPPORTED", "This point of sale does not list its operators"), List.of());
+    }
+
+    /**
      * Sends an order to the till.
      *
      * <p>The most consequential call in the module. Where the vendor offers no
@@ -176,6 +194,34 @@ public interface PosAdapter {
             String idempotencyKey) {
         return notSupported("writeBalance");
     }
+
+    // ------------------------------------------------------------------
+    // Order revision (ADR 0137, PosCapability#ORDER_REVISION)
+    // ------------------------------------------------------------------
+
+    /**
+     * Tells the vendor that the order it holds as {@code externalOrderId} is now worth
+     * {@code revision.revisedTotalMinor()}, under {@code revision.idempotencyKey()}. The key is built from the
+     * notice, so a repeat of the same send is the same send; an {@code UNCERTAIN} outcome is resolved by
+     * sending again, never by assuming either way.
+     *
+     * <p>Defaulted to "not supported", so an adapter whose vendor cannot revise an order -- Clopos today --
+     * compiles and behaves as it did. A default that answered a success would be the failure this capability
+     * exists to prevent: a till reported as corrected when it was never asked.
+     */
+    default ProviderOutcome reviseExportedOrder(PosContext context, String externalOrderId, TillRevision revision) {
+        return notSupported("reviseExportedOrder");
+    }
+
+    /**
+     * What the vendor is told about an order it already holds.
+     *
+     * @param tillTotalMinor the total the vendor holds now
+     * @param revisedTotalMinor what the order is worth
+     * @param reasonCode a stable code for why, e.g. {@code CATCHWEIGHT}; never free text
+     */
+    record TillRevision(
+            long tillTotalMinor, long revisedTotalMinor, String currency, String reasonCode, String idempotencyKey) {}
 
     private static ProviderOutcome notSupported(String operation) {
         return ProviderOutcome.rejected("NOT_SUPPORTED", "This point of sale does not support " + operation);
@@ -377,17 +423,19 @@ public interface PosAdapter {
      *                                ordering.orders.accepted_by_actor_id} —
      *                                null whenever the order was not accepted by
      *                                a signed-in user, or no such mapping has
-     *                                been recorded yet (operations-gap-map.md
-     *                                {@code 9.2c}: the mapping is provider-neutral
-     *                                and this field is that contract's whole
-     *                                shape, but no console screen writes a
-     *                                mapping row of this entity type yet — see
-     *                                that row's own note). An adapter whose
-     *                                vendor has no documented field for this
-     *                                (Clopos: {@code docs/providers/clopos-api.md}
-     *                                §6.5's {@code CreateOrderRequest} names
-     *                                none) must not invent one; it simply never
-     *                                reads this field
+     *                                been recorded yet. The console writes the mapping
+     *                                (the {@code OPERATOR} pairing on an installation's
+     *                                detail, operations-gap-map.md {@code 9.2c}); the
+     *                                export path resolves it, and hands it <em>only</em>
+     *                                to an adapter that declares {@link
+     *                                PosCapability#ORDER_OPERATOR_ATTRIBUTION} - for any
+     *                                other adapter this is null whatever is paired. An
+     *                                adapter that declares the capability must put this
+     *                                value in the create-order body (the contract test
+     *                                holds it to that); one that does not (Clopos: {@code
+     *                                docs/providers/clopos-api.md} §6.5's {@code
+     *                                CreateOrderRequest} names no such field) must not
+     *                                invent a field for it
      */
     record OrderExport(
             UUID orderId,

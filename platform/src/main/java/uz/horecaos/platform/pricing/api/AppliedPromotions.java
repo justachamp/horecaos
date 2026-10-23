@@ -57,8 +57,23 @@ public record AppliedPromotions(
      * @param amountMinor always positive: what it took off ({@code DISCOUNT},
      *                    {@code DELIVERY_DISCOUNT}) or added ({@code SURCHARGE}),
      *                    the direction being the effect's
+     * @param titles      the wording the marketer wrote for the customer, per locale, when the
+     *                    promotion behind the entry has any. Empty when it has none, and then the
+     *                    entry is described by its kind of benefit as before. Promotions that
+     *                    would be described the same way (same source, effect and titles) are
+     *                    still one entry
      */
-    public record Applied(Source source, Effect effect, long amountMinor) {}
+    public record Applied(Source source, Effect effect, long amountMinor, java.util.Map<String, String> titles) {
+
+        public Applied {
+            titles = titles == null ? java.util.Map.of() : java.util.Map.copyOf(titles);
+        }
+
+        /** An entry with no customer-facing title: the kind of benefit is all a storefront can say. */
+        public Applied(Source source, Effect effect, long amountMinor) {
+            this(source, effect, amountMinor, java.util.Map.of());
+        }
+    }
 
     /**
      * A free gift the cart could take up.
@@ -95,7 +110,13 @@ public record AppliedPromotions(
         /** Taken off the delivery charge; already reflected in {@code feeMinor}. */
         DELIVERY_DISCOUNT,
         /** Added to the goods by a markup; already reflected in the subtotal. */
-        SURCHARGE
+        SURCHARGE,
+        /**
+         * Added to the order by an order-level markup (ADR 0140, stage 5): a service charge computed on the goods
+         * after the discounts. Already reflected in the fees, never in the subtotal, so a customer reads it as a
+         * caption and not as a line that adds.
+         */
+        SERVICE_CHARGE
     }
 
     /**

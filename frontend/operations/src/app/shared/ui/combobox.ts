@@ -17,6 +17,12 @@ export interface ComboboxOption {
   /** Already translated / already the tenant's own data — never a key. */
   readonly label: string;
   readonly sublabel?: string | null;
+  /**
+   * A third column, already translated: a fact about the result that decides whether it is the one wanted
+   * («задано: бренд «Rayhon» (15 мин)»). Drawn after the label and the sublabel when there is room, below
+   * them when there is not.
+   */
+  readonly detail?: string | null;
 }
 
 const DEBOUNCE_MS = 250;

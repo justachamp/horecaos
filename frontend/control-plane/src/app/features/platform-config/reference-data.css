@@ -6,7 +6,7 @@
 
 .notice {
   margin-top: 12px;
-  border-left: 3px solid var(--q-warning);
+  border-inline-start: 3px solid var(--q-warning);
   padding: 8px 12px;
   background: var(--q-surface-1);
   max-width: 640px;
@@ -44,7 +44,7 @@
 
 .table th,
 .table td {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   border-bottom: 1px solid var(--q-hairline);
 }

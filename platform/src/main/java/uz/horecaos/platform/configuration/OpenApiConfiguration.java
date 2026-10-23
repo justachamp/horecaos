@@ -95,6 +95,11 @@ public class OpenApiConfiguration {
         return groupedOpenApi(OpenApiSurface.OPERATIONS);
     }
 
+    @Bean
+    GroupedOpenApi courierOpenApi() {
+        return groupedOpenApi(OpenApiSurface.COURIER);
+    }
+
     private static GroupedOpenApi groupedOpenApi(OpenApiSurface surface) {
         return GroupedOpenApi.builder()
                 .group(surface.id())

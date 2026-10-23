@@ -13,6 +13,7 @@ import {
   type ReorderVerdict,
 } from '../../services/orders.service';
 import { LangService } from '../../services/lang.service';
+import { type PaymentSplit, PointsService } from '../../services/points.service';
 import { UiCartService } from '../../services/ui-cart.service';
 import { TranslateService } from '../../services/translate.service';
 
@@ -99,9 +100,18 @@ class FakeUiCartService {
   formatPrice = (value: number) => `${value} so'm`;
 }
 
-async function setUp(configure: (orders: FakeOrdersService) => void = () => {}) {
+class FakePointsService {
+  paymentSplit = vi.fn<(orderId: string) => Promise<PaymentSplit | null>>(async () => null);
+}
+
+async function setUp(
+  configure: (orders: FakeOrdersService) => void = () => {},
+  configurePoints: (points: FakePointsService) => void = () => {},
+) {
   const orders = new FakeOrdersService();
+  const points = new FakePointsService();
   configure(orders);
+  configurePoints(points);
 
   TestBed.configureTestingModule({
     imports: [OrdersComponent],
@@ -113,6 +123,7 @@ async function setUp(configure: (orders: FakeOrdersService) => void = () => {}) 
       { provide: OrdersService, useValue: orders },
       { provide: LangService, useClass: FakeLangService },
       { provide: UiCartService, useClass: FakeUiCartService },
+      { provide: PointsService, useValue: points },
       { provide: TranslateService, useClass: FakeTranslateService },
     ],
   });
@@ -125,6 +136,7 @@ async function setUp(configure: (orders: FakeOrdersService) => void = () => {}) 
   return {
     fixture,
     orders,
+    points,
     cart: TestBed.inject(UiCartService) as unknown as FakeUiCartService,
     router: TestBed.inject(Router),
   };
@@ -431,5 +443,77 @@ describe('OrdersComponent.repeat -- a refused line stops the repeat and says why
     await pressRepeat(fixture);
 
     expect(fixture.nativeElement.textContent).toContain('errors.generic');
+  });
+});
+
+describe('OrdersComponent -- how the active order is paid (ADR 0046, ADR 0185)', () => {
+  const active = () => order({ id: 'a1', status: { id: 'PREPARING', name: 'PREPARING' } });
+  const splitOf = (...tenders: PaymentSplit['tenders'][number][]): PaymentSplit => ({
+    orderId: 'a1',
+    total: { amountMinor: 25_000, currency: 'UZS' },
+    tenders,
+  });
+  const points5k = {
+    kind: 'POINTS',
+    methodCode: null,
+    amount: { amountMinor: 5_000, currency: 'UZS' },
+    status: 'SETTLED',
+  } as const;
+  const click20k = {
+    kind: 'MONEY',
+    methodCode: 'CLICK',
+    amount: { amountMinor: 20_000, currency: 'UZS' },
+    status: 'PLANNED',
+  } as const;
+
+  const rows = (host: HTMLElement) =>
+    [...host.querySelectorAll('[data-testid="payment-split-row"]')].map((row) =>
+      (row.textContent ?? '').replace(/\s+/g, ' ').trim(),
+    );
+
+  it('shows the points and the money that pay the active order, each with where it stands', async () => {
+    const { fixture, points } = await setUp(
+      (orders) => orders.getOrders.mockReturnValue(of([active()])),
+      (p) => p.paymentSplit.mockResolvedValue(splitOf(points5k, click20k)),
+    );
+
+    expect(points.paymentSplit).toHaveBeenCalledWith('a1');
+    const [spent, money] = rows(fixture.nativeElement);
+    expect(spent).toContain('split.points');
+    expect(spent).toContain('split.status.SETTLED');
+    expect(spent).toContain('5 000');
+    expect(money).toContain('cart.click');
+    expect(money).toContain('split.status.PLANNED');
+    expect(money).toContain('20 000');
+  });
+
+  it('reads the split of the active order only, never one per history row', async () => {
+    const done = order({ id: 'a2', status: { id: 'COMPLETED', name: 'COMPLETED' } });
+    const { points } = await setUp((orders) =>
+      orders.getOrders.mockReturnValue(of([active(), done])),
+    );
+
+    expect(points.paymentSplit).toHaveBeenCalledTimes(1);
+    expect(points.paymentSplit).toHaveBeenCalledWith('a1');
+  });
+
+  it('reads nothing when no order is active', async () => {
+    const done = order({ id: 'a2', status: { id: 'COMPLETED', name: 'COMPLETED' } });
+    const { points } = await setUp((orders) => orders.getOrders.mockReturnValue(of([done])));
+
+    expect(points.paymentSplit).not.toHaveBeenCalled();
+  });
+
+  it('says nothing when the platform has no payment to show, or cannot be asked', async () => {
+    const none = await setUp((orders) => orders.getOrders.mockReturnValue(of([active()])));
+    expect(none.fixture.nativeElement.querySelector('[data-testid="payment-split"]')).toBeNull();
+
+    TestBed.resetTestingModule();
+    const failed = await setUp(
+      (orders) => orders.getOrders.mockReturnValue(of([active()])),
+      (p) => p.paymentSplit.mockRejectedValue(new Error('offline')),
+    );
+    expect(failed.fixture.nativeElement.querySelector('[data-testid="payment-split"]')).toBeNull();
+    expect(failed.fixture.nativeElement.textContent).toContain('orders.platformStatus.PREPARING');
   });
 });

@@ -8,8 +8,15 @@ import { type HiddenChargeRow, UiCartService } from '../../../services/ui-cart.s
 import { DeliverySelectionService } from '../../../services/delivery-selection.service';
 import { OrdersService } from '../../../services/orders.service';
 import { PaymentSessionService } from '../../../services/payment-session.service';
+import { submitPaymentForm } from '../../../services/payment-form';
+import { PointsService } from '../../../services/points.service';
 import { NotificationService } from '../../../services/notification.service';
 import { GiftOffersComponent } from '../../../shared/gift-offers/gift-offers.component';
+import {
+  NO_POINTS,
+  PointsRedemptionComponent,
+  type PointsSelection,
+} from '../../../shared/points-redemption/points-redemption.component';
 import { PromoCodeComponent } from '../../../shared/promo-code/promo-code.component';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import { TranslateService } from '../../../services/translate.service';
@@ -19,6 +26,7 @@ import {
   type LocationProfile,
 } from '../../../services/location-profile.service';
 import { APP_CONFIG } from '../../../core/config/app-config';
+import { formatMoney } from '../../../core/money/money';
 
 export interface PaymentOption {
   id: string;
@@ -32,7 +40,14 @@ export interface PaymentOption {
   templateUrl: './cart-confirmation.component.html',
   styleUrl: './cart-confirmation.component.scss',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslatePipe, GiftOffersComponent, PromoCodeComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslatePipe,
+    GiftOffersComponent,
+    PromoCodeComponent,
+    PointsRedemptionComponent,
+  ],
 })
 export class CartConfirmationComponent implements OnInit {
   showPaymentOptions = false;
@@ -105,6 +120,7 @@ export class CartConfirmationComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly paymentSessions = inject(PaymentSessionService);
   private readonly notification = inject(NotificationService);
+  private readonly points = inject(PointsService);
 
   /**
    * Asks the platform what this cart may be paid with, and keeps only the
@@ -305,6 +321,34 @@ export class CartConfirmationComponent implements OnInit {
     this.delivery.setRecipient(this.recipientName, this.recipientPhone);
   }
 
+  /**
+   * X.1 (ADR 0046, ADR 0185): the points the customer has put towards this order. The control
+   * owns the choice; this holds the last thing it said, for the totals and for the checkout.
+   */
+  readonly redemption = signal<PointsSelection>(NO_POINTS);
+
+  onPointsChanged(selection: PointsSelection): void {
+    this.redemption.set(selection);
+  }
+
+  /** The points taken off the total, as the customer reads them; null when none are spent. */
+  get pointsSpent(): string | null {
+    const minor = this.redemption().redeemMinor;
+    const currency = this.cart.priced()?.currency;
+    return minor > 0 && currency ? this.money(minor, currency) : null;
+  }
+
+  /** What is still paid in money once the points are out of the total; null when none are spent. */
+  get cashToPay(): string | null {
+    const minor = this.redemption().redeemMinor;
+    const priced = this.cart.priced();
+    return minor > 0 && priced ? this.money(priced.totalMinor - minor, priced.currency) : null;
+  }
+
+  private money(amountMinor: number, currency: string): string {
+    return formatMoney({ amountMinor, currency }, this.translate.get('common.currency'));
+  }
+
   togglePaymentOptions(): void {
     this.showPaymentOptions = !this.showPaymentOptions;
   }
@@ -396,6 +440,9 @@ export class CartConfirmationComponent implements OnInit {
    */
   async submitOrder(): Promise<void> {
     if (this.submitting() || !this.cart.cartData()) return;
+    // Points are switched on with an amount the platform did not offer. The control says so beside
+    // itself; placing the order without them instead would be doing something nobody asked for.
+    if (this.redemption().blocked) return;
     if (!this.selectedPaymentId) {
       this.orderError.set(this.translate.get('cart.noPaymentMethodSelected'));
       return;
@@ -429,10 +476,19 @@ export class CartConfirmationComponent implements OnInit {
         return;
       }
       const paymentMethodCode = this.selectedPaymentId;
+      // The points are spent against the quote just made, which may allow less than the one the
+      // customer chose them against (a promotion landed, the price moved). Look again before
+      // spending: a smaller cap is something to tell them about, not to quietly lower.
+      const redeemMinor = this.redemption().redeemMinor;
+      if (redeemMinor > 0 && !(await this.pointsStillAllowed(priced.cartId, redeemMinor))) {
+        this.orderError.set(this.translate.get('cart.pointsChanged'));
+        return;
+      }
       const result = await this.cart.checkout({
         priced,
         paymentMethodCode,
-        idempotencyKey: this.checkoutKey(),
+        idempotencyKey: this.checkoutKey(redeemMinor),
+        ...(redeemMinor > 0 ? { redeemFromBalanceMinor: redeemMinor } : {}),
       });
       if (result.outcome === 'REJECTED') {
         this.orderError.set(this.translate.get('cart.orderRejected'));
@@ -456,6 +512,11 @@ export class CartConfirmationComponent implements OnInit {
       if (PaymentSessionService.requiresOnlineSession(paymentMethodCode)) {
         try {
           const session = await this.paymentSessions.open(result.orderId);
+          if (session.form && submitPaymentForm(session.form)) {
+            // Payme on a fiscalised cashbox: the receipt detail is a field of the checkout form, which a link
+            // cannot carry, so the browser POSTs the form the platform built. Nothing after this runs.
+            return;
+          }
           if (session.checkoutUrl) {
             // A different host's checkout page, not an Angular route -- a full
             // navigation, and nothing after this line runs.
@@ -503,10 +564,31 @@ export class CartConfirmationComponent implements OnInit {
    *
    * Reset when the basket becomes an order, so the next order is a new intent.
    */
-  private checkoutKey(): string {
+  private checkoutKey(redeemMinor: number): string {
+    // The key stands for one body. A different amount of points is a different body, which the
+    // same key would be refused for, so the intent starts again.
+    if (this.pendingCheckoutKey !== null && this.pendingCheckoutRedeem !== redeemMinor) {
+      this.pendingCheckoutKey = null;
+    }
+    this.pendingCheckoutRedeem = redeemMinor;
     this.pendingCheckoutKey ??= newIdempotencyKey();
     return this.pendingCheckoutKey;
   }
 
   private pendingCheckoutKey: string | null = null;
+  private pendingCheckoutRedeem = 0;
+
+  /**
+   * Whether the platform still offers at least `redeemMinor` against the cart's current quote.
+   * A second look that cannot be had is not a reason to refuse: the platform checks the amount
+   * itself at checkout and says no there, so an unreadable offer lets the order through.
+   */
+  private async pointsStillAllowed(cartId: string, redeemMinor: number): Promise<boolean> {
+    try {
+      const fresh = await this.points.redemptionOffer(cartId);
+      return fresh.offer.redeemable && fresh.offer.maximum.amountMinor >= redeemMinor;
+    } catch {
+      return true;
+    }
+  }
 }

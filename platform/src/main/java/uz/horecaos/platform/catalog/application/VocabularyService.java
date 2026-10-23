@@ -428,7 +428,7 @@ public class VocabularyService {
 
     private static Map<String, String> suppliedNames(@Nullable Map<String, String> names) {
         try {
-            return LocalizedLabels.supplied(null, null, null, names, Vocabularies.MAX_NAME_LENGTH);
+            return LocalizedLabels.supplied(names, Vocabularies.MAX_NAME_LENGTH);
         } catch (IllegalArgumentException invalid) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
         }

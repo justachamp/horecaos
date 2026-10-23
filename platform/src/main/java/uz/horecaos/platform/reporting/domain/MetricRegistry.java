@@ -100,6 +100,14 @@ public final class MetricRegistry {
     /** ADR 0167 (7.6c): when the funnel and registration counts started being captured at day close. */
     private static final LocalDate ADR0167_FUNNEL_CAPTURE = LocalDate.of(2026, 10, 8);
 
+    /**
+     * Wave 21 w6-promotions-reviews-approvals (ADR 0140, ADR 0038, row 7.9): when {@code
+     * fact_promotion_redemption} started carrying the order's branch and legal entity, which is what lets the
+     * promo.* metrics below sit at the money grain. V0668 backfilled the rows written before this date from
+     * the orders' own facts, so a range that crosses it reads one grain.
+     */
+    private static final LocalDate W21_PROMOTION_GRAIN = LocalDate.of(2026, 10, 14);
+
     private static final Map<String, MetricDefinition> BY_CODE = index(List.of(
             new MetricDefinition(
                     new MetricId("revenue.gross", 1),
@@ -1093,6 +1101,144 @@ public final class MetricRegistry {
                             + "recovery report returns it per currency; every surface naming this "
                             + "metric must render it unbuilt rather than zero.",
                     null),
+            // Wave 21 w6-promotions-reviews-approvals (ADR 0140 "Reporting metrics", ADR 0038): the promotion
+            // spend metrics. ADR 0140 named them and could not register them, because the redemption fact held
+            // no legal entity; V0668 copies the order's branch and legal entity onto it. Answered by
+            // GET .../reporting/promotions/summary and not /queries, which reads pre-aggregated agg_branch_day: a
+            // distinct-customer count and a mean cannot be composed from per-slice figures. A benefit grant a
+            // customer spent counts like a promotion redeemed (ADR 0140 source_kind GRANT).
+            new MetricDefinition(
+                    new MetricId("promo.redemptions", 1),
+                    Grain.DAY_LOCATION_LEGAL_ENTITY,
+                    "reporting.fact_promotion_redemption",
+                    true,
+                    Aggregation.COUNT,
+                    "REDEMPTIONS_ON_SALE_ORDERS",
+                    CurrencyRule.NONE,
+                    "Whole redemptions",
+                    MetricUnit.COUNT,
+                    "Redemptions of a promotion, a promo code or a customer's one-off code, one per order and "
+                            + "promotion, on the business day each was recorded, for the orders that were not "
+                            + "cancelled, rejected, expired or payment-failed.",
+                    "Automatic promotions, typed promo codes and one-off benefit grants alike.",
+                    "An order that never became a sale stays in the redemption log with its status and is "
+                            + "left out of this count: spend nobody incurred. A slot is not returned when an "
+                            + "order is cancelled (ADR 0072), so a limit can be used up by orders this count "
+                            + "does not show.",
+                    "Not applicable: a refund does not change what promotion an order carried.",
+                    "Answered by GET .../reporting/promotions/summary. Lags by up to a business day. A "
+                            + "redemption whose order has no fact yet carries no branch or entity until that "
+                            + "day closes.",
+                    W21_PROMOTION_GRAIN),
+            new MetricDefinition(
+                    new MetricId("promo.unique_customers", 1),
+                    Grain.DAY_LOCATION_LEGAL_ENTITY,
+                    "reporting.fact_promotion_redemption.customer_subject_hash",
+                    true,
+                    Aggregation.COUNT_DISTINCT,
+                    "REDEMPTIONS_ON_SALE_ORDERS",
+                    CurrencyRule.NONE,
+                    "Whole customers",
+                    MetricUnit.COUNT,
+                    "Distinct customers (the ADR 0029 keyed pseudonym, never an account id) who redeemed the "
+                            + "promotion in the range.",
+                    "Signed-in customers.",
+                    "A guest order has no pseudonym and is not counted. A customer who redeemed at two "
+                            + "branches counts once per row of the grain the figure is read at, so a figure "
+                            + "read across branches must be asked for, not added up.",
+                    "Not applicable.",
+                    "A distinct count cannot be summed across rows: read the range, not the days.",
+                    W21_PROMOTION_GRAIN),
+            new MetricDefinition(
+                    new MetricId("promo.discount_som", 1),
+                    Grain.DAY_LOCATION_LEGAL_ENTITY,
+                    "reporting.fact_promotion_redemption.discount_minor",
+                    true,
+                    Aggregation.SUM,
+                    "REDEMPTIONS_ON_SALE_ORDERS",
+                    CurrencyRule.UZS_SOM,
+                    "Whole som; no sub-unit exists and nothing divides by a hundred",
+                    MetricUnit.MONEY_SOM,
+                    "What the promotion took off the orders that carried it: item and order discounts and "
+                            + "delivery benefits, as the quote's adjustments recorded them.",
+                    "The amount the order carries now, after any amendment moved it.",
+                    "Cancelled, rejected, expired and payment-failed orders. A markup is not a negative "
+                            + "discount; it is promo.markup_som.",
+                    "A refund does not change a discount given: it is revenue.net.v1's business.",
+                    "Per legal entity: a tenant trading as two companies reads two figures, never their sum.",
+                    W21_PROMOTION_GRAIN),
+            new MetricDefinition(
+                    new MetricId("promo.markup_som", 1),
+                    Grain.DAY_LOCATION_LEGAL_ENTITY,
+                    "reporting.fact_promotion_redemption.markup_minor",
+                    true,
+                    Aggregation.SUM,
+                    "REDEMPTIONS_ON_SALE_ORDERS",
+                    CurrencyRule.UZS_SOM,
+                    "Whole som; no sub-unit exists and nothing divides by a hundred",
+                    MetricUnit.MONEY_SOM,
+                    "What item markups added to the orders that carried them. The order-level service charge "
+                            + "(ADR 0140) is not in this figure and is not on by default: its fiscal treatment is "
+                            + "an open input.",
+                    "Item markups.",
+                    "Discounts, and the order-level markup while it is switched off.",
+                    "Not applicable.",
+                    null,
+                    W21_PROMOTION_GRAIN),
+            new MetricDefinition(
+                    new MetricId("promo.revenue_with", 1),
+                    Grain.DAY_LOCATION_LEGAL_ENTITY,
+                    "reporting.fact_order.gross_revenue_som joined through fact_promotion_redemption",
+                    true,
+                    Aggregation.SUM,
+                    "COMPLETED_ONLY",
+                    CurrencyRule.UZS_SOM,
+                    "Whole som; no sub-unit exists and nothing divides by a hundred",
+                    MetricUnit.MONEY_SOM,
+                    "Gross revenue of the completed orders that carried the promotion, as revenue.gross.v1 "
+                            + "defines gross.",
+                    "Completed orders that carried the promotion.",
+                    "Cancelled, rejected, expired and payment-failed orders. An order that carried two "
+                            + "promotions is counted under each, so these figures are not additive across "
+                            + "promotions.",
+                    "A refund reduces revenue.net.v1 and never this figure.",
+                    "Not additive across promotions.",
+                    W21_PROMOTION_GRAIN),
+            new MetricDefinition(
+                    new MetricId("promo.avg_check_with", 1),
+                    Grain.DAY_LOCATION_LEGAL_ENTITY,
+                    "promo.revenue_with.v1 over the completed orders that carried the promotion",
+                    true,
+                    Aggregation.AVERAGE,
+                    "COMPLETED_ONLY",
+                    CurrencyRule.UZS_SOM,
+                    "Whole som, half up; null when no completed order carried the promotion",
+                    MetricUnit.MONEY_SOM,
+                    "The mean gross revenue of the completed orders that carried the promotion.",
+                    "Completed orders that carried the promotion.",
+                    "Everything that is not a completed order.",
+                    "A refund does not change this figure.",
+                    "A comparison and not an uplift: customers who use a promotion differ from those who do " + "not.",
+                    W21_PROMOTION_GRAIN),
+            new MetricDefinition(
+                    new MetricId("promo.avg_check_without", 1),
+                    Grain.DAY_LOCATION_LEGAL_ENTITY,
+                    "reporting.fact_order.gross_revenue_som over the brand's completed orders that carried "
+                            + "no redemption of the promotion",
+                    true,
+                    Aggregation.AVERAGE,
+                    "COMPLETED_ONLY",
+                    CurrencyRule.UZS_SOM,
+                    "Whole som, half up; null when every completed order carried the promotion",
+                    MetricUnit.MONEY_SOM,
+                    "The mean gross revenue of the same brand's completed orders, in the same period and "
+                            + "legal entity (and branch, when one is asked for), that did not carry the "
+                            + "promotion.",
+                    "Completed orders of the brand and entity that carried no redemption of this promotion.",
+                    "The order that carried the promotion is never in its own comparison.",
+                    "A refund does not change this figure.",
+                    "The counterfactual the legacy dashboard lacks, and a comparison and not an uplift.",
+                    W21_PROMOTION_GRAIN),
             // ADR 0167 (7.6c): the customer funnel. Counts of distinct events on a business day,
             // captured at day close from the live tables before the cart sweeper deletes them. Not a
             // cohort and not a conversion rate -- see the definition's own last sentence. Visits are

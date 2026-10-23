@@ -142,4 +142,35 @@ class CustomerConfigurationKeysTests {
                 .as("ADR 0111 §7: card-view auditing is unconditional until counsel answers whether it must be")
                 .noneMatch(code -> code.contains("card.view_audit"));
     }
+
+    @Test
+    void theRegistryAndTheCustomersModuleDeclareTheSameDataSubjectExportKeys() {
+        for (ConfigurationKey<?> used : java.util.List.of(
+                CustomerConfigurationKeys.DSAR_RESPONSE_DEADLINE_DAYS,
+                CustomerConfigurationKeys.DSAR_BUNDLE_RETENTION_DAYS,
+                CustomerConfigurationKeys.DSAR_COVER_NOTE_RU,
+                CustomerConfigurationKeys.DSAR_COVER_NOTE_UZ_LATN,
+                CustomerConfigurationKeys.DSAR_COVER_NOTE_EN)) {
+            ConfigurationKey<?> registered = ConfigurationKeys.require(used.code());
+            assertThat(registered.valueType()).as(used.code()).isEqualTo(used.valueType());
+            assertThat(registered.defaultValue()).as(used.code()).isEqualTo(used.defaultValue());
+            assertThat(registered.settableScopes()).as(used.code()).isEqualTo(used.settableScopes());
+            assertThat(registered.owningModule()).as(used.code()).isEqualTo(used.owningModule());
+            assertThat(registered.explicitNullTerminates()).as(used.code()).isEqualTo(used.explicitNullTerminates());
+        }
+    }
+
+    @Test
+    void theDataSubjectExportDefaultsAreTheProvisionalOnes() {
+        // Thirty days to answer and a week to collect are the proposal, not legal's answer (ADR 0029 open input).
+        assertThat(CustomerConfigurationKeys.DSAR_RESPONSE_DEADLINE_DAYS.defaultValue())
+                .isEqualTo(30);
+        assertThat(CustomerConfigurationKeys.DSAR_BUNDLE_RETENTION_DAYS.defaultValue())
+                .isEqualTo(7);
+        // Blank is the default of every cover note: it means "keep the provisional wording and say so".
+        assertThat(CustomerConfigurationKeys.DSAR_COVER_NOTE_EN.defaultValue()).isEmpty();
+        assertThat(CustomerConfigurationKeys.coverNoteKeyFor("uz-latn"))
+                .contains(CustomerConfigurationKeys.DSAR_COVER_NOTE_UZ_LATN);
+        assertThat(CustomerConfigurationKeys.coverNoteKeyFor("fr")).isEmpty();
+    }
 }

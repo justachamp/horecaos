@@ -1,0 +1,196 @@
+<section class="editor" data-testid="job-editor" aria-labelledby="job-editor-title">
+  <h2 id="job-editor-title" class="q-emphasis">{{ heading() }}</h2>
+
+  <div class="fields">
+    <label class="field">
+      <span class="q-caption field__label">{{ 'staff.jobEditor.name.label' | t }}</span>
+      <input
+        class="q-body field__input"
+        type="text"
+        [maxLength]="maxNameLength"
+        [value]="name()"
+        (input)="name.set($any($event.target).value)"
+        [disabled]="busy()"
+        data-testid="job-name"
+      />
+      <span class="q-caption muted">{{ 'staff.jobEditor.name.hint' | t }}</span>
+      @if (nameMissing()) {
+        <span class="q-caption error" role="alert" data-testid="job-name-required">{{
+          'staff.jobEditor.name.required' | t
+        }}</span>
+      }
+    </label>
+
+    @if (editing(); as editMode) {
+      <p class="q-body-sm" data-testid="job-level-fixed">
+        <span class="q-caption muted">{{ 'staff.jobEditor.level.label' | t }}:</span>
+        {{ scopeLabel(level()) }}
+      </p>
+      <p class="q-caption muted">{{ 'staff.jobEditor.level.fixed' | t }}</p>
+      <p class="q-body-sm holders" data-testid="job-holders">
+        {{
+          (editMode.holders === 0 ? 'staff.jobEditor.holders.none' : 'staff.jobEditor.holders.some')
+            | t: { count: editMode.holders }
+        }}
+      </p>
+    } @else {
+      <label class="field">
+        <span class="q-caption field__label">{{ 'staff.jobEditor.level.label' | t }}</span>
+        <select
+          class="q-body field__input"
+          [value]="level()"
+          (change)="level.set($any($event.target).value)"
+          [disabled]="busy()"
+          data-testid="job-level"
+        >
+          @for (option of levels; track option) {
+            <option [value]="option" [selected]="option === level()">
+              {{ scopeLabel(option) }}
+            </option>
+          }
+        </select>
+      </label>
+    }
+  </div>
+
+  <h3 class="q-emphasis section-title">{{ 'staff.jobEditor.capabilities.title' | t }}</h3>
+
+  <div class="toolbar">
+    <label class="search">
+      <span class="q-visually-hidden">{{ 'staff.jobEditor.capabilities.search' | t }}</span>
+      <input
+        type="search"
+        class="q-body field__input"
+        [value]="search()"
+        (input)="onSearch($any($event.target).value)"
+        [placeholder]="'staff.jobEditor.capabilities.search' | t"
+        data-testid="job-capability-search"
+      />
+    </label>
+    <span class="q-caption muted" data-testid="job-selected-count">{{
+      'staff.jobEditor.capabilities.selected' | t: { count: ticked().size }
+    }}</span>
+  </div>
+
+  @if (trimmed() > 0) {
+    <p class="q-caption notice" role="status" data-testid="job-trimmed">
+      {{ 'staff.jobEditor.capabilities.trimmed' | t: { count: trimmed() } }}
+    </p>
+  }
+  @if (cannotGive().length > 0) {
+    <p class="q-caption error" role="alert" data-testid="job-must-drop">
+      {{ 'staff.jobEditor.capabilities.mustDrop' | t }}
+    </p>
+  }
+  @if (noneTicked()) {
+    <p class="q-caption error" role="alert" data-testid="job-none-ticked">
+      {{ 'staff.jobEditor.capabilities.none' | t }}
+    </p>
+  }
+
+  <div class="areas">
+    @for (group of groups(); track group.area) {
+      <fieldset class="area">
+        <legend class="q-caption area__title">{{ group.area }}</legend>
+        @for (row of group.rows; track row.code) {
+          <label class="row" [class.row--locked]="!canToggle(row)">
+            <input
+              type="checkbox"
+              [checked]="isTicked(row.code)"
+              [disabled]="busy() || !canToggle(row)"
+              (change)="toggle(row)"
+              [attr.data-testid]="'job-capability-' + row.code"
+            />
+            <span class="q-body-sm">{{ row.sentence }}</span>
+            @if (lockReason(row); as why) {
+              <span class="q-caption muted" [attr.data-testid]="'job-locked-' + row.code">
+                {{ why }}
+              </span>
+            }
+          </label>
+        }
+      </fieldset>
+    }
+  </div>
+
+  <label class="field">
+    <span class="q-caption field__label">{{ 'staff.jobEditor.reason.label' | t }}</span>
+    <input
+      class="q-body field__input"
+      type="text"
+      [value]="reason()"
+      (input)="reason.set($any($event.target).value)"
+      [placeholder]="'staff.jobEditor.reason.placeholder' | t"
+      [disabled]="busy()"
+      data-testid="job-reason"
+    />
+    @if (reasonMissing()) {
+      <span class="q-caption error" role="alert" data-testid="job-reason-required">{{
+        'staff.jobEditor.reason.required' | t
+      }}</span>
+    }
+  </label>
+
+  @if (serverError(); as message) {
+    <p class="q-body-sm error" role="alert" data-testid="job-error">{{ message }}</p>
+  }
+
+  <div class="actions">
+    <button
+      type="button"
+      class="primary-button"
+      (click)="save()"
+      [disabled]="busy()"
+      [attr.aria-disabled]="!canSave()"
+      data-testid="job-save"
+    >
+      {{ (busy() ? 'staff.jobEditor.saving' : 'staff.jobEditor.save') | t }}
+    </button>
+    <button type="button" class="text-button" (click)="dismiss.emit()" data-testid="job-cancel">
+      {{ 'staff.jobEditor.cancel' | t }}
+    </button>
+  </div>
+
+  @if (editing(); as editMode) {
+    <div class="danger" data-testid="job-retire">
+      <h3 class="q-emphasis">{{ 'staff.jobEditor.retire.title' | t }}</h3>
+      <p class="q-caption muted">{{ 'staff.jobEditor.retire.hint' | t }}</p>
+      @if (editMode.holders > 0) {
+        <p class="q-body-sm" role="status" data-testid="job-retire-blocked">
+          {{ 'staff.jobEditor.retire.blocked' | t: { count: editMode.holders } }}
+        </p>
+      } @else if (retiring()) {
+        <label class="field">
+          <span class="q-caption field__label">{{ 'staff.jobEditor.reason.label' | t }}</span>
+          <input
+            class="q-body field__input"
+            type="text"
+            [value]="retireReason()"
+            (input)="retireReason.set($any($event.target).value)"
+            [placeholder]="'staff.jobEditor.reason.placeholder' | t"
+            [disabled]="busy()"
+            data-testid="job-retire-reason"
+          />
+        </label>
+        <button
+          type="button"
+          class="danger-button"
+          (click)="confirmRetire()"
+          [disabled]="!canRetire()"
+          data-testid="job-retire-confirm"
+        >
+          {{ 'staff.jobEditor.retire.confirm' | t }}
+        </button>
+      } @else {
+        <button
+          type="button"
+          class="text-button"
+          (click)="retiring.set(true)"
+          data-testid="job-retire-open"
+        >
+          {{ 'staff.jobEditor.retire.title' | t }}
+        </button>
+      }
+    </div>
+  }
+</section>

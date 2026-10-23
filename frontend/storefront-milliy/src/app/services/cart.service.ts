@@ -385,11 +385,16 @@ export class CartService {
    * @param idempotencyKey formed when the customer pressed the button and reused
    *        on every retry of that one intent. A fresh key on a retry is how one
    *        press becomes two orders.
+   * @param redeemFromBalanceMinor the points the customer pays part of the order
+   *        with, in whole som (ADR 0046, ADR 0185). They are debited inside the
+   *        checkout transaction, never after it, and the rest is paid by
+   *        `paymentMethodCode`. Left out when no points are spent.
    */
   async checkout(input: {
     priced: PricedCart;
     paymentMethodCode: string;
     idempotencyKey: string;
+    redeemFromBalanceMinor?: number;
     /**
      * Extra headers, for a basket bound to a table: the guest's `X-Dine-In-Token`, which
      * checkout re-proves the table from (ADR 0047). `DineInService.checkoutAtTable` builds
@@ -404,6 +409,9 @@ export class CartService {
         quoteId: input.priced.quoteId,
         contextHash: input.priced.contextHash,
         paymentMethodCode: input.paymentMethodCode,
+        ...(input.redeemFromBalanceMinor && input.redeemFromBalanceMinor > 0
+          ? { redeemFromBalanceMinor: input.redeemFromBalanceMinor }
+          : {}),
       },
       idempotencyKey: input.idempotencyKey,
       ...(input.headers ? { headers: input.headers } : {}),

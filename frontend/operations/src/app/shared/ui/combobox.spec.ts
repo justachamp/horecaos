@@ -93,6 +93,34 @@ describe('Combobox', () => {
     expect(rows).toHaveLength(2);
   });
 
+  it('draws a third column on an option that has one, and nothing extra on one that has not', () => {
+    const fixture = render();
+    fixture.componentRef.setInput('options', [
+      {
+        id: 'k1',
+        label: 'НДС',
+        sublabel: 'Налоги → Фискализация',
+        detail: 'задано: компания (12%)',
+      },
+      { id: 'k2', label: 'Тихие часы', sublabel: 'Сообщения → Уведомления' },
+    ] satisfies readonly ComboboxOption[]);
+    fixture.detectChanges();
+    input(fixture).dispatchEvent(new Event('focus'));
+    fixture.detectChanges();
+
+    const options = [
+      ...(fixture.nativeElement as HTMLElement).querySelectorAll(
+        '[data-testid="q-combobox-option"]',
+      ),
+    ];
+    expect(options[0].querySelector('[data-testid="q-combobox-option-detail"]')?.textContent).toBe(
+      'задано: компания (12%)',
+    );
+    expect(options[0].classList.contains('q-combobox__option--columns')).toBe(true);
+    expect(options[1].querySelector('[data-testid="q-combobox-option-detail"]')).toBeNull();
+    expect(options[1].classList.contains('q-combobox__option--columns')).toBe(false);
+  });
+
   it('selects an option on click in single mode', () => {
     const fixture = render();
     fixture.componentRef.setInput('options', OPTIONS);

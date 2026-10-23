@@ -3,18 +3,13 @@ package uz.horecaos.platform.marketing.web;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
-import java.nio.charset.StandardCharsets;
-import java.security.GeneralSecurityException;
-import java.security.SecureRandom;
-import java.util.HexFormat;
 import java.util.UUID;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.marketing.api.AnonymousVisitorHandle;
 import uz.horecaos.platform.marketing.application.AttributionLinkClickService;
 
 /**
@@ -30,23 +25,19 @@ import uz.horecaos.platform.marketing.application.AttributionLinkClickService;
  * {@code marketing-link.manage} and was called by no surface. A staff person incrementing a counter by
  * hand is a way to make the chart wrong, so that endpoint is gone and not merely unused.
  *
- * <p>The visitor's address becomes a keyed hash here, with a key minted at process start and never
- * persisted, so the handle means nothing outside this process's sixty-second limiter window and cannot
- * be correlated across restarts or with any other table.
+ * <p>The visitor's address becomes a keyed hash here ({@link AnonymousVisitorHandle}), with a key minted at
+ * process start and never persisted, so the handle means nothing outside this process's sixty-second limiter
+ * window and cannot be correlated across restarts or with any other table.
  */
 @RestController
 @RequestMapping("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/attribution-links")
 @Tag(name = "Attribution link clicks", description = "Anonymous click counting for ?ref= landings (ADR 0167)")
 public class AttributionLinkClickController {
 
-    private static final String HMAC = "HmacSHA256";
-
     private final AttributionLinkClickService clicks;
-    private final byte[] processKey = new byte[32];
 
     public AttributionLinkClickController(AttributionLinkClickService clicks) {
         this.clicks = clicks;
-        new SecureRandom().nextBytes(processKey);
     }
 
     @PostMapping("/{token}/clicks")
@@ -79,12 +70,6 @@ public class AttributionLinkClickController {
             // No source at all still gets a bucket rather than an exemption; sharing one is stricter.
             return "unattributed";
         }
-        try {
-            Mac mac = Mac.getInstance(HMAC);
-            mac.init(new SecretKeySpec(processKey, HMAC));
-            return HexFormat.of().formatHex(mac.doFinal(address.getBytes(StandardCharsets.UTF_8)));
-        } catch (GeneralSecurityException impossible) {
-            throw new IllegalStateException(HMAC + " is unavailable", impossible);
-        }
+        return AnonymousVisitorHandle.of("ip", address);
     }
 }

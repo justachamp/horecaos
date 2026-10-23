@@ -1,3 +1,4 @@
+import { brandListPath } from './brand-list-path';
 import { LocationScope } from './operations-paths';
 
 /**
@@ -60,7 +61,8 @@ export const settingsPaths = {
 
   /** `OperationsBrandController.list` — the scope bar's brand picker and 10.1's index. */
   brands(scope: LocationScope): string {
-    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/brands`;
+    // Held in a module of its own so the eager `CurrentBrand` need not import this whole table.
+    return brandListPath(scope);
   },
 
   /** `OperationsBrandController.get`. */
@@ -296,6 +298,11 @@ export const settingsPaths = {
     return `${this.salesChannel(scope, channelId)}/setup`;
   },
 
+  /** `TelegramChannelSetupController` (ADR 0183 D27): a TELEGRAM channel's menu button, Mini App and texts. */
+  channelTelegram(scope: { readonly tenantId: string }, channelId: string): string {
+    return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/sales-channels/${enc(channelId)}/setup/telegram`;
+  },
+
   channelHostname(scope: LocationScope, channelId: string): string {
     return `${this.channelSetup(scope, channelId)}/hostname`;
   },
@@ -519,6 +526,26 @@ export const settingsPaths = {
   },
 
   /**
+   * `MarketplaceRulesetController.known` — ADR 0138: the closed set of marketplace rulesets a binding may name.
+   * Empty until a per-marketplace ruleset is authored.
+   */
+  integrationMarketplaceRulesets(scope: LocationScope): string {
+    return `${this.integrationInstallations(scope)}/marketplace-rulesets`;
+  },
+
+  /**
+   * `MarketplaceRulesetController.set` — names, or (code null) clears, the ruleset a MARKETPLACE binding is checked
+   * against. `PUT`, under the binding's version in `If-Match`.
+   */
+  integrationBindingRuleset(
+    scope: LocationScope,
+    installationId: string,
+    bindingId: string,
+  ): string {
+    return `${this.integrationInstallationBindings(scope, installationId)}/${enc(bindingId)}/marketplace-ruleset`;
+  },
+
+  /**
    * `OperationsProviderInstallationController.effectiveBindings` — gap-map
    * row 10.8a's per-branch install model, surfaced: for every location of a
    * brand, which installation actually handles each capability there,
@@ -653,17 +680,23 @@ export const settingsPaths = {
 
   // ---------------------------------------------------------- 10.9 Notifications
 
-  /** `NotificationTemplateController` — already operations surface (`/api/v1/tenants/**`). */
+  /**
+   * `NotificationTemplateController`, mapped at
+   * `/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates`.
+   *
+   * It sat on `${OPERATIONS}/tenants/...` until wave 21: a prefix the platform serves nothing under (the
+   * `/api/v1/operations` surface is `/api/v1/operations/tenants/{t}/<resource>` for the controllers that
+   * were mirrored there, and this one never was), so every call of the template editor answered 404 and
+   * no spec noticed, because none asserted the literal path. `settings-paths.spec.ts` now does, and
+   * `path-builders-resolve.spec.ts` resolves every builder of every `*-paths.ts` against the OpenAPI
+   * baseline so the next one cannot do it quietly.
+   */
   notificationTemplates(scope: LocationScope): string {
-    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/notification-templates`;
-  },
-
-  notificationTemplate(scope: LocationScope, templateId: string): string {
-    return `${this.notificationTemplates(scope)}/${enc(templateId)}`;
+    return `${TENANT}/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/notification-templates`;
   },
 
   notificationTemplateVersions(scope: LocationScope, templateId: string): string {
-    return `${this.notificationTemplate(scope, templateId)}/versions`;
+    return `${settingsPaths.notificationTemplates(scope)}/${enc(templateId)}/versions`;
   },
 
   notificationTemplateVersion(
@@ -696,8 +729,29 @@ export const settingsPaths = {
    * `X.27`: fixes the `variablesSchema: {}` defect that made the editor
    * unable to author a variable-bearing template at all.
    */
-  notificationVariableCatalogue(scope: LocationScope): string {
-    return `${this.notificationTemplates(scope)}/variable-catalogue`;
+  notificationVariableCatalogue(scope: LocationScope, templateKey?: string): string {
+    const path = `${this.notificationTemplates(scope)}/variable-catalogue`;
+    // One variable (the courier's first name) exists for one template key only (ADR 0184, D21), so the
+    // editor names the key it is editing and the platform answers for it.
+    return templateKey === undefined
+      ? path
+      : `${path}?templateKey=${encodeURIComponent(templateKey)}`;
+  },
+
+  /**
+   * `NotificationTemplateController.platformDefaults` — ADR 0184: the wording the platform sends when a
+   * brand and its tenant have written none, read-only.
+   */
+  notificationPlatformDefaults(scope: LocationScope): string {
+    return `${this.notificationTemplates(scope)}/platform-defaults`;
+  },
+
+  /**
+   * `NotificationTemplateController.otpWording` — ADR 0184, D19: the sentence a customer reads with a
+   * one-time code. The platform's, so read-only.
+   */
+  notificationOtpWording(scope: LocationScope): string {
+    return `${this.notificationTemplates(scope)}/otp-wording`;
   },
 
   // ------------------------------------------- 10.9 Notifications, Tab 2 routing
@@ -745,6 +799,14 @@ export const settingsPaths = {
    */
   orderOutcomeReasons(scope: LocationScope): string {
     return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/order-outcome-reasons`;
+  },
+
+  /**
+   * `OperationsOrderOutcomeReasonController.localeSet` — the languages a reason's customer wording is
+   * authored in (the union of the tenant's brands', default first). Needs `order.read`.
+   */
+  orderOutcomeReasonLocaleSet(scope: LocationScope): string {
+    return `${this.orderOutcomeReasons(scope)}/locale-set`;
   },
 
   orderOutcomeReasonCategories(scope: LocationScope): string {
@@ -841,6 +903,14 @@ export const settingsPaths = {
     return `${this.configurationKeys(tenantId)}/${enc(code)}/resolution`;
   },
 
+  /**
+   * `OperationsConfigurationController.placements` -- where every tenant-visible key and every listed policy is
+   * set, in one read (settings.md §10.0 «Find a setting»).
+   */
+  configurationPlacements(tenantId: string): string {
+    return `${OPERATIONS}/tenants/${enc(tenantId)}/configuration/placements`;
+  },
+
   /** `OperationsConfigurationController.setValue`. */
   configurationValues(tenantId: string, code: string): string {
     return `${this.configurationKeys(tenantId)}/${enc(code)}/values`;
@@ -855,6 +925,16 @@ export const settingsPaths = {
    */
   assistantUsage(tenantId: string): string {
     return `${OPERATIONS}/tenants/${enc(tenantId)}/assistant/usage`;
+  },
+
+  /**
+   * `AssistantLanguageController.languages` — the languages the assistant answers in (its detector's
+   * vocabulary, ADR 0069), each with the platform language it is and the configuration key that holds
+   * the disclosure in it. A read of code, answered to any signed-in principal: a brand manager's grant
+   * stops at the brand and needs the list to write a note there.
+   */
+  assistantLanguages(): string {
+    return `${OPERATIONS}/assistant/languages`;
   },
 
   /**
@@ -906,23 +986,54 @@ export const settingsPaths = {
   // ---------------------------------------------------------- 10.11 Data & privacy (ADR 0109)
 
   /**
-   * `CustomerController.tenantErasureRequests` — the tenant-wide DSAR
-   * worklist. Reuses `CustomerErasureService`'s existing per-account
-   * lifecycle (`V0178`); this is the only new read the worklist needed.
+   * `CustomerPrivacyController.privacyRequests` — every data-subject request across the tenant: erasure, a copy of her
+   * data and corrections, in one list (ADR 0029).
    *
-   * `CustomerController`'s class-level `@RequestMapping` is `/customers`, so
-   * the real route is `/api/v1/tenants/{tenantId}/customers/erasure-requests`
-   * — every other customer-nested path in this frontend already includes
-   * that segment (see `operationsPaths.customers`); this one previously
-   * didn't, and 404'd on every load.
+   * `CustomerController`'s class-level `@RequestMapping` is `/customers`, so the real route is
+   * `/api/v1/tenants/{tenantId}/customers/privacy-requests` — every other customer-nested path in this frontend already
+   * includes that segment (see `operationsPaths.customers`); the erasure-only worklist this replaces once 404'd on every
+   * load for leaving it out.
    */
-  erasureRequests(tenantId: string): string {
-    return `${TENANT}/${enc(tenantId)}/customers/erasure-requests`;
+  privacyRequests(tenantId: string): string {
+    return `${TENANT}/${enc(tenantId)}/customers/privacy-requests`;
   },
 
   /** `ConsentTypeController.list` — the tenant's own consent-purpose registry. */
   consentTypes(tenantId: string): string {
     return `${TENANT}/${enc(tenantId)}/consent-types`;
+  },
+
+  /** `ConsentTypeController.localeSet` — the union of the tenant's brands' languages the purposes are read in. */
+  consentTypeLocaleSet(tenantId: string): string {
+    return `${TENANT}/${enc(tenantId)}/consent-types/locale-set`;
+  },
+
+  /**
+   * `RetentionWindowController.windows` — what each retention setting does for this tenant: the stored value, the
+   * window the job acts on, the platform floor, and whether it is provisional (ADR 0109, ADR 0029).
+   */
+  retentionWindows(tenantId: string): string {
+    return `${OPERATIONS}/tenants/${enc(tenantId)}/retention-windows`;
+  },
+
+  // ------------------------------------------------ 9.4 Approvals: who signs (ADR 0050, ADR 0181)
+
+  /**
+   * `OperationsApprovalPolicyController` — the operations twin of the control-plane routes, so the console
+   * calls its own surface. `GET` lists every version, `POST` publishes the next one.
+   */
+  approvalPolicies(tenantId: string): string {
+    return `${OPERATIONS}/tenants/${enc(tenantId)}/approval-policies`;
+  },
+
+  /** Every registered action with its missing-policy mode and the policies the tenant has authored for it. */
+  approvalPolicyCoverage(tenantId: string): string {
+    return `${this.approvalPolicies(tenantId)}/coverage`;
+  },
+
+  /** End-dates one version in force: the only way to retire a threshold. */
+  approvalPolicyExpiry(tenantId: string, policyId: string): string {
+    return `${this.approvalPolicies(tenantId)}/${enc(policyId)}/expiry`;
   },
 } as const;
 

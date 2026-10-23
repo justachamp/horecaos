@@ -178,7 +178,8 @@ public class JdbcNotificationStore {
                     LIMIT :batchSize
                 )
                 RETURNING id, tenant_id, brand_id, location_id, notification_class, channel,
-                          template_key, template_id, template_version, locale, subject_type,
+                          template_key, template_id, template_version, platform_default_version,
+                          locale, subject_type,
                           subject_id, recipient_endpoint_id, recipient_account_id,
                           trigger_event_id, idempotency_key, status, suppression_reason,
                           variables::text AS variables, variables_hash, rendered_content_hash,
@@ -205,20 +206,29 @@ public class JdbcNotificationStore {
             UUID tenantId,
             UUID notificationId,
             UUID claimToken,
-            UUID templateId,
-            int templateVersion,
+            @Nullable UUID templateId,
+            @Nullable Integer templateVersion,
+            @Nullable Integer platformDefaultVersion,
             String locale,
             @Nullable UUID accountId,
             UUID endpointId,
             String variablesJson,
             String variablesHash,
             Instant now) {
+        if ((templateId == null) == (platformDefaultVersion == null)) {
+            // Exactly one source of wording, for the reason V0677's check says: a message is sent from a
+            // template row or from the platform's bundled wording, and a row that names neither (or
+            // both) cannot be rendered or proved.
+            throw new IllegalArgumentException(
+                    "A notification names a template or a platform default, not both" + " and not neither");
+        }
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
         parameters.put("id", notificationId);
         parameters.put("token", claimToken);
         parameters.put("templateId", templateId);
         parameters.put("templateVersion", templateVersion);
+        parameters.put("platformDefaultVersion", platformDefaultVersion);
         parameters.put("locale", locale);
         parameters.put("accountId", accountId);
         parameters.put("endpointId", endpointId);
@@ -229,7 +239,8 @@ public class JdbcNotificationStore {
         return jdbc.sql("""
                 UPDATE notifications.notifications
                 SET status = 'READY', template_id = :templateId,
-                    template_version = :templateVersion, locale = :locale,
+                    template_version = :templateVersion,
+                    platform_default_version = :platformDefaultVersion, locale = :locale,
                     recipient_account_id = :accountId,
                     recipient_endpoint_id = :endpointId, variables = CAST(:variables AS jsonb),
                     variables_hash = :variablesHash, version = version + 1, updated_at = :now
@@ -301,6 +312,23 @@ public class JdbcNotificationStore {
                         .param("now", utc(now))
                         .update()
                 == 1;
+    }
+
+    /**
+     * How many attempts this tenant has made on one channel since {@code since}: the daily cap's
+     * count (ADR 0182). Attempts rather than notifications, because an attempt is written just
+     * before the provider is called and is what actually used the shared sender.
+     */
+    public int attemptsSince(UUID tenantId, String channel, Instant since) {
+        return jdbc.sql("""
+                SELECT COUNT(*) FROM notifications.delivery_attempts
+                 WHERE tenant_id = :tenantId AND channel = :channel AND requested_at >= :since
+                """)
+                .param("tenantId", tenantId)
+                .param("channel", channel)
+                .param("since", utc(since))
+                .query(Integer.class)
+                .single();
     }
 
     public boolean markSending(
@@ -460,8 +488,8 @@ public class JdbcNotificationStore {
     public Optional<EndpointRow> endpoint(UUID tenantId, UUID endpointId) {
         return jdbc.sql("""
                 SELECT id, customer_account_id, endpoint_type, contact_point_id,
-                       operations_endpoint_reference, provider_binding_id, normalized_hash,
-                       verification_status, status
+                       operations_endpoint_reference, provider_binding_id, courier_id, push_subscription_id,
+                       normalized_hash, verification_status, status
                 FROM notifications.recipient_endpoints
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
@@ -497,6 +525,93 @@ public class JdbcNotificationStore {
                 .param("now", utc(now))
                 .query(UUID.class)
                 .single();
+    }
+
+    /**
+     * The endpoint standing for one courier, created on first use (ADR 0182, D15).
+     *
+     * <p>An upsert for the reason {@link #ensureProviderBindingEndpoint} is: two broadcasts reaching
+     * one courier at once must not both insert and have one fail the unique index doing the other half
+     * of the same work. The endpoint is the courier's id and nothing else; the number is read from the
+     * identity provider for the length of one send.
+     */
+    public UUID ensureCourierEndpoint(UUID tenantId, UUID courierId, Instant now) {
+        return jdbc.sql("""
+                INSERT INTO notifications.recipient_endpoints (
+                    id, tenant_id, endpoint_type, courier_id, status, created_at, updated_at)
+                VALUES (:id, :tenantId, 'COURIER', :courierId, 'ACTIVE', :now, :now)
+                ON CONFLICT (tenant_id, courier_id) WHERE courier_id IS NOT NULL
+                DO UPDATE SET updated_at = excluded.updated_at
+                RETURNING id
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .param("now", utc(now))
+                .query(UUID.class)
+                .single();
+    }
+
+    /**
+     * The endpoint standing for one Web Push subscription, created when the customer subscribes
+     * (ADR 0182, D14). The id is the subscription's and nothing else: the push service URL and the keys
+     * stay in the registry, encrypted, and are read for the length of one send.
+     */
+    public UUID ensurePushEndpoint(UUID tenantId, UUID customerAccountId, UUID pushSubscriptionId, Instant now) {
+        return jdbc.sql("""
+                INSERT INTO notifications.recipient_endpoints (
+                    id, tenant_id, customer_account_id, endpoint_type, push_subscription_id,
+                    verification_status, last_verified_at, status, created_at, updated_at)
+                VALUES (:id, :tenantId, :accountId, 'PUSH_TOKEN', :subscriptionId,
+                        'VERIFIED', :now, 'ACTIVE', :now, :now)
+                ON CONFLICT (tenant_id, push_subscription_id) WHERE push_subscription_id IS NOT NULL
+                DO UPDATE SET updated_at = excluded.updated_at
+                RETURNING id
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("accountId", customerAccountId)
+                .param("subscriptionId", pushSubscriptionId)
+                .param("now", utc(now))
+                .query(UUID.class)
+                .single();
+    }
+
+    /**
+     * The customer's live push endpoint at one brand, if any: what eligibility resolves a PUSH message's
+     * recipient from. Joined to the registry so that a subscription that ended, or whose browser-given
+     * expiry has passed, is not found even if its endpoint row has not been retired yet.
+     */
+    public Optional<UUID> activeCustomerPushEndpointId(
+            UUID tenantId, UUID brandId, UUID customerAccountId, Instant now) {
+        return jdbc.sql("""
+                SELECT e.id
+                  FROM notifications.recipient_endpoints e
+                  JOIN notifications.push_subscriptions s
+                    ON s.id = e.push_subscription_id AND s.tenant_id = e.tenant_id
+                 WHERE e.tenant_id = :tenantId AND e.customer_account_id = :accountId
+                   AND e.status = 'ACTIVE' AND s.status = 'ACTIVE' AND s.brand_id = :brandId
+                   AND (s.expires_at IS NULL OR s.expires_at > :now)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("accountId", customerAccountId)
+                .param("now", utc(now))
+                .query(UUID.class)
+                .optional();
+    }
+
+    /** Retires the endpoint a subscription stood for, so a fresh lookup stops finding it. Idempotent. */
+    public void retirePushEndpoint(UUID tenantId, UUID pushSubscriptionId, Instant now) {
+        jdbc.sql("""
+                UPDATE notifications.recipient_endpoints
+                SET status = 'RETIRED', version = version + 1, updated_at = :now
+                WHERE tenant_id = :tenantId AND push_subscription_id = :subscriptionId AND status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("subscriptionId", pushSubscriptionId)
+                .param("now", utc(now))
+                .update();
     }
 
     /**
@@ -539,8 +654,8 @@ public class JdbcNotificationStore {
     public Optional<EndpointRow> findByProviderBinding(UUID tenantId, UUID providerBindingId) {
         return jdbc.sql("""
                 SELECT id, customer_account_id, endpoint_type, contact_point_id,
-                       operations_endpoint_reference, provider_binding_id, normalized_hash,
-                       verification_status, status
+                       operations_endpoint_reference, provider_binding_id, courier_id, push_subscription_id,
+                       normalized_hash, verification_status, status
                 FROM notifications.recipient_endpoints
                 WHERE tenant_id = :tenantId AND provider_binding_id = :bindingId
                 """)
@@ -1010,9 +1125,43 @@ public class JdbcNotificationStore {
 
     // ------------------------------------------------------------------- rows
 
+    /** ADR 0029 erasure: how a customer wanted to be reached is her preference, and goes with her. */
+    public int deletePreferencesOfCustomer(UUID tenantId, UUID customerAccountId) {
+        return jdbc.sql("""
+                DELETE FROM notifications.notification_preferences
+                 WHERE tenant_id = :tenantId AND customer_account_id = :customerAccountId
+                """)
+                .param("tenantId", tenantId)
+                .param("customerAccountId", customerAccountId)
+                .update();
+    }
+
+    /**
+     * ADR 0029 erasure: retires the delivery destinations of an erased customer and overwrites the lookup hash
+     * they copied from her contact point. The contact point's own hash was replaced with a random value, so an
+     * endpoint left holding the old one would still let a search for her number find the endpoint, and through it
+     * the account. {@code RETIRED}, not deleted: a notification row references the endpoint it went to.
+     *
+     * @return how many endpoints were retired
+     */
+    public int retireEndpointsOfCustomer(UUID tenantId, UUID customerAccountId, java.time.Instant now) {
+        return jdbc.sql("""
+                UPDATE notifications.recipient_endpoints
+                   SET status = 'RETIRED',
+                       normalized_hash = CASE WHEN normalized_hash IS NULL THEN NULL ELSE gen_random_uuid()::text END,
+                       version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND customer_account_id = :customerAccountId
+                """)
+                .param("tenantId", tenantId)
+                .param("customerAccountId", customerAccountId)
+                .param("now", java.time.OffsetDateTime.ofInstant(now, java.time.ZoneOffset.UTC))
+                .update();
+    }
+
     private static final String SELECT_NOTIFICATION = """
             SELECT id, tenant_id, brand_id, location_id, notification_class, channel,
-                   template_key, template_id, template_version, locale, subject_type,
+                   template_key, template_id, template_version, platform_default_version,
+                   locale, subject_type,
                    subject_id, recipient_endpoint_id, recipient_account_id, trigger_event_id,
                    idempotency_key, status, suppression_reason, variables::text AS variables,
                    variables_hash, rendered_content_hash, scheduled_at, expires_at,
@@ -1043,6 +1192,7 @@ public class JdbcNotificationStore {
                 // to version 0 of a template and find nothing, presenting as a
                 // missing translation rather than as an unresolved message.
                 row.getObject("template_version", Integer.class),
+                row.getObject("platform_default_version", Integer.class),
                 row.getString("locale"),
                 row.getString("subject_type"),
                 row.getObject("subject_id", UUID.class),
@@ -1200,6 +1350,8 @@ public class JdbcNotificationStore {
             String templateKey,
             @Nullable UUID templateId,
             @Nullable Integer templateVersion,
+            /** ADR 0184: the bundled platform wording this was sent from; null when {@code templateId} is set. */
+            @Nullable Integer platformDefaultVersion,
             @Nullable String locale,
             String subjectType,
             UUID subjectId,
@@ -1229,6 +1381,8 @@ public class JdbcNotificationStore {
             @Nullable UUID contactPointId,
             @Nullable String operationsEndpointReference,
             @Nullable UUID providerBindingId,
+            @Nullable UUID courierId,
+            @Nullable UUID pushSubscriptionId,
             String normalizedHash,
             String verificationStatus,
             String status) {}
@@ -1241,6 +1395,8 @@ public class JdbcNotificationStore {
                 row.getObject("contact_point_id", UUID.class),
                 row.getString("operations_endpoint_reference"),
                 row.getObject("provider_binding_id", UUID.class),
+                row.getObject("courier_id", UUID.class),
+                row.getObject("push_subscription_id", UUID.class),
                 row.getString("normalized_hash"),
                 row.getString("verification_status"),
                 row.getString("status"));

@@ -27,7 +27,10 @@ import uz.horecaos.platform.ordering.api.OrderCompleted;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.ordering.api.OrderExpired;
+import uz.horecaos.platform.ordering.api.OrderFulfilling;
 import uz.horecaos.platform.ordering.api.OrderPaymentLapsed;
+import uz.horecaos.platform.ordering.api.OrderPreparing;
+import uz.horecaos.platform.ordering.api.OrderReady;
 import uz.horecaos.platform.ordering.api.OrderRejected;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
 import uz.horecaos.platform.reviews.api.FeedbackPromptPolicy;
@@ -58,11 +61,19 @@ import uz.horecaos.platform.reviews.api.FeedbackPromptPolicy;
  * transaction, so the "must not fail a confirmation" rule above still holds
  * for everything this class does.
  *
- * <p>Confirmation and rejection only. {@code OrderReceived} could reasonably
- * produce a "we have your order" message and does not here:
- * {@code docs/minimum-viable-cutover.md} scopes this ADR to confirmation and
- * rejection on one channel, and a third template is a third piece of copy a pilot
- * tenant would have to write and translate in three languages before going live.
+ * <p>{@code OrderReceived} could reasonably produce a "we have your order" message and
+ * does not here: a customer who has just placed an order does not need to be told so, and
+ * every message this class adds is a message a customer receives.
+ *
+ * <p><strong>ADR 0184 added the three milestones ADR 0045 names</strong> (the kitchen has started,
+ * the pickup is ready, the order is on its way), and with them the first intents that are not
+ * {@code TRANSACTIONAL_REQUIRED}: they are {@link NotificationClass#TRANSACTIONAL_OPTIONAL}, so a
+ * customer who does not want three messages per order can turn them off without losing the two that
+ * matter, and they ask the customer's consent under the purpose the wording names. They are
+ * customer-only (nothing fans them out to a branch's operations chat, which sees the order move on
+ * its board), and they expire after thirty minutes at most: «we have started» that arrives once the
+ * food is ready is noise. A delivery order's {@code READY} is «waiting for a courier», which ADR 0045
+ * does not message, so only a pickup order's {@code READY} becomes an intent.
  *
  * <p><strong>The rating prompt is timed by a policy (ADR 0159, Decision 4).</strong> The
  * {@link #ORDER_COMPLETED} intent used to be created at once and expire after {@code order-expiry}.
@@ -101,6 +112,21 @@ public class OrderNotificationTrigger {
      * looked; neither is what happened. No amount is a variable (ADR 0020).
      */
     public static final String ORDER_PAYMENT_LAPSED = "ORDER_PAYMENT_LAPSED";
+
+    /**
+     * ADR 0045 and ADR 0184: the kitchen has started on the order. The first of the three optional
+     * milestones, customer-only and consent-gated.
+     */
+    public static final String ORDER_PREPARING = "ORDER_PREPARING";
+
+    /** ADR 0045 and ADR 0184: a pickup order is ready to collect. Delivery orders are not told; see the class doc. */
+    public static final String ORDER_READY = "ORDER_READY";
+
+    /**
+     * ADR 0045 and ADR 0184: the order left with a courier. The one message that may carry the courier's
+     * first name ({@code courierFirstName}, resolved at render and never stored; D21).
+     */
+    public static final String ORDER_FULFILLING = "ORDER_FULFILLING";
 
     /**
      * ADR 0075: the order is finished, and this is the message a rating prompt
@@ -229,6 +255,16 @@ public class OrderNotificationTrigger {
             // this never becomes a customer notification intent.
             case OrderAwaitingApproval awaiting ->
                 createOperationsOnly(awaiting, ORDER_AWAITING_APPROVAL, awaiting.brandId(), awaiting.locationId());
+            // ADR 0184: the three milestones. Optional, customer-only, and consent-gated.
+            case OrderPreparing preparing ->
+                createMilestone(preparing, ORDER_PREPARING, preparing.brandId(), preparing.locationId());
+            case OrderReady ready -> {
+                if ("PICKUP".equals(ready.fulfillmentMode())) {
+                    createMilestone(ready, ORDER_READY, ready.brandId(), ready.locationId());
+                }
+            }
+            case OrderFulfilling fulfilling ->
+                createMilestone(fulfilling, ORDER_FULFILLING, fulfilling.brandId(), fulfilling.locationId());
             case OrderCompleted completed ->
                 create(
                         completed,
@@ -260,6 +296,12 @@ public class OrderNotificationTrigger {
         }
     }
 
+    /** How long a milestone message stays worth sending; see the class doc. */
+    private static final Duration MILESTONE_EXPIRY_CAP = Duration.ofMinutes(30);
+
+    /** What differs between an order's two kinds of customer message. */
+    private record Kind(NotificationClass notificationClass, Duration expiry, boolean fanOutToOperations) {}
+
     private void create(
             OrderingEvent event,
             String templateKey,
@@ -267,6 +309,24 @@ public class OrderNotificationTrigger {
             UUID locationId,
             Map<String, String> triggerVariables) {
         create(event, templateKey, brandId, locationId, triggerVariables, null);
+    }
+
+    /**
+     * The optional milestone of ADR 0045 and ADR 0184: the same intent as any other order message, in
+     * the optional class, for a shorter life, and to the customer alone.
+     */
+    private void createMilestone(OrderingEvent event, String templateKey, UUID brandId, UUID locationId) {
+        create(
+                event,
+                templateKey,
+                brandId,
+                locationId,
+                Map.of(),
+                null,
+                new Kind(
+                        NotificationClass.TRANSACTIONAL_OPTIONAL,
+                        expiry.compareTo(MILESTONE_EXPIRY_CAP) > 0 ? MILESTONE_EXPIRY_CAP : expiry,
+                        false));
     }
 
     /**
@@ -280,6 +340,24 @@ public class OrderNotificationTrigger {
             UUID locationId,
             Map<String, String> triggerVariables,
             @Nullable Instant promptCompletedAt) {
+        create(
+                event,
+                templateKey,
+                brandId,
+                locationId,
+                triggerVariables,
+                promptCompletedAt,
+                new Kind(NotificationClass.TRANSACTIONAL_REQUIRED, expiry, true));
+    }
+
+    private void create(
+            OrderingEvent event,
+            String templateKey,
+            UUID brandId,
+            UUID locationId,
+            Map<String, String> triggerVariables,
+            @Nullable Instant promptCompletedAt,
+            Kind kind) {
 
         // ADR 0024's headline suppression, and the one the ADR names first:
         // importing five years of confirmed orders would otherwise write five
@@ -306,8 +384,8 @@ public class OrderNotificationTrigger {
         UUID customerAccountId = orders.summary(tenantId, event.orderId())
                 .map(OrderDirectory.OrderSummary::customerAccountId)
                 .orElse(null);
-        NotificationChannel channel = channelRouter.resolve(
-                tenantId, brandId, customerAccountId, NotificationClass.TRANSACTIONAL_REQUIRED, defaultChannel);
+        NotificationChannel channel =
+                channelRouter.resolve(tenantId, brandId, customerAccountId, kind.notificationClass(), defaultChannel);
 
         // Keyed on the subject rather than the event id. A replayed OrderConfirmed
         // carries a fresh event id, and keying on that would send the customer a
@@ -321,7 +399,7 @@ public class OrderNotificationTrigger {
         // becomes sendable and when it stops being worth sending. Off, none of this runs and the intent
         // below is the one this class always created.
         Instant scheduledAt = now;
-        Instant expiresAt = now.plus(expiry);
+        Instant expiresAt = now.plus(kind.expiry());
         boolean sendCustomerIntent = true;
         if (promptCompletedAt != null && prompts.governs(tenantId)) {
             String mode = orders.notificationContext(tenantId, event.orderId())
@@ -348,8 +426,9 @@ public class OrderNotificationTrigger {
                         // customer spent: it is not marketing, it does not need marketing
                         // consent, and it must not become suppressible by a preference
                         // toggle. What is genuinely open — the legal basis behind that
-                        // classification — ADR 0020 leaves with counsel.
-                        NotificationClass.TRANSACTIONAL_REQUIRED.name(),
+                        // classification — ADR 0020 leaves with counsel. The three milestones
+                        // of ADR 0184 are the optional class instead: useful, not owed.
+                        kind.notificationClass().name(),
                         channel.name(),
                         templateKey,
                         SUBJECT_TYPE,
@@ -376,18 +455,20 @@ public class OrderNotificationTrigger {
         // suspended customer contact must never hold back the branch's own
         // group, and vice versa — and gated by the same import suppression
         // check above it, so a backfill does not also flood every ops group.
-        operationsAlerts.fanOut(
-                tenantId,
-                brandId,
-                locationId,
-                templateKey,
-                templateKey,
-                SUBJECT_TYPE,
-                event.orderId(),
-                event.eventId(),
-                "%s:%s:%s".formatted(templateKey, SUBJECT_TYPE, event.orderId()),
-                triggerVariables,
-                expiry);
+        if (kind.fanOutToOperations()) {
+            operationsAlerts.fanOut(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    templateKey,
+                    templateKey,
+                    SUBJECT_TYPE,
+                    event.orderId(),
+                    event.eventId(),
+                    "%s:%s:%s".formatted(templateKey, SUBJECT_TYPE, event.orderId()),
+                    triggerVariables,
+                    expiry);
+        }
     }
 
     /**

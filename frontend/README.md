@@ -1,6 +1,6 @@
 # HorecaOS frontends
 
-Three Angular applications plus the canonical design tokens. The Flutter customer app
+Five Angular applications (`operations`, `control-plane`, `storefront`, `storefront-milliy`, `courier`) and the canonical design tokens. The Flutter customer app
 lives in [../mobile](../mobile) and is on hold for launch — the storefront below is the
 customer surface ([ADR 0055](../platform/docs/adr/meta/0055-greenfield-launch-scope.md)).
 Imported 2026-08-30 from the Qoida workspace, where they were four sibling git
@@ -45,10 +45,20 @@ Capability-based nav filtering is UX only; the server re-authorizes every call
 Auth uses `angular-oauth2-oidc` against the same realm, tokens in memory. Tests live
 beside the code as `*.spec.ts` (`ng test --watch=false`). Angular 22.
 
+## courier/
+
+The installable web app a courier carries on shift ([ADR 0179](../platform/docs/adr/partial/0179-the-courier-client.md)):
+Keycloak Authorization Code with PKCE as a public client, tokens in memory, the shell, a Today
+screen fed by `GET /api/v1/courier/tenants/{tenantId}/me`, a profile with the language and sign
+out, ru / uz-Latn / en, and an installable service-worker shell. Shift, duty indicator, telemetry,
+offers and deliveries are the next parts. Its own README says what a PWA cannot do and why that is
+decided rather than hidden. Angular 21, like the storefronts; the design tokens are vendored and
+diffed in CI like control-plane's.
+
 ## design-tokens/
 
-`design-tokens/tokens.css` is **the** canonical token file. Today only `control-plane`
-and `operations` vendor a copy of it (`storefront` uses Tailwind and vendors no tokens
+`design-tokens/tokens.css` is **the** canonical token file. Today only `control-plane`,
+`courier` and `operations` vendor a copy of it (`storefront` uses Tailwind and vendors no tokens
 file at all); re-pointing every app at this one file directly is an open item on ADR
 0052's checklist. Of the two that vendor a copy, only `control-plane` checks it against
 the source of record: `control-plane/scripts/check-tokens.mjs` diffs
@@ -67,14 +77,18 @@ runs them; what they cover differs by app.
   `tokens.css`), and `lint:rules` proves the rule itself still fails on a violation. Then
   **`npm run format:check`** on the whole `src/` tree (`ts`, `html`, `css`, `json`); the tree is
   prettier-clean and CI keeps it so. Fix a failure with `npm run format` in the app.
-- **`control-plane`, `storefront`, `storefront-milliy`** — ESLint 8.57 with the
+- **`control-plane`, `courier`, `storefront`, `storefront-milliy`** — ESLint 8.57 with the
   `typescript-eslint` recommended rules, `@eslint/js` recommended, and `eqeqeq` (flat config,
   `eslint.config.mjs` in each app; underscore-prefixed arguments and variables are the way to say
   "deliberately unused"). `control-plane` also runs operations' `horecaos/no-raw-px-font-size`
   — imported from `frontend/operations/tools/eslint-plugin-horecaos`, not copied — because it
   vendors the closed type scale; the two storefronts are Tailwind/SCSS apps with no such scale,
-  so the rule is not applied there. Angular templates are not linted (`angular-eslint` needs
-  ESLint 9; operations is on 8.57, so the upgrade is one change across the apps).
+  so the rule is not applied there. Every app, the storefronts' `.scss` included, also runs
+  operations' `horecaos/no-physical-direction` over its stylesheets: `margin-left` is a finding,
+  `eslint --fix` rewrites it to `margin-inline-start`, and a declaration that must stay physical
+  says why with `physical-ok: <reason>` (ADR 0149, X.40; `operations/README.md` has the detail).
+  Angular templates are not linted (`angular-eslint` needs ESLint 9; operations is on 8.57, so
+  the upgrade is one change across the apps).
   `npm run lint:rules` runs `tools/lint-config.test.mjs`, which feeds the configured linter code
   that is wrong and code that is fine, so a config that silently lost its rules fails instead of
   passing for ever.

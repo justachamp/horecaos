@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.customers.api.ConsentDirectory;
@@ -30,10 +31,18 @@ public class ConsentService implements ConsentDirectory, ConsentRecorder {
 
     private final JdbcCustomerStore store;
     private final Clock clock;
+    private final ConsentPurposeCheck purposeCheck;
 
-    public ConsentService(JdbcCustomerStore store, Clock clock) {
+    @Autowired
+    public ConsentService(JdbcCustomerStore store, Clock clock, ConsentPurposeCheck purposeCheck) {
         this.store = store;
         this.clock = clock;
+        this.purposeCheck = purposeCheck;
+    }
+
+    /** A service that does not look at the purpose: for callers built without the registry. */
+    public ConsentService(JdbcCustomerStore store, Clock clock) {
+        this(store, clock, ConsentPurposeCheck.off());
     }
 
     /**
@@ -58,6 +67,9 @@ public class ConsentService implements ConsentDirectory, ConsentRecorder {
             @Nullable String evidenceReference,
             @Nullable Instant decidedAt) {
 
+        // Report-only and off by default: notices a purpose outside the tenant's registry without refusing it (ADR
+        // 0109).
+        purposeCheck.observe(tenantId, purpose, source);
         UUID id = UUID.randomUUID();
         store.insertConsentDecision(
                 id,

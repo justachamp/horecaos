@@ -8,6 +8,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -15,6 +17,7 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.catalog.api.CatalogDraftChanged.Change;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore;
@@ -37,11 +40,11 @@ import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
  * both go through) — so, unlike an offering toggle, nothing here needs to take
  * effect mid-service.
  *
- * <p><strong>Products only reach a live menu.</strong> A published menu carries a
- * product's images and no variant's or category's ({@code MenuVariant} and {@code
- * MenuCategory} have no image field), so a variant or category override is stored
- * and drawn by the preview but served by nothing until ADR 0040's push gives a
- * consumer for it.
+ * <p><strong>All three kinds reach a live menu.</strong> A published menu carries the images
+ * its channel shows for a product, for each of its variants and for each category ({@code
+ * MenuVariant} and {@code MenuCategory} carry {@code mediaAssetIds} and {@code imageUrls}, from
+ * {@link ChannelMediaLayers}), so an override stored for a variant or a category is served by the
+ * channel's menu and by the partner menu pull, not only stored and drawn by the preview.
  *
  * <p>Separate from {@link CatalogAuthoringService} because that class is
  * constructed directly, with five arguments, by dozens of tests that have no use
@@ -63,7 +66,12 @@ public class ChannelMediaOverrideService {
     private final SalesChannelLookup channels;
     private final AuditRecorder audit;
     private final Clock clock;
+    private final CatalogDraftSignal draft;
 
+    /**
+     * A service that says nothing when the draft moves: every fixture built before the draft event existed
+     * constructs it this way, and none of them asserts on an outbox row.
+     */
     public ChannelMediaOverrideService(
             JdbcCatalogStore store,
             JdbcChannelProjectionStore projections,
@@ -71,12 +79,25 @@ public class ChannelMediaOverrideService {
             SalesChannelLookup channels,
             AuditRecorder audit,
             Clock clock) {
+        this(store, projections, media, channels, audit, clock, event -> {});
+    }
+
+    @Autowired
+    public ChannelMediaOverrideService(
+            JdbcCatalogStore store,
+            JdbcChannelProjectionStore projections,
+            MediaAvailability media,
+            SalesChannelLookup channels,
+            AuditRecorder audit,
+            Clock clock,
+            ApplicationEventPublisher events) {
         this.store = store;
         this.projections = projections;
         this.media = media;
         this.channels = channels;
         this.audit = audit;
         this.clock = clock;
+        this.draft = new CatalogDraftSignal(events, clock);
     }
 
     /**
@@ -133,6 +154,9 @@ public class ChannelMediaOverrideService {
 
         projections.replaceMediaOverrides(tenantId, brandId, channelId, entityType, entityId, requested);
         List<MediaOverrideRow> now = projections.mediaOverridesFor(tenantId, brandId, channelId, entityType, entityId);
+        // ADR 0138 "Events": an override write rides CatalogDraftChanged, scoped to the channel it changes the
+        // projection of. A write that stored what was already stored returned above and says nothing.
+        draft.changed(tenantId, brandId, entityType.name(), entityId, Change.CHANNEL_MEDIA_REPLACED, channelId);
 
         audit.record(AuditFact.of("catalog.channelMediaOverride.replaced", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))

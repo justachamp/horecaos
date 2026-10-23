@@ -133,6 +133,94 @@ class PricingEngineTests {
                 .satisfies(a -> assertThat(a.amount().minor()).isEqualTo(10_000L));
     }
 
+    /**
+     * A receipt lists every priced modifier option as a line of its own, with the option's own
+     * classification (ADR 0038, ADR 0166 Decision 9), so the order has to be able to say what each one
+     * charged. A single «MODIFIERS» step for the whole line could not tell the cheese from the sauce.
+     */
+    @Test
+    @DisplayName(
+            "each priced option the customer chose is its own adjustment, naming the option, summing to the line's modifier charge")
+    void eachChosenOptionIsItsOwnAdjustment() {
+        UUID sauce = UUID.randomUUID();
+        var request = new QuoteRequest(
+                TENANT,
+                BRAND,
+                LOCATION,
+                null,
+                "STOREFRONT",
+                List.of(new QuoteRequest.Line("a", BURGER, 2, List.of(EXTRA_CHEESE, sauce))),
+                null);
+
+        var result = engine.price(
+                request,
+                inputsWithModifiers(Map.of(BURGER, 50_000L), Map.of(EXTRA_CHEESE, 5_000L, sauce, 2_000L)),
+                NOW);
+
+        assertThat(result.total().minor()).as("2 x (50 000 + 5 000 + 2 000)").isEqualTo(114_000L);
+        var charges = result.adjustments().stream()
+                .filter(a -> a.type() == Quote.Adjustment.Type.MODIFIER)
+                .toList();
+        assertThat(charges).hasSize(2);
+        assertThat(charges).extracting(Quote.Adjustment::sourceType).containsOnly("MODIFIER_OPTION");
+        assertThat(charges.stream()
+                        .collect(java.util.stream.Collectors.toMap(
+                                Quote.Adjustment::sourceId, a -> a.amount().minor())))
+                .as("what each option charged on the line, quantity included")
+                .containsEntry(EXTRA_CHEESE, 10_000L)
+                .containsEntry(sauce, 4_000L);
+        assertThat(charges).extracting(Quote.Adjustment::descriptionCode).containsOnly("MODIFIERS");
+    }
+
+    @Test
+    @DisplayName("the itemised charges of a decimal quantity still sum to the line's modifier charge, rounded once")
+    void theItemisedChargesSumToTheLinesCharge() {
+        UUID sauce = UUID.randomUUID();
+        var request = new QuoteRequest(
+                TENANT,
+                BRAND,
+                LOCATION,
+                null,
+                "STOREFRONT",
+                List.of(new QuoteRequest.Line(
+                        "a", BURGER, new java.math.BigDecimal("0.5"), List.of(EXTRA_CHEESE, sauce))),
+                null);
+
+        var result = engine.price(
+                request,
+                inputsWithModifiers(Map.of(BURGER, 50_000L), Map.of(EXTRA_CHEESE, 5_001L, sauce, 3_001L)),
+                NOW);
+
+        long itemised = result.adjustments().stream()
+                .filter(a -> a.type() == Quote.Adjustment.Type.MODIFIER)
+                .mapToLong(a -> a.amount().minor())
+                .sum();
+        assertThat(itemised)
+                .as("0.5 x 8 002 = 4 001, rounded once on the line, however it is split between the options")
+                .isEqualTo(4_001L);
+        assertThat(result.total().minor())
+                .as("the line's gross is what it always was: 25 000 base + 4 001")
+                .isEqualTo(29_001L);
+    }
+
+    @Test
+    @DisplayName("an option priced at zero changes nothing and is not itemised")
+    void aFreeOptionIsNotItemised() {
+        var request = new QuoteRequest(
+                TENANT,
+                BRAND,
+                LOCATION,
+                null,
+                "STOREFRONT",
+                List.of(new QuoteRequest.Line("a", BURGER, 1, List.of(EXTRA_CHEESE))),
+                null);
+
+        var result = engine.price(request, inputsWithModifiers(Map.of(BURGER, 50_000L), Map.of(EXTRA_CHEESE, 0L)), NOW);
+
+        assertThat(result.total().minor()).isEqualTo(50_000L);
+        assertThat(result.adjustments()).noneMatch(a -> a.type() == Quote.Adjustment.Type.MODIFIER);
+    }
+
     @Test
     @DisplayName("an item with no active price is refused, never priced at zero")
     void anUnpricedItemIsRefused() {

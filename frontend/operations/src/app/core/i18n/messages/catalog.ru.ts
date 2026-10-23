@@ -55,9 +55,7 @@ export const catalogRu: AreaMessages<typeof catalogEn> = {
   'catalog.autoAdd.field.mandatory': 'Клиент не может отказаться',
   'catalog.autoAdd.field.fulfillment': 'Способы получения',
   'catalog.autoAdd.field.channel': 'Типы каналов',
-  'catalog.autoAdd.field.textRu': 'Текст для клиента (русский)',
-  'catalog.autoAdd.field.textUz': 'Текст для клиента (узбекский)',
-  'catalog.autoAdd.field.textEn': 'Текст для клиента (английский)',
+  'catalog.autoAdd.field.textIn': 'Текст для клиента ({language})',
   'catalog.autoAdd.channelsNote':
     'Только каналы, где заказ собирается из корзины. Заказ агрегатора или кассы не может нести правило.',
   'catalog.autoAdd.pickVariant': 'Найдите добавляемую позицию',
@@ -383,6 +381,14 @@ export const catalogRu: AreaMessages<typeof catalogEn> = {
   'catalog.editor.physical.portion': 'Размер порции',
   'catalog.editor.physical.portionHint': 'Шаг, с которым меняется количество, например 0,5',
   'catalog.editor.physical.nutrition': 'Пищевая ценность (КБЖУ)',
+  'catalog.editor.physical.accuracy.preview':
+    'Покупатели видят эту строку под таблицей, на языке, на котором читают меню:',
+  'catalog.editor.physical.accuracy.ru':
+    'Значения КБЖУ приблизительные и могут отличаться от фактических.',
+  'catalog.editor.physical.accuracy.uz':
+    'KBJU qiymatlari taxminiy va haqiqiyidan farq qilishi mumkin.',
+  'catalog.editor.physical.accuracy.en':
+    'Nutrition values are approximate and may differ from the actual product.',
   'catalog.editor.physical.per100g': 'на 100 г',
   'catalog.editor.physical.per100ml': 'на 100 мл',
   'catalog.editor.physical.calories': 'Калории, ккал',

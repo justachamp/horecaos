@@ -135,13 +135,15 @@ class EndpointCapabilityDeclarationTests {
                     || isStaffMfaEndpoint(handler)
                     || isStaffInvitationEndpoint(handler)
                     || isStaffPasswordResetEndpoint(handler)
+                    || isCourierAccessLinkEndpoint(handler)
                     || isPreAccountTelegramSignInEndpoint(handler)
                     || isDeviceEnrolmentBootstrapEndpoint(handler)
                     || isScopeResolvedCourierPolicyEndpoint(handler)
                     || isPreAccountPickupLocationSearchEndpoint(handler)
                     || isDeliveryFeePreviewEndpoint(handler)
                     || isContentCounterEndpoint(handler)
-                    || isAttributionLinkClickEndpoint(handler)) {
+                    || isAttributionLinkClickEndpoint(handler)
+                    || isPageLoadCountEndpoint(handler)) {
                 continue;
             }
             if (authorizationDeclarationCount(handler) == 0) {
@@ -267,6 +269,7 @@ class EndpointCapabilityDeclarationTests {
                     || isStaffMfaEndpoint(handler)
                     || isStaffInvitationEndpoint(handler)
                     || isStaffPasswordResetEndpoint(handler)
+                    || isCourierAccessLinkEndpoint(handler)
                     || isPreAccountTelegramSignInEndpoint(handler)
                     || isDeviceEnrolmentBootstrapEndpoint(handler)
                     || isPreAccountPickupLocationSearchEndpoint(handler)
@@ -274,11 +277,14 @@ class EndpointCapabilityDeclarationTests {
                     || isTerminalSecretEndpoint(handler)
                     || isContentCounterEndpoint(handler)
                     || isAttributionLinkClickEndpoint(handler)
+                    || isPageLoadCountEndpoint(handler)
                     || isDispatchRuleSimulationEndpoint(handler)
                     || isPromotionSimulationEndpoint(handler)
                     || isAutoAddSimulationEndpoint(handler)
+                    || isCourierRuleSimulationEndpoint(handler)
                     || isGeocodeLookupEndpoint(handler)
-                    || isPrintPreviewEndpoint(handler)) {
+                    || isPrintPreviewEndpoint(handler)
+                    || isCourierObservationBatchEndpoint(handler)) {
                 continue;
             }
             if (!declaresReplayProtection(handler)) {
@@ -573,6 +579,18 @@ class EndpointCapabilityDeclarationTests {
     }
 
     /**
+     * ADR 0178: a courier setting their own password from the link they were texted. The reasoning
+     * {@link #isStaffPasswordResetEndpoint} states applies unchanged: no password means no session and so no
+     * capability, the one-time token in the body authorises both calls, replay finds a spent link, and ADR 0033
+     * rate-limits both per caller address. Exact paths, like every other exemption.
+     */
+    private static boolean isCourierAccessLinkEndpoint(Method handler) {
+        String path = pathOf(handler);
+        return path.equals("/api/v1/operations/courier-access/inspect")
+                || path.equals("/api/v1/operations/courier-access/accept");
+    }
+
+    /**
      * ADR 0063: minting a "Continue with Telegram" sign-in code.
      *
      * <p>The identical reasoning {@link #isPreAccountIdentityEndpoint} states, applied
@@ -759,6 +777,16 @@ class EndpointCapabilityDeclarationTests {
     }
 
     /**
+     * ADR 0183 D18: the anonymous page-load ping. Like the attribution-link click and the content counters it has no
+     * principal to authorise (a storefront visitor has not signed in, and the ping precedes any account), it can only add one
+     * to a per-day counter, it stores no address, user agent, cookie, session or path, it is dark behind a platform flag, and
+     * it is limited per visitor in the ADR 0033 limiter. Matched on the exact path and method, never a prefix.
+     */
+    private static boolean isPageLoadCountEndpoint(Method handler) {
+        return pathOf(handler).equals("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/page-loads");
+    }
+
+    /**
      * ADR 0167 Decision 4/5: the public click on an attribution link, {@code POST
      * .../brands/{brandId}/attribution-links/{token}/clicks}. A {@code ?ref=} landing has no
      * principal and never will, so there is no capability to declare -- the record says the endpoint
@@ -835,6 +863,43 @@ class EndpointCapabilityDeclarationTests {
     }
 
     /**
+     * Whether this endpoint is the courier's own observation batch (ADR 0045, ADR 0179): the one
+     * exemption from ADR 0031's mandatory {@code Idempotency-Key} that ADR 0045 names, "here and
+     * nowhere else".
+     *
+     * <p>A handset posts it every ten seconds, six rows a minute per courier in the idempotency table for
+     * no benefit, because the track is idempotent on its own natural key (the one-minute window,
+     * {@code ON CONFLICT} replace). It is not {@code @NaturallyIdempotent}, which this class reserves for
+     * a partner binding, so the exemption is spelled here, on the exact path, and the other half of the
+     * bargain is held by {@link #theCourierObservationBatchStillDeclaresItsOwnAuthorization}: it is
+     * exempt from replay protection <em>only</em>, never from an authorization decision.
+     */
+    private static boolean isCourierObservationBatchEndpoint(Method handler) {
+        return pathOf(handler)
+                .equals("/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}"
+                        + "/telemetry/observations");
+    }
+
+    @Test
+    void theCourierObservationBatchStillDeclaresItsOwnAuthorization() {
+        List<Method> batch = allControllerMethods().stream()
+                .filter(EndpointCapabilityDeclarationTests::isCourierObservationBatchEndpoint)
+                .toList();
+
+        assertThat(batch)
+                .as("a scan finding nothing here would pass however the endpoint was weakened")
+                .hasSize(1);
+        CourierSelfAuthorized declaration = batch.get(0).getAnnotation(CourierSelfAuthorized.class);
+        assertThat(declaration)
+                .as("the batch is exempt from the Idempotency-Key, never from deciding who may post it")
+                .isNotNull();
+        assertThat(declaration.value()).isEqualTo(uz.horecaos.platform.iam.api.Capability.COURIER_TELEMETRY);
+        assertThat(authorizationDeclarationCount(batch.get(0)))
+                .as("one strategy, so a staff capability cannot be added beside it")
+                .isEqualTo(1);
+    }
+
+    /**
      * Whether this endpoint is one of the six address lookups (ADR 0145): suggest, geocode and
      * reverse geocode, each at brand scope and again at location scope.
      *
@@ -852,7 +917,44 @@ class EndpointCapabilityDeclarationTests {
      * discipline every exemption here keeps.
      */
     private static boolean isGeocodeLookupEndpoint(Method handler) {
-        return GEOCODE_LOOKUP_PATHS.contains(pathOf(handler));
+        return GEOCODE_LOOKUP_PATHS.contains(pathOf(handler))
+                || STOREFRONT_GEOCODE_LOOKUP_PATHS.contains(pathOf(handler));
+    }
+
+    /**
+     * The three lookups again on the storefront surface (ADR 0145 decision 2, row X.4), for a
+     * customer's own session. Same exemption for the same reason, and a different authorization:
+     * ownership, not a capability. {@link #theStorefrontGeocodeLookupsAreOwnershipChecked} holds the
+     * other half.
+     */
+    private static final Set<String> STOREFRONT_GEOCODE_LOOKUP_PATHS = Set.of(
+            "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/geocode/suggestions",
+            "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/geocode/resolutions",
+            "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/geocode/reverse-resolutions");
+
+    @Test
+    void theStorefrontGeocodeLookupsAreOwnershipChecked() {
+        List<String> found = new ArrayList<>();
+        List<String> wrong = new ArrayList<>();
+
+        for (Method handler : allControllerMethods()) {
+            if (!STOREFRONT_GEOCODE_LOOKUP_PATHS.contains(pathOf(handler))) {
+                continue;
+            }
+            String where = handler.getDeclaringClass().getSimpleName() + "#" + handler.getName();
+            found.add(where);
+            if (handler.getAnnotation(CustomerOwned.class) == null) {
+                wrong.add(where + " is not @CustomerOwned");
+            }
+            if (handler.getAnnotation(RequiresCapability.class) != null) {
+                wrong.add(where + " declares a staff capability a customer does not hold");
+            }
+        }
+
+        assertThat(found)
+                .as("the three lookups the exemption names must all exist, or the exemption outlived them")
+                .hasSize(STOREFRONT_GEOCODE_LOOKUP_PATHS.size());
+        assertThat(wrong).isEmpty();
     }
 
     private static final Set<String> GEOCODE_LOOKUP_PATHS = geocodeLookupPaths();
@@ -874,7 +976,7 @@ class EndpointCapabilityDeclarationTests {
         List<String> wrong = new ArrayList<>();
 
         for (Method handler : allControllerMethods()) {
-            if (!isGeocodeLookupEndpoint(handler)) {
+            if (!GEOCODE_LOOKUP_PATHS.contains(pathOf(handler))) {
                 continue;
             }
             String where = handler.getDeclaringClass().getSimpleName() + "#" + handler.getName();
@@ -976,6 +1078,19 @@ class EndpointCapabilityDeclarationTests {
     private static boolean isAutoAddSimulationEndpoint(Method handler) {
         return pathOf(handler)
                 .equals("/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/auto-add-rules/simulations");
+    }
+
+    /**
+     * Whether this endpoint is the courier bonus and penalty rule simulator (ADR 0178): a POST only because its input
+     * is a candidate rule, not a query string.
+     *
+     * <p>It replays the evaluator's arithmetic over shifts and periods already closed and writes nothing -- no ledger
+     * entry, no approval, no state -- so there is no effect for a replay key to guard. It is not exempt from
+     * authorization: it declares {@code courier.adjustment.reason.manage}, the capability of authoring the rule.
+     * Matched on the exact path, as every exemption here is.
+     */
+    private static boolean isCourierRuleSimulationEndpoint(Method handler) {
+        return pathOf(handler).equals("/api/v1/operations/tenants/{tenantId}/adjustment-rule-simulations");
     }
 
     /**

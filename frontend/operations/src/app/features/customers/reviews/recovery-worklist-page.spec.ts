@@ -8,6 +8,7 @@ import { BrandScope } from '../../../core/api/catalog-paths';
 import { Page } from '../../../core/api/page';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { CurrentBrand } from '../../../core/auth/current-brand';
+import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { I18n } from '../../../core/i18n/i18n';
 import { BoardColumn } from '../../../shared/ui/board-column/board-column';
 import { LocationsApi, LocationView } from '../../settings/locations/locations-api';
@@ -71,6 +72,7 @@ describe('RecoveryWorklistPage', () => {
     countsAtLocation: ReturnType<typeof vi.fn>;
     detail: ReturnType<typeof vi.fn>;
     transition: ReturnType<typeof vi.fn>;
+    candidates: ReturnType<typeof vi.fn>;
   };
   let locationsApi: { list: ReturnType<typeof vi.fn>; profile: ReturnType<typeof vi.fn> };
   /** What the next `detail` read fails with, if a spec wants the drawer's read to be refused. */
@@ -112,6 +114,12 @@ describe('RecoveryWorklistPage', () => {
         return caseDetail();
       }),
       transition: vi.fn().mockResolvedValue({}),
+      candidates: vi.fn().mockResolvedValue({
+        remedies: [],
+        grants: [],
+        orderId: 'order-1',
+        customerAccountId: 'customer-1',
+      }),
     };
     locationsApi = {
       list: vi.fn().mockResolvedValue([location()]),
@@ -126,6 +134,7 @@ describe('RecoveryWorklistPage', () => {
         { provide: RecoveryApi, useValue: api },
         { provide: LocationsApi, useValue: locationsApi },
         { provide: CurrentBrand, useValue: brand },
+        { provide: SessionCapabilities, useValue: { has: () => false } },
         { provide: RecoveryReachResolver, useValue: resolverFor(reach) },
         {
           provide: ActivatedRoute,
@@ -393,6 +402,75 @@ describe('RecoveryWorklistPage', () => {
     where.dispatchEvent(new Event('change'));
     await flush();
     expect(api.counts).toHaveBeenLastCalledWith(SCOPE, 'location-1');
+  });
+
+  it('narrows the board and the table by the rating of the review, sent as both ends of the range', async () => {
+    await render({ NEW: [caseSummary()] });
+    api.list.mockClear();
+
+    const rating = host().querySelector(
+      '[data-testid="recovery-rating-filter"]',
+    ) as HTMLSelectElement;
+    expect([...rating.options].map((option) => option.value)).toEqual([
+      '',
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+    ]);
+    rating.value = '2';
+    rating.dispatchEvent(new Event('change'));
+    await flush();
+    fixture.detectChanges();
+    expect(api.list).toHaveBeenCalledWith(
+      SCOPE,
+      { cursor: null, limit: 25 },
+      expect.objectContaining({ minRating: 2, maxRating: 2 }),
+    );
+
+    (host().querySelector('[data-testid="view-table"]') as HTMLButtonElement).click();
+    await flush();
+    fixture.detectChanges();
+    expect(api.list).toHaveBeenLastCalledWith(
+      SCOPE,
+      { cursor: null, limit: 50 },
+      expect.objectContaining({ minRating: 2, maxRating: 2 }),
+    );
+
+    // Back to any rating: neither end is sent.
+    const again = host().querySelector(
+      '[data-testid="recovery-rating-filter"]',
+    ) as HTMLSelectElement;
+    again.value = '';
+    again.dispatchEvent(new Event('change'));
+    await flush();
+    fixture.detectChanges();
+    const filters = api.list.mock.calls.at(-1)?.[2] as CaseFilters;
+    expect(filters.minRating).toBeUndefined();
+    expect(filters.maxRating).toBeUndefined();
+  });
+
+  it('reads a branch manager’s worklist by rating too, on the branch route', async () => {
+    await render({ NEW: [caseSummary()] }, undefined, undefined, {
+      scope: SCOPE,
+      locationIds: ['location-1', 'location-2'],
+    });
+    api.listAtLocation.mockClear();
+
+    const rating = host().querySelector(
+      '[data-testid="recovery-rating-filter"]',
+    ) as HTMLSelectElement;
+    rating.value = '1';
+    rating.dispatchEvent(new Event('change'));
+    await flush();
+
+    expect(api.listAtLocation).toHaveBeenCalledWith(
+      SCOPE,
+      'location-1',
+      { cursor: null, limit: 25 },
+      expect.objectContaining({ minRating: 1, maxRating: 1 }),
+    );
   });
 
   it('opens a card’s case in the drawer, read at the card’s own branch', async () => {

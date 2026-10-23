@@ -205,6 +205,24 @@ public class JdbcPrintingStore {
                 .list();
     }
 
+    /**
+     * Which of these branches have at least one active printer registered, one statement for a board page
+     * (the {@code REPRINT} action: a branch with nothing to print on is not offered «Печать»).
+     */
+    public java.util.Set<UUID> locationsWithActivePrinter(UUID tenantId, java.util.Collection<UUID> locationIds) {
+        if (locationIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return java.util.Set.copyOf(jdbc.sql("""
+                        SELECT DISTINCT location_id FROM printing.printers
+                         WHERE tenant_id = :tenantId AND location_id IN (:locationIds) AND status = 'ACTIVE'
+                        """)
+                .param("tenantId", tenantId)
+                .param("locationIds", locationIds)
+                .query(UUID.class)
+                .list());
+    }
+
     /** The active agent printers bound to one agent, which is what a claim polls. */
     public List<PrinterRow> printersBoundTo(UUID tenantId, UUID locationId, UUID agentDeviceId) {
         return jdbc.sql(SELECT_PRINTER + """

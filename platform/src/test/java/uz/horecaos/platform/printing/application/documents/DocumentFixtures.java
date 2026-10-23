@@ -70,7 +70,8 @@ final class DocumentFixtures {
                 100_000,
                 "no cilantro please, the guest is allergic",
                 List.of(new Modifier(UUID.randomUUID(), null, "Extras", "Extra beef", 1, 10_000)),
-                List.of(new Preset("NO_ONION", "Без лука", "Piyozsiz", "No onion")),
+                List.of(new Preset(
+                        "NO_ONION", java.util.Map.of("ru", "Без лука", "uz-Latn", "Piyozsiz", "en", "No onion"))),
                 null,
                 null,
                 null);
@@ -98,7 +99,9 @@ final class DocumentFixtures {
                 30_000,
                 null,
                 List.of(),
-                List.of(new Preset("WELL_DONE", "Хорошо прожарить", "Yaxshi pishirish", "Well done")),
+                List.of(new Preset(
+                        "WELL_DONE",
+                        java.util.Map.of("ru", "Хорошо прожарить", "uz-Latn", "Yaxshi pishirish", "en", "Well done"))),
                 COMBO,
                 "Combo No.1",
                 1);
@@ -194,7 +197,7 @@ final class DocumentFixtures {
                 "UZS",
                 Instant.parse("2026-10-08T07:02:30Z"),
                 List.of(new uz.horecaos.platform.payments.api.FiscalReceiptSource.Line(
-                        "Order A-014", 1, 138_000, 138_000, 0, 0)),
+                        "Order A-014", java.math.BigDecimal.ONE, 138_000, 138_000, 0, 0)),
                 138_000,
                 0,
                 evidence);

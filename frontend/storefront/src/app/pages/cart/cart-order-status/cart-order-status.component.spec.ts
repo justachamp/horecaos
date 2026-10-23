@@ -6,6 +6,7 @@ import { AnalyticsInjector } from '../../../core/analytics/analytics-injector';
 import { LangService } from '../../../services/lang.service';
 import { MenuService } from '../../../services/menu.service';
 import { OrdersService, type ApiOrderDetail } from '../../../services/orders.service';
+import { type PaymentSplit, PointsService } from '../../../services/points.service';
 import { TranslateService } from '../../../services/translate.service';
 import { CartOrderStatusComponent } from './cart-order-status.component';
 
@@ -23,7 +24,7 @@ class FakeTranslateService {
   }
 }
 
-function open(detail: ApiOrderDetail) {
+function open(detail: ApiOrderDetail, split: PaymentSplit | null = null) {
   TestBed.configureTestingModule({
     imports: [CartOrderStatusComponent],
     providers: [
@@ -38,6 +39,7 @@ function open(detail: ApiOrderDetail) {
         provide: OrdersService,
         useValue: { getOrderDetail: vi.fn(() => of(detail)), poll: vi.fn(() => NEVER) },
       },
+      { provide: PointsService, useValue: { paymentSplit: vi.fn(() => Promise.resolve(split)) } },
       { provide: TranslateService, useValue: new FakeTranslateService() },
       { provide: LangService, useValue: { langId: () => 'ru' } },
       { provide: MenuService, useValue: { currency: () => 'UZS' } },
@@ -153,6 +155,7 @@ async function renderOrder(order: ApiOrderDetail): Promise<HTMLElement> {
         provide: OrdersService,
         useValue: { getOrderDetail: () => of(order), poll: () => NEVER },
       },
+      { provide: PointsService, useValue: { paymentSplit: () => Promise.resolve(null) } },
       { provide: TranslateService, useClass: PlainTranslateService },
       { provide: LangService, useValue: { langId: () => 'ru' } },
       { provide: MenuService, useValue: { currency: () => 'UZS' } },
@@ -214,5 +217,74 @@ describe('CartOrderStatusComponent: the promotions behind the price (ADR 0140)',
       'cart.deliveryOfferNote',
     );
     expect(host.querySelector('[data-testid="discount-row"]')).toBeNull();
+  });
+});
+
+describe('CartOrderStatusComponent: how the order is paid (ADR 0046, ADR 0185)', () => {
+  const split = (overrides: Partial<PaymentSplit> = {}): PaymentSplit => ({
+    orderId: 'o1',
+    total: { amountMinor: 20_000, currency: 'UZS' },
+    tenders: [
+      {
+        kind: 'POINTS',
+        methodCode: null,
+        amount: { amountMinor: 5_000, currency: 'UZS' },
+        status: 'SETTLED',
+      },
+      {
+        kind: 'MONEY',
+        methodCode: 'CLICK',
+        amount: { amountMinor: 15_000, currency: 'UZS' },
+        status: 'PLANNED',
+      },
+    ],
+    ...overrides,
+  });
+
+  async function opened(paymentSplit: PaymentSplit | null) {
+    const view = open(order([]), paymentSplit);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    view.fixture.detectChanges();
+    return view;
+  }
+
+  const rows = (host: HTMLElement) =>
+    [...host.querySelectorAll('[data-testid="payment-split-row"]')].map((row) =>
+      (row.textContent ?? '').replace(/\s+/g, ' ').trim(),
+    );
+
+  it('shows the points the customer spent and the money that pays the rest, each with where it stands', async () => {
+    const { host } = await opened(split());
+
+    const [points, money] = rows(host);
+    expect(points).toContain('split.points');
+    expect(points).toContain('split.status.SETTLED');
+    expect(points).toContain('5 000');
+    expect(money).toContain('cart.click');
+    expect(money).toContain('split.status.PLANNED');
+    expect(money).toContain('15 000');
+  });
+
+  it('says nothing about an order paid entirely one way: the total above already says it', async () => {
+    const { host } = await opened(
+      split({
+        tenders: [
+          {
+            kind: 'MONEY',
+            methodCode: 'CASH',
+            amount: { amountMinor: 20_000, currency: 'UZS' },
+            status: 'PLANNED',
+          },
+        ],
+      }),
+    );
+
+    expect(host.querySelector('[data-testid="payment-split"]')).toBeNull();
+  });
+
+  it('says nothing when the platform has no payment to show for the order', async () => {
+    const { host } = await opened(null);
+
+    expect(host.querySelector('[data-testid="payment-split"]')).toBeNull();
   });
 });

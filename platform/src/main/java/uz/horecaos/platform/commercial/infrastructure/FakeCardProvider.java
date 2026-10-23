@@ -12,10 +12,10 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
-import uz.horecaos.platform.commercial.application.CardAccount;
-import uz.horecaos.platform.commercial.application.CardCharger;
-import uz.horecaos.platform.commercial.application.CardEnrolment;
-import uz.horecaos.platform.commercial.application.CardProviderAdapter;
+import uz.horecaos.platform.commercial.api.CardAccount;
+import uz.horecaos.platform.commercial.api.CardCharger;
+import uz.horecaos.platform.commercial.api.CardEnrolment;
+import uz.horecaos.platform.commercial.api.CardProviderAdapter;
 
 /**
  * An in-process card provider that behaves like the real ones will (ADR 0095): the

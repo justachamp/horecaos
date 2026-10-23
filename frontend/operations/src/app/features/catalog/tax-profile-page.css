@@ -34,7 +34,7 @@
 
 .tax-profile__existing-item {
   width: 100%;
-  text-align: left;
+  text-align: start;
   padding: 6px 10px;
   border: 1px solid var(--q-hairline);
   background: var(--q-canvas);

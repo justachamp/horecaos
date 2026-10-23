@@ -7,7 +7,7 @@
 .settings__rail {
   width: 240px;
   flex: none;
-  border-right: 1px solid var(--q-hairline);
+  border-inline-end: 1px solid var(--q-hairline);
   padding: 20px 16px;
   overflow-y: auto;
 }

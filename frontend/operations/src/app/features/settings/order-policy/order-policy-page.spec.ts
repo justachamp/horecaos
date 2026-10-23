@@ -8,8 +8,13 @@ import { ConfigurationResolutionView } from '../../../core/api/configuration';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { I18n } from '../../../core/i18n/i18n';
 import { Toasts } from '../../../shared/ui/toast';
+import { CouriersApi } from '../../couriers/couriers-api';
+import { DeliveryTariffsApi } from '../../delivery/delivery-tariffs-api';
 import { DispatchRulesApi } from '../../delivery/dispatch-rules-api';
+import { PaidHoldApi } from '../../kitchen/paid-hold-api';
 import { ConfigurationApi } from '../configuration-api';
+import { LocationsApi } from '../locations/locations-api';
+import { SalesChannelsApi } from '../sales-channels/sales-channels-api';
 import { SavedTarget } from '../settings-saved';
 import { SettingsScope } from '../settings-scope';
 import { LatenessPolicyCard } from './lateness-policy-card';
@@ -32,22 +37,29 @@ const POLICY: AcceptancePolicyResponse = {
   policyVersion: 7,
 };
 
-/** One default value per wave-P46 key, matching `OrderingConfigurationKeys`. */
+/** One default value per card 2-5 key, matching `OrderingConfigurationKeys` (ADR 0177 retired five and added two). */
 const CARD2_5_DEFAULTS: Readonly<Record<string, unknown>> = {
-  'ordering.business_day_start_hour': 6,
-  'ordering.average_order_minutes': 30,
-  'ordering.maximum_order_minutes': 60,
   'ordering.late_order_threshold_minutes': 45,
   'ordering.at_risk_before_minutes': 5,
   'ordering.late_colour': '',
   'ordering.minimum_order_amount_minor': 0,
-  'ordering.vat_rate_percent': '12',
-  'ordering.routing_poll_interval_minutes': 2,
   'ordering.auto_accept_eligible_channels': 'ALL',
   'ordering.auto_accept_min_prior_orders': 0,
   'ordering.preorder_branch_resolution': 'BY_DISTANCE',
-  'ordering.operator_promo_code_allowed': false,
+  'ordering.operator_promo_code_allowed': true,
+  'ordering.operator_callback_flag_allowed': true,
+  'ordering.operator_change_due_allowed': true,
+  'delivery.out_of_zone_policy': 'REJECT',
 };
+
+/** The five card-2 scalars nothing read, retired by ADR 0177: the page neither shows nor reads them. */
+const RETIRED_CODES = [
+  'ordering.business_day_start_hour',
+  'ordering.average_order_minutes',
+  'ordering.maximum_order_minutes',
+  'ordering.vat_rate_percent',
+  'ordering.routing_poll_interval_minutes',
+];
 
 /** Nothing authored anywhere: the lateness card renders the platform default. */
 const LATENESS_DEFAULT: LatenessEditorView = {
@@ -171,6 +183,53 @@ describe('OrderPolicyPage', () => {
               }),
           },
         },
+        // The neighbours card's reads (ADR 0177): each is a read-only echo of a setting that lives elsewhere.
+        {
+          provide: DeliveryTariffsApi,
+          useValue: {
+            list: () =>
+              Promise.resolve([
+                {
+                  tariffId: 't-1',
+                  code: 'STD',
+                  name: 'Standard',
+                  status: 'ACTIVE',
+                  brandDefault: true,
+                  distanceMode: 'ROAD',
+                },
+              ]),
+          },
+        },
+        {
+          provide: LocationsApi,
+          useValue: {
+            serviceSummary: () => Promise.resolve({ maxConcurrentOrders: 12 }),
+          },
+        },
+        {
+          provide: SalesChannelsApi,
+          useValue: {
+            list: () =>
+              Promise.resolve([
+                {
+                  id: 'ch-1',
+                  code: 'call-centre',
+                  systemType: 'CALL_CENTRE',
+                  status: 'ACTIVE',
+                  enabledPaymentMethodCount: 2,
+                  enabledFulfillmentModes: ['PICKUP', 'DELIVERY'],
+                },
+              ]),
+          },
+        },
+        {
+          provide: PaidHoldApi,
+          useValue: { policy: () => Promise.resolve({ mode: 'HOLD_UNTIL_PAID' }) },
+        },
+        {
+          provide: CouriersApi,
+          useValue: { policy: () => Promise.resolve({ kitchenReadyOnly: true }) },
+        },
         provideRouter([]),
         { provide: CurrentTenant, useValue: new FakeCurrentTenant() },
         { provide: SettingsScope, useValue: settingsScope },
@@ -207,13 +266,71 @@ describe('OrderPolicyPage', () => {
     );
   });
 
-  it('renders the eleven card 2-5 fields with their resolved values, not a not-built note', () => {
+  it('renders the card 2-5 fields with their resolved values, not a not-built note', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).not.toContain('notBuilt');
     expect(text).toContain('45'); // late order threshold minutes
-    expect(text).toContain('12'); // VAT rate
     expect(text).toContain('Nearest branch'); // BY_DISTANCE
-    expect(text).toContain('No'); // operator promo code allowed, boolean false
+    expect(text).toContain('Yes'); // operator promo code allowed, boolean true
+  });
+
+  // ADR 0177 decision 2: five scalars nothing read are gone, and the page no longer shows a setting that
+  // changes nothing.
+  it('no longer offers or reads the five retired card 2 scalars', () => {
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+
+    for (const label of [
+      'Business day starts',
+      'Average order time',
+      'Maximum order time',
+      'VAT rate',
+      'Routing poll interval',
+    ]) {
+      expect(text, label).not.toContain(label);
+    }
+    const fieldRows = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.field-row'),
+    ).map((row) => row.textContent ?? '');
+    expect(fieldRows).toHaveLength(10);
+    expect(
+      fieldRows.filter((row) => row.includes('Not applied yet')),
+      'every field on Cards 2 to 5 is read by something',
+    ).toEqual([]);
+    for (const code of RETIRED_CODES) {
+      expect(configApi.resolution, code).not.toHaveBeenCalledWith(
+        TENANT_ID,
+        code,
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+      );
+    }
+  });
+
+  // ADR 0177 decision 5: the branch resolver and the server's own re-derivation read the pre-order rule for the
+  // whole brand, so a value written at a branch would be accepted, traced, shown as set there and read by nothing.
+  it('does not offer the pre-order branch rule a value of its own on a branch', async () => {
+    const rowFor = (label: string): HTMLElement =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.field-row'),
+      ).find((row) => row.textContent?.includes(label)) as HTMLElement;
+
+    expect(rowFor('Pre-order branch selection').textContent).not.toContain('Set at brand level');
+    expect(rowFor('Pre-order branch selection').querySelector('.field__action')).not.toBeNull();
+
+    settingsScope.locationId.set('loc-1');
+    settingsScope.level.set('LOCATION');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const preOrder = rowFor('Pre-order branch selection');
+    expect(preOrder.textContent).toContain('Set at brand level');
+    expect(preOrder.querySelector('.field__action'), 'no way to write it at a branch').toBeNull();
+    expect(
+      rowFor('Operator may apply a promo code').querySelector('.field__action'),
+      'a key the server does read at a branch is still offered there',
+    ).not.toBeNull();
   });
 
   it('publishes Card 1 with a required reason', async () => {
@@ -245,7 +362,7 @@ describe('OrderPolicyPage', () => {
 
   it('overrides a Card 2 integer field at the scope bar’s own scope, with a required reason', async () => {
     const fieldRows = fixture.nativeElement.querySelectorAll('.field-row');
-    const lateThresholdRow = fieldRows[3] as HTMLElement; // business day, average, maximum, late
+    const lateThresholdRow = fieldRows[0] as HTMLElement; // late threshold, at-risk, colour, minimum
     const overrideButton = lateThresholdRow.querySelector('.field__action') as HTMLButtonElement;
     overrideButton.click();
     fixture.detectChanges();
@@ -290,7 +407,7 @@ describe('OrderPolicyPage', () => {
       if (code === 'ordering.operator_promo_code_allowed') {
         return Promise.resolve({
           ...defaultResolution(code),
-          value: true,
+          value: false,
           cameFromDefault: false,
           source: 'SCOPED_VALUE',
           winningScope: 'BRAND',
@@ -306,7 +423,7 @@ describe('OrderPolicyPage', () => {
     fixture.detectChanges();
 
     const fieldRows = fixture.nativeElement.querySelectorAll('.field-row');
-    const promoCodeRow = fieldRows[fieldRows.length - 1] as HTMLElement; // Card 5's only field
+    const promoCodeRow = fieldRows[fieldRows.length - 3] as HTMLElement; // Card 5: promo, callback, change due
     const revertButton = Array.from(promoCodeRow.querySelectorAll('.field__action')).find(
       (button) => button.textContent?.includes('Revert'),
     ) as HTMLButtonElement;
@@ -328,8 +445,8 @@ describe('OrderPolicyPage', () => {
   // Row X.39: the at-risk threshold and the tenant's late colour, both read by
   // the order board and the kitchen board.
 
-  const AT_RISK_ROW = 4; // business day, average, maximum, late, at-risk
-  const LATE_COLOUR_ROW = 5;
+  const AT_RISK_ROW = 1; // late threshold, at-risk, colour, minimum
+  const LATE_COLOUR_ROW = 2;
 
   function rowAt(index: number): HTMLElement {
     return fixture.nativeElement.querySelectorAll('.field-row')[index] as HTMLElement;
@@ -372,12 +489,8 @@ describe('OrderPolicyPage', () => {
   // ADR 0150: «An order with no promised time is late after» is the tenant-wide default for the no-promise
   // fallback of the boundaries card; it is read now. The screen says which orders it governs and carries
   // «Not applied yet» only on the two siblings no record has given a reader.
-  const AVERAGE_ROW = 1;
-  const MAXIMUM_ROW = 2;
-  const LATE_THRESHOLD_ROW = 3;
-  const MINIMUM_ROW = 6;
-  const VAT_ROW = 7;
-  const ROUTING_ROW = 8;
+  const LATE_THRESHOLD_ROW = 0;
+  const MINIMUM_ROW = 3;
 
   it('words the late-order scalar for the orders it governs, and says it is read', () => {
     const row = rowAt(LATE_THRESHOLD_ROW);
@@ -397,20 +510,6 @@ describe('OrderPolicyPage', () => {
       'Only for orders with no promised time',
     );
     expect(rowAt(LATE_THRESHOLD_ROW).textContent).not.toContain('Not applied yet');
-  });
-
-  it('says «Not applied yet» on every card 2 field nothing reads, beside the value and while editing (ADR 0150)', () => {
-    // Business day start, average, maximum, VAT rate and routing poll interval: stored, inherited, read by nothing.
-    for (const row of [0, AVERAGE_ROW, MAXIMUM_ROW, VAT_ROW, ROUTING_ROW]) {
-      expect(rowAt(row).textContent, `row ${row}`).toContain('Not applied yet');
-    }
-    expect(rowAt(AVERAGE_ROW).textContent).toContain('Average order time (minutes)');
-    expect(rowAt(MAXIMUM_ROW).textContent).toContain('Maximum order time (minutes)');
-
-    (rowAt(AVERAGE_ROW).querySelector('.field__action') as HTMLButtonElement).click();
-    fixture.detectChanges();
-    expect(rowAt(AVERAGE_ROW).querySelector('input')).not.toBeNull();
-    expect(rowAt(AVERAGE_ROW).textContent).toContain('Not applied yet');
   });
 
   it('puts no such note on the scalars that are applied', () => {
@@ -647,7 +746,7 @@ describe('OrderPolicyPage', () => {
 
   it('re-reads the lateness document when the late-order threshold it defaults to is saved (ADR 0150)', async () => {
     latenessApi.get.mockClear();
-    (rowAt(3).querySelector('.field__action') as HTMLButtonElement).click(); // late threshold
+    (rowAt(LATE_THRESHOLD_ROW).querySelector('.field__action') as HTMLButtonElement).click(); // late threshold
     fixture.detectChanges();
     type('[id="field-ordering.late_order_threshold_minutes"]', '20');
     type('[id="field-reason-ordering.late_order_threshold_minutes"]', 'aggregator orders sooner');
@@ -665,10 +764,10 @@ describe('OrderPolicyPage', () => {
 
   it('does not re-read the lateness document for an unrelated field', async () => {
     latenessApi.get.mockClear();
-    (rowAt(0).querySelector('.field__action') as HTMLButtonElement).click(); // business day start
+    (rowAt(MINIMUM_ROW).querySelector('.field__action') as HTMLButtonElement).click(); // minimum order sum
     fixture.detectChanges();
-    type('[id="field-ordering.business_day_start_hour"]', '5');
-    type('[id="field-reason-ordering.business_day_start_hour"]', 'unrelated');
+    type('[id="field-ordering.minimum_order_amount_minor"]', '5000');
+    type('[id="field-reason-ordering.minimum_order_amount_minor"]', 'unrelated');
     publishButton().click();
     await flushMicrotasks();
 
@@ -683,7 +782,7 @@ describe('OrderPolicyPage', () => {
     fixture.detectChanges();
 
     const fieldRows = fixture.nativeElement.querySelectorAll('.field-row');
-    const lateThresholdRow = fieldRows[3] as HTMLElement;
+    const lateThresholdRow = fieldRows[0] as HTMLElement;
     const overrideButton = lateThresholdRow.querySelector('.field__action') as HTMLButtonElement;
     overrideButton.click();
     fixture.detectChanges();
@@ -723,6 +822,188 @@ describe('OrderPolicyPage', () => {
       '/delivery/dispatch-rules',
     );
   });
+  // ---------------------------------- ADR 0177 decision 3: Card 1's hold-back path, Card 3's gates
+
+  async function renderWith(policy: Partial<AcceptancePolicyResponse>): Promise<void> {
+    policyApi.getEffective.mockResolvedValue({ ...POLICY, ...policy });
+    fixture = TestBed.createComponent(OrderPolicyPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  }
+
+  const byTestId = (id: string): HTMLElement | null =>
+    (fixture.nativeElement as HTMLElement).querySelector(`[data-testid="${id}"]`);
+
+  function selectValue(selector: string, value: string): void {
+    const select = fixture.nativeElement.querySelector(selector) as HTMLSelectElement;
+    select.value = value;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+  }
+
+  function startEditingCard1(): void {
+    (fixture.nativeElement.querySelector('.card .primary') as HTMLButtonElement).click();
+    fixture.detectChanges();
+  }
+
+  it('says an auto-confirm policy with nobody to confirm holds nothing back, and that the gates therefore cannot', async () => {
+    await renderWith({ mode: 'AUTO_CONFIRM', approvalChannel: 'NONE', approvalTimeoutSeconds: 0 });
+
+    expect(byTestId('hold-back-none')?.textContent).toContain('cannot hold an order');
+    expect(byTestId('gates-no-path')?.textContent).toContain('cannot hold anything');
+  });
+
+  it('shows the hold-back path of an auto-confirm policy that names one, and stops warning about the gates', async () => {
+    await renderWith({ mode: 'AUTO_CONFIRM', approvalChannel: 'POS', approvalTimeoutSeconds: 120 });
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(byTestId('hold-back-none')).toBeNull();
+    expect(byTestId('gates-no-path')).toBeNull();
+    expect(text).toContain('Who confirms');
+    expect(text).toContain('POS');
+    expect(text).toContain('120');
+  });
+
+  it('leaves the gates their path under restaurant approval', () => {
+    expect(byTestId('gates-no-path')).toBeNull();
+  });
+
+  it('starts an auto-confirm draft with nobody to confirm, and a channel brings a timeout the held order can wait on', async () => {
+    startEditingCard1();
+    selectValue('#policy-mode', 'AUTO_CONFIRM');
+
+    expect(
+      (fixture.nativeElement.querySelector('#policy-approval-channel') as HTMLSelectElement).value,
+    ).toBe('NONE');
+    expect(fixture.nativeElement.querySelector('#policy-timeout')).toBeNull();
+    expect(byTestId('hold-back-hint')).not.toBeNull();
+
+    selectValue('#policy-approval-channel', 'HORECAOS_OPERATIONS');
+
+    expect((fixture.nativeElement.querySelector('#policy-timeout') as HTMLInputElement).value).toBe(
+      '300',
+    );
+    type('#policy-reason', 'Hold back unknown channels for a look');
+    publishButton().click();
+    await flushMicrotasks();
+
+    expect(policyApi.publish).toHaveBeenCalledWith(
+      TENANT_ID,
+      BRAND_ID,
+      null,
+      expect.objectContaining({
+        mode: 'AUTO_CONFIRM',
+        approvalChannel: 'HORECAOS_OPERATIONS',
+        approvalTimeoutSeconds: 300,
+      }),
+    );
+  });
+
+  it('will not publish a hold-back path whose timeout is outside 30 seconds to 30 minutes', () => {
+    startEditingCard1();
+    selectValue('#policy-mode', 'AUTO_CONFIRM');
+    selectValue('#policy-approval-channel', 'POS');
+    type('#policy-reason', 'A reason');
+    expect(publishButton().disabled).toBe(false);
+
+    type('#policy-timeout', '10');
+    expect(publishButton().disabled).toBe(true);
+
+    type('#policy-timeout', '1801');
+    expect(publishButton().disabled).toBe(true);
+
+    type('#policy-timeout', '1800');
+    expect(publishButton().disabled).toBe(false);
+  });
+
+  it('publishes a plain auto-confirm with no path when nobody is chosen, whatever timeout is on the form', async () => {
+    startEditingCard1();
+    selectValue('#policy-mode', 'AUTO_CONFIRM');
+    type('#policy-reason', 'Everything is accepted on its own');
+    expect(publishButton().disabled).toBe(false);
+    publishButton().click();
+    await flushMicrotasks();
+
+    expect(policyApi.publish).toHaveBeenCalledWith(
+      TENANT_ID,
+      BRAND_ID,
+      null,
+      expect.objectContaining({ mode: 'AUTO_CONFIRM', approvalChannel: 'NONE' }),
+    );
+  });
+
+  it('puts the operator toggles on Card 5, each saying what turning it off does', () => {
+    const labels = [7, 8, 9].map((index) => rowAt(index).textContent ?? '');
+
+    expect(labels[0]).toContain('Operator may apply a promo code');
+    expect(labels[0]).toContain('refused');
+    expect(labels[1]).toContain('call the customer back');
+    expect(labels[1]).toContain('hides the checkbox');
+    expect(labels[2]).toContain('cash the customer will hand over');
+    expect(labels[2]).toContain('refuses a cash amount');
+  });
+
+  it('words the pre-order branch selection for what it does, including the pickup fallback', () => {
+    const text = rowAt(6).textContent ?? '';
+
+    expect(text).toContain('Pre-order branch selection');
+    expect(text).toContain('no candidate branch is open');
+    expect(text).toContain('soonest to open');
+  });
+
+  // -------------------------------------- ADR 0177: the settings that live elsewhere, as read-only echoes
+
+  it('shows what is in force for the settings that live on other screens, each with the way to its screen', () => {
+    expect(byTestId('neighbour-value-distanceMode')?.textContent).toContain('By road');
+    expect(byTestId('neighbour-value-branchLimit')?.textContent).toContain('Set for each branch');
+    expect(byTestId('neighbour-value-outOfZone')?.textContent).toContain('Reject');
+    expect(byTestId('neighbour-value-courierVisibility')?.textContent).toContain(
+      'Only orders the kitchen has finished',
+    );
+    expect(byTestId('neighbour-value-paidHold')?.textContent).toContain('Holds an unpaid order');
+    expect(byTestId('neighbour-value-callCentre')?.textContent).toContain('2 payment methods');
+    expect(byTestId('neighbour-value-callCentre')?.textContent).toContain('Pickup, Delivery');
+
+    const links = [
+      'distanceMode',
+      'branchLimit',
+      'outOfZone',
+      'courierVisibility',
+      'paidHold',
+      'callCentre',
+    ].map((id) => byTestId(`neighbour-link-${id}`)?.getAttribute('href'));
+    expect(links).toEqual([
+      '/delivery/tariffs',
+      '/settings/locations',
+      '/delivery/courier-policy',
+      '/delivery/courier-policy',
+      '/kitchen/buffer',
+      '/settings/sales-channels',
+    ]);
+  });
+
+  it('is honest that the out-of-zone policy is not applied yet', () => {
+    expect(byTestId('neighbour-outOfZone')?.textContent).toContain('Not applied yet');
+    expect(byTestId('neighbour-distanceMode')?.textContent).not.toContain('Not applied yet');
+  });
+
+  it('says a neighbour cannot be read, rather than leaving a blank, when the role cannot read it', async () => {
+    TestBed.inject(ConfigurationApi);
+    configApi.resolution.mockImplementation((_tenantId: string, code: string) =>
+      code === 'delivery.out_of_zone_policy'
+        ? Promise.reject(new Error('403'))
+        : Promise.resolve(defaultResolution(code)),
+    );
+    fixture = TestBed.createComponent(OrderPolicyPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(byTestId('neighbour-value-outOfZone')?.textContent).toContain('your role cannot read');
+    expect(byTestId('neighbour-value-distanceMode')?.textContent).toContain('By road');
+  });
+
   // -------------------------------------------------- settings.md §1.3: a toast names the level
 
   describe('confirming a save in the toast host (row X.1)', () => {
@@ -806,7 +1087,7 @@ describe('OrderPolicyPage', () => {
     });
 
     it('names the setting, its new value and the level when a field is overridden', async () => {
-      const row = fixture.nativeElement.querySelectorAll('.field-row')[3] as HTMLElement;
+      const row = fixture.nativeElement.querySelectorAll('.field-row')[0] as HTMLElement;
       (row.querySelector('.field__action') as HTMLButtonElement).click();
       fixture.detectChanges();
       const value = fixture.nativeElement.querySelector(
@@ -840,7 +1121,7 @@ describe('OrderPolicyPage', () => {
           code === 'ordering.operator_promo_code_allowed'
             ? {
                 ...defaultResolution(code),
-                value: true,
+                value: false,
                 cameFromDefault: false,
                 source: 'SCOPED_VALUE' as const,
                 winningScope: 'BRAND' as const,
@@ -856,7 +1137,7 @@ describe('OrderPolicyPage', () => {
       fixture.detectChanges();
       const rows = fixture.nativeElement.querySelectorAll('.field-row');
       const revert = Array.from(
-        (rows[rows.length - 1] as HTMLElement).querySelectorAll('.field__action'),
+        (rows[rows.length - 3] as HTMLElement).querySelectorAll('.field__action'),
       ).find((button) => button.textContent?.includes('Revert')) as HTMLButtonElement;
 
       revert.click();
@@ -868,7 +1149,7 @@ describe('OrderPolicyPage', () => {
 
     it('stays silent when the save fails: the error belongs beside the field, not in a toast', async () => {
       configApi.setValue.mockRejectedValue(new Error('nope'));
-      const row = fixture.nativeElement.querySelectorAll('.field-row')[3] as HTMLElement;
+      const row = fixture.nativeElement.querySelectorAll('.field-row')[0] as HTMLElement;
       (row.querySelector('.field__action') as HTMLButtonElement).click();
       fixture.detectChanges();
       const reason = fixture.nativeElement.querySelector(

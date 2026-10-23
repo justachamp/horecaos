@@ -3,6 +3,7 @@ package uz.horecaos.platform.fulfillment.api;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 
 /**
@@ -57,6 +58,10 @@ public interface BranchResolutionPort {
      * @param zoneAreaSquareMeters that version's polygon area — ADR 0037's second
      *                             ranking key, the tiebreak for two zones of
      *                             equal priority
+     * @param locationLatitude     the branch's own point (ADR 0177: how far it is from
+     *                             the customer, for a pre-order that must pick among
+     *                             closed branches), null for a branch with no point
+     * @param locationLongitude    the other half of {@code locationLatitude}
      */
     record DeliveryBranchMatch(
             UUID locationId,
@@ -64,7 +69,21 @@ public interface BranchResolutionPort {
             UUID zoneId,
             int zoneVersion,
             int zonePriority,
-            double zoneAreaSquareMeters) {}
+            double zoneAreaSquareMeters,
+            @Nullable Double locationLatitude,
+            @Nullable Double locationLongitude) {
+
+        /** A match whose branch has no coordinate of its own to measure a distance from. */
+        public DeliveryBranchMatch(
+                UUID locationId,
+                String displayName,
+                UUID zoneId,
+                int zoneVersion,
+                int zonePriority,
+                double zoneAreaSquareMeters) {
+            this(locationId, displayName, zoneId, zoneVersion, zonePriority, zoneAreaSquareMeters, null, null);
+        }
+    }
 
     record PickupBranchCandidate(UUID locationId, String displayName) {}
 }

@@ -1,0 +1,50 @@
+:host {
+  display: block;
+}
+
+.lifecycle {
+  margin-top: 16px;
+}
+
+.lifecycle__heading {
+  margin: 0 0 4px;
+  color: var(--q-ink-subtle);
+}
+
+.lifecycle__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.lifecycle__actions button {
+  padding: 4px 10px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: var(--q-type-body-xs);
+}
+
+.lifecycle__actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.lifecycle__hint {
+  margin: 0 0 4px;
+  color: var(--q-ink-muted);
+}
+
+.lifecycle__form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 420px;
+}
+
+.lifecycle__error {
+  margin: 0;
+  color: var(--q-error-text);
+}

@@ -13,10 +13,12 @@ import { I18n } from '../../core/i18n/i18n';
 import { RealtimeClient, RealtimeFrame } from '../../core/realtime/realtime-client';
 import { NullMapProvider, provideNullMapProvider } from '../../shared/ui/map/null-map-provider';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
+import { LocationsApi } from '../settings/locations/locations-api';
 import { CourierPositionsApi } from './courier-positions-api';
 import { DispatchApi, ExceptionResponse, PlanQueueResponse } from './dispatch-api';
 import { DispatchBoardPage } from './dispatch-board-page';
 import { MapRegionService } from './map-region';
+import { ShortcutRegistry } from '../../shared/keyboard/shortcut-registry';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 
@@ -173,6 +175,12 @@ describe('DispatchBoardPage', () => {
     };
   }
 
+  /** Where the branch is, as `LocationsApi.profile` reads it; `null` is a branch nobody has placed. */
+  let branchPoint: { latitude: number; longitude: number } | null = {
+    latitude: 41.31,
+    longitude: 69.24,
+  };
+
   async function render(
     plans: readonly PlanQueueResponse[] = [UNASSIGNED_PLAN],
     fleet: readonly RosterEntryResponse[] = [COURIER],
@@ -223,6 +231,17 @@ describe('DispatchBoardPage', () => {
           },
         },
         { provide: DispatchApi, useValue: dispatchApi },
+        {
+          provide: LocationsApi,
+          useValue: {
+            profile: vi.fn().mockImplementation(() =>
+              Promise.resolve({
+                latitude: branchPoint?.latitude ?? null,
+                longitude: branchPoint?.longitude ?? null,
+              }),
+            ),
+          },
+        },
         { provide: CouriersApi, useValue: { roster: vi.fn().mockResolvedValue(fleet) } },
         { provide: ApiClient, useValue: { get: () => of({ value: [], version: null }) } },
         { provide: RealtimeClient, useValue: fakeRealtimeClient() },
@@ -895,5 +914,441 @@ describe('DispatchBoardPage', () => {
     await settle();
 
     expect(positions.fleet.mock.calls.length).toBe(reads);
+  });
+
+  // ---------------------------------------------------------------- the keys (couriers.md §3)
+
+  describe('the keys (couriers.md §3, gap map row X.1)', () => {
+    function key(value: string, init: KeyboardEventInit = {}, target?: HTMLElement): boolean {
+      const event = new KeyboardEvent('keydown', {
+        key: value,
+        bubbles: true,
+        cancelable: true,
+        ...init,
+      });
+      Object.defineProperty(event, 'target', {
+        value: target ?? document.activeElement ?? document.body,
+      });
+      return TestBed.inject(ShortcutRegistry).dispatch(event);
+    }
+
+    const cards = (): HTMLElement[] => [
+      ...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+        '[data-testid="dispatch-card"]',
+      ),
+    ];
+
+    const selected = (): boolean[] =>
+      cards().map(
+        (card) =>
+          card.querySelector<HTMLInputElement>('[data-testid="dispatch-card-select"]')?.checked ??
+          false,
+      );
+
+    /** Puts the cursor on card `index` the way an operator does: j from the top. */
+    function cursorOn(index: number): HTMLElement {
+      (document.activeElement as HTMLElement | null)?.blur();
+      for (let step = 0; step <= index; step++) {
+        key('j');
+      }
+      return cards()[index];
+    }
+
+    async function settleScreen(): Promise<void> {
+      await flushMicrotasks();
+      fixture.detectChanges();
+    }
+
+    afterEach(() => {
+      document.body.querySelectorAll('q-confirm-dialog').forEach((node) => node.remove());
+    });
+
+    it('is registered while the board is on screen and lists only the keys the board has controls for', async () => {
+      await render([UNASSIGNED_PLAN, CARRIED_PLAN]);
+      const scope = TestBed.inject(ShortcutRegistry)
+        .scopes()
+        .find((candidate) => candidate.id === 'dispatch-board')!;
+      const caps = scope.shortcuts.flatMap((shortcut) => shortcut.caps);
+
+      expect(scope.title()).toBe('Dispatch board');
+      expect(caps).toEqual(
+        expect.arrayContaining(['j', 'k', 'x', 'Shift+X', 'a', 'r', 'e', 'u', 'm', 'Esc']),
+      );
+      expect(caps, 'no search box, status tabs or fleet rail to bind them to').not.toContain('/');
+
+      fixture.destroy();
+      expect(
+        TestBed.inject(ShortcutRegistry)
+          .scopes()
+          .some((candidate) => candidate.id === 'dispatch-board'),
+      ).toBe(false);
+    });
+
+    it('j and k move focus between the cards, and stop at the ends', async () => {
+      await render([UNASSIGNED_PLAN, CARRIED_PLAN, MANUAL_ACTION_PLAN]);
+      const all = cards();
+
+      expect(key('j', {}, document.body)).toBe(true);
+      expect(document.activeElement).toBe(all[0]);
+      key('j');
+      expect(document.activeElement).toBe(all[1]);
+      key('j');
+      key('j');
+      expect(document.activeElement, 'stops at the last card').toBe(all[2]);
+      key('k');
+      expect(document.activeElement).toBe(all[1]);
+    });
+
+    it('x selects the focused card and x again deselects it; a card that cannot be selected has no key to press', async () => {
+      await render([UNASSIGNED_PLAN, { ...CARRIED_PLAN, status: 'DELIVERED' }]);
+      cursorOn(0);
+
+      expect(key('x')).toBe(true);
+      await settleScreen();
+      expect(selected()).toEqual([true, false]);
+      key('x');
+      await settleScreen();
+      expect(selected()).toEqual([false, false]);
+
+      cursorOn(1);
+      expect(key('x'), 'a finished plan is not bulk-selectable: it draws no checkbox').toBe(false);
+    });
+
+    it('Shift+X selects every card from the last one selected to the focused one', async () => {
+      await render([
+        UNASSIGNED_PLAN,
+        { ...UNASSIGNED_PLAN, planId: 'plan-b', orderId: 'order-b' },
+        { ...UNASSIGNED_PLAN, planId: 'plan-c', orderId: 'order-c' },
+      ]);
+      const all = cards();
+      cursorOn(0);
+      key('x');
+      await settleScreen();
+      cursorOn(2);
+
+      expect(key('X', { shiftKey: true })).toBe(true);
+      await settleScreen();
+
+      expect(selected()).toEqual([true, true, true]);
+    });
+
+    it('a selects the card and takes the cursor to the courier picker, which the selection reveals', async () => {
+      await render();
+      cursorOn(0);
+
+      expect(key('a')).toBe(true);
+      await new Promise<void>((resolve) => setTimeout(resolve, 80));
+      fixture.detectChanges();
+      await new Promise<void>((resolve) => setTimeout(resolve, 80));
+
+      expect(selected()).toEqual([true]);
+      expect(document.activeElement).toBe(
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="dispatch-bulk-courier-select"]',
+        ),
+      );
+    });
+
+    it('Esc clears the selection and does nothing when there is none', async () => {
+      await render();
+      const all = cards();
+      cursorOn(0);
+      expect(key('Escape'), 'nothing selected: nothing to clear').toBe(false);
+      key('x');
+      await settleScreen();
+      expect(selected()).toEqual([true]);
+
+      expect(key('Escape')).toBe(true);
+      await settleScreen();
+
+      expect(selected()).toEqual([false]);
+    });
+
+    it('e opens the external-courier dialog for an unassigned card and not for a carried one', async () => {
+      await render([UNASSIGNED_PLAN, CARRIED_PLAN]);
+      const all = cards();
+      cursorOn(1);
+      expect(key('e'), 'a carried plan draws no external-courier control').toBe(false);
+
+      cursorOn(0);
+      expect(key('e')).toBe(true);
+      await settleScreen();
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('q-external-courier-dialog'),
+      ).not.toBeNull();
+    });
+
+    it('u asks before it unassigns, and unassigns only on yes', async () => {
+      await render([UNASSIGNED_PLAN, CARRIED_PLAN]);
+      dispatchApi.unassign.mockResolvedValue({ applied: true });
+      const all = cards();
+      cursorOn(0);
+      expect(key('u'), 'an unassigned card has no courier to take off').toBe(false);
+
+      cursorOn(1);
+      expect(key('u')).toBe(true);
+      await flushMicrotasks();
+      const dialog = document.body.querySelector('q-confirm-dialog')!;
+      expect(dialog.textContent).toContain('Take the courier off this order?');
+      expect(dispatchApi.unassign).not.toHaveBeenCalled();
+      [...dialog.querySelectorAll<HTMLButtonElement>('button')]
+        .find((button) => button.textContent!.trim() === 'Keep')!
+        .click();
+      await flushMicrotasks();
+      expect(dispatchApi.unassign).not.toHaveBeenCalled();
+
+      cursorOn(1);
+      key('u');
+      await flushMicrotasks();
+      [...document.body.querySelectorAll<HTMLButtonElement>('q-confirm-dialog button')]
+        .find((button) => button.textContent!.trim() === 'Unassign')!
+        .click();
+      await flushMicrotasks();
+
+      expect(dispatchApi.unassign).toHaveBeenCalledOnce();
+    });
+
+    it('m shows and hides the map', async () => {
+      await render();
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[data-testid="dispatch-map"]')).toBeNull();
+
+      expect(key('m', {}, document.body)).toBe(true);
+      await settleScreen();
+      expect(host.querySelector('[data-testid="dispatch-map"]')).not.toBeNull();
+
+      key('m', {}, document.body);
+      await settleScreen();
+      expect(host.querySelector('[data-testid="dispatch-map"]')).toBeNull();
+    });
+  });
+
+  // ------------------------------------------- row 3.1: route legs on the map pane
+
+  describe('route legs (straight lines, never the road)', () => {
+    /** The doorsteps of the two plans below, as the audited reveal answers them. */
+    const LEG_POINTS: OrderMapPointsResponse = {
+      ...REVEALED,
+      points: [
+        {
+          orderId: 'order-1',
+          publicOrderNumber: 'F-101',
+          status: 'PREPARING',
+          createdAt: '2026-10-07T08:00:00Z',
+          latitude: 41.3,
+          longitude: 69.3,
+        },
+        {
+          orderId: 'order-2',
+          publicOrderNumber: 'F-102',
+          status: 'FULFILLING',
+          createdAt: '2026-10-07T08:05:00Z',
+          latitude: 41.33,
+          longitude: 69.27,
+        },
+      ],
+    };
+
+    const BRANCH = { latitude: 41.31, longitude: 69.24 };
+    /** The courier's pin in `render`: where `courier-1` is right now. */
+    const COURIER_NOW = { latitude: 41.32, longitude: 69.25 };
+
+    async function openWithPoints(
+      plans: readonly PlanQueueResponse[],
+      points: OrderMapPointsResponse = LEG_POINTS,
+    ): Promise<void> {
+      await render(plans);
+      orderPoints.reveal.mockResolvedValue(points);
+      press('dispatch-map-toggle');
+      await settle();
+    }
+
+    it('draws no leg before the doorsteps have been opened, however many plans are in flight', async () => {
+      await openWithPoints([UNASSIGNED_PLAN, CARRIED_PLAN]);
+
+      expect(mapProvider.map.livePolylines).toHaveLength(0);
+      expect(host().querySelector('[data-testid="order-points-lines-note"]')).toBeNull();
+    });
+
+    it('after the audited reveal, a carried plan gets branch to courier and courier to door, and an unassigned plan branch to door', async () => {
+      await openWithPoints([UNASSIGNED_PLAN, CARRIED_PLAN]);
+
+      press('order-points-reveal');
+      await settle();
+
+      const legs = mapProvider.map.livePolylines;
+      expect(legs).toHaveLength(3);
+      const byId = new Map(
+        legs.map((leg, index) => [
+          leg.label ?? String(index),
+          { path: leg.path, tone: leg.tone, dashed: leg.dashed },
+        ]),
+      );
+      const toCourier = [...byId.entries()].find(([, v]) => v.tone === 'courier')!;
+      expect(toCourier[1].path).toEqual([BRANCH, COURIER_NOW]);
+      expect(toCourier[0]).toContain('F-102');
+      expect(toCourier[0]).toContain('K-014');
+
+      const toDoor = legs.filter((leg) => leg.tone === 'order');
+      expect(toDoor).toHaveLength(2);
+      const carriedLeg = toDoor.find((leg) => leg.label?.includes('F-102'))!;
+      expect(carriedLeg.path).toEqual([COURIER_NOW, { latitude: 41.33, longitude: 69.27 }]);
+      const poolLeg = toDoor.find((leg) => leg.label?.includes('F-101'))!;
+      expect(poolLeg.path).toEqual([BRANCH, { latitude: 41.3, longitude: 69.3 }]);
+      expect(legs.every((leg) => leg.dashed)).toBe(true);
+      expect(legs.every((leg) => /straight line/i.test(leg.label ?? ''))).toBe(true);
+    });
+
+    it('says in the legend that the lines are straight and not the road', async () => {
+      await openWithPoints([CARRIED_PLAN]);
+      press('order-points-reveal');
+      await settle();
+
+      const note = host().querySelector('[data-testid="order-points-lines-note"]')!;
+      expect(note.textContent).toContain('straight');
+      expect(note.textContent).toContain('not the road');
+    });
+
+    it('puts the planned road distance on the leg and in a caption, when the plan has one', async () => {
+      await openWithPoints(
+        [UNASSIGNED_PLAN, CARRIED_PLAN, { ...MANUAL_ACTION_PLAN, orderId: 'order-3' }],
+        {
+          ...LEG_POINTS,
+          points: [
+            ...LEG_POINTS.points,
+            {
+              orderId: 'order-3',
+              publicOrderNumber: 'F-103',
+              status: 'PREPARING',
+              createdAt: '2026-10-07T08:10:00Z',
+              latitude: 41.29,
+              longitude: 69.2,
+            },
+          ],
+        },
+      );
+      press('order-points-reveal');
+      await settle();
+
+      const road = [...host().querySelectorAll('[data-testid="dispatch-road-distance"]')].map(
+        (item) => item.textContent?.replace(/\s+/g, ' ').trim(),
+      );
+      expect(road).toHaveLength(2);
+      expect(road.join('|')).toContain('F-101');
+      expect(road.join('|')).toContain('1.8 km');
+      expect(road.join('|')).toContain('F-102');
+      expect(road.join('|')).toContain('0.9 km');
+      // F-103's plan carries no distance, so it has no caption, and its leg still draws.
+      expect(road.join('|')).not.toContain('F-103');
+      const poolLeg = mapProvider.map.livePolylines.find((leg) => leg.label?.includes('F-101'))!;
+      expect(poolLeg.label).toContain('1.8 km');
+    });
+
+    it('moves the courier end of both legs when the courier’s pin moves with the board', async () => {
+      await openWithPoints([CARRIED_PLAN]);
+      press('order-points-reveal');
+      await settle();
+      const [toCourier, toDoor] = [
+        mapProvider.map.livePolylines.find((leg) => leg.tone === 'courier')!,
+        mapProvider.map.livePolylines.find((leg) => leg.tone === 'order')!,
+      ];
+
+      positions.fleet.mockResolvedValue({
+        pins: [
+          {
+            courierId: 'courier-1',
+            latitude: 41.325,
+            longitude: 69.26,
+            accuracyMeters: 10,
+            activeAssignmentCount: 1,
+            capturedAt: new Date().toISOString(),
+          },
+        ],
+        withoutPin: [],
+      });
+      host().querySelector<HTMLButtonElement>('.dispatch__refresh')!.click();
+      await settle();
+
+      expect(mapProvider.map.livePolylines.filter((leg) => !leg.removed)).toEqual([
+        toCourier,
+        toDoor,
+      ]);
+      expect(toCourier.path[1]).toEqual({ latitude: 41.325, longitude: 69.26 });
+      expect(toDoor.path[0]).toEqual({ latitude: 41.325, longitude: 69.26 });
+    });
+
+    it('draws nothing for a courier with no drawable position, a partner shipment, a finished plan, or an order that was not opened', async () => {
+      const noPin: PlanQueueResponse = {
+        ...CARRIED_PLAN,
+        planId: 'plan-4',
+        orderId: 'order-4',
+        shipment: { ...CARRIED_PLAN.shipment!, shipmentId: 'shipment-4', courierId: 'courier-9' },
+      };
+      const partner: PlanQueueResponse = {
+        ...CARRIED_PLAN,
+        planId: 'plan-5',
+        orderId: 'order-5',
+        shipment: {
+          ...CARRIED_PLAN.shipment!,
+          shipmentId: 'shipment-5',
+          sourceType: 'PARTNER',
+          courierId: null,
+          providerBindingId: 'binding-1',
+        },
+      };
+      const finished: PlanQueueResponse = {
+        ...CARRIED_PLAN,
+        planId: 'plan-6',
+        orderId: 'order-6',
+        status: 'COMPLETED',
+        shipment: { ...CARRIED_PLAN.shipment!, shipmentId: 'shipment-6', status: 'DELIVERED' },
+      };
+      const points = (orderId: string, latitude: number) => ({
+        orderId,
+        publicOrderNumber: `F-${orderId}`,
+        status: 'FULFILLING',
+        createdAt: '2026-10-07T08:00:00Z',
+        latitude,
+        longitude: 69.3,
+      });
+      await openWithPoints([noPin, partner, finished, UNASSIGNED_PLAN], {
+        ...LEG_POINTS,
+        // order-1 (the unassigned plan) is deliberately not among them.
+        points: [points('order-4', 41.35), points('order-5', 41.36), points('order-6', 41.37)],
+      });
+      press('order-points-reveal');
+      await settle();
+
+      expect(mapProvider.map.livePolylines).toHaveLength(0);
+    });
+
+    it('draws no leg when the branch has not been placed on the map, and keeps the pins', async () => {
+      branchPoint = null;
+      try {
+        await openWithPoints([UNASSIGNED_PLAN, CARRIED_PLAN]);
+        press('order-points-reveal');
+        await settle();
+
+        expect(mapProvider.map.livePolylines).toHaveLength(0);
+        expect(mapProvider.map.livePins.some((pin) => pin.tone === 'order')).toBe(true);
+      } finally {
+        branchPoint = { latitude: 41.31, longitude: 69.24 };
+      }
+    });
+
+    it('takes the legs off with the doorsteps when the map is hidden, and does not bring them back until they are opened again', async () => {
+      await openWithPoints([CARRIED_PLAN]);
+      press('order-points-reveal');
+      await settle();
+      expect(mapProvider.map.livePolylines.length).toBeGreaterThan(0);
+
+      press('dispatch-map-toggle');
+      await settle();
+      press('dispatch-map-toggle');
+      await settle();
+
+      expect(mapProvider.map.livePolylines.filter((leg) => !leg.removed)).toHaveLength(0);
+    });
   });
 });

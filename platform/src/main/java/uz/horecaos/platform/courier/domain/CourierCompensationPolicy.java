@@ -68,6 +68,12 @@ import org.jspecify.annotations.Nullable;
  *                                  pays every order in full, exactly as {@link RunPayMode#PER_ORDER} does; a
  *                                  dispatch rule cannot turn grouping on while it is null. A document stored
  *                                  before this field existed has no value for it and reads as null
+ * @param pickupHandoverGate        ADR 0042, ADR 0178: how firmly the pickup and the handover hold a courier
+ *                                  to the position check once the GPS switch is on. Null reads as
+ *                                  {@link GateMode#SOFT}, which is ADR 0042's default and what a document
+ *                                  stored before this field existed means: a failed check is recorded and the
+ *                                  step goes ahead. {@link GateMode#HARD} refuses it. Accepting an offer and
+ *                                  arriving at the branch are hard whatever this says
  */
 public record CourierCompensationPolicy(
         int reverificationDays,
@@ -85,7 +91,49 @@ public record CourierCompensationPolicy(
         RevealTiming revealCustomerLocationTiming,
         boolean postDeliveryPaymentCheckRequired,
         int onlineWithinMinutes,
-        @Nullable RunPayMode runPayMode) {
+        @Nullable RunPayMode runPayMode,
+        @Nullable GateMode pickupHandoverGate) {
+
+    /**
+     * A document without a gate mode: how every document read before ADR 0178 resolves, and what the
+     * sixteen-argument callers that predate it build.
+     */
+    public CourierCompensationPolicy(
+            int reverificationDays,
+            int warningDays,
+            int settlementPeriodDays,
+            long cashCeilingMinor,
+            long penaltyApprovalThresholdMinor,
+            ShiftEnforcement shiftEnforcement,
+            int graceSeconds,
+            int confirmationPointRetentionDays,
+            boolean gpsVerificationEnabled,
+            int gpsAcceptRadiusMeters,
+            int gpsStatusChangeRadiusMeters,
+            boolean kitchenReadyOnly,
+            RevealTiming revealCustomerLocationTiming,
+            boolean postDeliveryPaymentCheckRequired,
+            int onlineWithinMinutes,
+            @Nullable RunPayMode runPayMode) {
+        this(
+                reverificationDays,
+                warningDays,
+                settlementPeriodDays,
+                cashCeilingMinor,
+                penaltyApprovalThresholdMinor,
+                shiftEnforcement,
+                graceSeconds,
+                confirmationPointRetentionDays,
+                gpsVerificationEnabled,
+                gpsAcceptRadiusMeters,
+                gpsStatusChangeRadiusMeters,
+                kitchenReadyOnly,
+                revealCustomerLocationTiming,
+                postDeliveryPaymentCheckRequired,
+                onlineWithinMinutes,
+                runPayMode,
+                null);
+    }
 
     /**
      * A document without a run pay mode: how every document read before ADR 0170 resolves, and what the
@@ -123,7 +171,13 @@ public record CourierCompensationPolicy(
                 revealCustomerLocationTiming,
                 postDeliveryPaymentCheckRequired,
                 onlineWithinMinutes,
+                null,
                 null);
+    }
+
+    /** The mode the pickup and the handover are held to: not decided reads as {@link GateMode#SOFT}. */
+    public GateMode effectiveGateMode() {
+        return pickupHandoverGate == null ? GateMode.SOFT : pickupHandoverGate;
     }
 
     /** The mode a run is paid under: not decided reads as every order in full. */
@@ -148,6 +202,7 @@ public record CourierCompensationPolicy(
             RevealTiming.AFTER_ACCEPT,
             false,
             10,
+            null,
             null);
 
     public CourierCompensationPolicy {

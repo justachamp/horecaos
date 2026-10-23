@@ -3,6 +3,7 @@ package uz.horecaos.platform.fulfillment.application;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -14,6 +15,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.fulfillment.domain.zone.ZoneRole;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore.GeometryFacts;
+import uz.horecaos.platform.web.api.ApiException;
 
 /**
  * Landing a batch of legacy zone geometry as one review, rather than one
@@ -91,7 +93,9 @@ public class ZoneBatchImportService {
                         status.setRollbackOnly();
                     }
                     return ok;
-                } catch (DataAccessException | IllegalArgumentException failure) {
+                } catch (DataAccessException | IllegalArgumentException | ApiException failure) {
+                    // A row that cannot be registered (no name in the brand's default language, a refused
+                    // name) is that row's outcome, never the whole batch's: the report gives every row one.
                     status.setRollbackOnly();
                     return RowOutcome.rejected(row.externalRef(), describeFailure(failure));
                 }
@@ -103,14 +107,7 @@ public class ZoneBatchImportService {
     }
 
     private RowOutcome importOneRow(UUID tenantId, UUID brandId, ImportRow row) {
-        UUID zoneId = zones.createZone(
-                tenantId,
-                brandId,
-                row.role(),
-                row.code(),
-                row.displayNameRu(),
-                row.displayNameUz(),
-                row.displayNameEn());
+        UUID zoneId = zones.createZone(tenantId, brandId, row.role(), row.code(), row.names());
 
         ServiceZoneService.DraftedVersion drafted = zones.draftPolygonVersion(
                 new ServiceZoneService.NewVersion(
@@ -157,9 +154,7 @@ public class ZoneBatchImportService {
             String externalRef,
             ZoneRole role,
             String code,
-            String displayNameRu,
-            String displayNameUz,
-            String displayNameEn,
+            Map<String, String> names,
             @Nullable UUID regionId,
             int priority,
             String currency,

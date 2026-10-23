@@ -15,6 +15,7 @@ import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { TimeZone, formatClock } from '../../core/format/datetime';
 import { formatMoney } from '../../core/format/money';
+import { formatQuantity } from '../../core/format/quantity';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
@@ -27,10 +28,13 @@ import {
   DragDropAssignOutcome,
   DragDropAssignRejection,
 } from '../../shared/ui/drag-drop-assign/drag-drop-assign-types';
-import { MapMarker } from '../../shared/ui/map/map-canvas';
+import { OrderMapPoint, OrderMapPointsResponse } from '../../core/api/order-map-points-api';
+import { MapLine, MapMarker } from '../../shared/ui/map/map-canvas';
+import { LatLng } from '../../shared/ui/map/map-provider';
 import { StaleIndicator } from '../../shared/ui/stale-indicator';
 import { StatusPill, StatusTone } from '../../shared/ui/status-pill';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
+import { LocationsApi } from '../settings/locations/locations-api';
 import {
   ExternalBookingSubmission,
   ExternalCourierDialog,
@@ -48,6 +52,7 @@ import {
 } from './dispatch-api';
 import { FALLBACK_MAP_CENTRE, MapRegionService } from './map-region';
 import { OrderPointsMap } from './order-points-map';
+import { registerDispatchBoardKeys } from './dispatch-board-keys';
 
 /**
  * `ShipmentStatus`'s own six values (gap map rows 1.2e/1.2f/1.2g/2.1c) —
@@ -153,8 +158,19 @@ const OPEN_STATUSES: ReadonlySet<string> = new Set([
  * stating this screen as its purpose, and are never read on the board's refresh: the board polls
  * every ten seconds, and a doorstep read that often would bury the audit trail it exists to keep.
  * The board's cards still carry the non-PII destination label and nothing that names a customer.
- * **Routes are not drawn**: a route needs a road network, which is ADR 0147's, and a straight line
- * from a courier to a door is a claim about the road that nobody here can make.
+ *
+ * **Route legs (row `3.1`, batch 21).** Once the dispatcher has opened the day's doorsteps, each
+ * open plan with a carrying courier whose position is drawable gets two straight, dashed legs:
+ * branch to the courier where they are now, and the courier to the door; a plan nobody carries yet
+ * gets one, branch to door. They are drawn from points the board already holds (the branch's own
+ * coordinates, the courier pins of the fleet read, the revealed doorstep) and from nothing else: the
+ * source named in couriers.md §4 is "live position + pickup/delivery points", ADR 0147 returns
+ * metres and seconds and no geometry, and ADR 0045 keeps a stored track off the live map. So the
+ * lines are labelled «straight line, not the road» on the line, in the legend and in this comment,
+ * and the plan's own road metres (`distanceMeters`) are shown beside them as a caption when the plan
+ * has them. No doorstep, no leg; a courier without a drawable fix, a partner shipment and a branch
+ * nobody has placed on the map draw nothing rather than a guess. Hiding the map takes the doorsteps
+ * and the legs with it, because they came from an audited act that the next open must repeat.
  *
  * **The ADR 0045 accelerator (row 3.1, this wave).** This board used to be
  * the one live surface still standing on a bare 10-second poll after the
@@ -190,9 +206,12 @@ const OPEN_STATUSES: ReadonlySet<string> = new Set([
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DispatchBoardPage implements OnInit {
+  /** couriers.md §3: the dispatch board's keys. */
+  private readonly keys = registerDispatchBoardKeys();
   private readonly api = inject(ApiClient);
   private readonly dispatch = inject(DispatchApi);
   private readonly couriersApi = inject(CouriersApi);
+  private readonly locationsApi = inject(LocationsApi);
   private readonly positions = inject(CourierPositionsApi);
   private readonly regions = inject(MapRegionService);
   private readonly location = inject(CurrentLocation);
@@ -235,6 +254,87 @@ export class DispatchBoardPage implements OnInit {
   protected readonly mapCentre = computed(
     () => this.regions.primary()?.centre ?? FALLBACK_MAP_CENTRE,
   );
+
+  /** Where this branch is (its own coordinates), for the legs that start there; `null` until read, or when unplaced. */
+  private readonly branchPoint = signal<LatLng | null>(null);
+  /** The doorsteps the dispatcher has opened this time the map was open, by order: the legs' far ends. */
+  private readonly revealedPoints = signal<ReadonlyMap<string, OrderMapPoint>>(new Map());
+
+  /** The legs of every open plan whose doorstep is open, as straight lines (see the class comment). */
+  protected readonly routeLegs = computed<readonly MapLine[]>(() => {
+    const branch = this.branchPoint();
+    const points = this.revealedPoints();
+    if (branch === null || points.size === 0) {
+      return [];
+    }
+    const pins = new Map(this.courierPins().map((pin) => [pin.courierId, pin]));
+    const legs: MapLine[] = [];
+    for (const plan of this.plans()) {
+      const door = points.get(plan.orderId);
+      if (!door) {
+        continue;
+      }
+      const doorPoint: LatLng = { latitude: door.latitude, longitude: door.longitude };
+      const road = this.roadSuffix(plan);
+      const number = door.publicOrderNumber;
+      if (this.isOpen(plan)) {
+        legs.push({
+          id: `leg:${plan.planId}:door`,
+          path: [branch, doorPoint],
+          tone: 'order',
+          dashed: true,
+          label: this.i18n.t('delivery.dispatch.legs.branchToDoor', { number }) + road,
+        });
+        continue;
+      }
+      const courierId = plan.shipment?.courierId;
+      if (!courierId || !this.carriesLeg(plan)) {
+        continue;
+      }
+      const pin = pins.get(courierId);
+      if (!pin) {
+        continue;
+      }
+      const now: LatLng = { latitude: pin.latitude, longitude: pin.longitude };
+      const courier = this.courierReference(courierId);
+      legs.push(
+        {
+          id: `leg:${plan.planId}:courier`,
+          path: [branch, now],
+          tone: 'courier',
+          dashed: true,
+          label: this.i18n.t('delivery.dispatch.legs.branchToCourier', { number, courier }),
+        },
+        {
+          id: `leg:${plan.planId}:door`,
+          path: [now, doorPoint],
+          tone: 'order',
+          dashed: true,
+          label: this.i18n.t('delivery.dispatch.legs.courierToDoor', { number, courier }) + road,
+        },
+      );
+    }
+    return legs;
+  });
+
+  /** Said under the map while any leg is drawn: what the lines are, and what they are not. */
+  protected readonly legsNote = computed(() =>
+    this.routeLegs().length > 0 ? this.i18n.t('delivery.dispatch.legs.note') : null,
+  );
+
+  /** The planned road distance of each plan that has a leg on the map, when the plan carries one (`PlanQueueResponse.distanceMeters`). */
+  protected readonly roadDistances = computed<readonly { planId: string; text: string }[]>(() => {
+    const drawn = new Set(this.routeLegs().map((leg) => leg.id.split(':')[1]));
+    return this.plans()
+      .filter((plan) => drawn.has(plan.planId) && typeof plan.distanceMeters === 'number')
+      .map((plan) => ({
+        planId: plan.planId,
+        text: this.i18n.t('delivery.dispatch.legs.roadCaption', {
+          number: this.revealedPoints().get(plan.orderId)?.publicOrderNumber ?? plan.orderId,
+          km: this.kilometres(plan.distanceMeters ?? 0),
+        }),
+      }));
+  });
 
   protected readonly busyPlanIds = signal<ReadonlySet<string>>(new Set());
   protected readonly notice = signal<string | null>(null);
@@ -542,7 +642,71 @@ export class DispatchBoardPage implements OnInit {
     if (open) {
       void this.regions.ensureLoaded();
       void this.loadPositions();
+      void this.loadBranchPoint();
+    } else {
+      // The doorsteps were opened by an audited act of the person who pressed the button; they do not
+      // outlive the pane that showed them, and neither do the legs drawn from them.
+      this.revealedPoints.set(new Map());
     }
+  }
+
+  /** The doorsteps the child map has just opened, kept for the legs. */
+  protected onPointsRevealed(answer: OrderMapPointsResponse): void {
+    this.revealedPoints.set(new Map(answer.points.map((point) => [point.orderId, point])));
+  }
+
+  /**
+   * The branch's own coordinates, for the legs that start at it. Best effort and read once per
+   * opening: a branch nobody has placed, or a caller who may not read it, draws no leg and loses
+   * nothing else.
+   */
+  private async loadBranchPoint(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      const profile = await this.locationsApi.profile(scope);
+      const { latitude, longitude } = profile;
+      this.branchPoint.set(
+        typeof latitude === 'number' &&
+          typeof longitude === 'number' &&
+          Number.isFinite(latitude) &&
+          Number.isFinite(longitude)
+          ? { latitude, longitude }
+          : null,
+      );
+    } catch {
+      this.branchPoint.set(null);
+    }
+  }
+
+  /** A plan a leg can be drawn for: it is carried by a courier of ours and has neither been delivered nor stopped. */
+  private carriesLeg(plan: PlanQueueResponse): boolean {
+    return (
+      plan.shipment !== null &&
+      plan.shipment !== undefined &&
+      plan.shipment.sourceType !== 'PARTNER' &&
+      !SHIPMENT_CANCEL_TERMINAL_STATUSES.has(plan.shipment.status) &&
+      plan.status !== 'COMPLETED' &&
+      plan.status !== 'CANCELLED'
+    );
+  }
+
+  private courierReference(courierId: string): string {
+    return (
+      this.fleet().find((courier) => courier.courierId === courierId)?.displayReference ?? courierId
+    );
+  }
+
+  private kilometres(meters: number): string {
+    return formatQuantity(Math.round(meters / 100) / 10, this.i18n.locale());
+  }
+
+  private roadSuffix(plan: PlanQueueResponse): string {
+    return typeof plan.distanceMeters === 'number'
+      ? this.i18n.t('delivery.dispatch.legs.road', { km: this.kilometres(plan.distanceMeters) })
+      : '';
   }
 
   /**

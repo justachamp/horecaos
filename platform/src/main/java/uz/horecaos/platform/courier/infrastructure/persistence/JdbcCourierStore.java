@@ -22,6 +22,7 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import uz.horecaos.platform.courier.api.CourierConfigurationKeys;
 import uz.horecaos.platform.courier.domain.ComplianceField;
 import uz.horecaos.platform.courier.domain.EngagementStatus;
 import uz.horecaos.platform.courier.domain.RegistrationWarningState;
@@ -986,7 +987,8 @@ public class JdbcCourierStore {
             @Nullable UUID engagementId,
             @Nullable String engagementStatus,
             @Nullable String warningState,
-            @Nullable LocalDate reverificationDueOn) {}
+            @Nullable LocalDate reverificationDueOn,
+            int version) {}
 
     /**
      * An engagement as the ordinary projection reads it.
@@ -1095,7 +1097,7 @@ public class JdbcCourierStore {
      * the columns is what makes that a deliberate act rather than an omission.
      */
     private static final String SELECT_ROSTER = """
-            SELECT c.id, c.display_reference, c.status,
+            SELECT c.id, c.display_reference, c.status, c.version,
                    c.courier_type_id, t.display_name AS type_name, t.vehicle_class,
                    t.max_concurrent_assignments,
                    e.id AS engagement_id, e.status AS engagement_status,
@@ -1182,7 +1184,8 @@ public class JdbcCourierStore {
                 rs.getObject("engagement_id", UUID.class),
                 rs.getString("engagement_status"),
                 rs.getString("warning_state"),
-                rs.getObject("reverification_due_on", LocalDate.class));
+                rs.getObject("reverification_due_on", LocalDate.class),
+                rs.getInt("version"));
     }
 
     private static CourierRow mapCourier(ResultSet rs, int rowNumber) throws SQLException {
@@ -1229,40 +1232,69 @@ public class JdbcCourierStore {
     // ------------------------------------------------------ applicant retention
 
     /**
-     * Couriers who applied and were never verified, untouched since {@code
-     * cutoff} (ADR 0092, decided 2026-09-11), claimed for erasure.
+     * Couriers who applied and were never verified, untouched for their own tenant's retention window (ADR 0092, decided
+     * 2026-09-11; per tenant since batch 21), claimed for erasure.
      *
-     * <p>Never verified means no engagement of theirs carries a verification,
-     * and no shift or ledger entry names them -- a person who was paid is a
-     * courier with a settlement history, not an applicant, whatever their
-     * engagement says now. Locks the courier row only; the application role
-     * holds UPDATE on it.
+     * <p>The window is resolved per tenant in the statement ({@code TenantRetention.WINDOWS_SQL}): the tenant's own number of
+     * months, else the platform's, else {@code defaultMonths}, raised to {@code floorMonths}. A tenant that asked for six months
+     * has its dead applications erased at six, and the one beside it that asked for nothing keeps twelve.
+     *
+     * <p>Never verified means no engagement of theirs carries a verification, and no shift or ledger entry names them -- a
+     * person who was paid is a courier with a settlement history, not an applicant, whatever their engagement says now. Locks
+     * the courier row only; the application role holds UPDATE on it.
      */
-    public List<ApplicantRef> claimUnverifiedApplicants(Instant cutoff, int batchSize) {
-        return jdbc.sql("""
+    public List<ApplicantRef> claimUnverifiedApplicants(
+            Instant now, int batchSize, int defaultMonths, int floorMonths) {
+        return jdbc.sql(unverifiedApplicantsStatement(true))
+                .param("now", utc(now))
+                .param("batchSize", batchSize)
+                .param("keyCode", CourierConfigurationKeys.APPLICANT_RETENTION_MONTHS_CODE)
+                .param("defaultValue", defaultMonths)
+                .param("floor", floorMonths)
+                .query((row, number) ->
+                        new ApplicantRef(row.getObject("tenant_id", UUID.class), row.getObject("id", UUID.class)))
+                .list();
+    }
+
+    /** How many applicants {@link #claimUnverifiedApplicants} would claim now: the report-only mode's count. */
+    public int countUnverifiedApplicants(Instant now, int defaultMonths, int floorMonths) {
+        return jdbc.sql(unverifiedApplicantsStatement(false))
+                .param("now", utc(now))
+                .param("keyCode", CourierConfigurationKeys.APPLICANT_RETENTION_MONTHS_CODE)
+                .param("defaultValue", defaultMonths)
+                .param("floor", floorMonths)
+                .query(Integer.class)
+                .single();
+    }
+
+    private static String unverifiedApplicantsStatement(boolean claim) {
+        String select = """
+                WITH windows AS (%s)
                 SELECT c.tenant_id, c.id
                   FROM fulfillment.couriers c
+                  JOIN windows w ON w.tenant_id = c.tenant_id
                  WHERE c.status = 'ACTIVE'
-                   AND c.updated_at < :cutoff
+                   AND c.updated_at < CAST(:now AS timestamptz) - (w.value * INTERVAL '1 month')
                    AND NOT EXISTS (
                        SELECT 1 FROM fulfillment.courier_engagements e
                         WHERE e.tenant_id = c.tenant_id AND e.courier_id = c.id
-                          AND (e.registration_verified_at IS NOT NULL OR e.updated_at >= :cutoff))
+                          AND (e.registration_verified_at IS NOT NULL
+                               OR e.updated_at >= CAST(:now AS timestamptz) - (w.value * INTERVAL '1 month')))
                    AND NOT EXISTS (
                        SELECT 1 FROM fulfillment.courier_shifts s
                         WHERE s.tenant_id = c.tenant_id AND s.courier_id = c.id)
                    AND NOT EXISTS (
                        SELECT 1 FROM fulfillment.courier_ledger_entries l
                         WHERE l.tenant_id = c.tenant_id AND l.courier_id = c.id)
+                """.formatted(uz.horecaos.platform.configuration.TenantRetention.WINDOWS_SQL);
+        if (!claim) {
+            return "SELECT count(*) FROM (" + select + ") applicants";
+        }
+        return select + """
                  ORDER BY c.updated_at
                  LIMIT :batchSize
                  FOR UPDATE OF c SKIP LOCKED
-                """)
-                .param("cutoff", utc(cutoff))
-                .param("batchSize", batchSize)
-                .query((row, number) ->
-                        new ApplicantRef(row.getObject("tenant_id", UUID.class), row.getObject("id", UUID.class)))
-                .list();
+                """;
     }
 
     /**
@@ -1288,6 +1320,72 @@ public class JdbcCourierStore {
                        protected_registration_ref = NULL, version = version + 1, updated_at = :now
                  WHERE tenant_id = :tenantId AND courier_id = :courierId AND status <> 'ENDED'
                 """)
+                .param("today", today)
+                .param("now", utc(now))
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .update();
+    }
+
+    /**
+     * Corrects a courier's display reference and/or type, version-checked (ADR 0178, IA 3.3 «courier CRUD»).
+     * Only a courier still {@code ACTIVE}: an archived one is a record, not a profile.
+     *
+     * @return false when the version moved or the courier is archived
+     */
+    public boolean updateCourier(
+            UUID tenantId,
+            UUID courierId,
+            int expectedVersion,
+            @Nullable String displayReference,
+            @Nullable UUID courierTypeId,
+            Instant now) {
+        return jdbc.sql("""
+                        UPDATE fulfillment.couriers
+                           SET display_reference = COALESCE(:reference, display_reference),
+                               courier_type_id = COALESCE(:typeId, courier_type_id),
+                               version = version + 1, updated_at = :now
+                         WHERE tenant_id = :tenantId AND id = :courierId
+                           AND version = :version AND status = 'ACTIVE'
+                        """)
+                        .param("reference", displayReference)
+                        .param("typeId", courierTypeId)
+                        .param("now", utc(now))
+                        .param("tenantId", tenantId)
+                        .param("courierId", courierId)
+                        .param("version", expectedVersion)
+                        .update()
+                == 1;
+    }
+
+    /** Archives an {@code ACTIVE} courier. False when it already is, or there is no such courier. */
+    public boolean archiveCourier(UUID tenantId, UUID courierId, Instant now) {
+        return jdbc.sql("""
+                        UPDATE fulfillment.couriers
+                           SET status = 'ARCHIVED', version = version + 1, updated_at = :now
+                         WHERE tenant_id = :tenantId AND id = :courierId AND status = 'ACTIVE'
+                        """)
+                        .param("now", utc(now))
+                        .param("tenantId", tenantId)
+                        .param("courierId", courierId)
+                        .update()
+                == 1;
+    }
+
+    /**
+     * Ends every engagement the courier still holds. The registration reference stays: it is what an
+     * accountant's export names the courier by, and unlike an erased applicant's it is a record of
+     * work that happened.
+     *
+     * @return how many engagements this ended
+     */
+    public int endEngagements(UUID tenantId, UUID courierId, LocalDate today, Instant now) {
+        return jdbc.sql("""
+                        UPDATE fulfillment.courier_engagements
+                           SET status = 'ENDED', engaged_until = GREATEST(engaged_from, CAST(:today AS date)),
+                               version = version + 1, updated_at = :now
+                         WHERE tenant_id = :tenantId AND courier_id = :courierId AND status <> 'ENDED'
+                        """)
                 .param("today", today)
                 .param("now", utc(now))
                 .param("tenantId", tenantId)

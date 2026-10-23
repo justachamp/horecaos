@@ -123,6 +123,11 @@ class StaffMfaFlowTests {
             }
 
             @Override
+            public Map<String, Set<String>> tenantJobCapabilities(UUID tenantId, Set<String> roleCodes) {
+                return Map.of();
+            }
+
+            @Override
             public boolean holdsRoleInTenant(String subject, UUID tenantId, String roleCode) {
                 return false;
             }
@@ -712,6 +717,11 @@ class StaffMfaFlowTests {
 
             @Override
             public Map<UUID, Set<String>> rolesByTenant(String subject) {
+                return Map.of();
+            }
+
+            @Override
+            public Map<String, Set<String>> tenantJobCapabilities(UUID tenantId, Set<String> roleCodes) {
                 return Map.of();
             }
 

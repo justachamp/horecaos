@@ -182,7 +182,7 @@ public class PricingEngine {
                             ++sequence,
                             entry.getKey(),
                             Adjustment.Type.ITEM_DISCOUNT,
-                            "PROMOTION",
+                            sourceTypeOf(inputs, applied.promotionId()),
                             applied.promotionId(),
                             applied.definitionVersion(),
                             Money.of(-entry.getValue(), currency),
@@ -193,7 +193,7 @@ public class PricingEngine {
                             ++sequence,
                             null,
                             Adjustment.Type.ORDER_DISCOUNT,
-                            "PROMOTION",
+                            sourceTypeOf(inputs, applied.promotionId()),
                             applied.promotionId(),
                             applied.definitionVersion(),
                             Money.of(-applied.orderMinor(), currency),
@@ -283,7 +283,38 @@ public class PricingEngine {
                 adjustments,
                 sequence,
                 offers.deliveryBenefitMinor(),
-                offers);
+                offers,
+                inputs.promotions() == null
+                        ? java.util.Set.of()
+                        : inputs.promotions().grantIds());
+
+        // Stage 5 (ADR 0140). The order-level markup: a service charge computed on the post-discount
+        // goods subtotal, written as its own line beside the delivery fee and reported inside the fees.
+        // Dark unless the resolver handed in an order-level markup, which it does only while
+        // pricing.order_markup.enabled is on. It carries no tax share: how a service line is taxed and
+        // carried on the fiscal receipt is an open finance and legal input (ADR 0140), and a wrong tax
+        // split is materially worse than an absent one.
+        PromotionEvaluator.OrderMarkupOutcome serviceCharge =
+                evaluateOrderMarkups(inputs, taxedLines, grossTotal, autoAddedLineIds(request), now);
+        long serviceChargeMinor = serviceCharge.totalMinor();
+        List<Quote.QuoteLine> pricedLines = delivery.lines();
+        if (!serviceCharge.isEmpty()) {
+            pricedLines = new ArrayList<>(delivery.lines());
+            pricedLines.add(serviceChargeLine(currency, serviceChargeMinor));
+            int next = adjustments.size();
+            for (PromotionEvaluator.AppliedOrderMarkup applied : serviceCharge.applied()) {
+                adjustments.add(new Adjustment(
+                        ++next,
+                        SERVICE_CHARGE_LINE_ID,
+                        Adjustment.Type.ORDER_MARKUP,
+                        PROMOTION_SOURCE,
+                        applied.promotionId(),
+                        applied.definitionVersion(),
+                        Money.of(applied.amountMinor(), currency),
+                        applied.code()));
+            }
+        }
+        long feeMinor = Math.addExact(delivery.feeMinor(), serviceChargeMinor);
 
         // Stage 8. subtotal is reported gross of the discount — derived from
         // preDiscountGrossTotal, not from the discounted grossTotal below —
@@ -303,11 +334,12 @@ public class PricingEngine {
                 ? Math.subtractExact(preDiscountGrossTotal, totalTax)
                 : preDiscountGrossTotal;
         long total = inputs.taxMode() == TaxMode.INCLUSIVE
-                ? Math.addExact(grossTotal, delivery.feeMinor())
-                : Math.addExact(Math.addExact(grossTotal, totalTax), delivery.feeMinor());
+                ? Math.addExact(grossTotal, feeMinor)
+                : Math.addExact(Math.addExact(grossTotal, totalTax), feeMinor);
 
         List<PromotionEvaluator.TraceEntry> trace = new ArrayList<>(markups.trace());
         trace.addAll(offers.trace());
+        trace.addAll(serviceCharge.trace());
 
         // The most restrictive value across every applied promotion wins, markups
         // included (ADR 0140): an order carrying any promotion that suppresses
@@ -316,19 +348,23 @@ public class PricingEngine {
         boolean accrualAllowed = offers.applied().stream()
                         .noneMatch(applied -> applied.loyaltyAccrual() == Promotion.LoyaltyAccrual.SUPPRESS)
                 && markups.applied().stream()
+                        .noneMatch(applied -> applied.loyaltyAccrual() == Promotion.LoyaltyAccrual.SUPPRESS)
+                && serviceCharge.applied().stream()
                         .noneMatch(applied -> applied.loyaltyAccrual() == Promotion.LoyaltyAccrual.SUPPRESS);
         boolean redemptionAllowed = offers.applied().stream()
                         .noneMatch(applied -> applied.loyaltyRedemption() == Promotion.LoyaltyRedemption.BLOCK)
                 && markups.applied().stream()
+                        .noneMatch(applied -> applied.loyaltyRedemption() == Promotion.LoyaltyRedemption.BLOCK)
+                && serviceCharge.applied().stream()
                         .noneMatch(applied -> applied.loyaltyRedemption() == Promotion.LoyaltyRedemption.BLOCK);
 
         return new Result(
                 Money.of(subtotal, currency),
                 Money.of(totalTax, currency),
-                Money.of(delivery.feeMinor(), currency),
+                Money.of(feeMinor, currency),
                 Money.of(discountTotal, currency),
                 Money.of(total, currency),
-                delivery.lines(),
+                pricedLines,
                 List.copyOf(adjustments),
                 delivery.shortfallMinor(),
                 contextHash(request, inputs),
@@ -392,6 +428,7 @@ public class PricingEngine {
         List<AdjustmentDraft> drafts = new ArrayList<>();
 
         long modifierTotal = 0;
+        List<AppliedOption> chosenOptions = new ArrayList<>();
         for (UUID optionId : line.modifierOptionIds()) {
             Long modifierPrice = inputs.modifierPrices().get(optionId);
             if (modifierPrice == null) {
@@ -401,11 +438,13 @@ public class PricingEngine {
                 continue;
             }
             modifierTotal = Math.addExact(modifierTotal, modifierPrice);
+            chosenOptions.add(new AppliedOption(optionId, modifierPrice));
         }
 
         // The second level (ADR 0136): validated against the facts, then priced exactly
         // as a first-level option is. A selection the facts do not allow never gets here.
         long nestedTotal = 0;
+        List<AppliedOption> nestedOptions = new ArrayList<>();
         for (UUID optionId : CompositePricing.resolveNested(line, composite)) {
             Long nestedPrice = inputs.modifierPrices().get(optionId);
             if (nestedPrice == null) {
@@ -415,6 +454,7 @@ public class PricingEngine {
                 continue;
             }
             nestedTotal = Math.addExact(nestedTotal, nestedPrice);
+            nestedOptions.add(new AppliedOption(optionId, nestedPrice));
         }
 
         HiddenTotal hidden = hiddenCharges(line.variantId(), inputs, composite, strict);
@@ -451,26 +491,9 @@ public class PricingEngine {
                 inputs.priceBookVersion(),
                 baseLine,
                 "BASE_PRICE"));
-        if (modifierTotal > 0) {
-            drafts.add(new AdjustmentDraft(
-                    line.lineId(),
-                    Adjustment.Type.MODIFIER,
-                    "PRICE_BOOK",
-                    inputs.priceBookId(),
-                    inputs.priceBookVersion(),
-                    modifiersLine,
-                    "MODIFIERS"));
-        }
-        if (nestedTotal > 0) {
-            drafts.add(new AdjustmentDraft(
-                    line.lineId(),
-                    Adjustment.Type.MODIFIER,
-                    "PRICE_BOOK",
-                    inputs.priceBookId(),
-                    inputs.priceBookVersion(),
-                    nestedLine,
-                    "NESTED_MODIFIERS"));
-        }
+        addOptionDrafts(drafts, line.lineId(), chosenOptions, modifiersLine, inputs.priceBookVersion(), "MODIFIERS");
+        addOptionDrafts(
+                drafts, line.lineId(), nestedOptions, nestedLine, inputs.priceBookVersion(), "NESTED_MODIFIERS");
         addHiddenDrafts(drafts, line.lineId(), hidden, line.quantity());
 
         Quote.QuoteLine quoteLine = Quote.QuoteLine.item(
@@ -596,7 +619,7 @@ public class PricingEngine {
      */
     private HiddenTotal hiddenCharges(
             UUID variantId, PricingInputs inputs, CompositePricing.CompositeInputs composite, boolean strict) {
-        List<HiddenApplied> applied = new ArrayList<>();
+        List<AppliedOption> applied = new ArrayList<>();
         long total = 0;
         for (CompositePricing.HiddenCharge charge : composite.hiddenChargesOf(variantId)) {
             Long price = inputs.modifierPrices().get(charge.optionId());
@@ -606,11 +629,60 @@ public class PricingEngine {
                 }
                 continue;
             }
-            applied.add(new HiddenApplied(charge.optionId(), price));
+            applied.add(new AppliedOption(charge.optionId(), price));
             total = Math.addExact(total, price);
         }
         return new HiddenTotal(total, applied);
     }
+
+    /**
+     * One adjustment per priced option the customer chose, which together are the line's modifier charge.
+     *
+     * <p>A receipt carries every priced modifier option as a line of its own, with the option's own
+     * classification (ADR 0038, ADR 0166 Decision 9), so the order has to be able to say what each one
+     * charged. It used to say it once for the whole line, as one {@code MODIFIERS} step, and a receipt
+     * built from that could not tell the cheese from the sauce. The charge is still rounded once, on the
+     * line, exactly as before ({@code lineAmount} is the figure the line's gross already contains); only
+     * how it is itemised changed: the shares are the line's charge split in proportion to the options'
+     * unit prices, so for a whole quantity each is exactly {@code price × quantity} and for a decimal one
+     * the shares still sum to the line's charge to the minor unit. The description code is the one the
+     * aggregate carried, so a reader that filters on it still finds the charge.
+     *
+     * <p>An option priced at zero adds nothing to the line and is not itemised: the order's modifier row
+     * says it was chosen. (A hidden option is itemised even at zero, because there the adjustment is the
+     * only evidence it was applied.)
+     */
+    private static void addOptionDrafts(
+            List<AdjustmentDraft> drafts,
+            String lineId,
+            List<AppliedOption> options,
+            long lineAmount,
+            int priceBookVersion,
+            String descriptionCode) {
+        List<AppliedOption> priced =
+                options.stream().filter(option -> option.priceMinor() > 0).toList();
+        if (priced.isEmpty() || lineAmount <= 0) {
+            return;
+        }
+        long[] shares = TaxCalculation.apportion(
+                lineAmount, priced.stream().mapToLong(AppliedOption::priceMinor).toArray());
+        for (int i = 0; i < priced.size(); i++) {
+            drafts.add(new AdjustmentDraft(
+                    lineId,
+                    Adjustment.Type.MODIFIER,
+                    MODIFIER_OPTION_SOURCE,
+                    priced.get(i).optionId(),
+                    priceBookVersion,
+                    shares[i],
+                    descriptionCode));
+        }
+    }
+
+    /**
+     * The {@code source_type} of an adjustment for an option the customer chose, whose {@code source_id}
+     * is the option itself: what an order reads to learn what each option charged.
+     */
+    public static final String MODIFIER_OPTION_SOURCE = QuoteSnapshot.Adjustment.MODIFIER_OPTION_SOURCE;
 
     /**
      * One adjustment per hidden option, even at a price of zero.
@@ -621,7 +693,7 @@ public class PricingEngine {
      */
     private static void addHiddenDrafts(
             List<AdjustmentDraft> drafts, String lineId, HiddenTotal hidden, BigDecimal units) {
-        for (HiddenApplied charge : hidden.applied()) {
+        for (AppliedOption charge : hidden.applied()) {
             drafts.add(new AdjustmentDraft(
                     lineId,
                     Adjustment.Type.MODIFIER,
@@ -636,7 +708,7 @@ public class PricingEngine {
     /** What the hidden charges add to a line of {@code units}, each rounded once as its adjustment is. */
     private static long hiddenLineMinor(HiddenTotal hidden, BigDecimal units) {
         long total = 0;
-        for (HiddenApplied charge : hidden.applied()) {
+        for (AppliedOption charge : hidden.applied()) {
             total = Math.addExact(total, Quantities.times(charge.priceMinor(), units));
         }
         return total;
@@ -649,9 +721,9 @@ public class PricingEngine {
      */
     public static final String HIDDEN_MODIFIER_SOURCE = QuoteSnapshot.Adjustment.HIDDEN_MODIFIER_SOURCE;
 
-    private record HiddenApplied(UUID optionId, long priceMinor) {}
+    private record AppliedOption(UUID optionId, long priceMinor) {}
 
-    private record HiddenTotal(long totalMinor, List<HiddenApplied> applied) {}
+    private record HiddenTotal(long totalMinor, List<AppliedOption> applied) {}
 
     private record AdjustmentDraft(
             @Nullable String lineId,
@@ -723,7 +795,8 @@ public class PricingEngine {
             List<Adjustment> adjustments,
             int sequence,
             long promotionBenefitMinor,
-            PromotionEvaluator.Outcome offers) {
+            PromotionEvaluator.Outcome offers,
+            java.util.Set<UUID> grantIds) {
 
         if (charge == null || !charge.isResolved()) {
             return new Delivery(0L, lines, null);
@@ -838,7 +911,7 @@ public class PricingEngine {
                         ++sequence,
                         DELIVERY_FEE_LINE_ID,
                         Adjustment.Type.DELIVERY_FEE_BENEFIT,
-                        "PROMOTION",
+                        grantIds.contains(applied.promotionId()) ? GRANT_SOURCE : PROMOTION_SOURCE,
                         applied.promotionId(),
                         applied.definitionVersion(),
                         Money.of(-share, currency),
@@ -852,6 +925,20 @@ public class PricingEngine {
         // here means the basket clears the minimum, so there is no shortfall
         // left to report.
         return new Delivery(fee, List.copyOf(withDelivery), null);
+    }
+
+    /** The {@code source_type} of an adjustment a promotion produced. */
+    public static final String PROMOTION_SOURCE = "PROMOTION";
+
+    /**
+     * The {@code source_type} of an adjustment a customer's one-off benefit grant produced (ADR 0140). There is
+     * no promotion row behind the id such an adjustment names, so it must not claim to be one.
+     */
+    public static final String GRANT_SOURCE = "GRANT";
+
+    private static String sourceTypeOf(PricingInputs inputs, UUID promotionId) {
+        PromotionInputs offers = inputs.promotions();
+        return offers != null && offers.grantIds().contains(promotionId) ? GRANT_SOURCE : PROMOTION_SOURCE;
     }
 
     /**
@@ -945,6 +1032,53 @@ public class PricingEngine {
                     autoAdded.contains(line.lineId())));
         }
         return basketLines;
+    }
+
+    /**
+     * Stage 5's read: the order-level markups, judged on the basket as the discounts left it. The goods
+     * subtotal handed to the evaluator is the post-discount one.
+     */
+    private PromotionEvaluator.OrderMarkupOutcome evaluateOrderMarkups(
+            PricingInputs inputs,
+            List<Quote.QuoteLine> lines,
+            long postDiscountGoods,
+            java.util.Set<String> autoAdded,
+            java.time.Instant now) {
+
+        PromotionInputs offers = inputs.promotions();
+        if (offers == null
+                || offers.promotions().stream()
+                        .noneMatch(promotion -> promotion.kind() == Promotion.Kind.MARKUP
+                                && promotion.scope() == Promotion.Scope.ORDER)) {
+            return EMPTY_ORDER_MARKUPS;
+        }
+        return promotions.evaluateOrderMarkups(
+                offers.promotions(),
+                new PromotionEvaluator.Basket(
+                        inputs.currency(), basketLinesOf(offers, lines, autoAdded), postDiscountGoods, 0L),
+                offers.context(),
+                now);
+    }
+
+    private static final PromotionEvaluator.OrderMarkupOutcome EMPTY_ORDER_MARKUPS =
+            new PromotionEvaluator.OrderMarkupOutcome(0L, List.of(), List.of());
+
+    /** The one service-charge line: a quote has at most one, so the key is fixed like the delivery fee's. */
+    public static final String SERVICE_CHARGE_LINE_ID = "service-charge";
+
+    private static final String SERVICE_CHARGE_DESCRIPTION = "SERVICE_CHARGE";
+
+    private static Quote.QuoteLine serviceChargeLine(String currency, long amountMinor) {
+        return new Quote.QuoteLine(
+                SERVICE_CHARGE_LINE_ID,
+                Quote.LineType.SERVICE_CHARGE,
+                null,
+                BigDecimal.ONE,
+                SERVICE_CHARGE_DESCRIPTION,
+                Money.of(amountMinor, currency),
+                Money.of(amountMinor, currency),
+                Money.of(amountMinor, currency),
+                Money.zero(currency));
     }
 
     private static final PromotionEvaluator.Outcome EMPTY_OFFERS =
@@ -1429,15 +1563,27 @@ public class PricingEngine {
      *        and this engine may read neither a clock nor a zone.
      * @param membership variant to product and categories, for the line-matching
      *        conditions.
+     * @param grantIds the ids among {@code promotions} that stand for a customer's one-off benefit grant and not
+     *        for a promotion row (ADR 0140); the adjustments they produce name the source {@code GRANT}.
      */
     public record PromotionInputs(
             List<Promotion> promotions,
             PromotionEvaluator.PromotionContext context,
-            Map<UUID, MenuMembershipLookup.Membership> membership) {
+            Map<UUID, MenuMembershipLookup.Membership> membership,
+            java.util.Set<UUID> grantIds) {
 
         public PromotionInputs {
             promotions = promotions == null ? List.of() : List.copyOf(promotions);
             membership = membership == null ? Map.of() : Map.copyOf(membership);
+            grantIds = grantIds == null ? java.util.Set.of() : java.util.Set.copyOf(grantIds);
+        }
+
+        /** Inputs with no benefit grant among the promotions: every caller that predates ADR 0140's grants. */
+        public PromotionInputs(
+                List<Promotion> promotions,
+                PromotionEvaluator.PromotionContext context,
+                Map<UUID, MenuMembershipLookup.Membership> membership) {
+            this(promotions, context, membership, java.util.Set.of());
         }
     }
 

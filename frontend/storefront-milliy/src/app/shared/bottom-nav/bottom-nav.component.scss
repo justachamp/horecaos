@@ -7,8 +7,8 @@
   padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
   background: var(--surface-base);
   box-shadow: var(--shadow-nav);
-  border-top-left-radius: var(--radius-lg);
-  border-top-right-radius: var(--radius-lg);
+  border-start-start-radius: var(--radius-lg);
+  border-start-end-radius: var(--radius-lg);
 }
 
 .tab {
@@ -38,7 +38,7 @@
 .tab__badge {
   position: absolute;
   top: -5px;
-  right: -8px;
+  inset-inline-end: -8px;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;

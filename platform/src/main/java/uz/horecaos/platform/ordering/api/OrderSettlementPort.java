@@ -134,6 +134,88 @@ public interface OrderSettlementPort {
     }
 
     /**
+     * Moves the money leg of a settlement nobody has paid yet to another payment method, and to a new total when the
+     * same amendment repriced the order (ADR 0039 {@code CHANGE_PAYMENT_METHOD}, ADR 0046).
+     *
+     * <p>The defect this closes: an order moved from cash to a provider opened the provider's intent for the order
+     * <em>total</em> while its settlement went on saying CASH, so a points-plus-cash order asked Click for the
+     * money it had already part-paid in points and {@code payment[]} named a method the customer no longer used.
+     * Nothing rewrote a tender's method. Here the settlement is the authority again and the intent is told: the
+     * returned {@link MoneyLegReplan#moneyDueMinor()} is what the provider is asked to collect.
+     *
+     * <p>Only ever a re-plan of what has not happened yet, as {@link #restateTotal}: the settlement must be
+     * {@code PLANNED} with nothing settled, with exactly one money tender that is still {@code PLANNED} and has no
+     * payment intent. The balance (points) tender is never touched, which is the point of ADR 0185: a redemption
+     * stays what it was and the money follows the method. A change that would leave no money to collect is refused
+     * (ADR 0046 requires at least one som of money).
+     *
+     * <p>"Has no payment intent" is a guard for later: no code links an intent to a tender yet, so it does not
+     * refuse today, and a caller must itself know that no provider intent is open for the order (the amendment
+     * does, by refusing a method change unless the order's payment projection is {@code NOT_REQUIRED}).
+     *
+     * @param locationId the branch the order was placed at, which a cash tender's fiscal responsibility depends on
+     */
+    default MoneyLegReplan replanMoneyLeg(
+            UUID tenantId,
+            UUID orderId,
+            UUID locationId,
+            long newTotalMinor,
+            String newPaymentMethodCode,
+            String actor) {
+        return MoneyLegReplan.noSettlement();
+    }
+
+    /**
+     * The points the customer has given up against this order: the settlement's balance tenders that are held or
+     * settled (ADR 0046, ADR 0185). Zero for an order with no settlement or no redemption, and for one whose points
+     * went back to the customer.
+     *
+     * <p>Read, never derived, because the order total <em>includes</em> this amount: an 80 000 order paid 10 000 in
+     * points is 70 000 in money. Anything that reasons about cash against the order, such as the change an operator
+     * hands back or whether the cash tendered covers what is owed, subtracts it ({@link #cashToCollectMinor}). An
+     * unwired port answers zero, which is the order total, as it always was.
+     */
+    default long balanceHeldMinor(UUID tenantId, UUID orderId) {
+        return 0L;
+    }
+
+    /**
+     * What the customer still owes in money for an order of {@code totalMinor}: the total less the points they spent
+     * (ADR 0185). The one place that subtraction is written, so the change due on the detail pane, the printed slip
+     * and the {@code CASH_TENDERED_INSUFFICIENT} notice cannot disagree about it.
+     *
+     * @param totalMinor the order total the caller is reasoning about, which on an amendment is the amended total
+     */
+    default long cashToCollectMinor(UUID tenantId, UUID orderId, long totalMinor) {
+        return Math.max(0L, Math.subtractExact(totalMinor, balanceHeldMinor(tenantId, orderId)));
+    }
+
+    /**
+     * What re-planning the money leg answered.
+     *
+     * @param moneyDueMinor what the new method is to collect; meaningful only when {@code status} is {@code REPLANNED}
+     */
+    record MoneyLegReplan(Status status, long moneyDueMinor) {
+
+        public enum Status {
+            /** The settlement now names the new method and sums to the new total. */
+            REPLANNED,
+            /** The order has no settlement, so nothing disagrees and the caller falls back to the order total. */
+            NO_SETTLEMENT,
+            /** Money is in or in flight, or the plan cannot be moved: the amendment must be refused. */
+            NOT_REPLANNABLE
+        }
+
+        public static MoneyLegReplan noSettlement() {
+            return new MoneyLegReplan(Status.NO_SETTLEMENT, 0L);
+        }
+
+        public static MoneyLegReplan refused() {
+            return new MoneyLegReplan(Status.NOT_REPLANNABLE, 0L);
+        }
+    }
+
+    /**
      * What checkout asks payments to plan a settlement from.
      *
      * @param customerAccountId       null for a guest checkout, which has no

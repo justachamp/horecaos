@@ -17,10 +17,12 @@ import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.ordering.api.OrderingConfigurationKeys;
 import uz.horecaos.platform.ordering.domain.DeliveryDestination;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcBranchOverrideReasonStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore.CartRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
+import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.web.api.ApiException;
@@ -86,6 +88,7 @@ public class OperatorOrderingService {
     private final JdbcOrderStore orders;
     private final AuditRecorder audit;
     private final Clock clock;
+    private final ConfigurationResolver configuration;
 
     /**
      * Recorded as the ADR 0027 fact against the one reveal {@link
@@ -101,6 +104,9 @@ public class OperatorOrderingService {
     /** The payment method code a cash tender is meaningful for. */
     private static final String CASH = "CASH";
 
+    /** The refusal when points are to be spent and the operator has not confirmed the customer agreed (ADR 0185). */
+    public static final String REDEMPTION_NEEDS_CUSTOMER_AGREEMENT = "REDEMPTION_NEEDS_CUSTOMER_AGREEMENT";
+
     /** The notice an order carries when the cash tendered is short of its total (ADR 0039, as on an amendment). */
     static final String CASH_TENDERED_INSUFFICIENT = "CASH_TENDERED_INSUFFICIENT";
 
@@ -112,7 +118,8 @@ public class OperatorOrderingService {
             CustomerAddressBook addresses,
             JdbcOrderStore orders,
             AuditRecorder audit,
-            Clock clock) {
+            Clock clock,
+            ConfigurationResolver configuration) {
         this.carts = carts;
         this.checkout = checkout;
         this.overrideReasons = overrideReasons;
@@ -121,6 +128,36 @@ public class OperatorOrderingService {
         this.orders = orders;
         this.audit = audit;
         this.clock = clock;
+        this.configuration = configuration;
+    }
+
+    /**
+     * What this location lets an operator do while keying an order in (settings.md 10.3 card 5, ADR 0177):
+     * apply a promo code, flag the order for a call back, record the cash the customer will hand over.
+     * Read at the location the order is for, and also served to the New order screen
+     * ({@code OperatorOrderEntryPolicyController}) so it hides what the server would refuse.
+     */
+    public record EntryPolicy(boolean promoCodeAllowed, boolean callbackFlagAllowed, boolean changeDueAllowed) {}
+
+    public EntryPolicy entryPolicy(UUID tenantId, UUID brandId, UUID locationId) {
+        ResourceScope scope = ResourceScope.location(tenantId, brandId, locationId);
+        return new EntryPolicy(
+                allowed(OrderingConfigurationKeys.OPERATOR_PROMO_CODE_ALLOWED, scope),
+                allowed(OrderingConfigurationKeys.OPERATOR_CALLBACK_FLAG_ALLOWED, scope),
+                allowed(OrderingConfigurationKeys.OPERATOR_CHANGE_DUE_ALLOWED, scope));
+    }
+
+    /**
+     * An unset key resolves to its registered default, which is {@code true} for all three (behaviour
+     * preserving: operators have done each of these since rows 1.3e and 1.3), and only an explicit
+     * {@code false} refuses.
+     */
+    private boolean allowed(uz.horecaos.platform.tenancy.api.ConfigurationKey<Boolean> key, ResourceScope scope) {
+        return !Boolean.FALSE.equals(configuration.value(key, scope));
+    }
+
+    private static ApiException notAllowed(String reason, String message) {
+        return new ApiException(ErrorCode.RESOURCE_CONFLICT, message, Map.of("reason", reason));
     }
 
     /** One line an operator entered into the basket. */
@@ -233,6 +270,15 @@ public class OperatorOrderingService {
      *                           first read rather than after a second, amending call. A
      *                           later change still goes through the {@code
      *                           SET_CASH_TENDERED} amendment
+     * @param redeemFromBalanceMinor ADR 0185: how much of the total the customer agreed, on the call, to pay from
+     *                           their points, in whole som, or zero. Taken inside the checkout transaction like a
+     *                           customer's own, against the identified customer's own account and no other (ADR
+     *                           0046). Never after the order exists: ADR 0185 declines that
+     * @param operatorAttestsCustomerAgreement ADR 0039's pattern for a decision the customer makes and the operator
+     *                           relays: the operator states the customer agreed to spend the points. Required when
+     *                           {@code redeemFromBalanceMinor} is above zero, and recorded as one audit fact
+     * @param callbackRequested  ADR 0177: «Перезвонить клиенту» raised while the order is keyed in. Written on the
+     *                           write that creates the order, refused where the location turned the flag off
      */
     public record PlaceOrderCommand(
             UUID tenantId,
@@ -255,10 +301,172 @@ public class OperatorOrderingService {
             @Nullable String overrideNote,
             @Nullable UUID dineInSessionId,
             @Nullable Long cashTenderedMinor,
-            List<UUID> declinedAutoAddRuleIds) {
+            List<UUID> declinedAutoAddRuleIds,
+            long redeemFromBalanceMinor,
+            boolean operatorAttestsCustomerAgreement,
+            boolean callbackRequested) {
 
         public PlaceOrderCommand {
             declinedAutoAddRuleIds = List.copyOf(declinedAutoAddRuleIds);
+        }
+
+        /**
+         * An order that redeems nothing and raises no callback flag: every caller that predates ADR 0185 taking a
+         * redemption at order entry and ADR 0177 letting the operator raise the flag while keying the order in.
+         */
+        @SuppressWarnings("checkstyle:ParameterNumber")
+        public PlaceOrderCommand(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                UUID customerAccountId,
+                String channelCode,
+                FulfillmentMode fulfillmentMode,
+                List<OrderLine> lines,
+                @Nullable Destination destination,
+                String paymentMethodCode,
+                @Nullable String promoCode,
+                String idempotencyKey,
+                String operatorSubject,
+                @Nullable String correlationId,
+                @Nullable Instant requestedFor,
+                boolean overrideOutOfHours,
+                @Nullable UUID proposedLocationId,
+                @Nullable String overrideReasonCode,
+                @Nullable String overrideNote,
+                @Nullable UUID dineInSessionId,
+                @Nullable Long cashTenderedMinor,
+                List<UUID> declinedAutoAddRuleIds) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines,
+                    destination,
+                    paymentMethodCode,
+                    promoCode,
+                    idempotencyKey,
+                    operatorSubject,
+                    correlationId,
+                    requestedFor,
+                    overrideOutOfHours,
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    cashTenderedMinor,
+                    declinedAutoAddRuleIds,
+                    0L,
+                    false,
+                    false);
+        }
+
+        /** An order that raises no callback flag at creation: every caller that predates ADR 0177. */
+        @SuppressWarnings("checkstyle:ParameterNumber")
+        public PlaceOrderCommand(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                UUID customerAccountId,
+                String channelCode,
+                FulfillmentMode fulfillmentMode,
+                List<OrderLine> lines,
+                @Nullable Destination destination,
+                String paymentMethodCode,
+                @Nullable String promoCode,
+                String idempotencyKey,
+                String operatorSubject,
+                @Nullable String correlationId,
+                @Nullable Instant requestedFor,
+                boolean overrideOutOfHours,
+                @Nullable UUID proposedLocationId,
+                @Nullable String overrideReasonCode,
+                @Nullable String overrideNote,
+                @Nullable UUID dineInSessionId,
+                @Nullable Long cashTenderedMinor,
+                List<UUID> declinedAutoAddRuleIds,
+                long redeemFromBalanceMinor,
+                boolean operatorAttestsCustomerAgreement) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines,
+                    destination,
+                    paymentMethodCode,
+                    promoCode,
+                    idempotencyKey,
+                    operatorSubject,
+                    correlationId,
+                    requestedFor,
+                    overrideOutOfHours,
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    cashTenderedMinor,
+                    declinedAutoAddRuleIds,
+                    redeemFromBalanceMinor,
+                    operatorAttestsCustomerAgreement,
+                    false);
+        }
+
+        /** An order that redeems nothing but may raise the callback flag: every caller that predates ADR 0185. */
+        @SuppressWarnings("checkstyle:ParameterNumber")
+        public PlaceOrderCommand(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                UUID customerAccountId,
+                String channelCode,
+                FulfillmentMode fulfillmentMode,
+                List<OrderLine> lines,
+                @Nullable Destination destination,
+                String paymentMethodCode,
+                @Nullable String promoCode,
+                String idempotencyKey,
+                String operatorSubject,
+                @Nullable String correlationId,
+                @Nullable Instant requestedFor,
+                boolean overrideOutOfHours,
+                @Nullable UUID proposedLocationId,
+                @Nullable String overrideReasonCode,
+                @Nullable String overrideNote,
+                @Nullable UUID dineInSessionId,
+                @Nullable Long cashTenderedMinor,
+                List<UUID> declinedAutoAddRuleIds,
+                boolean callbackRequested) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines,
+                    destination,
+                    paymentMethodCode,
+                    promoCode,
+                    idempotencyKey,
+                    operatorSubject,
+                    correlationId,
+                    requestedFor,
+                    overrideOutOfHours,
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    cashTenderedMinor,
+                    declinedAutoAddRuleIds,
+                    0L,
+                    false,
+                    callbackRequested);
         }
 
         /**
@@ -461,7 +669,7 @@ public class OperatorOrderingService {
                 priced.quote().contextHash(),
                 command.idempotencyKey(),
                 command.paymentMethodCode(),
-                0L,
+                command.redeemFromBalanceMinor(),
                 "USER",
                 command.operatorSubject(),
                 command.correlationId(),
@@ -493,7 +701,8 @@ public class OperatorOrderingService {
                     command.tenantId(),
                     Objects.requireNonNull(result.orderId(), "a created checkout always names an order"),
                     tendered);
-            if (tendered < priced.quote().totalMinor()) {
+            // What the customer still owes in money: the total less the points they agreed to spend (ADR 0185).
+            if (tendered < Math.subtractExact(priced.quote().totalMinor(), command.redeemFromBalanceMinor())) {
                 // As on the amendment: a notice the operator acknowledges, never a refusal. The
                 // customer can hand over more, and the figure is a hint rather than money.
                 List<String> warnings = new ArrayList<>(result.warnings());
@@ -509,6 +718,21 @@ public class OperatorOrderingService {
                         result.unavailableItems(),
                         List.copyOf(warnings));
             }
+        }
+
+        // ADR 0185: the operator attests the customer's agreement to spend their points, once, on the write that
+        // created the order. Not on a rejection (nothing was redeemed) and not on a replay of the same key.
+        if (command.redeemFromBalanceMinor() > 0
+                && result.outcome() == CheckoutService.CheckoutResult.Outcome.CREATED) {
+            recordRedemptionAttestation(command, Objects.requireNonNull(result.orderId()));
+        }
+        // ADR 0177: the flag the operator raised while keying the order in is on it from the first read,
+        // written only on the write that created it (a REPLAYED retry must not raise it a second time
+        // after somebody has already rung the customer back and cleared it).
+        if (command.callbackRequested() && result.outcome() == CheckoutService.CheckoutResult.Outcome.CREATED) {
+            orders.recordCallbackRequestedAtCreation(
+                    command.tenantId(),
+                    Objects.requireNonNull(result.orderId(), "a created checkout always names an order"));
         }
 
         // Audited only on the write that actually created the order — never on
@@ -546,6 +770,33 @@ public class OperatorOrderingService {
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED,
                     "A " + command.fulfillmentMode() + " order is not eaten at a table, so it has no bill to go on");
+        }
+        if (command.redeemFromBalanceMinor() < 0) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A redemption settles a positive amount, or none");
+        }
+        if (command.redeemFromBalanceMinor() > 0 && !command.operatorAttestsCustomerAgreement()) {
+            // The customer is on the phone and the operator relays their decision; without the operator saying so
+            // there is no record that the customer asked for their points to be spent.
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "Spending a customer's points needs the operator to confirm the customer agreed",
+                    Map.of("reason", REDEMPTION_NEEDS_CUSTOMER_AGREEMENT));
+        }
+        EntryPolicy policy = entryPolicy(command.tenantId(), command.brandId(), command.locationId());
+        if (command.callbackRequested() && !policy.callbackFlagAllowed()) {
+            throw notAllowed(
+                    "OPERATOR_CALLBACK_NOT_ALLOWED",
+                    "This location does not let an operator flag an order for a call back");
+        }
+        if (command.cashTenderedMinor() != null && !policy.changeDueAllowed()) {
+            throw notAllowed(
+                    "OPERATOR_CHANGE_DUE_NOT_ALLOWED",
+                    "This location does not let an operator record the cash the customer will hand over");
+        }
+        if (command.promoCode() != null && !command.promoCode().isBlank() && !policy.promoCodeAllowed()) {
+            throw notAllowed(
+                    "OPERATOR_PROMO_CODE_NOT_ALLOWED",
+                    "This location does not let an operator apply a promo code to an order");
         }
         Long tendered = command.cashTenderedMinor();
         if (tendered != null) {
@@ -753,8 +1004,33 @@ public class OperatorOrderingService {
             point = new GeoPoint(located.latitude(), located.longitude());
         }
         return branchResolution
-                .resolve(command.tenantId(), command.brandId(), command.fulfillmentMode(), point, command.channelCode())
+                .resolve(
+                        command.tenantId(),
+                        command.brandId(),
+                        command.fulfillmentMode(),
+                        point,
+                        command.channelCode(),
+                        command.requestedFor())
                 .proposedLocationId();
+    }
+
+    private void recordRedemptionAttestation(PlaceOrderCommand command, UUID orderId) {
+        // Amounts and ids only, never the customer's name or phone (ADR 0029).
+        audit.record(AuditFact.of("ordering.order.redemption_attested", AuditClass.BUSINESS)
+                .by(ActorRef.user(command.operatorSubject(), null))
+                .at(ResourceScope.location(command.tenantId(), command.brandId(), command.locationId()))
+                .target("Order", orderId)
+                .because("The operator confirmed the customer agreed to pay part of the order with their points")
+                .changed(ChangeDocuments.created(mapOf(
+                        "redeemedMinor",
+                        command.redeemFromBalanceMinor(),
+                        "customerAccountId",
+                        command.customerAccountId().toString(),
+                        "customerAgreementAttested",
+                        true)))
+                .correlatedBy(command.correlationId() == null ? orderId.toString() : command.correlationId())
+                .occurredAt(clock.instant())
+                .build());
     }
 
     private void recordOverrideAudit(

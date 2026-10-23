@@ -1,0 +1,153 @@
+<div class="deliveries">
+  <div class="deliveries__toolbar">
+    <h1 class="q-subhead">{{ 'delivery.deliveries.title' | t }}</h1>
+  </div>
+
+  <div class="deliveries__filters" data-testid="deliveries-filters">
+    <label class="q-field">
+      <span class="q-caption">{{ 'delivery.deliveries.filter.branch' | t }}</span>
+      <select
+        data-testid="deliveries-filter-branch"
+        [value]="branchId()"
+        (change)="branchId.set($any($event.target).value); changeFilter()"
+      >
+        <option value="">{{ 'delivery.deliveries.filter.all' | t }}</option>
+        @for (branch of branches(); track branch.id) {
+          <option [value]="branch.id">{{ branch.displayName }}</option>
+        }
+      </select>
+    </label>
+    <label class="q-field">
+      <span class="q-caption">{{ 'delivery.deliveries.filter.state' | t }}</span>
+      <select
+        data-testid="deliveries-filter-state"
+        [value]="stateFilter()"
+        (change)="stateFilter.set($any($event.target).value); changeFilter()"
+      >
+        <option value="">{{ 'delivery.deliveries.filter.all' | t }}</option>
+        @for (state of states; track state) {
+          <option [value]="state">{{ stateLabel(state) }}</option>
+        }
+      </select>
+    </label>
+    <label class="q-field">
+      <span class="q-caption">{{ 'delivery.deliveries.filter.courier' | t }}</span>
+      <select
+        data-testid="deliveries-filter-courier"
+        [value]="courierId()"
+        (change)="courierId.set($any($event.target).value); changeFilter()"
+      >
+        <option value="">{{ 'delivery.deliveries.filter.all' | t }}</option>
+        @for (courier of roster(); track courier.courierId) {
+          <option [value]="courier.courierId">{{ courier.displayReference }}</option>
+        }
+      </select>
+    </label>
+    <label class="q-field">
+      <span class="q-caption">{{ 'delivery.deliveries.filter.from' | t }}</span>
+      <input
+        type="date"
+        data-testid="deliveries-filter-from"
+        [value]="fromDate()"
+        (change)="fromDate.set($any($event.target).value); changeFilter()"
+      />
+    </label>
+    <label class="q-field">
+      <span class="q-caption">{{ 'delivery.deliveries.filter.to' | t }}</span>
+      <input
+        type="date"
+        data-testid="deliveries-filter-to"
+        [value]="toDate()"
+        (change)="toDate.set($any($event.target).value); changeFilter()"
+      />
+    </label>
+  </div>
+
+  @if (ownBranchOnly()) {
+    <p class="q-caption deliveries__note" data-testid="deliveries-own-branch" role="status">
+      {{ 'delivery.deliveries.ownBranchOnly' | t }}
+    </p>
+  }
+
+  @if (loading()) {
+    <div class="deliveries__skeleton" [attr.aria-label]="'delivery.deliveries.loading' | t">
+      @for (i of [1, 2, 3]; track i) {
+        <div class="deliveries__skeleton-row"></div>
+      }
+    </div>
+  } @else if (denied()) {
+    <div class="deliveries__denied" data-testid="deliveries-denied">
+      <p class="q-body-sm">{{ 'delivery.deliveries.denied' | t }}</p>
+    </div>
+  } @else {
+    @if (error(); as message) {
+      <div class="deliveries__error" role="alert" data-testid="deliveries-error">
+        <span class="q-body-sm">{{ message }}</span>
+      </div>
+    }
+
+    <div class="deliveries__scroll">
+      <table class="deliveries__table">
+        <thead>
+          <tr>
+            <th>{{ 'delivery.deliveries.column.order' | t }}</th>
+            <th>{{ 'delivery.deliveries.column.branch' | t }}</th>
+            <th>{{ 'delivery.deliveries.column.destination' | t }}</th>
+            <th>{{ 'delivery.deliveries.column.state' | t }}</th>
+            <th>{{ 'delivery.deliveries.column.courier' | t }}</th>
+            <th>{{ 'delivery.deliveries.column.promised' | t }}</th>
+            <th>{{ 'delivery.deliveries.column.delivered' | t }}</th>
+            <th>{{ 'delivery.deliveries.column.cash' | t }}</th>
+            <th>{{ 'delivery.deliveries.column.cost' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.planId) {
+            <tr data-testid="delivery-row">
+              <td>
+                <a
+                  class="q-mono"
+                  data-testid="delivery-open"
+                  [routerLink]="['/orders', row.orderId]"
+                  >{{ row.orderReference }}</a
+                >
+              </td>
+              <td>{{ row.branchName }}</td>
+              <td>{{ row.destinationLabel ?? '—' }}</td>
+              <td data-testid="delivery-state">
+                <span class="status-badge">{{ stateLabel(row.planStatus) }}</span>
+              </td>
+              <td class="q-mono" data-testid="delivery-courier">{{ carrier(row) }}</td>
+              <td class="q-tnum">{{ time(row.promisedDeliveryEnd) }}</td>
+              <td class="q-tnum">{{ time(row.deliveredAt) }}</td>
+              <td class="q-tnum" data-testid="delivery-cash">
+                {{ money(row.cashToCollectMinor, row.currency) }}
+              </td>
+              <td class="q-tnum" data-testid="delivery-cost">{{ cost(row.cost) }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="9">
+                <p class="q-body-sm" data-testid="deliveries-empty">
+                  {{ 'delivery.deliveries.empty' | t }}
+                </p>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (nextCursor() !== null) {
+      <button
+        type="button"
+        class="deliveries__more"
+        data-testid="deliveries-more"
+        [disabled]="loadingMore()"
+        (click)="loadMore()"
+      >
+        {{ 'delivery.deliveries.more' | t }}
+      </button>
+    }
+  }
+</div>

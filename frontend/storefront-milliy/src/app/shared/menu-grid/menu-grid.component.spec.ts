@@ -129,3 +129,101 @@ describe('MenuGridComponent: tag filters (ADR 0174)', () => {
     expect(host.querySelector('[data-testid="tag-filter-empty"]')).toBeNull();
   });
 });
+
+describe('MenuGridComponent: the compact rail of the marketplace layout (ADR 0183 D17)', () => {
+  const categories = Array.from({ length: 8 }, (_, i) => ({
+    id: `c-${i + 1}`,
+    name: `Category ${i + 1}`,
+  }));
+  const sections = categories.map((category) =>
+    section(category.id, [dish(`d-${category.id}`, [])]),
+  );
+
+  function render(layout: 'STANDARD' | 'MARKETPLACE') {
+    TestBed.configureTestingModule({
+      providers: [provideRouter([]), { provide: TranslateService, useClass: FakeTranslateService }],
+    });
+    const fixture = TestBed.createComponent(MenuGridComponent);
+    fixture.componentRef.setInput('categories', categories);
+    fixture.componentRef.setInput('sections', sections);
+    fixture.componentRef.setInput('currency', 'UZS');
+    fixture.componentRef.setInput('layout', layout);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    return {
+      fixture,
+      host,
+      rail: () =>
+        Array.from(
+          host.querySelectorAll<HTMLButtonElement>('nav[aria-label="home.categories"] .chip'),
+        )
+          .map((chip) => (chip.textContent ?? '').trim())
+          .filter((name) => name.startsWith('Category ')),
+      opener: () => host.querySelector<HTMLButtonElement>('[data-testid="all-categories-open"]'),
+      dialog: () => host.querySelector('[role="dialog"]'),
+    };
+  }
+
+  it('draws every category and no opener in the standard layout, as before', () => {
+    const { rail, opener } = render('STANDARD');
+
+    expect(rail()).toHaveLength(8);
+    expect(opener()).toBeNull();
+  });
+
+  it('draws the first five and an «all categories» opener in the marketplace layout', () => {
+    const { rail, opener, dialog } = render('MARKETPLACE');
+
+    expect(rail()).toEqual(['Category 1', 'Category 2', 'Category 3', 'Category 4', 'Category 5']);
+    expect(opener()).not.toBeNull();
+    expect(dialog()).toBeNull();
+  });
+
+  it('lists every category in the overlay, applies a choice made there, closes, and keeps the choice on the rail', () => {
+    const { fixture, host, rail, opener, dialog } = render('MARKETPLACE');
+
+    opener()?.click();
+    fixture.detectChanges();
+    expect(dialog()).not.toBeNull();
+    expect(dialog()?.querySelectorAll('li')).toHaveLength(9);
+
+    host.querySelector<HTMLButtonElement>('[data-testid="categories-overlay-c-7"]')?.click();
+    fixture.detectChanges();
+
+    expect(dialog()).toBeNull();
+    expect(rail()).toEqual(['Category 1', 'Category 2', 'Category 3', 'Category 4', 'Category 7']);
+    expect(host.querySelectorAll('.section__title')).toHaveLength(1);
+    expect(host.querySelector('.section__title')?.textContent?.trim()).toBe('Section c-7');
+  });
+
+  it('closes the overlay with Escape and chooses nothing', () => {
+    const { fixture, host, opener, dialog } = render('MARKETPLACE');
+
+    opener()?.click();
+    fixture.detectChanges();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    fixture.detectChanges();
+
+    expect(dialog()).toBeNull();
+    expect(host.querySelectorAll('.section__title')).toHaveLength(8);
+  });
+
+  it('shows a rail that is already short in full, with the opener still there', () => {
+    TestBed.configureTestingModule({
+      providers: [provideRouter([]), { provide: TranslateService, useClass: FakeTranslateService }],
+    });
+    const fixture = TestBed.createComponent(MenuGridComponent);
+    fixture.componentRef.setInput('categories', categories.slice(0, 3));
+    fixture.componentRef.setInput('sections', sections.slice(0, 3));
+    fixture.componentRef.setInput('layout', 'MARKETPLACE');
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(
+      Array.from(host.querySelectorAll('nav[aria-label="home.categories"] .chip')).filter((chip) =>
+        (chip.textContent ?? '').trim().startsWith('Category '),
+      ),
+    ).toHaveLength(3);
+    expect(host.querySelector('[data-testid="all-categories-open"]')).not.toBeNull();
+  });
+});

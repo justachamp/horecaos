@@ -53,6 +53,9 @@ export class ContentService {
   readonly groups = computed(() => this.home()?.groups ?? NONE);
   readonly stories = computed(() => this.home()?.stories ?? NONE);
   readonly popup = computed(() => this.home()?.popup ?? null);
+  readonly brandSwitcher = computed(() => this.home()?.brandSwitcher ?? NONE);
+  /** `STANDARD` while there is no document: a failed read never changes how categories are drawn. */
+  readonly layout = computed(() => this.home()?.layout ?? 'STANDARD');
 
   private started = false;
   private requestedLocale: string | null = null;

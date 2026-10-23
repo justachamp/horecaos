@@ -43,6 +43,7 @@ import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentInten
 import uz.horecaos.platform.payments.settlement.JdbcSettlementStore;
 import uz.horecaos.platform.payments.settlement.SettlementStatus;
 import uz.horecaos.platform.payments.settlement.TenderStatus;
+import uz.horecaos.platform.support.ApprovalWorklistProof;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
@@ -125,6 +126,61 @@ class OperationsPaymentControllerEndpointTests {
         grant(OWNER, PlatformRole.TENANT_OWNER);
         grant(FINANCE, PlatformRole.TENANT_FINANCE);
         grant(ADMINISTRATOR, PlatformRole.TENANT_ADMIN);
+    }
+
+    /**
+     * Row 9.4, ADR 0027, ADR 0048, ADR 0181: the refund reaches the worklist. The threshold stays the one
+     * platform-wide number ADR 0048 keeps ({@code horecaos.payments.remedy-approval-threshold-minor}); what the
+     * tenant adds is the policy that says a second person signs above it, and that is now published through the
+     * console's own route. Without that policy an over-threshold refund goes through on one signature
+     * ({@code ALLOW_WITHOUT_APPROVAL}).
+     *
+     * <p>Proved as far as the decision: the request is raised by the real call, listed under its action code with
+     * the approver capability the owner named, and a finance approver's signature settles it. What the resubmitted
+     * refund then does to the tenders is {@code RefundAndRemedyTests}' ground -- this order has no settled tender
+     * to return money to, and pretending otherwise here would prove the fixture.
+     */
+    @Test
+    void aRefundAboveTheThresholdWaitsOnTheWorklistUnderThePolicyTheOwnerPublished() throws Exception {
+        UUID orderId = order(500_000L);
+        ApprovalWorklistProof.publishPolicy(
+                mvc, TENANT, tokenFor(OWNER), "payments.remedy.record", "refund.approve", "policy-refund-1");
+
+        MvcResult requested = mvc.perform(
+                        post("/api/v1/operations/tenants/" + TENANT + "/orders/" + orderId + "/refunds")
+                                .with(tokenFor(OWNER))
+                                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "refund-http-1")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                {"amountMinor":300000,"currency":"UZS","reasonCode":"LATE_DELIVERY",
+                                 "reason":"the order arrived an hour late","channel":"CASH_DRAWER",
+                                 "executedBy":"manager-1","executedAt":"2026-10-14T05:00:00Z",
+                                 "idempotencyKey":"refund-proof-1"}
+                                """))
+                .andReturn();
+
+        assertThat(requested.getResponse().getStatus()).isEqualTo(200);
+        assertThat(requested.getResponse().getContentAsString())
+                .as("a second signature is wanted, so nothing was recorded")
+                .contains("\"approvalStatus\":\"PENDING\"")
+                .contains("\"approvalRequestId\"");
+        assertThat(jdbc.sql("SELECT count(*) FROM payments.order_remedies WHERE order_id = :id")
+                        .param("id", orderId)
+                        .query(Long.class)
+                        .single())
+                .isZero();
+
+        tools.jackson.databind.JsonNode entry =
+                ApprovalWorklistProof.listed(mvc, TENANT, tokenFor(FINANCE), "payments.remedy.record");
+        assertThat(entry.get("requiredApproverCapability").asString()).isEqualTo("refund.approve");
+        assertThat(entry.get("mayDecide").asBoolean()).isTrue();
+        assertThat(ApprovalWorklistProof.approve(
+                        mvc,
+                        TENANT,
+                        tokenFor(FINANCE),
+                        UUID.fromString(entry.get("id").asString()),
+                        "decide-refund-1"))
+                .isEqualTo("APPROVED");
     }
 
     @Test

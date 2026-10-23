@@ -52,7 +52,7 @@
 }
 
 .promo-codes__reveal button {
-  margin-left: auto;
+  margin-inline-start: auto;
   padding: 4px 10px;
   border: 1px solid var(--q-hairline);
   background: var(--q-canvas);
@@ -72,7 +72,7 @@
 }
 
 .promo-codes__table th {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
@@ -87,7 +87,7 @@
 }
 
 .promo-codes__action-col {
-  text-align: right;
+  text-align: end;
   display: flex;
   gap: 6px;
   justify-content: flex-end;
@@ -210,7 +210,7 @@
 }
 
 .promo-codes__redemptions-table th {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);

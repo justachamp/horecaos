@@ -1,5 +1,6 @@
 package uz.horecaos.platform.payments.settlement;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -41,5 +42,20 @@ class OrderRemedyCompensationDirectory implements CompensationDirectory {
         return remedies.findRemedy(tenantId, refId)
                 .map(remedy -> new CompensationSummary(
                         kind(), remedy.id(), remedy.orderId(), remedy.amountMinor(), remedy.currency()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CompensationCandidate> candidatesForOrder(UUID tenantId, UUID orderId) {
+        return remedies.remediesOfOrder(tenantId, orderId).stream()
+                .map(remedy -> new CompensationCandidate(
+                        kind(),
+                        remedy.id(),
+                        remedy.remedyType().name(),
+                        remedy.executedAt() == null ? "RECORDED" : "EXECUTED",
+                        remedy.amountMinor(),
+                        remedy.currency(),
+                        remedy.recordedAt()))
+                .toList();
     }
 }

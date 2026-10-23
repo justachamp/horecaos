@@ -28,6 +28,14 @@
   projection (ADR 0040), a rendered mock of a marketplace's own app, and the
   `CatalogDraftChanged` event this record says an override write rides — no such
   event exists in code, so an override write is audited and nothing more.
+  Addition, 2026-10-14 ([ADR 0180](../partial/0180-stale-marketplace-channels-weighed-baskets-and-the-marketplace-menu-pull.md)): `PUT .../marketplace-ruleset` sets a binding's ruleset code
+  (only a known one, audited, `integration.installation.manage`); `CatalogDraftChanged` is
+  published through the outbox on a new `catalog.events` topic for an override write and the
+  authoring writes; the channel's variant and category photo layer is carried by the assembled
+  menu and so served and not only stored; and the partner pulls the same projection as
+  `GET /api/v1/partner/tenants/{tenantId}/restaurants/{locationId}/menu` under an `ETag`.
+  There is still no per-marketplace ruleset and no outbound push. The aggregator preview stays
+  data-accurate in HorecaOS frames, not a mock of a marketplace's own app.
 - Date proposed: 2026-09-25
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 12, w2-catalog-adrs) from

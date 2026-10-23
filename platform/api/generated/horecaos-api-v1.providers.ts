@@ -30,6 +30,73 @@ export interface PartnerAvailabilityResponse {
   nextCursor?: string;
 }
 
+export interface PartnerMenuCategoryResponse {
+  categoryId?: string;
+  code?: string;
+  images?: Array<PartnerMenuImageResponse>;
+  name?: string;
+  parentCategoryId?: string;
+  productIds?: Array<string>;
+  sortOrder?: number;
+}
+
+export interface PartnerMenuImageResponse {
+  assetId?: string;
+  url?: string;
+}
+
+export interface PartnerMenuItemResponse {
+  code?: string;
+  description?: string;
+  images?: Array<PartnerMenuImageResponse>;
+  modifierGroupIds?: Array<string>;
+  name?: string;
+  productId?: string;
+  variants?: Array<PartnerMenuVariantResponse>;
+}
+
+export interface PartnerMenuModifierGroupResponse {
+  allowSameOptionMultipleTimes?: boolean;
+  code?: string;
+  maximumSelections?: number;
+  minimumSelections?: number;
+  modifierGroupId?: string;
+  name?: string;
+  options?: Array<PartnerMenuModifierOptionResponse>;
+  required?: boolean;
+}
+
+export interface PartnerMenuModifierOptionResponse {
+  amountMinor?: number;
+  code?: string;
+  maximumQuantity?: number;
+  name?: string;
+  optionId?: string;
+}
+
+export interface PartnerMenuResponse {
+  categories?: Array<PartnerMenuCategoryResponse>;
+  currency?: string;
+  items?: Array<PartnerMenuItemResponse>;
+  locale?: string;
+  locationId?: string;
+  modifierGroups?: Array<PartnerMenuModifierGroupResponse>;
+  publicationId?: string;
+}
+
+export interface PartnerMenuVariantResponse {
+  amountMinor?: number;
+  images?: Array<PartnerMenuImageResponse>;
+  isDefault?: boolean;
+  name?: string;
+  onSaleNow?: boolean;
+  orderable?: boolean;
+  partnerItemId?: string;
+  sku?: string;
+  unitCode?: string;
+  variantId?: string;
+}
+
 export interface PartnerOrderControllerPushRequest {
   discountFunding?: string;
   displayCode?: string;
@@ -40,6 +107,16 @@ export interface PartnerOrderControllerPushRequest {
   pickupExpectedAt?: string;
   totals: Totals;
   venueReference: string;
+}
+
+export interface PartnerRestaurantResponse {
+  channelConfigured?: boolean;
+  locationId?: string;
+  name?: string;
+}
+
+export interface PartnerRestaurantsResponse {
+  restaurants?: Array<PartnerRestaurantResponse>;
 }
 
 export interface PushResponse {
@@ -74,7 +151,9 @@ export interface Totals {
 export interface Operations {
   "push_1": { method: "POST"; path: "/api/v1/partner/tenants/{tenantId}/marketplace/shift-events"; request: { parameters: { path: { tenantId: string } }; body: ShiftEventRequest }; responses: { "200": ShiftEventResponse } };
   "push": { method: "POST"; path: "/api/v1/partner/tenants/{tenantId}/orders"; request: { parameters: { path: { tenantId: string } }; body: PartnerOrderControllerPushRequest }; responses: { "200": PushResponse } };
+  "partnerRestaurants": { method: "GET"; path: "/api/v1/partner/tenants/{tenantId}/restaurants"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": PartnerRestaurantsResponse } };
   "read": { method: "GET"; path: "/api/v1/partner/tenants/{tenantId}/restaurants/{locationId}/availability"; request: { parameters: { path: { locationId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PartnerAvailabilityResponse } };
+  "partnerMenu": { method: "GET"; path: "/api/v1/partner/tenants/{tenantId}/restaurants/{locationId}/menu"; request: { parameters: { path: { locationId: string; tenantId: string }; query: { locale?: string } } }; responses: { "200": PartnerMenuResponse } };
   "handle_3": { method: "DELETE"; path: "/providers/payme/{binding}"; request: { parameters: { path: { binding: string } } }; responses: { "200": {  } } };
   "handle": { method: "GET"; path: "/providers/payme/{binding}"; request: { parameters: { path: { binding: string } } }; responses: { "200": {  } } };
   "handle_5": { method: "HEAD"; path: "/providers/payme/{binding}"; request: { parameters: { path: { binding: string } } }; responses: { "200": {  } } };

@@ -1398,9 +1398,20 @@ public class JdbcCatalogStore {
                             rs.getDate("valid_from").toLocalDate(),
                             validUntil,
                             dated ? (validUntil != null && !on.isBefore(validUntil)) : null,
-                            dated ? rs.getString("replaced_by_code") : null);
+                            dated ? rs.getString("replaced_by_code") : null,
+                            toIntegerList(rs.getArray("default_unit_codes")));
                 })
                 .list();
+    }
+
+    private static List<Integer> toIntegerList(java.sql.Array array) throws java.sql.SQLException {
+        if (array == null) {
+            return List.of();
+        }
+        Object[] elements = (Object[]) array.getArray();
+        return java.util.Arrays.stream(elements)
+                .map(element -> ((Number) element).intValue())
+                .toList();
     }
 
     private static List<String> toStringList(java.sql.Array array) throws java.sql.SQLException {
@@ -1422,7 +1433,8 @@ public class JdbcCatalogStore {
             java.time.LocalDate validFrom,
             java.time.@Nullable LocalDate validUntil,
             @Nullable Boolean withdrawn,
-            @Nullable String replacedByCode) {
+            @Nullable String replacedByCode,
+            List<Integer> defaultUnitCodes) {
 
         /** The browse without a date: nothing is said about withdrawal. */
         public MxikReferenceRow(
@@ -1434,7 +1446,18 @@ public class JdbcCatalogStore {
                 List<String> defaultPackageCodes,
                 java.time.LocalDate validFrom,
                 java.time.@Nullable LocalDate validUntil) {
-            this(code, parentCode, labelRu, labelUz, labelEn, defaultPackageCodes, validFrom, validUntil, null, null);
+            this(
+                    code,
+                    parentCode,
+                    labelRu,
+                    labelUz,
+                    labelEn,
+                    defaultPackageCodes,
+                    validFrom,
+                    validUntil,
+                    null,
+                    null,
+                    List.of());
         }
     }
 
@@ -3287,7 +3310,9 @@ public class JdbcCatalogStore {
                               OR fc.fiscal_unit_code IS NULL OR fc.fiscal_name IS NULL) AS unclassified,
                            first_category.id AS category_id,
                            fc.mxik_code AS mxik_code,
-                           fc.package_code AS package_code
+                           fc.package_code AS package_code,
+                           fc.fiscal_unit_code AS fiscal_unit_code,
+                           fc.fiscal_name AS fiscal_name
                     FROM catalog.variants v
                     JOIN catalog.products p
                         ON p.id = v.product_id AND p.tenant_id = v.tenant_id AND p.brand_id = v.brand_id
@@ -3325,7 +3350,9 @@ public class JdbcCatalogStore {
                               OR fc.fiscal_unit_code IS NULL OR fc.fiscal_name IS NULL) AS unclassified,
                            CAST(NULL AS uuid) AS category_id,
                            fc.mxik_code AS mxik_code,
-                           fc.package_code AS package_code
+                           fc.package_code AS package_code,
+                           fc.fiscal_unit_code AS fiscal_unit_code,
+                           fc.fiscal_name AS fiscal_name
                     FROM catalog.modifier_options o
                     LEFT JOIN catalog.translations t
                         ON t.entity_type = 'MODIFIER_OPTION' AND t.entity_id = o.id AND t.tenant_id = o.tenant_id
@@ -3346,7 +3373,9 @@ public class JdbcCatalogStore {
                               OR fc.fiscal_unit_code IS NULL OR fc.fiscal_name IS NULL) AS unclassified,
                            CAST(NULL AS uuid) AS category_id,
                            fc.mxik_code AS mxik_code,
-                           fc.package_code AS package_code
+                           fc.package_code AS package_code,
+                           fc.fiscal_unit_code AS fiscal_unit_code,
+                           fc.fiscal_name AS fiscal_name
                     FROM catalog.fees f
                     LEFT JOIN catalog.fiscal_classifications fc
                         ON fc.priceable_type = 'FEE' AND fc.priceable_id = f.id AND fc.tenant_id = f.tenant_id
@@ -3369,7 +3398,9 @@ public class JdbcCatalogStore {
                         row.getBoolean("unclassified"),
                         row.getObject("category_id", UUID.class),
                         row.getString("mxik_code"),
-                        row.getString("package_code")))
+                        row.getString("package_code"),
+                        row.getObject("fiscal_unit_code", Integer.class),
+                        row.getString("fiscal_name")))
                 .list();
     }
 
@@ -3386,6 +3417,9 @@ public class JdbcCatalogStore {
      *                    the half-filled rows it is completing and a write can
      *                    leave alone what is already there
      * @param packageCode the same for the package code
+     * @param fiscalUnitCode the unit code the classification holds, or null (ADR 0038 requires it beside the
+     *                    two codes; a node that holds both codes and lacks this is still counted unclassified)
+     * @param fiscalName  the receipt-line name the classification holds, or null (the same)
      */
     public record FiscalCoverageNodeRow(
             PriceableType nodeType,
@@ -3396,7 +3430,9 @@ public class JdbcCatalogStore {
             boolean unclassified,
             @Nullable UUID categoryId,
             @Nullable String mxikCode,
-            @Nullable String packageCode) {}
+            @Nullable String packageCode,
+            @Nullable Integer fiscalUnitCode,
+            @Nullable String fiscalName) {}
 
     // --------------------------------------------------- row 4.2g: per-item sale schedule
 

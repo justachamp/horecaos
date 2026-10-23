@@ -61,12 +61,18 @@ public interface FiscalReceiptSource {
     }
 
     /**
-     * @param quantity       whole units, as a fiscal line carries them
+     * @param quantity       the count as the fiscal line carries it: whole for a piece, decimal for a weighed line
      * @param unitMinor      the unit price, in this platform's minor units
      * @param lineTotalMinor quantity times unit price, less any discount, as payments states it
      * @param taxMinor       the line's tax share from the accepted quote, never recomputed
      */
-    record Line(String name, int quantity, long unitMinor, long lineTotalMinor, long taxMinor, int vatPercent) {}
+    record Line(
+            String name,
+            java.math.BigDecimal quantity,
+            long unitMinor,
+            long lineTotalMinor,
+            long taxMinor,
+            int vatPercent) {}
 
     /** What the fiscal operator returned for the document. Every field is optional because the operator's are. */
     record Evidence(

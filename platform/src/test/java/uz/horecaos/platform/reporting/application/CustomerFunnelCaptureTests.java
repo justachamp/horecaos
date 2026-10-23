@@ -118,7 +118,7 @@ class CustomerFunnelCaptureTests {
         capture = new FunnelCaptureService(
                 funnelStore,
                 new JdbcCartFunnelSource(
-                        jdbc, new CartRetentionSweeper(new JdbcCartStore(jdbc), jdbc, clock, 90, 500), clock),
+                        jdbc, new CartRetentionSweeper(new JdbcCartStore(jdbc), jdbc, clock, 90, 500, false), clock),
                 new JdbcCustomerRegistrationSource(jdbc),
                 clock);
         close = new DayCloseService(
@@ -243,7 +243,7 @@ class CustomerFunnelCaptureTests {
         assertThat(funnelRow(DAY, BRAND, "WEB").get("basket_started")).isEqualTo(3);
 
         clock.advance(Duration.ofDays(100));
-        new CartRetentionSweeper(new JdbcCartStore(jdbc), jdbc, clock, 90, 500).runOnce();
+        new CartRetentionSweeper(new JdbcCartStore(jdbc), jdbc, clock, 90, 500, false).runOnce();
         assertThat(jdbc.sql("SELECT count(*) FROM ordering.carts WHERE status <> 'CONVERTED'")
                         .query(Long.class)
                         .single())

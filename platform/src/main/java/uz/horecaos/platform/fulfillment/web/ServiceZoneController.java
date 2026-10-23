@@ -89,9 +89,6 @@ public class ServiceZoneController {
                 brandId,
                 body.role(),
                 body.code(),
-                body.displayNameRu(),
-                body.displayNameUz(),
-                body.displayNameEn(),
                 body.displayNames() == null ? Map.of() : body.displayNames());
         return ResponseEntity.ok(new ZoneView(zoneId, body.code(), body.role().name()));
     }
@@ -196,21 +193,14 @@ public class ServiceZoneController {
     }
 
     /**
-     * @param displayNameRu/displayNameUz/displayNameEn the platform triple's names.
-     *        <strong>Still required</strong>: {@code OpenApiContractTests} refuses to make a
-     *        published required request field optional, so row 10.12 could not relax them. A
-     *        brand that does not offer one of the three languages names it with its default
-     *        language's name -- what the console does
-     * @param displayNames the name per locale (optional, additive): the way to name a
-     *        language outside the platform triple. It overlays the three fields above where
-     *        both name a locale
+     * @param displayNames the name per locale (row 10.12): the zone's name in each language the
+     *        brand offers. The brand's default language is required, and a request that names
+     *        none is refused; the three fixed fields the request used to carry left the wire with
+     *        their columns (V0679, ADR 0149)
      */
     public record CreateZoneRequest(
             @NotNull ZoneRole role,
             @NotBlank @Size(max = 32) String code,
-            @NotBlank @Size(max = 200) String displayNameRu,
-            @NotBlank @Size(max = 200) String displayNameUz,
-            @NotBlank @Size(max = 200) String displayNameEn,
             @Nullable @Size(max = 32) Map<String, @Size(max = 200) String> displayNames) {}
 
     /**
@@ -258,16 +248,12 @@ public class ServiceZoneController {
      * ZoneSummaryRow}'s own doc for why that is a real state and not an
      * omission.
      *
-     * @param displayNames every locale the zone has a name in, the platform triple
-     *                     first then any other by code, each once (row 10.12)
+     * @param displayNames every locale the zone has a name in, the registry's order, each once (row 10.12)
      */
     public record ZoneSummaryResponse(
             UUID zoneId,
             String role,
             String code,
-            String displayNameRu,
-            String displayNameUz,
-            String displayNameEn,
             String status,
             @Nullable Integer activeVersion,
             @Nullable Integer priority,
@@ -284,9 +270,6 @@ public class ServiceZoneController {
                     row.id(),
                     row.role().name(),
                     row.code(),
-                    row.displayNameRu(),
-                    row.displayNameUz(),
-                    row.displayNameEn(),
                     row.status(),
                     row.activeVersion(),
                     row.priority(),

@@ -1,10 +1,11 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
 import { CurrentLocation } from '../../../core/auth/current-location';
+import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { I18n } from '../../../core/i18n/i18n';
 import {
   BulkServiceStateResponse,
@@ -14,6 +15,7 @@ import {
   LocationsApi,
   LocationView,
 } from './locations-api';
+import { ShortcutRegistry } from '../../../shared/keyboard/shortcut-registry';
 import { LocationsPage } from './locations-page';
 
 const SCOPE: LocationScope = { tenantId: 'tenant-1', brandId: 'brand-1', locationId: 'location-1' };
@@ -99,6 +101,11 @@ const CHANNELS: readonly LocationChannelsView[] = [
 class FakeCurrentLocation {
   readonly scope = signal<LocationScope | null>(SCOPE);
   readonly denied = signal(false);
+  readonly options = signal([
+    { id: 'location-1', displayName: 'Chilanzar', status: 'ACTIVE' as const },
+    { id: 'location-2', displayName: 'Yunusabad', status: 'ACTIVE' as const },
+    { id: 'location-3', displayName: 'Sergeli', status: 'ACTIVE' as const },
+  ]);
   ensureLoaded = vi.fn().mockResolvedValue(undefined);
 }
 
@@ -152,6 +159,7 @@ describe('LocationsPage', () => {
         provideRouter([]),
         { provide: LocationsApi, useValue: api },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+        { provide: SessionCapabilities, useValue: { has: () => true } },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -229,6 +237,79 @@ describe('LocationsPage', () => {
     );
   });
 
+  describe('the closed-branch strip (brands-and-locations.md §6.2)', () => {
+    const strip = (): HTMLElement | null =>
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="closed-branch-strip"]');
+
+    it('names every branch shut by hand above the list, from the same read the list is drawn from', async () => {
+      await render();
+
+      expect(strip()?.textContent).toContain('Yunusabad');
+      expect(strip()?.textContent).toContain('until cancelled');
+      expect(strip()?.textContent).not.toContain('Chilanzar');
+      expect(api.serviceStates).toHaveBeenCalledTimes(1);
+    });
+
+    it('has no strip while every branch is open', async () => {
+      await render({
+        serviceStates: vi.fn().mockResolvedValue(
+          STATES.map((state) => ({
+            ...state,
+            mode: 'FOLLOW_SCHEDULE' as const,
+            effectiveMode: 'FOLLOW_SCHEDULE' as const,
+            reasonCode: null,
+          })),
+        ),
+      });
+
+      expect(strip()).toBeNull();
+    });
+
+    it('reopening from the strip puts the branch back on the list’s state column at once', async () => {
+      await render();
+      expect(rowFor(fixture, 'Yunusabad').textContent).toContain('fryer_broken');
+      api.serviceStates.mockResolvedValue(
+        STATES.map((state) => ({
+          ...state,
+          mode: 'FOLLOW_SCHEDULE' as const,
+          effectiveMode: 'FOLLOW_SCHEDULE' as const,
+          reasonCode: null,
+        })),
+      );
+
+      (strip()!.querySelector('[data-testid="closed-branch-reopen"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(api.changeServiceState).toHaveBeenCalledWith(
+        { tenantId: 'tenant-1', brandId: 'brand-1', locationId: 'location-2' },
+        { mode: 'FOLLOW_SCHEDULE' },
+      );
+      expect(strip()).toBeNull();
+      expect(rowFor(fixture, 'Yunusabad').textContent).not.toContain('fryer_broken');
+    });
+
+    it('reopening a row from the list takes the branch off the strip at once', async () => {
+      await render();
+      api.serviceStates.mockResolvedValue(
+        STATES.map((state) => ({
+          ...state,
+          mode: 'FOLLOW_SCHEDULE' as const,
+          effectiveMode: 'FOLLOW_SCHEDULE' as const,
+          reasonCode: null,
+        })),
+      );
+
+      (
+        rowFor(fixture, 'Yunusabad').querySelector('.actions-cell button') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(strip()).toBeNull();
+    });
+  });
+
   it('sorts forced-closed branches first, regardless of load order (severity sort)', async () => {
     await render();
 
@@ -265,7 +346,10 @@ describe('LocationsPage', () => {
     select.dispatchEvent(new Event('change'));
     fixture.detectChanges();
 
-    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    // The rows only: the closed-branch strip above them names Yunusabad whatever the filter says.
+    const text = rows(fixture)
+      .map((row) => row.textContent ?? '')
+      .join(' ');
     expect(text).toContain('Chilanzar');
     expect(text).not.toContain('Yunusabad');
     expect(text).not.toContain('Sergeli');
@@ -358,6 +442,132 @@ describe('LocationsPage', () => {
       mode: 'FORCE_CLOSED',
       reasonCode: 'regional holiday',
       locationIds: ['location-1'],
+    });
+  });
+
+  // ------------------------------------------------- the keys (brands-and-locations.md §1.8)
+
+  describe('the keys', () => {
+    function key(value: string): boolean {
+      const event = new KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'target', { value: document.activeElement ?? document.body });
+      return TestBed.inject(ShortcutRegistry).dispatch(event);
+    }
+
+    /** The cursor on the row naming `displayName`, reached by j from the top as an operator would. */
+    function cursorOn(displayName: string): HTMLElement {
+      (document.activeElement as HTMLElement | null)?.blur();
+      const target = rowFor(fixture, displayName);
+      for (let step = 0; step < rows(fixture).length; step++) {
+        key('j');
+        if (document.activeElement === target) {
+          return target;
+        }
+      }
+      throw new Error(`the cursor never reached ${displayName}`);
+    }
+
+    it('is on the cheat-sheet with the list keys', async () => {
+      await render();
+      const scope = TestBed.inject(ShortcutRegistry)
+        .scopes()
+        .find((candidate) => candidate.id === 'locations-list')!;
+
+      expect(scope.title()).toBe('Branches');
+      expect(scope.shortcuts.flatMap((shortcut) => shortcut.caps)).toEqual([
+        'j',
+        '↓',
+        'k',
+        '↑',
+        'Enter',
+        'Space',
+        'x',
+        'c',
+        'o',
+        'Esc',
+      ]);
+    });
+
+    it('j and k walk the rows without wrapping, and make real focus of it', async () => {
+      await render();
+      const all = rows(fixture);
+
+      key('j');
+      expect(document.activeElement).toBe(all[0]);
+      key('k');
+      expect(document.activeElement, 'k at the top stays at the top').toBe(all[0]);
+      for (let step = 0; step < all.length + 2; step++) {
+        key('j');
+      }
+      expect(document.activeElement, 'stops at the last row').toBe(all[all.length - 1]);
+    });
+
+    it('Space and x select the branch under the cursor and deselect it again', async () => {
+      await render();
+      const row = cursorOn('Chilanzar');
+      const checkbox = row.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+
+      expect(key(' ')).toBe(true);
+      fixture.detectChanges();
+      expect(checkbox.checked).toBe(true);
+      expect(fixture.nativeElement.querySelector('.bulk-bar')).not.toBeNull();
+
+      key('x');
+      fixture.detectChanges();
+      expect(checkbox.checked).toBe(false);
+    });
+
+    it('Esc clears the selection, and does nothing without one', async () => {
+      await render();
+      cursorOn('Chilanzar');
+      expect(key('Escape')).toBe(false);
+      key('x');
+      fixture.detectChanges();
+
+      expect(key('Escape')).toBe(true);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('.bulk-bar')).toBeNull();
+    });
+
+    it('c opens the close form on an open branch (and closes nothing by itself), and not on a closed one', async () => {
+      await render();
+      cursorOn('Yunusabad');
+      expect(key('c'), 'a closed branch has no «close» to press').toBe(false);
+
+      const row = cursorOn('Chilanzar');
+      expect(key('c')).toBe(true);
+      fixture.detectChanges();
+
+      expect(row.querySelector('.close-form')).not.toBeNull();
+      expect(api.changeServiceState).not.toHaveBeenCalled();
+    });
+
+    it('o reopens a closed branch, and does nothing on an open one', async () => {
+      await render();
+      cursorOn('Chilanzar');
+      expect(key('o')).toBe(false);
+
+      cursorOn('Yunusabad');
+      expect(key('o')).toBe(true);
+      await flushMicrotasks();
+
+      expect(api.changeServiceState).toHaveBeenCalledWith(
+        expect.objectContaining({ locationId: 'location-2' }),
+        expect.objectContaining({ mode: 'FOLLOW_SCHEDULE' }),
+      );
+    });
+
+    it('Enter opens the branch the cursor is on', async () => {
+      await render();
+      const row = cursorOn('Sergeli');
+      vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+      const opened = vi.fn();
+      row.addEventListener('click', opened);
+
+      expect(key('Enter')).toBe(true);
+
+      expect(opened).toHaveBeenCalledOnce();
     });
   });
 });

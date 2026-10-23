@@ -489,7 +489,11 @@ public class CatalogQueryService {
                         row.locationCount(),
                         row.categoryId(),
                         row.mxikCode(),
-                        row.packageCode()))
+                        row.packageCode(),
+                        null,
+                        null,
+                        row.fiscalUnitCode(),
+                        row.fiscalName()))
                 .toList();
         // A node whose code the list has since withdrawn needs attention even when it is fully classified, so it
         // is counted and listed apart from the unclassified ones (ADR 0173 Decision 7). Nothing blocks on it.
@@ -512,7 +516,9 @@ public class CatalogQueryService {
                         row.mxikCode(),
                         row.packageCode(),
                         fact.validUntil(),
-                        fact.replacedByCode()));
+                        fact.replacedByCode(),
+                        row.fiscalUnitCode(),
+                        row.fiscalName()));
             }
         }
         withdrawn.sort(java.util.Comparator.comparing(node -> node.name() == null ? "" : node.name()));
@@ -741,6 +747,9 @@ public class CatalogQueryService {
      * @param mxikCode    what the node already holds for the ИКПУ, if anything —
      *                    an unclassified node may hold some of the four fields
      * @param packageCode the same for the package code
+     * @param fiscalUnitCode the unit code the node already holds, if anything (ADR 0038 requires four fields; a
+     *                    node holding both codes and lacking this or the name is listed too, and says so)
+     * @param fiscalName  the receipt-line name the node already holds, if anything
      */
     public record FiscalCoverageNode(
             PriceableType nodeType,
@@ -752,7 +761,9 @@ public class CatalogQueryService {
             @Nullable String mxikCode,
             @Nullable String packageCode,
             java.time.@Nullable LocalDate mxikWithdrawnOn,
-            @Nullable String mxikReplacedBy) {
+            @Nullable String mxikReplacedBy,
+            @Nullable Integer fiscalUnitCode,
+            @Nullable String fiscalName) {
 
         public FiscalCoverageNode(
                 PriceableType nodeType,
@@ -763,7 +774,19 @@ public class CatalogQueryService {
                 @Nullable UUID categoryId,
                 @Nullable String mxikCode,
                 @Nullable String packageCode) {
-            this(nodeType, nodeId, name, categoryName, locationCount, categoryId, mxikCode, packageCode, null, null);
+            this(
+                    nodeType,
+                    nodeId,
+                    name,
+                    categoryName,
+                    locationCount,
+                    categoryId,
+                    mxikCode,
+                    packageCode,
+                    null,
+                    null,
+                    null,
+                    null);
         }
     }
 

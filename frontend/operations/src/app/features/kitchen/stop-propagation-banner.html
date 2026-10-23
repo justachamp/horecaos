@@ -9,6 +9,79 @@
       >
         {{ line(binding) }}
       </p>
+      @if (hasList(binding)) {
+        <button
+          type="button"
+          class="q-body-sm propagation__toggle"
+          [attr.aria-expanded]="list(binding) !== null"
+          (click)="toggleList(binding)"
+          data-testid="stop-propagation-would-push-toggle"
+        >
+          {{
+            (list(binding)
+              ? 'kitchen.stopList.propagation.dryRun.hide'
+              : 'kitchen.stopList.propagation.dryRun.show'
+            ) | t: { count: binding.wouldPush ?? 0 }
+          }}
+        </button>
+        @if (list(binding); as open) {
+          <ul class="propagation__list" data-testid="stop-propagation-would-push">
+            @for (item of open.items; track item.variantId + item.externalItemReference) {
+              <li
+                class="q-body-sm propagation__item"
+                data-testid="stop-propagation-would-push-item"
+              >
+                <span class="propagation__dish">
+                  {{ item.dishName || ('kitchen.stopList.propagation.dryRun.unnamed' | t) }}
+                </span>
+                <span class="propagation__decision">{{ decision(item) }}</span>
+                <span class="q-caption propagation__partner">
+                  {{
+                    'kitchen.stopList.propagation.dryRun.reference'
+                      | t: { reference: item.externalItemReference }
+                  }}
+                  · {{ partnerHolds(item) }}
+                </span>
+              </li>
+            }
+          </ul>
+          @if (open.loading) {
+            <p
+              class="q-caption propagation__line"
+              data-testid="stop-propagation-would-push-loading"
+            >
+              {{ 'kitchen.stopList.propagation.dryRun.loading' | t }}
+            </p>
+          } @else if (open.failed) {
+            <p
+              class="q-caption propagation__line"
+              role="status"
+              data-testid="stop-propagation-would-push-failed"
+            >
+              {{ 'kitchen.stopList.propagation.dryRun.failed' | t }}
+            </p>
+          }
+          @if (open.nextCursor && !open.loading) {
+            <button
+              type="button"
+              class="q-body-sm propagation__toggle"
+              (click)="moreOfList(binding)"
+              data-testid="stop-propagation-would-push-more"
+            >
+              {{ 'kitchen.stopList.propagation.dryRun.more' | t }}
+            </button>
+          }
+        }
+      }
+      @if (incident(binding); as text) {
+        <p
+          class="q-body-sm propagation__line propagation__line--attention"
+          role="status"
+          data-testid="stop-propagation-incident"
+        >
+          {{ text }}
+        </p>
+      }
     }
   </div>
 }

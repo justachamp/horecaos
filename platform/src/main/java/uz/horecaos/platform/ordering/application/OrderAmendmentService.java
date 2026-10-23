@@ -159,6 +159,7 @@ public class OrderAmendmentService {
     private final OrderDeliveryPoint deliveryPoint;
     private final CartMenuRules menu;
     private final LineRemovalCoordinator removals;
+    private final MarkedOrderPayment markedPayment;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderAmendmentService(
@@ -182,7 +183,8 @@ public class OrderAmendmentService {
             PromotionRedemptionPort promotions,
             PromotionQueryPort promotionQuery,
             CartMenuRules menu,
-            LineRemovalCoordinator removals) {
+            LineRemovalCoordinator removals,
+            MarkedOrderPayment markedPayment) {
         this.orders = orders;
         this.amendments = amendments;
         this.audit = audit;
@@ -203,6 +205,7 @@ public class OrderAmendmentService {
         this.promotionQuery = promotionQuery;
         this.menu = menu;
         this.removals = removals;
+        this.markedPayment = markedPayment;
         this.deliveryPoint = new OrderDeliveryPoint(orders, protection, objectMapper);
         // A second template for the one write that has to outlive the exception it
         // accompanies, exactly as PaymentAttemptService needs for the same reason:
@@ -279,6 +282,7 @@ public class OrderAmendmentService {
         requireRemovalsPossible(decoded.basket(), liveAtPropose);
         requireOrderableQuantities(order, decoded.basket());
         requireWeighedLinesStayAtHandover(order, decoded, liveAtPropose);
+        requireMarkedGoodsKeepAMarkingCapableMethod(order, decoded);
         requireScannedLinesAreNotReplaced(tenantId, orderId, decoded);
         long deltaTotalMinor = 0L;
         boolean requiresApproval = false;
@@ -619,8 +623,11 @@ public class OrderAmendmentService {
             deltaTotalMinor = totalMinor - previous.totalMinor();
             fiscalCorrectionRequired = true;
             // ADR 0169, decision 6: the cash a courier is told to collect follows the amended total. This was
-            // missing for an increase as well. A payment-method change brings its own tender (below).
-            if (decoded.paymentMethodCode() == null
+            // missing for an increase as well. A move to a provider brings its own tender (below), which is
+            // planned at the amended total; a batch that names no method, or names CASH (a no-op for the order
+            // already on cash that a method change is accepted for), keeps the cash tender where it is, so it is
+            // restated here. Skipping it for CASH left the settlement, and the courier's figure, at the old total.
+            if (!movesToAProvider(decoded)
                     && "NOT_REQUIRED".equals(order.paymentStatusProjection())
                     && deltaTotalMinor != 0) {
                 removals.restateCashDue(order, totalMinor, actorId);
@@ -632,7 +639,8 @@ public class OrderAmendmentService {
             // Asked again here: a priced amendment outlives the call that priced it, and this is the
             // statement that opens the provider intent.
             requireWeighedLinesStayAtHandover(order, decoded, liveLines);
-            paymentProjectionPatch = applyPaymentMethodChange(tenantId, order, amendment, decoded.paymentMethodCode());
+            paymentProjectionPatch = applyPaymentMethodChange(
+                    tenantId, order, amendment, decoded.paymentMethodCode(), totalMinor, actorId);
             fiscalCorrectionRequired = true;
         }
 
@@ -687,7 +695,7 @@ public class OrderAmendmentService {
                 .orElseThrow(
                         () -> new AmendmentNotPermittedException("The amendment settled while it was being applied"));
 
-        List<String> warnings = warningsFor(order, patch);
+        List<String> warnings = warningsFor(order, patch, totalMinor);
 
         events.publishEvent(new OrderAmendmentApplied(
                 UUID.randomUUID(),
@@ -1742,6 +1750,29 @@ public class OrderAmendmentService {
     }
 
     /**
+     * ADR 0038 stage 6, ADR 0166 Decision 7: the second door to the sale checkout already guards.
+     *
+     * <p>A basket holding a marked good is not offered, and cannot check out with, a method whose receipt
+     * cannot carry the code ({@code CartPaymentOptions}, {@code CheckoutEligibilityGuard}). Changing the
+     * payment method of a live order is the other way to the same pair, so it is shut by the same rule: an
+     * order that holds a marked good, or that this same batch adds one to, is not moved to such a method.
+     * Asked at propose, so the operator is refused before the customer is rung.
+     */
+    private void requireMarkedGoodsKeepAMarkingCapableMethod(OrderRow order, DecodedAmendment decoded) {
+        String method = decoded.paymentMethodCode();
+        if (method == null) {
+            return;
+        }
+        Set<UUID> added = new HashSet<>();
+        decoded.basket().addedLines().forEach(line -> added.add(line.variantId()));
+        markedPayment
+                .refusalOf(order.tenantId(), order.brandId(), order.orderId(), method, added)
+                .ifPresent(message -> {
+                    throw new AmendmentRefusedException("MARKED_GOODS_NEED_MARKING_CAPABLE_PAYMENT", message);
+                });
+    }
+
+    /**
      * ADR 0161, Decision 10: an amendment that would close or reduce a line holding a live mark is refused
      * before it writes anything.
      *
@@ -1853,6 +1884,12 @@ public class OrderAmendmentService {
         }
     }
 
+    /** Whether the batch moves the order to a method other than cash, which re-plans the money leg itself. */
+    private static boolean movesToAProvider(DecodedAmendment decoded) {
+        String method = decoded.paymentMethodCode();
+        return method != null && !CASH_METHOD_CODE.equalsIgnoreCase(method);
+    }
+
     /**
      * ADR 0039 {@code CHANGE_PAYMENT_METHOD}: {@code CASH} at either end is
      * carried out directly. Anything else on the <em>current</em> side needs
@@ -1866,7 +1903,12 @@ public class OrderAmendmentService {
      *         NOT_REQUIRED} projection alone
      */
     private @Nullable String applyPaymentMethodChange(
-            UUID tenantId, OrderRow order, AmendmentRow amendment, String paymentMethodCode) {
+            UUID tenantId,
+            OrderRow order,
+            AmendmentRow amendment,
+            String paymentMethodCode,
+            long newTotalMinor,
+            @Nullable String actorId) {
         if (CASH_METHOD_CODE.equalsIgnoreCase(paymentMethodCode)) {
             return null;
         }
@@ -1874,10 +1916,15 @@ public class OrderAmendmentService {
             throw new AmendmentRefusedException(
                     "PAYMENT_METHOD_NOT_ACCEPTED", "This location cannot accept " + paymentMethodCode);
         }
+        // ADR 0185. The settlement is the authority and the intent is told: the money tender is moved to the new
+        // method (and to the amended total, when this amendment repriced the order) and the provider is asked for
+        // what that leg now collects. It used to be asked for the order total, which on a points-plus-cash order is
+        // the money the customer had already part-paid in points, while the tender went on saying CASH.
+        long moneyDueMinor = removals.replanMoneyLeg(order, newTotalMinor, paymentMethodCode, actorId);
         payments.createIntent(
                 tenantId,
                 order.orderId(),
-                order.totalMinor(),
+                moneyDueMinor,
                 order.currency(),
                 paymentMethodCode,
                 amendment.idempotencyKey() + ":payment-method");
@@ -1923,10 +1970,22 @@ public class OrderAmendmentService {
                 .collect(Collectors.groupingBy(
                         QuoteSnapshot.Line::cartLineKey, LinkedHashMap::new, Collectors.toList()));
         Map<String, List<QuoteSnapshot.Adjustment>> hiddenChargesByLine = new LinkedHashMap<>();
+        // What each option charged a rewritten line: the hidden ones the server applied, and the ones the
+        // customer chose. A receipt lists every priced option as a line of its own, so the replacement
+        // line must carry the same itemisation the line it replaces had at checkout.
+        Map<String, List<QuoteSnapshot.Adjustment>> optionChargesByLine = new LinkedHashMap<>();
         for (QuoteSnapshot.Adjustment adjustment : quote.adjustments()) {
-            if (adjustment.lineKey() != null
-                    && QuoteSnapshot.Adjustment.HIDDEN_MODIFIER_SOURCE.equals(adjustment.sourceType())) {
+            if (adjustment.lineKey() == null) {
+                continue;
+            }
+            if (QuoteSnapshot.Adjustment.HIDDEN_MODIFIER_SOURCE.equals(adjustment.sourceType())) {
                 hiddenChargesByLine
+                        .computeIfAbsent(adjustment.lineKey(), key -> new ArrayList<>())
+                        .add(adjustment);
+            }
+            if (QuoteSnapshot.Adjustment.HIDDEN_MODIFIER_SOURCE.equals(adjustment.sourceType())
+                    || QuoteSnapshot.Adjustment.MODIFIER_OPTION_SOURCE.equals(adjustment.sourceType())) {
+                optionChargesByLine
                         .computeIfAbsent(adjustment.lineKey(), key -> new ArrayList<>())
                         .add(adjustment);
             }
@@ -2021,7 +2080,7 @@ public class OrderAmendmentService {
                         tenantId,
                         orderId,
                         newLineId,
-                        hiddenChargesByLine.getOrDefault(priced.lineKey(), List.of()),
+                        optionChargesByLine.getOrDefault(priced.lineKey(), List.of()),
                         adjustmentSequence);
             }
         }
@@ -2076,7 +2135,7 @@ public class OrderAmendmentService {
                         tenantId,
                         orderId,
                         newLineId,
-                        hiddenChargesByLine.getOrDefault(priced.lineKey(), List.of()),
+                        optionChargesByLine.getOrDefault(priced.lineKey(), List.of()),
                         adjustmentSequence);
             }
         }
@@ -2179,9 +2238,6 @@ public class OrderAmendmentService {
                         newLineId,
                         preset.sourcePresetId(),
                         preset.code(),
-                        preset.labelRu(),
-                        preset.labelUz(),
-                        preset.labelEn(),
                         preset.labels(),
                         preset.sortOrder());
             }
@@ -2286,14 +2342,21 @@ public class OrderAmendmentService {
     /**
      * What the operator should be told but not blocked by.
      *
-     * <p>ADR 0039: change-due short of the total raises
+     * <p>ADR 0039: change-due short of what the customer owes in cash raises
      * {@code CASH_TENDERED_INSUFFICIENT}, which the operator acknowledges rather
      * than being refused — the customer can hand over more, and a hard refusal
      * here would stop an order over a figure that is a hint rather than money.
+     *
+     * <p>What they owe in cash is the amended total less the points they spent
+     * (ADR 0185), the same figure order entry compares the tender with, and not
+     * the total: an 80 000 order paid 10 000 in points is covered by 70 000.
+     *
+     * @param totalMinor the order's total once this amendment has applied
      */
-    private List<String> warningsFor(OrderRow order, OrderFieldPatch patch) {
+    private List<String> warningsFor(OrderRow order, OrderFieldPatch patch, long totalMinor) {
         List<String> warnings = new ArrayList<>();
-        if (patch.cashTenderedExpectedMinor() != null && patch.cashTenderedExpectedMinor() < order.totalMinor()) {
+        if (patch.cashTenderedExpectedMinor() != null
+                && patch.cashTenderedExpectedMinor() < removals.cashToCollectMinor(order, totalMinor)) {
             warnings.add("CASH_TENDERED_INSUFFICIENT");
         }
         return warnings;

@@ -1,5 +1,6 @@
 import {
   LatLng,
+  LineTone,
   MapBounds,
   MapHandle,
   MapOptions,
@@ -10,6 +11,8 @@ import {
   PolygonHandle,
   PolygonLook,
   PolygonOptions,
+  PolylineHandle,
+  PolylineOptions,
   RectangleHandle,
   RectangleOptions,
   Unsubscribe,
@@ -81,6 +84,7 @@ export interface Ymaps {
   Map: new (element: HTMLElement, state: object, options?: object) => YMap;
   Placemark: new (coordinates: YCoord, properties?: object, options?: object) => YGeoObject;
   Polygon: new (coordinates: YCoord[][], properties?: object, options?: object) => YGeoObject;
+  Polyline: new (coordinates: YCoord[], properties?: object, options?: object) => YGeoObject;
   Rectangle: new (coordinates: YCoord[], properties?: object, options?: object) => YGeoObject;
 }
 
@@ -162,6 +166,26 @@ const PIN_PRESETS: Readonly<Record<PinTone, string | null>> = {
   order: 'islands#redDotIcon',
   closed: 'islands#grayDotIcon',
 };
+
+/** The vendor's stroke for each tone of line: the pin dots' own colours, so a leg and its pin read as one thing. */
+const LINE_COLOURS: Readonly<Record<LineTone, string>> = {
+  default: OVERLAY_STROKE,
+  courier: '#2e9d57',
+  order: '#d64545',
+};
+
+const LINE_WIDTH = 3;
+
+function lineOptions(
+  tone: LineTone | undefined,
+  dashed: boolean | undefined,
+): Record<string, unknown> {
+  return {
+    strokeColor: LINE_COLOURS[tone ?? 'default'],
+    strokeWidth: LINE_WIDTH,
+    strokeStyle: dashed ? 'dash' : 'solid',
+  };
+}
 
 export function toYandex(point: LatLng): YCoord {
   return [point.latitude, point.longitude];
@@ -270,6 +294,16 @@ class YandexMapHandle implements MapHandle {
     const handle = new YandexRectangle(this.map, rectangle);
     handle.setEditable(options.editable);
     return handle;
+  }
+
+  addPolyline(options: PolylineOptions): PolylineHandle {
+    const polyline = new this.ymaps.Polyline(
+      options.path.map(toYandex),
+      { hintContent: options.label ?? '' },
+      lineOptions(options.tone, options.dashed),
+    );
+    this.map.geoObjects.add(polyline);
+    return new YandexPolyline(this.map, polyline, options);
   }
 
   fitBounds(bounds: MapBounds): void {
@@ -390,6 +424,45 @@ class YandexPolygon implements PolygonHandle {
 
   remove(): void {
     this.map.geoObjects.remove(this.polygon);
+  }
+}
+
+class YandexPolyline implements PolylineHandle {
+  private tone: LineTone | undefined;
+  private dashed: boolean | undefined;
+
+  constructor(
+    private readonly map: YMap,
+    private readonly polyline: YGeoObject,
+    options: PolylineOptions,
+  ) {
+    this.tone = options.tone;
+    this.dashed = options.dashed;
+  }
+
+  setPath(path: readonly LatLng[]): void {
+    this.polyline.geometry.setCoordinates(path.map(toYandex));
+  }
+
+  setLook(look: {
+    readonly label?: string;
+    readonly tone?: LineTone;
+    readonly dashed?: boolean;
+  }): void {
+    if (look.label !== undefined) {
+      this.polyline.properties?.set('hintContent', look.label);
+    }
+    if (look.tone !== undefined || look.dashed !== undefined) {
+      this.tone = look.tone ?? this.tone;
+      this.dashed = look.dashed ?? this.dashed;
+      const next = lineOptions(this.tone, this.dashed);
+      this.polyline.options.set('strokeColor', next['strokeColor']);
+      this.polyline.options.set('strokeStyle', next['strokeStyle']);
+    }
+  }
+
+  remove(): void {
+    this.map.geoObjects.remove(this.polyline);
   }
 }
 

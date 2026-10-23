@@ -11,10 +11,12 @@ import uz.horecaos.platform.tenancy.api.TenantId;
  * <p>{@code OrderStateService} deferred this one deliberately, and said so in
  * place: PREPARING, READY, FULFILLING and COMPLETED "have no external consumer
  * in this slice… rather than being published now to a catalogue nobody reads."
- * That was right, and the condition has changed — ADR 0075's rating prompt has
- * to know an order finished, and ADR 0071 accepts a review only once it has. So
- * this is the one of the four that now has a reader, and the other three stay
- * unpublished for the reason that comment gives.
+ * That was right, and the condition has changed twice. First, ADR 0075's rating
+ * prompt had to know an order finished, and ADR 0071 accepts a review only once
+ * it has, so this was the first of the four to be published. ADR 0184 then gave
+ * the other three a reader (the customer's «being prepared», «ready» and «on the
+ * way» messages), and {@link OrderPreparing}, {@link OrderReady} and {@link
+ * OrderFulfilling} are published beside it.
  *
  * <p>Terminal, and therefore final: nothing leaves {@code COMPLETED}. A consumer
  * may treat this as the last word on the order without waiting for anything

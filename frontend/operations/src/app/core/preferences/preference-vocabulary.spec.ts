@@ -77,7 +77,7 @@ function propertiesOf(interfaceName: string): string[] {
 const sorted = (values: readonly string[]): string[] => [...values].sort();
 
 describe('the preference vocabulary, console against platform (ADR 0160)', () => {
-  it('names the same ten board columns on both sides of a document', () => {
+  it('names the same fifteen board columns on both sides of a document', () => {
     expect(sorted(unionOf('OrderBoardColumnsChange', 'show'))).toEqual(
       sorted(ORDER_BOARD_COLUMN_KEYS),
     );

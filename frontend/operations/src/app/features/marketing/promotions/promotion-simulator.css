@@ -125,7 +125,7 @@
 
 .sim__totals dd {
   margin: 0;
-  text-align: right;
+  text-align: end;
 }
 
 .sim__total-label,

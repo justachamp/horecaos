@@ -6,6 +6,8 @@ import org.springframework.stereotype.Component;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcLeadStore;
 import uz.horecaos.platform.customers.spi.CustomerErasureParticipant;
 import uz.horecaos.platform.customers.spi.CustomerErasureParticipant.ErasedContacts;
+import uz.horecaos.platform.customers.spi.ErasesCustomerData;
+import uz.horecaos.platform.customers.spi.ErasureCounts;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
@@ -30,6 +32,9 @@ import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
  * <p>Idempotent: a retried erasure overwrites the same rows with new tombstones.
  */
 @Component
+@ErasesCustomerData(
+        name = "leads",
+        tables = {"customer.leads"})
 public class LeadErasureParticipant implements CustomerErasureParticipant {
 
     private static final String TOMBSTONE = "[erased]";
@@ -46,13 +51,8 @@ public class LeadErasureParticipant implements CustomerErasureParticipant {
     }
 
     @Override
-    public void erase(UUID tenantId, UUID customerAccountId) {
-        erase(tenantId, customerAccountId, ErasedContacts.none());
-    }
-
-    @Override
-    public void erase(UUID tenantId, UUID customerAccountId, ErasedContacts held) {
-        leads.erasePersonalFields(
+    public ErasureCounts erase(UUID tenantId, UUID customerAccountId, ErasedContacts held) {
+        int overwritten = leads.erasePersonalFields(
                 tenantId,
                 customerAccountId,
                 held.phoneLookupHashes(),
@@ -65,5 +65,6 @@ public class LeadErasureParticipant implements CustomerErasureParticipant {
                         .serialize(),
                 TOMBSTONE,
                 clock.instant());
+        return ErasureCounts.of("customer.leads", overwritten);
     }
 }

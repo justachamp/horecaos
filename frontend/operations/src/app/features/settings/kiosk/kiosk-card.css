@@ -110,3 +110,7 @@ button:disabled {
   opacity: 0.5;
   cursor: default;
 }
+
+.hardware {
+  margin-top: 20px;
+}

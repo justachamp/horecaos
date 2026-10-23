@@ -96,7 +96,7 @@
           [value]="draftLocale()"
           (change)="draftLocale.set($any($event.target).value)"
         >
-          @for (locale of locales; track locale) {
+          @for (locale of locales(); track locale) {
             <option [value]="locale" [selected]="locale === draftLocale()">
               {{ localeLabel(locale) }}
             </option>

@@ -244,6 +244,29 @@
                 @if (statement.voidReason) {
                   <div class="q-caption muted">{{ statement.voidReason }}</div>
                 }
+                @if (invoiceOf(statement); as invoice) {
+                  <div
+                    class="q-caption einvoice"
+                    [class.einvoice--waiting]="invoice.awaitingYourSignature"
+                    data-testid="statement-einvoice"
+                  >
+                    <span class="muted">{{ 'finance.subscription.einvoice.label' | t }}:</span>
+                    {{ invoiceLabel(invoice) }}
+                    @if (invoice.awaitingYourSignature) {
+                      <div data-testid="statement-einvoice-sign">
+                        {{
+                          'finance.subscription.einvoice.sign'
+                            | t: { operator: operatorName(invoice.provider) }
+                        }}
+                      </div>
+                    }
+                    @if (invoiceChecked(invoice); as checked) {
+                      <div class="muted">
+                        {{ 'finance.subscription.einvoice.checked' | t: { time: checked } }}
+                      </div>
+                    }
+                  </div>
+                }
               </td>
               <td class="q-body-sm actions">
                 @if (statement.statementId) {

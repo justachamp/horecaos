@@ -1,6 +1,6 @@
 .pane {
-  border-left: 1px solid var(--q-hairline);
-  padding-left: 24px;
+  border-inline-start: 1px solid var(--q-hairline);
+  padding-inline-start: 24px;
 }
 
 .pane h2 {
@@ -20,7 +20,7 @@
   border: none;
   border-bottom: 2px solid transparent;
   padding: 8px 4px;
-  margin-right: 16px;
+  margin-inline-end: 16px;
   color: var(--q-ink-muted);
   cursor: pointer;
   font: inherit;
@@ -168,7 +168,7 @@ select.field {
 
 /* Staff 10.12: the brand's own required-default locale, marked in the editor's legend. */
 .locale-default-marker {
-  margin-left: 6px;
+  margin-inline-start: 6px;
   font-size: 0.85em;
   text-transform: uppercase;
   color: var(--q-ink-muted);

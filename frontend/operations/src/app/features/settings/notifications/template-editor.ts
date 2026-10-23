@@ -17,12 +17,14 @@ import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { InlineAlert } from '../../../shared/ui/inline-alert';
 import { PhoneFrame } from '../../../shared/ui/phone-frame';
+import { PushWordingFields, pushTargetIsValid } from './push-wording-fields';
 import { describeApiError } from '../../orders/order-errors';
 import {
   NotificationsApi,
   VariableCatalogueEntry,
   VersionResult,
   WIRED_CHANNELS,
+  Wording,
   WordingResponse,
 } from './notifications-api';
 
@@ -32,11 +34,42 @@ const PLACEHOLDER = /\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}/g;
 /** Sample values for the live preview — the same defaults `TemplateTestSendService` renders a test send with. */
 const SAMPLE_VALUES: Readonly<Record<string, string>> = {
   orderNumber: 'A-1042',
-  amount: '85 000 UZS',
+  amount: '85000',
   currency: 'UZS',
   reasonCode: 'OUT_OF_STOCK',
   code: '482913',
+  restaurantName: 'Oqtepa Lavash',
+  deliveryTime: '19:45',
+  preparationTime: '35',
+  discountAmount: '5000',
+  deliveryFee: '12000',
+  // The two personal values read as invented people in a preview: they are looked up when a real
+  // message is sent and are never stored (ADR 0184, D21), so there is no real value to show here.
+  customerName: 'Aziz',
+  courierFirstName: 'Bobur',
+  // LOYALTY_POINTS_EXPIRING (ADR 0046, ADR 0181): the same three values the platform's own test send uses.
+  loyaltyPoints: '12 000',
+  loyaltyExpiresOn: '28.10.2026',
+  loyaltyDaysRemaining: '14',
 };
+
+/** The product list as the preview shows it, with or without the price after each item. */
+function sampleProductList(showItemPrices: boolean): string {
+  return showItemPrices ? '2x Lavash (50000 UZS), 1x Cola (8000 UZS)' : '2x Lavash, 1x Cola';
+}
+
+/**
+ * What a prefilled wording needs to carry: a language, its text, the version's price switch, and for a push
+ * its cover and target (ADR 0182, D14).
+ */
+export interface PrefillWording {
+  readonly locale: string;
+  readonly body: string;
+  readonly subject: string | null;
+  readonly showItemPrices?: boolean;
+  readonly coverAssetId?: string | null;
+  readonly targetPath?: string | null;
+}
 
 /** Every placeholder a piece of text names, in first-appearance order. */
 function variablesUsedIn(text: string): readonly string[] {
@@ -47,8 +80,12 @@ function variablesUsedIn(text: string): readonly string[] {
   return [...found];
 }
 
-function renderPreview(text: string): string {
-  return text.replace(PLACEHOLDER, (whole, name: string) => SAMPLE_VALUES[name] ?? `[${name}]`);
+function renderPreview(text: string, showItemPrices: boolean): string {
+  return text.replace(PLACEHOLDER, (whole, name: string) =>
+    name === 'productList'
+      ? sampleProductList(showItemPrices)
+      : (SAMPLE_VALUES[name] ?? `[${name}]`),
+  );
 }
 
 /**
@@ -65,7 +102,7 @@ function renderPreview(text: string): string {
  */
 @Component({
   selector: 'q-notification-template-editor',
-  imports: [TPipe, InlineAlert, PhoneFrame],
+  imports: [TPipe, InlineAlert, PhoneFrame, PushWordingFields],
   templateUrl: './template-editor.html',
   styleUrl: './template-editor.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -79,8 +116,11 @@ export class TemplateEditor {
   readonly templateKey = input.required<string>();
   readonly notificationClass = input.required<string>();
   readonly channel = input.required<string>();
-  /** The version to start from — the active version's own text, or null for a blank draft. */
-  readonly prefill = input<readonly WordingResponse[] | null>(null);
+  /**
+   * The version to start from — the active version's own text, the platform's default wording a brand is
+   * customising (ADR 0184), or null for a blank draft.
+   */
+  readonly prefill = input<readonly PrefillWording[] | null>(null);
 
   readonly saved = output<VersionResult>();
   readonly cancelled = output<void>();
@@ -108,7 +148,14 @@ export class TemplateEditor {
   });
   protected readonly bodies = signal<Readonly<Record<string, string>>>({});
   protected readonly subjects = signal<Readonly<Record<string, string>>>({});
-  protected readonly hasSubject = computed(() => this.channel() === 'EMAIL');
+  /** An email has a subject and a push has a title: the same field, which every inbox and every lock screen shows. */
+  protected readonly hasSubject = computed(
+    () => this.channel() === 'EMAIL' || this.channel() === 'PUSH',
+  );
+  protected readonly isPush = computed(() => this.channel() === 'PUSH');
+  /** A push's cover and target are written once and sent with every language (ADR 0182, D14). */
+  protected readonly coverAssetId = signal<string | null>(null);
+  protected readonly targetPath = signal('');
   protected readonly isWired = computed(() => WIRED_CHANNELS.has(this.channel()));
 
   protected readonly catalogue = signal<readonly VariableCatalogueEntry[]>([]);
@@ -123,11 +170,47 @@ export class TemplateEditor {
   protected readonly error = signal<string | null>(null);
   protected readonly result = signal<VersionResult | null>(null);
 
-  protected readonly preview = computed(() => renderPreview(this.bodyOf(this.activeLocale())));
+  /**
+   * ADR 0184: whether `{{productList}}` follows each item with its line total. One value for the whole
+   * version, which is why it sits beside the tabs and not inside one of them.
+   */
+  protected readonly showItemPrices = signal(false);
+  /** The switch only means something where the class offers `{{productList}}` at all. */
+  protected readonly offersProductList = computed(() =>
+    this.variablesForClass().some((variable) => variable.name === 'productList'),
+  );
+  /** True when some language's wording prints the list, which is the only thing the switch changes. */
+  protected readonly usesProductList = computed(() =>
+    this.localeTags().some((tag) => variablesUsedIn(this.bodyOf(tag)).includes('productList')),
+  );
+  /** Variables looked up when a message is sent and never stored; the editor says so beside them. */
+  protected readonly offersPersonalVariables = computed(() =>
+    this.variablesForClass().some(
+      (variable) => variable.name === 'customerName' || variable.name === 'courierFirstName',
+    ),
+  );
+
+  protected readonly preview = computed(() =>
+    renderPreview(this.bodyOf(this.activeLocale()), this.showItemPrices()),
+  );
 
   protected readonly canSave = computed(
     () =>
-      !this.submitting() && this.localeTags().every((tag) => this.bodyOf(tag).trim().length > 0),
+      !this.submitting() &&
+      this.localeTags().every(
+        (tag) =>
+          this.bodyOf(tag).trim().length > 0 &&
+          // An email without a subject is filed under «no subject» by every inbox (ADR 0182).
+          (!this.hasSubject() || this.subjectOf(tag).trim().length > 0),
+      ) &&
+      // A switch that changes nothing is refused by the platform; saying so here saves the round trip.
+      (!this.showItemPrices() || this.usesProductList()) &&
+      (!this.isPush() || pushTargetIsValid(this.targetPath())),
+  );
+
+  /** The other languages this wording can be copied into, to start their translation (settings.md 10.9). */
+  protected readonly copyTargets = computed(() =>
+    this.localeTags().filter((tag) => tag !== this.activeLocale()),
   );
   protected readonly anyBodyStarted = computed(() =>
     this.localeTags().some((tag) => this.bodyOf(tag).trim().length > 0),
@@ -173,9 +256,17 @@ export class TemplateEditor {
       for (const row of prefill) {
         bodies[row.locale] = row.body;
         subjects[row.locale] = row.subject ?? '';
+        // One cover and one target for the version: the first language that carries them speaks for all.
+        if (this.coverAssetId() === null && row.coverAssetId) {
+          this.coverAssetId.set(row.coverAssetId);
+        }
+        if (this.targetPath() === '' && row.targetPath) {
+          this.targetPath.set(row.targetPath);
+        }
       }
       this.bodies.set(bodies);
       this.subjects.set(subjects);
+      this.showItemPrices.set(prefill.some((row) => row.showItemPrices === true));
     });
 
     effect(() => {
@@ -201,6 +292,17 @@ export class TemplateEditor {
 
   protected setSubject(tag: string, value: string): void {
     this.subjects.update((current) => ({ ...current, [tag]: value }));
+  }
+
+  /**
+   * Copies the active language's text (and subject) into another language, to be translated there. It
+   * replaces what the target held, which the button says in its label when the target had text.
+   */
+  protected copyActiveTo(target: string): void {
+    const source = this.activeLocale();
+    this.setBody(target, this.bodyOf(source));
+    this.setSubject(target, this.subjectOf(source));
+    this.chosenLocale.set(target);
   }
 
   /** Appends the placeholder to the active locale's own body — see the class doc for why nothing else is needed. */
@@ -241,14 +343,8 @@ export class TemplateEditor {
       }
 
       const outcome = await this.api.addVersion(this.scope(), this.templateId(), {
-        wordings: Object.fromEntries(
-          sent.map((tag) => [
-            tag,
-            this.hasSubject() && (subjects[tag] ?? '').trim().length > 0
-              ? { subject: (subjects[tag] ?? '').trim(), body: bodies[tag] ?? '' }
-              : { body: bodies[tag] ?? '' },
-          ]),
-        ),
+        showItemPrices: this.showItemPrices() ? true : undefined,
+        wordings: Object.fromEntries(sent.map((tag) => [tag, this.wordingOf(tag)])),
         variablesSchema: schema,
       });
       this.result.set(outcome);
@@ -260,6 +356,22 @@ export class TemplateEditor {
     }
   }
 
+  /** What is sent for one language: the text, and for a push its title, cover and target. */
+  private wordingOf(tag: string): Wording {
+    const body = this.bodies()[tag] ?? '';
+    const subject = (this.subjects()[tag] ?? '').trim();
+    const text: Wording = this.hasSubject() && subject.length > 0 ? { subject, body } : { body };
+    if (!this.isPush()) {
+      return text;
+    }
+    const target = this.targetPath().trim();
+    return {
+      ...text,
+      ...(this.coverAssetId() !== null ? { coverAssetId: this.coverAssetId() } : {}),
+      ...(target.length > 0 ? { targetPath: target } : {}),
+    };
+  }
+
   protected cancel(): void {
     this.cancelled.emit();
   }
@@ -267,7 +379,7 @@ export class TemplateEditor {
   private async loadCatalogue(): Promise<void> {
     this.catalogueLoading.set(true);
     try {
-      this.catalogue.set(await this.api.variableCatalogue(this.scope()));
+      this.catalogue.set(await this.api.variableCatalogue(this.scope(), this.templateKey()));
     } finally {
       this.catalogueLoading.set(false);
     }

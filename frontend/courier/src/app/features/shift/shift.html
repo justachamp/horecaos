@@ -1,0 +1,162 @@
+<section class="page">
+  <h1 class="q-title">{{ 'shift.title' | t }}</h1>
+
+  @switch (profile.state()) {
+    @case ('loading') {
+      <p class="q-body muted" role="status">{{ 'common.loading' | t }}</p>
+    }
+    @case ('error') {
+      <p class="notice error" role="alert">{{ 'error.generic' | t }}</p>
+    }
+    @case ('not-registered') {
+      <div class="card">
+        <h2 class="q-subhead">{{ 'home.notRegistered.title' | t }}</h2>
+        <p class="q-body">{{ 'home.notRegistered.body' | t }}</p>
+      </div>
+    }
+    @case ('ready') {
+      @let record = profile.profile();
+      @if (record) {
+        @if (record.openShift; as shift) {
+          <div class="card">
+            <h2 class="q-emphasis">{{ 'shift.state.open' | t }}</h2>
+            <p class="q-subhead">
+              {{ (onBreak() ? 'home.shift.duty.ON_BREAK' : 'home.shift.duty.AVAILABLE') | t }}
+            </p>
+            @if (shift.locationName) {
+              <p class="q-body">{{ 'home.shift.at' | t: { branch: shift.locationName } }}</p>
+            }
+            <p class="q-body-sm muted">{{ 'home.shift.since' | t: { time: openedAt() } }}</p>
+
+            @if (confirmingClose()) {
+              <div class="notice warning" role="alertdialog" aria-labelledby="close-title">
+                <p id="close-title" class="q-emphasis">{{ 'shift.close.title' | t }}</p>
+                <p class="q-body-sm">{{ 'shift.close.body' | t }}</p>
+              </div>
+              <div class="actions">
+                <button
+                  type="button"
+                  class="btn danger"
+                  [disabled]="shifts.busy()"
+                  (click)="close()"
+                >
+                  {{ 'shift.close.confirm' | t }}
+                </button>
+                <button type="button" class="btn secondary" (click)="keepWorking()">
+                  {{ 'shift.close.cancel' | t }}
+                </button>
+              </div>
+            } @else {
+              <div class="actions">
+                @if (onBreak()) {
+                  <button
+                    type="button"
+                    class="btn"
+                    [disabled]="shifts.busy()"
+                    (click)="shifts.endBreak()"
+                  >
+                    {{ 'shift.break.end' | t }}
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    class="btn secondary"
+                    [disabled]="shifts.busy()"
+                    (click)="shifts.startBreak()"
+                  >
+                    {{ 'shift.break.start' | t }}
+                  </button>
+                }
+                <button
+                  type="button"
+                  class="btn danger"
+                  [disabled]="shifts.busy()"
+                  (click)="askToClose()"
+                >
+                  {{ 'shift.close' | t }}
+                </button>
+              </div>
+              <p class="q-body-sm muted">{{ 'shift.break.note' | t }}</p>
+            }
+          </div>
+        } @else {
+          @if (shifts.lastClosed(); as closed) {
+            <div class="card">
+              <h2 class="q-emphasis">{{ 'shift.closed.title' | t }}</h2>
+              <p class="q-body">{{ 'shift.closed.paid' | t: { duration: paid() } }}</p>
+              <p class="q-body-sm muted">
+                {{ 'shift.closed.break' | t: { duration: onBreakTime() } }}
+              </p>
+            </div>
+            @if (closed.cashHandoverId) {
+              <div class="card">
+                <h2 class="q-emphasis">{{ 'shift.cash.title' | t }}</h2>
+                @if (shifts.cashDeclared()) {
+                  <p class="notice" role="status">{{ 'shift.cash.done' | t }}</p>
+                } @else {
+                  <p class="q-body">{{ 'shift.cash.body' | t }}</p>
+                  <div class="field">
+                    <label class="q-caption" for="cash">{{
+                      'shift.cash.label' | t: { currency: currency }
+                    }}</label>
+                    <input
+                      id="cash"
+                      type="text"
+                      inputmode="decimal"
+                      autocomplete="off"
+                      [value]="cashText()"
+                      (input)="typeCash($event)"
+                      [attr.aria-invalid]="cashInvalid()"
+                    />
+                  </div>
+                  @if (cashInvalid()) {
+                    <p class="notice error" role="alert">{{ 'shift.cash.invalid' | t }}</p>
+                  }
+                  <button type="button" class="btn" [disabled]="shifts.busy()" (click)="declare()">
+                    {{ 'shift.cash.declare' | t }}
+                  </button>
+                }
+              </div>
+            }
+          }
+
+          <div class="card">
+            <h2 class="q-emphasis">{{ 'shift.none.title' | t }}</h2>
+            @if (shifts.selectedBranch(); as branch) {
+              <p class="q-body">{{ 'shift.none.body' | t }}</p>
+              @if (record.branches.length > 1) {
+                <div class="field">
+                  <label class="q-caption" for="branch">{{ 'shift.branch.label' | t }}</label>
+                  <select id="branch" (change)="choose($event)">
+                    @for (option of record.branches; track option.locationId) {
+                      <option
+                        [value]="option.locationId"
+                        [selected]="option.locationId === branch.locationId"
+                      >
+                        {{ option.displayName }}
+                      </option>
+                    }
+                  </select>
+                </div>
+              }
+              <button type="button" class="btn" [disabled]="shifts.busy()" (click)="shifts.open()">
+                {{ 'shift.open' | t }}
+              </button>
+              <p class="q-body-sm muted">{{ 'shift.open.locationNote' | t }}</p>
+            } @else {
+              <p class="q-body">{{ 'home.branches.none' | t }}</p>
+            }
+          </div>
+        }
+
+        @if (errorText(); as text) {
+          <p class="notice error" role="alert">{{ text }}</p>
+        }
+
+        @if (record.openShift) {
+          <app-duty-card />
+        }
+      }
+    }
+  }
+</section>

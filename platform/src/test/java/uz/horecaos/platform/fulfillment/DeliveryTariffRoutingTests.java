@@ -47,6 +47,7 @@ import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZo
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.support.AuditTrail;
+import uz.horecaos.platform.support.LocaleNames;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 
@@ -443,7 +444,8 @@ class DeliveryTariffRoutingTests {
     }
 
     private void activeZone(UUID tariffId) {
-        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "CITY", "CITY", "CITY", "CITY");
+        UUID zoneId =
+                zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "CITY", LocaleNames.triple("CITY", "CITY", "CITY"));
         var drafted = zones.draftCircleVersion(
                 new ServiceZoneService.NewVersion(
                         TENANT, BRAND, zoneId, ZoneRole.DELIVERY, null, 0, "UZS", tariffId, null, null, ACTOR),

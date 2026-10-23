@@ -7,6 +7,7 @@ import { OwnProfile } from '../../core/auth/own-profile';
 import { ScopeGrant } from '../../core/auth/session-context';
 import { ApiError } from '../../core/api/problem-details';
 import { StaffMember, hasName } from '../../core/api/staff-member';
+import { PhonePipe } from '../../core/format/phone.pipe';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { localeDisplayName } from '../../core/i18n/locale-labels';
@@ -19,9 +20,11 @@ import { StaffMembersApi } from './staff-members-api';
 import { ProfileDraft, draftOf, toSelfRequest } from './staff-profile-draft';
 import { MyProfileInterfaceCard } from './my-profile-interface-card';
 import { MyProfileMfaCard } from './my-profile-mfa-card';
+import { MyProfilePasswordCard } from './my-profile-password-card';
 import { MyProfilePinCard } from './my-profile-pin-card';
 import { MyProfileSessionsCard } from './my-profile-sessions-card';
 import { StaffProfileForm } from './staff-profile-form';
+import { StaffJobNames } from './staff-job-names';
 import { roleLabel, scopeLevelLabel } from './staff-role-labels';
 
 /** What the platform accepts as a photo, and the size it stops at (`StaffSelfController.MAX_PHOTO_BYTES`). */
@@ -71,16 +74,18 @@ interface CapabilityGroup {
  * **«Вход в два шага» is real (ADR 0148):** {@link MyProfileMfaCard}.
  *
  * **«Сеансы» is real (ADR 0176):** {@link MyProfileSessionsCard} lists the account's sessions by
- * device and ends them. The rest of «Безопасность» (the password, the terminal PIN) is not built
- * and renders as a named absence, the same "omit, do not disable" rule `not-built-page.ts`
- * follows.
+ * device and ends them. **«Пароль» is a hand-off (ADR 0098):** {@link MyProfilePasswordCard} sends
+ * the person to the reset flow and says that it ends every sign-in. The terminal PIN is real too
+ * (ADR 0155, {@link MyProfilePinCard}); nothing on «Безопасность» is a named absence any more.
  */
 @Component({
   selector: 'q-my-profile-page',
   imports: [
     TPipe,
+    PhonePipe,
     StaffProfileForm,
     MyProfileMfaCard,
+    MyProfilePasswordCard,
     MyProfilePinCard,
     MyProfileSessionsCard,
     MyProfileInterfaceCard,
@@ -97,6 +102,7 @@ export class MyProfilePage {
   private readonly ownProfile = inject(OwnProfile);
   protected readonly auth = inject(Auth);
   protected readonly i18n = inject(I18n);
+  private readonly jobNames = inject(StaffJobNames);
   private readonly registry = inject(PlatformLocales);
 
   protected readonly scopes = computed<readonly ScopeGrant[]>(() => this.tenant.scopes());
@@ -138,6 +144,8 @@ export class MyProfilePage {
 
   private async loadProfile(): Promise<void> {
     await this.tenant.ensureLoaded();
+    // A job the company defined is named by the session context for the person holding it (ADR 0186).
+    this.jobNames.rememberFromScopes(this.tenant.scopes());
     const tenantId = this.tenant.tenantId();
     if (!tenantId) {
       this.profileState.set('absent');
@@ -281,7 +289,7 @@ export class MyProfilePage {
   }
 
   protected roleLabel(code: string): string {
-    return roleLabel(code, (key) => this.i18n.t(key));
+    return roleLabel(code, (key) => this.i18n.t(key), this.jobNames.nameOf(code));
   }
 
   protected scopeLevelLabel(scopeType: ScopeGrant['scope']['type']): string {

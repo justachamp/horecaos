@@ -521,12 +521,17 @@ public class JdbcAudienceStore {
      */
     public List<SnapshotForPurge> snapshotsPastRetention(Instant now, int retentionMonths, int limit) {
         return jdbc.sql("""
-                SELECT id, tenant_id
-                  FROM marketing.audience_snapshots
-                 WHERE status = 'READY'
-                   AND completed_at < (CAST(:now AS timestamptz) - (:months * INTERVAL '1 month'))
-                   AND members_purged_at IS NULL
-                 ORDER BY completed_at
+                SELECT s.id, s.tenant_id
+                  FROM marketing.audience_snapshots s
+                 WHERE s.status = 'READY'
+                   AND s.completed_at < (CAST(:now AS timestamptz) - (:months * INTERVAL '1 month'))
+                   AND s.members_purged_at IS NULL
+                   AND NOT EXISTS (
+                       SELECT 1 FROM marketing.audience_snapshot_members m
+                         JOIN customer.legal_holds hold
+                           ON hold.tenant_id = m.tenant_id AND hold.customer_account_id = m.customer_account_id
+                        WHERE m.snapshot_id = s.id AND hold.status = 'ACTIVE')
+                 ORDER BY s.completed_at
                  LIMIT :limit
                 """)
                 .param("now", utc(now))

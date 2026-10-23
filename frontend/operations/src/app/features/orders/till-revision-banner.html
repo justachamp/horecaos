@@ -1,0 +1,66 @@
+@if (open(); as notice) {
+  <section class="till-revision" role="alert" data-testid="till-revision-banner">
+    <h3 class="q-emphasis till-revision__title">{{ 'orders.tillRevision.title' | t }}</h3>
+    <p class="till-revision__body" data-testid="till-revision-body">
+      {{
+        'orders.tillRevision.body'
+          | t
+            : {
+                till: money(notice.tillTotalMinor, notice.currency),
+                revised: money(notice.revisedTotalMinor, notice.currency),
+                delta: signedMoney(notice.deltaMinor, notice.currency),
+              }
+      }}
+    </p>
+    @if (notice.failureCode) {
+      <p class="q-caption till-revision__failure" data-testid="till-revision-failure">
+        {{ 'orders.tillRevision.failed' | t }}
+      </p>
+    }
+    @if (message(); as text) {
+      <p class="q-caption till-revision__message" role="status" data-testid="till-revision-message">
+        {{ text }}
+      </p>
+    }
+    @if (mayResolve()) {
+      <div class="till-revision__actions">
+        @if (view()?.canTell) {
+          <button
+            type="button"
+            class="till-revision__send q-body-sm"
+            [disabled]="busy()"
+            (click)="send()"
+            data-testid="till-revision-send"
+          >
+            {{ (busy() ? 'orders.tillRevision.sending' : 'orders.tillRevision.send') | t }}
+          </button>
+        }
+        <button
+          type="button"
+          class="till-revision__acknowledge q-body-sm"
+          [disabled]="busy()"
+          (click)="acknowledge()"
+          data-testid="till-revision-acknowledge"
+        >
+          {{ 'orders.tillRevision.acknowledge' | t }}
+        </button>
+      </div>
+    } @else {
+      <p class="q-caption till-revision__ask-manager" data-testid="till-revision-ask-manager">
+        {{ 'orders.tillRevision.askManager' | t }}
+      </p>
+    }
+  </section>
+} @else if (justClosed(); as closed) {
+  <p class="q-caption till-revision__closed" role="status" data-testid="till-revision-closed">
+    {{ (closed === 'TOLD' ? 'orders.tillRevision.told' : 'orders.tillRevision.acknowledged') | t }}
+  </p>
+} @else if (unreadable()) {
+  <p
+    class="q-caption till-revision__unreadable"
+    role="status"
+    data-testid="till-revision-unreadable"
+  >
+    {{ 'orders.tillRevision.unreadable' | t }}
+  </p>
+}

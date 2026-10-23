@@ -3,6 +3,7 @@ package uz.horecaos.platform.fiscal.infrastructure.persistence;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -49,6 +50,7 @@ public class JdbcFiscalEvidenceStore {
             UUID orderId,
             @Nullable UUID legalEntityId,
             @Nullable UUID tenderId,
+            @Nullable LocalDate businessDate,
             @Nullable UUID paymentIntentId,
             @Nullable String providerType,
             String documentType,
@@ -92,7 +94,7 @@ public class JdbcFiscalEvidenceStore {
     /** Every document for an order, oldest first. Plural, and never anything else. */
     public List<EvidenceRow> documentsOfOrder(UUID tenantId, UUID orderId) {
         return jdbc.sql("""
-                        SELECT d.id, d.order_id, d.legal_entity_id, d.tender_id, d.payment_intent_id,
+                        SELECT d.id, d.order_id, d.legal_entity_id, d.tender_id, d.business_date, d.payment_intent_id,
                                d.provider_type, d.document_type, d.corrects_document_id, d.status,
                                d.reason_code, d.reason_note, d.external_receipt_id, d.fiscal_sign,
                                d.terminal_id, d.receipt_reference, d.registered_at, d.receipt_url,
@@ -345,6 +347,7 @@ public class JdbcFiscalEvidenceStore {
                 row.getObject("order_id", UUID.class),
                 row.getObject("legal_entity_id", UUID.class),
                 row.getObject("tender_id", UUID.class),
+                row.getObject("business_date", LocalDate.class),
                 row.getObject("payment_intent_id", UUID.class),
                 row.getString("provider_type"),
                 row.getString("document_type"),

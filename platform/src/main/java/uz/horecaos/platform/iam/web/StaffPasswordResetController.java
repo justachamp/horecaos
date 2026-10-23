@@ -65,6 +65,9 @@ public class StaffPasswordResetController {
      */
     private static final RateLimiter.Policy LIMIT = RateLimiter.Policy.strictPerMinute(10);
 
+    /** {@code uz-Latn}, {@code en-US}, {@code uz_UZ}: a language, then up to three subtags. */
+    private static final String LANGUAGE_TAG_SHAPE = "[A-Za-z]{2,8}([-_][A-Za-z0-9]{1,8}){0,3}";
+
     private final PasswordResetService resets;
     private final RateLimiter rateLimiter;
 
@@ -184,10 +187,21 @@ public class StaffPasswordResetController {
         }
     }
 
-    /** A user name or an email address, and the language to write in. */
+    /**
+     * A user name or an email address, and the language to write in.
+     *
+     * <p>The locale is checked for being the shape of a language tag and for nothing more. Which tags
+     * exist, which spellings are aliases ({@code uz} for {@code uz-Latn}) and what the platform sends
+     * in is the registry's to say, and {@code LocaleVocabulary.message} answers any tag with a
+     * language it writes in or the fallback (ADR 0149). A list of tags here was a second copy of the
+     * registry that refused the console's own {@code uz-Latn}, which closed the one recovery path of
+     * a locked-out Uzbek-language account.
+     */
     public record PasswordResetRequest(
             @NotBlank @Size(max = 255) String login,
-            @Pattern(regexp = "uz|ru|en") @Nullable String locale) {
+
+            @Size(max = 35) @Pattern(regexp = LANGUAGE_TAG_SHAPE) @Nullable
+            String locale) {
 
         /** A record's generated {@code toString} would print the login. */
         @Override

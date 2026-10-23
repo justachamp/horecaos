@@ -121,6 +121,9 @@ services:
       HORECAOS_STOREFRONT_ORIGIN: ${HORECAOS_STOREFRONT_ORIGIN:?set the public storefront origin, for example https://horecaos.uz}
       HORECAOS_OPERATIONS_ORIGIN: ${HORECAOS_OPERATIONS_ORIGIN:?set the public operations console origin, for example https://operations.horecaos.uz}
       HORECAOS_CONTROL_PLANE_ORIGIN: ${HORECAOS_CONTROL_PLANE_ORIGIN:?set the public control-plane origin, for example https://admin.horecaos.uz}
+      # ADR 0179. Optional: unset, this is an address nothing can reach, and the Caddyfile's
+      # courier block stays dormant. See the comment above that block.
+      HORECAOS_COURIER_ORIGIN: ${HORECAOS_COURIER_ORIGIN:-http://courier.disabled.invalid}
       HORECAOS_ACME_EMAIL: ${HORECAOS_ACME_EMAIL:?set the address ACME certificate expiry notices should go to}
       # ADR 0023: Payme's published source addresses, defence in depth for
       # /providers/payme/*. Deliberately defaulted to a non-routable address
@@ -230,7 +233,6 @@ services:
       APP_BRAND_ID: ${HORECAOS_STOREFRONT_BRAND_ID:?set the pilot brand id}
       APP_DEFAULT_LOCATION_ID: ${HORECAOS_STOREFRONT_LOCATION_ID:?set the pilot location id}
       APP_CHANNEL: STOREFRONT
-      APP_YANDEX_MAPS_API_KEY: ${HORECAOS_YANDEX_MAPS_API_KEY:-}
       TZ: Asia/Tashkent
     networks:
       - public
@@ -312,6 +314,47 @@ services:
           cpus: "0.5"
           memory: 128M
 
+  courier-web:
+    # The courier PWA (ADR 0179, frontend/courier). Same nginx + envsubst shape as the other
+    # frontends and the same reasoning as storefront-web above; the image rewrites its own
+    # /config.json from these variables at every start, so the container is not read-only.
+    # It is always declared and idle until the edge has a courier origin to send to it.
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    image: ${HORECAOS_REGISTRY}/horecaos-courier:${HORECAOS_FRONTEND_IMAGE_TAG:?set the frontend release tag}
+    environment:
+      # Same-origin: the edge proxies /api/v1/courier/* for this origin and nothing else.
+      APP_API_BASE_URL: /api/v1
+      # The browser signs in at Keycloak directly, so this is the PUBLIC auth origin, and it
+      # must equal the realm's issuer (HORECAOS_AUTH_ORIGIN) exactly: the app refuses a
+      # discovery document that names another.
+      APP_ISSUER_URL: ${HORECAOS_AUTH_ORIGIN}/realms/horecaos
+      APP_CLIENT_ID: horecaos-courier
+      # The tenant this deployment's couriers work for. One container per tenant, like the
+      # storefront; defaults to the pilot tenant the storefront serves.
+      APP_TENANT_ID: ${HORECAOS_COURIER_TENANT_ID:-${HORECAOS_STOREFRONT_TENANT_ID}}
+      APP_DISPLAY_TIME_ZONE: Asia/Tashkent
+      # The currency this tenant's couriers are settled in; sent when a shift opens and closes.
+      APP_CURRENCY: ${HORECAOS_COURIER_CURRENCY:-UZS}
+      TZ: Asia/Tashkent
+    networks:
+      - public
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+
   # ---------------------------------------------------------------------------
   # Application
   # ---------------------------------------------------------------------------
@@ -349,6 +392,16 @@ services:
       # against Spring Boot 4.1's relaxed-binding rules, not guessed.
       HORECAOS_CUSTOMERS_VERIFICATION_PRESET_PHONE: ${HORECAOS_VERIFICATION_PRESET_PHONE:-}
       HORECAOS_CUSTOMERS_VERIFICATION_PRESET_CODE: ${HORECAOS_VERIFICATION_PRESET_CODE:-}
+      # ADR 0029's "Provisional retention": the platform refuses to start on a production profile while any retention value
+      # is unconfirmed by legal (ProvisionalRetentionGuard). Confirming is these two lines in the environment file, nothing
+      # else; REPORT_ONLY keeps one deployment going while the signed document is obtained and warns on every start.
+      # platform/docs/runbooks/external-connections/w10-privacy.md has the steps and the way back.
+      HORECAOS_PRIVACY_RETENTION_CONFIRMED: ${HORECAOS_PRIVACY_RETENTION_CONFIRMED:-}
+      HORECAOS_PRIVACY_RETENTION_CONFIRMATION_REFERENCE: ${HORECAOS_PRIVACY_RETENTION_CONFIRMATION_REFERENCE:-}
+      HORECAOS_PRIVACY_RETENTION_CHECK: ${HORECAOS_PRIVACY_RETENTION_CHECK:-AUTO}
+      # Off by default. REPORT_ONLY counts consent decisions recorded under a purpose the tenant has not registered
+      # (horecaos.customers.consent.unregistered_purpose); it never refuses one.
+      HORECAOS_CUSTOMERS_CONSENT_PURPOSE_CHECK: ${HORECAOS_CUSTOMERS_CONSENT_PURPOSE_CHECK:-OFF}
 
       HORECAOS_DB_URL: jdbc:postgresql://platform-db:5432/horecaos
       HORECAOS_DB_USERNAME: horecaos_app
@@ -393,6 +446,24 @@ services:
       HORECAOS_MAIL_SMTP_SECURITY: ${HORECAOS_MAIL_SMTP_SECURITY:-STARTTLS}
       HORECAOS_MAIL_SMTP_USERNAME: ${HORECAOS_MAIL_SMTP_USERNAME:-}
       HORECAOS_MAIL_SMTP_PASSWORD_REF: ${HORECAOS_MAIL_SMTP_PASSWORD_REF:-}
+      # ADR 0182: a tenant's campaign email leaves through the same relay, in the brand's
+      # name, and each tenant may send this many a UTC day (the excess is held to the
+      # next day, not dropped). Set it against the provider's own sending limits.
+      HORECAOS_NOTIFICATIONS_EMAIL_DAILY_CAP_PER_TENANT: ${HORECAOS_NOTIFICATIONS_EMAIL_DAILY_CAP_PER_TENANT:-1000}
+      # ADR 0182: whether a courier's own login number may be used for a dispatcher's SMS.
+      # The platform owner's answer to give; false until it is recorded, and a courier
+      # broadcast is refused (COURIER_CONTACTS_NOT_WIRED) while it is.
+      HORECAOS_COURIERS_BROADCAST_CONTACT_USE_CLEARED: ${HORECAOS_COURIERS_BROADCAST_CONTACT_USE_CLEARED:-false}
+      # ADR 0182, D14: Web Push from the storefronts, signed as the platform (VAPID). All three empty
+      # means push is off and the console says PUSH_NOT_CONFIGURED. The private key is never a value
+      # here: the reference names it in OpenBao, for example
+      # horecaos:production:provider_notification:platform:vapid, stored with
+      #   bao kv put horecaos/production/provider_notification/platform/vapid value=<base64url private key>
+      # The public key is not a secret. The subject is a mailto: or https: contact for the push services.
+      # See platform/docs/runbooks/external-connections/w7-campaign-channels.md, section 9.
+      HORECAOS_PUSH_VAPID_PUBLIC_KEY: ${HORECAOS_PUSH_VAPID_PUBLIC_KEY:-}
+      HORECAOS_PUSH_VAPID_PRIVATE_KEY_REF: ${HORECAOS_PUSH_VAPID_PRIVATE_KEY_REF:-}
+      HORECAOS_PUSH_VAPID_SUBJECT: ${HORECAOS_PUSH_VAPID_SUBJECT:-}
       # ADR 0069: the grounded assistant's model provider. Empty means the
       # assistant takes no turns. The key is never a value here: the reference
       # names it in OpenBao, for example
@@ -472,6 +543,19 @@ services:
       # recorded on every fee the engine measures, so the two move together.
       HORECAOS_ROUTING_OSRM_ENABLED: ${HORECAOS_ROUTING_OSRM_ENABLED:-false}
       HORECAOS_ROUTING_OSRM_DATASET_VERSION: ${HORECAOS_ROUTING_DATASET_TAG:-}
+
+      # ADR 0145: address search and map tiles. `none` (the default) is also the way back: suggestions
+      # degrade to text and every map area says there is no provider. Turning it on is these three lines in the
+      # environment file and a restart, nothing else; this block is what carries them into the container
+      # (compose forwards nothing from --env-file except what is listed), and ProductionComposeRunbookVariablesTests
+      # fails when a variable the runbook names is missing here. The server key is never a value: the reference
+      # names it in OpenBao, for example
+      # horecaos:production:provider_geocoding:platform:yandex-server-key. The browser key is public by
+      # construction (a referrer-restricted key delivered to browsers by GET .../map-config), so it is a value.
+      # Steps and the way back: platform/docs/runbooks/external-connections/w3-delivery-maps.md, sections 1 to 3.
+      HORECAOS_GEO_PROVIDER: ${HORECAOS_GEO_PROVIDER:-none}
+      HORECAOS_GEO_YANDEX_SECRET_REFERENCE: ${HORECAOS_GEO_YANDEX_SECRET_REFERENCE:-}
+      HORECAOS_GEO_YANDEX_BROWSER_KEY: ${HORECAOS_GEO_YANDEX_BROWSER_KEY:-}
 
       TZ: Asia/Tashkent
     volumes:

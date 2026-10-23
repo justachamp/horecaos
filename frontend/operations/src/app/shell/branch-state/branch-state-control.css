@@ -1,0 +1,36 @@
+:host {
+  display: inline-flex;
+}
+
+.branch-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.branch-control__dot {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  background: var(--q-success);
+}
+
+/* A branch shut by hand is the state somebody must remember to undo: it reads as an alert, not a label. */
+.branch-control--closed {
+  border-color: var(--q-error-text);
+  color: var(--q-error-text);
+}
+
+.branch-control--closed .branch-control__dot {
+  background: var(--q-error);
+}
+
+.branch-control--forced .branch-control__dot {
+  background: var(--q-warning);
+}

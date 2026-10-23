@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 
 import { APP_CONFIG } from '../../core/config/app-config';
+import { ContentBrandSwitcherComponent } from '../../shared/content-brand-switcher/content-brand-switcher.component';
 import { ContentCarouselComponent } from '../../shared/content-carousel/content-carousel.component';
 import { ContentGroupsComponent } from '../../shared/content-groups/content-groups.component';
 import { ContentPopupComponent } from '../../shared/content-popup/content-popup.component';
@@ -56,6 +57,7 @@ type LoadState = 'loading' | 'ready' | 'error';
   selector: 'app-home',
   standalone: true,
   imports: [
+    ContentBrandSwitcherComponent,
     ContentCarouselComponent,
     ContentGroupsComponent,
     ContentPopupComponent,
@@ -89,6 +91,8 @@ export class HomeComponent {
   protected readonly promoGrid = this.content.promoGrid;
   protected readonly groups = this.content.groups;
   protected readonly popup = this.content.popup;
+  protected readonly brandSwitcher = this.content.brandSwitcher;
+  protected readonly layout = this.content.layout;
 
   protected readonly brandName = this.config.brand.displayName;
   protected readonly state = signal<LoadState>('loading');

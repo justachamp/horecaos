@@ -2,6 +2,7 @@ package uz.horecaos.platform.ordering.application;
 
 import java.time.Instant;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
@@ -61,8 +62,14 @@ class CheckoutProgressionStep {
      * published by the caller and is what a consumer sees; the ordering events
      * this release has all describe a commercial decision — accepted, rejected,
      * confirmed — and "waiting on a card" is not one of them.
+     *
+     * <p>{@code holdReasonCode} is why an {@code AUTO_CONFIRM} policy will not confirm this order once it
+     * is paid (ADR 0177: an auto-accept gate held it back), or null. The gate decided here, at checkout,
+     * and the money may land an hour later, so this transition keeps the reason and {@link
+     * OrderStateService#paymentCaptured} reads it back when the order moves on to {@code
+     * AWAITING_APPROVAL}: the history that answers "why is it stuck" names the gate, not the payment.
      */
-    OrderStatus awaitPayment(CheckoutCommand command, UUID orderId, Instant now) {
+    OrderStatus awaitPayment(CheckoutCommand command, UUID orderId, @Nullable String holdReasonCode, Instant now) {
 
         OrderStateMachine.require(OrderStatus.RECEIVED, OrderStatus.PAYMENT_AUTHORIZING);
         int version = orders.transition(
@@ -76,7 +83,7 @@ class CheckoutProgressionStep {
                 OrderStatus.RECEIVED,
                 OrderStatus.PAYMENT_AUTHORIZING,
                 TransitionTrigger.CHECKOUT,
-                null,
+                holdReasonCode,
                 command.actorType(),
                 command.actorId(),
                 command.correlationId(),
@@ -98,6 +105,7 @@ class CheckoutProgressionStep {
             UUID orderId,
             OrderAcceptancePolicy policy,
             Instant deadline,
+            @Nullable String holdReasonCode,
             Instant now) {
 
         OrderStateMachine.require(OrderStatus.RECEIVED, OrderStatus.AWAITING_APPROVAL);
@@ -112,7 +120,9 @@ class CheckoutProgressionStep {
                 OrderStatus.RECEIVED,
                 OrderStatus.AWAITING_APPROVAL,
                 TransitionTrigger.CHECKOUT,
-                null,
+                // ADR 0177: "why is this order waiting" for an AUTO_CONFIRM policy that did not confirm
+                // it. Null for restaurant approval, where waiting is what the policy says.
+                holdReasonCode,
                 command.actorType(),
                 command.actorId(),
                 command.correlationId(),

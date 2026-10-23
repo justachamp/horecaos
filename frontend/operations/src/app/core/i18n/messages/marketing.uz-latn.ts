@@ -132,8 +132,7 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.campaign.stats.refused': 'Rad etildi',
   'marketing.campaign.stats.total': 'Jami urinishlar',
   'marketing.campaign.stats.refusedByReason.title': 'Rad etilganlar, sabab boʻyicha',
-  'marketing.campaign.stats.deliveryUnavailableHint':
-    'Yetkazildi/yetkazilmadi hali kuzatilmaydi — bu kampaniya uchun oʻqilganlik xabari yoʻq.',
+  'marketing.campaign.stats.delivery.title': 'Xabarlar nima boʻldi',
   'marketing.campaign.stats.export': 'Qabul qiluvchilarni CSV sifatida eksport qilish',
   'marketing.campaign.stats.exportedCount': '{count} ta hisob ID eksport qilindi',
 
@@ -214,7 +213,7 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   // ------------------------------------------------------------- courier broadcasts 6.4b (T18)
   'marketing.courierBroadcasts.title': 'Kuryerlarga xabarnomalar',
   'marketing.courierBroadcasts.intro':
-    'Dispetcherning kuryerlarga oʻz operativ SMS xabarnomasi — smena almashinuvi, ob-havo, yoʻl yopilishi. Hech qachon mijoz kampaniyasi emas.',
+    'Dispetcherning kuryerlarga oʻz operativ SMS xabarlari — smena almashinuvi, ob-havo, yoʻl yopilishi. SMS-shlyuz tasdiqlagan matn boʻyicha, kuryerning tizimga kirish raqamiga yuboriladi; platforma raqamni bitta xabar uchun oʻqiydi va hech qayerda saqlamaydi. Hech qachon mijoz kampaniyasi emas.',
   'marketing.courierBroadcasts.loading': 'Yuklanmoqda',
   'marketing.courierBroadcasts.empty': 'Hali xabarnoma yoʻq',
   'marketing.courierBroadcasts.create.action': 'Yangi xabarnoma',
@@ -223,10 +222,9 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.courierBroadcasts.create.targetKind.ALL_ACTIVE': 'Barcha faol kuryerlar',
   'marketing.courierBroadcasts.create.targetKind.GROUP': 'Bitta kuryer guruhi',
   'marketing.courierBroadcasts.create.targetGroupId': 'Guruh ID',
-  'marketing.courierBroadcasts.create.message': 'Xabar',
   'marketing.courierBroadcasts.create.submit': 'Qoralamani saqlash',
   'marketing.courierBroadcasts.column.target': 'Qabul qiluvchilar',
-  'marketing.courierBroadcasts.column.message': 'Xabar',
+  'marketing.courierBroadcasts.column.message': 'Matn',
   'marketing.courierBroadcasts.column.status': 'Holat',
   'marketing.courierBroadcasts.column.recipients': 'Qabul qiluvchilar',
   'marketing.courierBroadcasts.status.DRAFT': 'Qoralama',
@@ -234,11 +232,78 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.courierBroadcasts.status.FAILED': 'Muvaffaqiyatsiz',
   'marketing.courierBroadcasts.action.send': 'Yuborish',
   'marketing.courierBroadcasts.refusalReason': 'Rad etildi: {reason}',
+  'marketing.courierBroadcasts.create.template': 'Matn',
+  'marketing.courierBroadcasts.create.template.placeholder': 'Tasdiqlangan matnni tanlang',
+  'marketing.courierBroadcasts.create.template.awaiting': '{key} — SMS-shlyuz tasdigʻini kutmoqda',
+  'marketing.courierBroadcasts.create.templates.none':
+    'Kuryerlar uchun tayyor matn yoʻq. «Sozlamalar → Bildirishnomalar» boʻlimida COURIER_DISPATCH sinfidagi SMS shablonini yarating va shlyuz tasdigʻini kuting.',
+  'marketing.courierBroadcasts.create.variablesHint':
+    'Qisqa qiymatlar, har biri bir qatorda, 80 belgidan oshmasin. Faqat ish matni: ism va telefon raqamlarisiz.',
+  'marketing.courierBroadcasts.create.preview': 'Xabar quyidagicha boʻladi',
+  'marketing.courierBroadcasts.variable.place': 'Joy',
+  'marketing.courierBroadcasts.variable.time': 'Vaqt',
+  'marketing.courierBroadcasts.variable.note': 'Izoh',
+  'marketing.courierBroadcasts.action.results': 'Natijalar',
+  'marketing.courierBroadcasts.action.hideResults': 'Natijalarni yashirish',
+  'marketing.courierBroadcasts.results.title': 'Har bir kuryer xabari nima boʻldi',
+  'marketing.courierBroadcasts.results.loading': 'Yuklanmoqda',
+  'marketing.courierBroadcasts.results.column.courier': 'Kuryer',
+  'marketing.courierBroadcasts.results.column.state': 'Holat',
+  'marketing.courierBroadcasts.results.column.reason': 'Sababi',
+  'marketing.courierBroadcasts.results.empty': 'Hech bir kuryerga xabar yuborilmadi.',
+  'marketing.courierBroadcasts.results.state.NO_CONTACT': 'Raqam yoʻq',
+  'marketing.delivery.reason.COURIER_HAS_NO_NUMBER':
+    'Identifikatsiya provayderida bu kuryer uchun platforma xabar yuboradigan raqam yoʻq. Profilni tuzating va qaytadan qoralama yarating.',
+  'marketing.delivery.reason.RECIPIENT_UNRESOLVABLE':
+    'Xabar yuborilayotganda kuryer raqami yoʻq edi.',
+  'marketing.delivery.reason.SMS_PURPOSE_NOT_PERMITTED':
+    'SMS hisobi kuryer xabarlarini yuborishga ruxsat etilmagan.',
+  'marketing.delivery.reason.RECEIVER_UNREACHABLE': 'Shlyuz raqamga yetib boʻlmasligini aytdi.',
+  'marketing.delivery.reason.PROVIDER_REPORTED_FAILURE':
+    'Shlyuz xabar yetib bormaganini maʻlum qildi.',
+  'marketing.delivery.reason.IDENTITY_PROVIDER_UNAVAILABLE':
+    'Identifikatsiya provayderidan kuryer raqamini soʻrab boʻlmadi; platforma qayta urinadi.',
+  'marketing.delivery.reason.other': 'Sabab kodi: {code}',
+  'marketing.delivery.reason.ADDRESS_REJECTED': 'Pochta serveri bu manzilni butunlay rad etdi',
+  'marketing.delivery.reason.ADDRESS_INVALID': 'Bu yaroqli email manzil emas',
+  'marketing.delivery.reason.MESSAGE_INVALID': 'Pochta serveri xatning oʻzini rad etdi',
+  'marketing.delivery.reason.SMTP_UNAVAILABLE': 'Pochta serveriga ulanib boʻlmadi',
+  'marketing.delivery.reason.EMAIL_NOT_CONFIGURED': 'Bu joylashtirishda pochta serveri sozlanmagan',
+  'marketing.courierBroadcasts.readiness.heading':
+    'Bu brend uchun kuryer SMS-larini hozircha yuborib boʻlmaydi',
+  'marketing.courierBroadcasts.wiring.SMS_PURPOSE_NOT_PERMITTED':
+    'Bu brendning SMS hisobi kuryer xabarlarini yuborishga ruxsat etilmagan. Kirish kodlari va buyurtma xabarlariga bu taʻsir qilmaydi. Platforma egasi hisob kuryer trafigini oʻtkaza olishini yozma tasdiqlamaguncha va u ulanishda koʻrsatilmaguncha kuryerga SMS yuborib boʻlmaydi.',
+  'marketing.courierBroadcasts.wiring.COURIER_CONTACTS_NOT_WIRED':
+    'Platforma hozircha kuryerning oʻz raqamidan unga xabar yuborish uchun foydalana olmaydi. Bu u tizimga kirishda ishlatadigan raqam va platforma uning nusxasini saqlamaydi; platforma egasi uni dispetcher xabari uchun ishlatish mumkinligini qayd etmaguncha kuryerlarga xabarnoma yuborib boʻlmaydi.',
+  'marketing.courierBroadcasts.wiring.COURIER_CONTACTS_UNAVAILABLE':
+    'Identifikatsiya provayderidan kuryerlar raqamlarini soʻrab boʻlmadi. Hech narsa yuborilmadi, xabarnoma qoralama boʻlib qoldi; birozdan keyin qayta urining.',
+  'marketing.courierBroadcasts.wiring.NO_PROVIDER_BINDING':
+    'Bu brend uchun SMS provayderi ulanmagan. Uni brend integratsiyalari sozlamalarida ulang.',
+  'marketing.courierBroadcasts.wiring.INSTALLATION_INACTIVE':
+    'SMS provayderi ulanishi oʻchirilgan.',
+  'marketing.courierBroadcasts.wiring.INSTALLATION_MISSING':
+    'SMS provayderi ulanishi endi mavjud emas.',
+  'marketing.courierBroadcasts.wiring.SMS_ACCOUNT_MISCONFIGURED':
+    'Bu brendning SMS hisobi sozlamalarining bir qismi yetishmaydi.',
+  'marketing.courierBroadcasts.wiring.PROVIDER_ADAPTER_MISMATCH':
+    'Ulangan SMS provayderi uchun bu versiyada adapter yoʻq.',
+  'marketing.courierBroadcasts.wiring.NO_ADAPTER': 'Bu versiyada SMS adapteri yoʻq.',
+  'marketing.courierBroadcasts.wiring.NO_DELIVERY_ADAPTER':
+    'Bu versiyada SMS yetkazish yoʻli yoʻq.',
+  'marketing.courierBroadcasts.wiring.COURIER_TEMPLATE_NOT_AVAILABLE':
+    'Bu xabarnoma matni endi bu brend uchun amaldagi kuryer matni emas.',
+  'marketing.courierBroadcasts.wiring.TEMPLATE_AWAITING_PROVIDER':
+    'Matn hali SMS-shlyuz tasdigʻini kutmoqda, shuning uchun u bilan hozircha hech narsa yuborib boʻlmaydi.',
+  'marketing.courierBroadcasts.wiring.NO_ACTIVE_COURIER': 'Bu tanlovda faol kuryer yoʻq.',
+  'marketing.courierBroadcasts.wiring.NO_COURIER_HAS_A_NUMBER':
+    'Tanlangan kuryerlarning birortasida platforma xabar yuboradigan raqam yoʻq; hech narsa yuborilmadi.',
+  'marketing.courierBroadcasts.wiring.UNKNOWN':
+    'Hozir bu brend uchun kuryerga SMS yuborib boʻlmaydi ({reason}).',
 
   // --------------------------------------------------------- attribution links 6.6a (ADR 0044, T18)
   'marketing.attributionLinks.title': 'Jalb qilish havolalari',
   'marketing.attributionLinks.intro':
-    'Kampaniya yoki bloger uchun kuzatiladigan ?ref= sayt havolasi yoki Telegram chuqur havolasi.',
+    'Kampaniya yoki bloger uchun havola: saytingizga, Telegram botingizga yoki Telegram Mini App ga. U necha marta ochilganini sanaydi, kim ochganini esa yoʻq.',
   'marketing.attributionLinks.empty': 'Hali havola yaratilmagan',
   'marketing.attributionLinks.create.action': 'Havola yaratish',
   'marketing.attributionLinks.create.title': 'Jalb qilish havolasini yaratish',
@@ -260,6 +325,96 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.attributionLinks.destinationType.CAMPAIGN': 'Kampaniya',
   'marketing.attributionLinks.destinationType.STOREFRONT_HOME': 'Doʻkon bosh sahifasi',
   'marketing.attributionLinks.destinationType.INFLUENCER': 'Bloger',
+  'marketing.attributionLinks.copy': 'Nusxalash',
+  'marketing.attributionLinks.copied': 'Nusxalandi',
+  'marketing.attributionLinks.unavailable.WEB_HOSTNAME_NOT_CLAIMED':
+    'Sayt manzili hali yoʻq: bu brend filiallari manzili bor birorta veb-kanal orqali sotmaydi.',
+  'marketing.attributionLinks.unavailable.WEB_HOSTNAME_NOT_VERIFIED':
+    'Sayt manzili hali tasdiqlanmagan.',
+  'marketing.attributionLinks.unavailable.WEB_HOSTNAME_AMBIGUOUS':
+    'Savdo ikkita tasdiqlangan sayt manzili orqali ketadi va platforma qaysi biriga havola berishni taxmin qilmaydi.',
+  'marketing.attributionLinks.unavailable.TELEGRAM_BOT_NOT_CONNECTED':
+    'Bu brend uchun Telegram bot ulanmagan.',
+  'marketing.attributionLinks.unavailable.TELEGRAM_BOT_UNREACHABLE':
+    'Telegram hozir bot nomini aytmadi. Birozdan keyin qayta urinib koʻring.',
+  'marketing.attributionLinks.unavailable.TELEGRAM_MINI_APP_NOT_SET_UP':
+    'Mini App hali sozlanmagan: quyidagi Telegram Mini App sozlashni yakunlang.',
+  'marketing.attributionLinks.unavailable.MOBILE_APP_ON_HOLD':
+    'Mobil ilova toʻxtatilgan, shuning uchun bu havola hech yerga olib bormaydi.',
+  // ------------------------------------------- the guided Mini App setup (ADR 0183, row 6.6a)
+  'marketing.miniApp.title': 'Telegram Mini App ni sozlash',
+  'marketing.miniApp.lead':
+    'Vitrinangiz Telegram botingiz ichida. Ikki qadamni faqat siz Telegramda bajarasiz va yuboriladigan soʻzlar aniq yozilgan; qolgani faktlardan oʻqiladi, shuning uchun chiqib, keyin qaytish mumkin.',
+  'marketing.miniApp.loading': 'Sozlash qayerda turganini oʻqiyapmiz…',
+  'marketing.miniApp.denied':
+    'Mini App ni sozlash uchun integratsiyalarni boshqarish huquqi kerak.',
+  'marketing.miniApp.error': 'Sozlash qayerda turganini oʻqib boʻlmadi.',
+  'marketing.miniApp.open': 'Ochish',
+  'marketing.miniApp.copy': 'Nusxalash',
+  'marketing.miniApp.state.DONE': 'Tayyor',
+  'marketing.miniApp.state.RECORDED': 'Yozib qoʻyildi',
+  'marketing.miniApp.state.TODO': 'Bajarish kerak',
+  'marketing.miniApp.state.UNKNOWN': 'Tekshirib boʻlmadi',
+  'marketing.miniApp.step.CONNECT_BOT.title': 'Botingizni ulang',
+  'marketing.miniApp.step.CONNECT_BOT.hint':
+    'Botni @BotFather da yarating (/newbot), keyin tokenini Sozlamalar → Integratsiyalar boʻlimiga qoʻying. Token qayta koʻrsatilmaydi.',
+  'marketing.miniApp.step.REGISTER_WEBHOOK.title': 'Botning webhook ini roʻyxatdan oʻtkazing',
+  'marketing.miniApp.step.REGISTER_WEBHOOK.hint':
+    'Bot mijozlaringizni eshitishi uchun: Integratsiyalardagi bot kartasida «Webhook ni roʻyxatdan oʻtkazish» tugmasini bosing.',
+  'marketing.miniApp.step.TELEGRAM_CHANNEL.title': 'Telegram sotuv kanalini qoʻshing',
+  'marketing.miniApp.step.TELEGRAM_CHANNEL.hint':
+    'Sozlamalar → Sotuv kanallari boʻlimida shu botga ulangan Telegram turidagi kanal qoʻshing. Menyu tugmasi, matnlar va Mini App kaliti shu yerda sozlanadi.',
+  'marketing.miniApp.step.STOREFRONT_ADDRESS.title': 'Vitrinangizning tasdiqlangan manzili bor',
+  'marketing.miniApp.step.STOREFRONT_ADDRESS.hint':
+    'Mini App vitrinangizni ochadi, shuning uchun unga veb-kanalingizning tasdiqlangan manzili kerak. Bu yerda manzil kiritmaysiz.',
+  'marketing.miniApp.step.BOTFATHER_APP.title': 'Mini App ni BotFather da yarating',
+  'marketing.miniApp.step.BOTFATHER_APP.hint':
+    'Buni faqat bot egasi qila oladi, tekshirishning esa imkoni yoʻq: Telegram bunday imkon bermaydi. Qisqa nomni bildirganingizda bu qadam «Yozib qoʻyildi» deb koʻrinadi.',
+  'marketing.miniApp.step.MENU_BUTTON.title': 'Mini App ni botning menyu tugmasiga qoʻying',
+  'marketing.miniApp.step.MENU_BUTTON.hint':
+    'Tugmani oʻrnatamiz va Telegramdan nimani koʻrsatayotganini soʻraymiz. Telegram biz oʻrnatganini koʻrsatgandagina qadam tayyor boʻladi.',
+  'marketing.miniApp.step.TEST_LINK.title': 'Telefoningizda oching',
+  'marketing.miniApp.step.TEST_LINK.hint':
+    'Bu havolani Telegramda oching: vitrina bot ichida ochilishi kerak. Keyin yuqorida «Telegram Mini App» havolasini yarating va uni oching — bosish hisobga olinadi.',
+  'marketing.miniApp.detail.STOREFRONT_ADDRESS.NOT_CLAIMED':
+    'Bu brend filiallarida sotadigan birorta veb-kanal hali manzil belgilamagan.',
+  'marketing.miniApp.detail.STOREFRONT_ADDRESS.NOT_VERIFIED':
+    'Veb-kanal manzili belgilangan, lekin tasdiqlanmagan. DNS yozuvini joylashtiring va tasdiqlang.',
+  'marketing.miniApp.detail.STOREFRONT_ADDRESS.AMBIGUOUS':
+    'Bu brend filiallarida ikkita tasdiqlangan sayt manzili orqali sotiladi va platforma qaysi biri vitrina ekanini taxmin qilmaydi.',
+  'marketing.miniApp.detail.MENU_BUTTON.NOT_READY': 'Avval yuqoridagi qadamlarni yakunlang.',
+  'marketing.miniApp.detail.MENU_BUTTON.MINI_APP_OFF':
+    'Mini App Telegram kanalida oʻchirilgan. Qisqa nomni yozib qoʻysangiz, u yoqiladi.',
+  'marketing.miniApp.detail.MENU_BUTTON.NOT_APPLIED':
+    'Telegram biz oʻrnatmoqchi boʻlgan tugmadan boshqasini koʻrsatyapti.',
+  'marketing.miniApp.detail.MENU_BUTTON.OTHER_BRAND':
+    'Telegram kanalining Mini App i boshqa brend vitrinasini ochadi. Qisqa nomni shu yerda yozib qoʻysangiz, u shu brendga oʻtadi.',
+  'marketing.miniApp.detail.MENU_BUTTON.STALE_BUTTON':
+    'Telegram hamon vitrinani ochadigan tugmani koʻrsatyapti, vaholanki Mini App oʻchirilgan yoki manzil endi tasdiqlanmagan. Mijozlar u yerga yuborilmasligi uchun tugmani oling.',
+  'marketing.miniApp.detail.TEST_LINK.NOT_READY':
+    'Bot va qisqa nom maʻlum boʻlgach, havola paydo boʻladi.',
+  'marketing.miniApp.botFather.step1': 'Telegramda @BotFather ni oching va /newapp yuboring.',
+  'marketing.miniApp.botFather.step2': 'Botingizni tanlang: @{bot}.',
+  'marketing.miniApp.botFather.step3':
+    'Nom va qisqa tavsif yuboring. Mijozlar ikkalasini ham koʻradi.',
+  'marketing.miniApp.botFather.step4':
+    '640×360 rasm yuboring, keyin GIF yoki oʻtkazib yuborish uchun /empty.',
+  'marketing.miniApp.botFather.step5':
+    'BotFather Web App URL soʻraganda, quyidagi manzilni aynan shundayligicha yuboring.',
+  'marketing.miniApp.botFather.step6':
+    'BotFather qisqa nom soʻraganda, oʻzingiz tanlagan birini yuboring: harflar, raqamlar va pastki chiziq, masalan order. BotFather u bilan tugaydigan havola yuboradi. Qisqa nomni shu yerga kiriting.',
+  'marketing.miniApp.shortName': 'BotFather qabul qilgan qisqa nom',
+  'marketing.miniApp.record': 'Qisqa nomni yozib qoʻyish',
+  'marketing.miniApp.needsChannel':
+    'Avval Telegram sotuv kanalini qoʻshing: qisqa nom shu kanalda yoziladi.',
+  'marketing.miniApp.needsAddress':
+    'BotFather ga vitrinangiz manzili kerak. Avval yuqoridagi qadamni yakunlang.',
+  'marketing.miniApp.menu.wanted': '«{label}» yozuvini oʻrnatamiz, u {url} ni ochadi.',
+  'marketing.miniApp.menu.held': 'Telegram hozir {url} ni ochadigan tugmani koʻrsatyapti.',
+  'marketing.miniApp.menu.apply': 'Menyu tugmasini oʻrnatish',
+  'marketing.miniApp.menu.takeOff': 'Menyu tugmasini olib tashlash',
+  'marketing.miniApp.menu.notShown':
+    'Telegram chaqiruvni qabul qildi, lekin hamon boshqa tugmani koʻrsatyapti. Qayta urinib koʻring yoki botni BotFather da tekshiring.',
 
   // ------------------------------------------------------- promo codes 6.2 (ADR 0072, wave 60)
   'marketing.promoCodes.title': 'Promokodlar',
@@ -400,7 +555,7 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.loyalty.accrual.form.lotLifetime': 'Ballar necha kunda kuchini yoʻqotadi',
   'marketing.loyalty.accrual.form.expiryWarning': 'Muddatidan necha kun oldin ogohlantirish',
   'marketing.loyalty.accrual.form.expiryWarning.hint':
-    'Ball partiyasi necha kun qolganda "tez orada tugaydi" deb hisoblanadi — bu haqidagi xabarnoma hali qurilmagan (ADR 0046).',
+    'Ball partiyasi necha kun qolganda "tez orada tugaydi" deb hisoblanadi. Mijozga kuniga bir marta, shu oynadagi barcha partiyalarni qamrab olgan bitta xabar yuboriladi, LOYALTY_POINTS_EXPIRING matni bilan. Bu matn "Bildirishnomalar" boʻlimida yozilib yoqilmaguncha hech narsa yuborilmaydi (ADR 0046).',
 
   'marketing.loyalty.redemption.title': 'Sarflash',
   'marketing.loyalty.redemption.hint':
@@ -457,6 +612,23 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
     'Faqat hisobot: solishtiradi, hech narsa qoʻllamaydi va yubormaydi',
   'marketing.loyalty.posSync.mode.PULL': 'Kassada boʻlgan narsani yuklaydi',
   'marketing.loyalty.posSync.mode.PULL_AND_PUSH': 'Yuklaydi va jurnal balansini yuboradi',
+  // ------------------------------------------------------------------- staging the rollout (ADR 0171, row 6.3b)
+  'marketing.loyalty.posSync.stage.label': 'Joriy etish bosqichi',
+  'marketing.loyalty.posSync.stage.hint':
+    'Avval faqat hisobot, keyin yuklash, keyin yuborish. Yuqoriga — bir bosqichdan, pastga — darhol.',
+  'marketing.loyalty.posSync.stage.reason': 'Nega (harakatlar jurnalida saqlanadi)',
+  'marketing.loyalty.posSync.stage.apply': 'Bosqichni qoʻllash',
+  'marketing.loyalty.posSync.stage.saved': 'Endi ulanish quyidagicha ishlaydi: {mode}.',
+  'marketing.loyalty.posSync.stage.stale':
+    'Buni avval kimdir oʻzgartirgan. Sahifa hozirgi holatni koʻrsatmoqda; oʻzgarishingizni qaytadan kiriting.',
+  'marketing.loyalty.posSync.keeps.title': 'Kassangiz oʻz bonus balansini yuritadimi?',
+  'marketing.loyalty.posSync.keeps.body':
+    'Agar yuritsa va bu yerda uni hech narsa aks ettirmasa, xodimlarga mijozning bu yerdagi va kassadagi balansi farq qilishi mumkinligi aytiladi.',
+  'marketing.loyalty.posSync.keeps.label': 'Kassa oʻz bonus balansini yuritadi',
+  'marketing.loyalty.posSync.keeps.save': 'Saqlash',
+  'marketing.loyalty.posSync.keeps.saved': 'Saqlandi.',
+  'marketing.loyalty.posSync.keeps.yes': 'Ha: kassa oʻz bonus balansini yuritadi.',
+  'marketing.loyalty.posSync.keeps.no': 'Yoʻq: kassa yuritmaydi yoki bu haqda aytilmagan.',
   'marketing.loyalty.posSync.reconcile.action': 'Hozir solishtirish',
   'marketing.loyalty.posSync.reconcile.running': 'Solishtirilmoqda…',
   'marketing.loyalty.posSync.runs.title': 'Solishtirish hisobotlari',
@@ -673,10 +845,15 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.wiring.NO_ADAPTER': 'Ushbu versiyada bu kanal uchun adapter yoʻq.',
   'marketing.wiring.NO_DELIVERY_ADAPTER':
     'Ushbu versiyada bu kanalning yetkazib berish yoʻli yoʻq.',
-  'marketing.wiring.NO_DELIVERY_ADAPTER.EMAIL':
-    'Mehmonlarga email ulanmagan. Platformaning pochta xizmati faqat xodimlarga taklif va parolni tiklash xatlarini yuboradi; muassasaning oʻz mehmonlariga email yuborish alohida qaror boʻlib, u hali qabul qilinmagan.',
-  'marketing.wiring.NO_DELIVERY_ADAPTER.PUSH':
-    'Push ulanmagan: push provayderi hali yoʻq, shuning uchun mehmonga push-xabar yuborib boʻlmaydi.',
+  'marketing.wiring.EMAIL_NOT_CONFIGURED':
+    'Bu joylashtirishda elektron pochta sozlanmagan: pochta serveri koʻrsatilmagan, shuning uchun hech narsa yuborib boʻlmaydi. Platforma egasi yuboruvchi provayderni ulamaguncha email kampaniyasini ishga tushirib boʻlmaydi.',
+  'marketing.wiring.EMAIL_PURPOSE_NOT_PERMITTED':
+    'Platformaning pochta xizmati faqat kampaniya xatlarini yuboradi.',
+  'marketing.wiring.PUSH_NOT_CONFIGURED':
+    'Bu joylashtirishda push sozlanmagan: platformaning push kalitlari va aloqa manzili koʻrsatilmagan, shuning uchun hech narsa yuborib boʻlmaydi. Platforma egasi ularni ulamaguncha push kampaniyasini ishga tushirib boʻlmaydi.',
+  'marketing.wiring.PUSH_PURPOSE_NOT_PERMITTED':
+    'Platformaning push xizmati faqat kampaniya xabarlarini yuboradi.',
+  'marketing.wiring.ACCOUNT_MISCONFIGURED': 'Bu kanal hisobining sozlamalari qisman yetishmaydi.',
   'marketing.wiring.UNKNOWN': 'Ushbu kanal hozir bu brend uchun xabar yetkaza olmaydi ({reason}).',
   'marketing.refusal.SCENARIO_CONFLICT': 'Boshqa faol ssenariy bu mehmonga hozirgina taklif bergan',
   'marketing.refusal.SCENARIO_PRIORITY_LOST':
@@ -1037,6 +1214,41 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.delivery.NO_RECEIPT': 'Yetkazish hisoboti kelmadi',
   'marketing.delivery.HANDED_TO_OPERATOR': 'Operatorga topshirilgan',
   'marketing.delivery.PENDING': 'Hali yuborilmagan',
+  'marketing.delivery.READ': 'Oʻqilgan',
+  'marketing.delivery.WITHHELD': 'Ushlab qolingan',
+  'marketing.delivery.HANDED_TO_OPERATOR.MESSAGING_APP': 'Yuborilgan',
+  'marketing.delivery.HANDED_TO_OPERATOR.PUSH': 'Push xizmati qabul qildi',
+  'marketing.delivery.READ.PUSH': 'Bosilgan',
+  'marketing.delivery.reason.PUSH_SUBSCRIPTION_GONE':
+    'Brauzerning push xizmati obuna tugaganini bildirdi: mijoz push-ni qayta yoqmaguncha unga bu yerdan yetib boʻlmaydi',
+  'marketing.delivery.reason.PUSH_VAPID_REJECTED':
+    'Push xizmati platformaning yuboruvchi kalitini bu obuna uchun qabul qilmadi (mijoz obuna boʻlgandan keyin kalit almashtirilgan)',
+  'marketing.delivery.reason.PUSH_NOT_CONFIGURED': 'Bu joylashtirishda push sozlanmagan',
+  'marketing.delivery.reason.PUSH_PAYLOAD_TOO_LARGE': 'Push xizmati xabar hajmini rad etdi',
+  'marketing.delivery.reason.PUSH_REQUEST_REFUSED': 'Push xizmati xabarni rad etdi',
+  'marketing.delivery.reason.PUSH_PAYLOAD_UNUSABLE': 'Xabarni bu obuna uchun shifrlab boʻlmadi',
+  'marketing.delivery.reason.PUSH_REDIRECT_REFUSED':
+    'Push xizmati soʻrovni boshqa manzilga yoʻnaltirdi; platforma bunga ergashmaydi',
+  'marketing.delivery.reason.PUSH_SERVICE_ERROR': 'Push xizmati qayta-qayta xato qaytardi',
+  'marketing.delivery.reason.PUSH_RATE_LIMITED':
+    'Push xizmati platformadan qayta-qayta sekinroq yuborishni soʻradi',
+  'marketing.delivery.reason.PUSH_SERVICE_UNREACHABLE': 'Push xizmatiga ulanib boʻlmadi',
+  'marketing.delivery.reason.PUSH_SECRET_UNAVAILABLE': 'Platformaning push kaliti mavjud emas',
+  'marketing.delivery.counts.notReported': 'Bu kanal maʻlum qilmaydi',
+  'marketing.delivery.counts.segments': 'Hisoblangan segmentlar',
+  'marketing.delivery.counts.withheldTitle': 'Ushlab qolish sabablari',
+  'marketing.delivery.withheld.TEMPLATE_AWAITING_PROVIDER': 'Matn shlyuz tasdigʻini kutmoqda',
+  'marketing.delivery.withheld.TEMPLATE_REFUSED_BY_PROVIDER': 'Matnni shlyuz rad etgan',
+  'marketing.delivery.withheld.CONSENT_WITHHELD':
+    'Auditoriya tuzilgandan keyin rozilik qaytarib olingan',
+  'marketing.delivery.withheld.PREFERENCE_DISABLED': 'Mijoz buni oʻchirgan',
+  'marketing.delivery.withheld.NO_RECIPIENT_ENDPOINT': 'Yaroqli manzil yoki raqam yoʻq',
+  'marketing.delivery.withheld.NO_RECIPIENT_ACCOUNT': 'Mijoz hisobi yoʻq',
+  'marketing.delivery.withheld.NO_ACTIVE_TEMPLATE': 'Amaldagi matn yoʻq',
+  'marketing.delivery.withheld.NO_TEMPLATE_FOR_LOCALE': 'Mijoz tilida matn yoʻq',
+  'marketing.delivery.withheld.CHANNEL_NOT_AVAILABLE': 'Kanal mavjud emas',
+  'marketing.delivery.withheld.CAMPAIGN_NOT_SENDING': 'Kampaniya toʻxtatilgan',
+  'marketing.delivery.withheld.EXPIRED': 'Yuborilmasdan muddati tugadi',
   'marketing.campaign.recipients.deliveryHint':
     'Yetkazish — shlyuzdan kelgan maʻlumot, vaʻda emas: «operatorga topshirilgan» xabar qabul qilingani va boshqa hech narsa maʻlum qilinmaganini bildiradi.',
   'marketing.campaign.recipients.segments': 'Hisoblangan segmentlar: {count}',
@@ -1424,14 +1636,59 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.storefront.tab.groups': 'Bosh sahifa guruhlari',
   'marketing.storefront.tab.carousel': 'Takliflar karuseli',
   'marketing.storefront.tab.preview': 'Koʻrib chiqish',
-  'marketing.storefront.tab.switcher': 'Brend almashtirgich',
+  'marketing.storefront.tab.switcher': 'Brend almashtirgich va joylashuv',
+  'marketing.storefront.tab.branches': 'Filiallar tartibi',
   'marketing.storefront.groups.hint':
     'Bosh ekrandagi nomli taomlar lentalari: qoʻlda tanlangan yoki butun toifa. Bu yerdagi tartib ekrandagi tartibdir.',
   'marketing.storefront.carousel.hint':
     'Bosh ekran tepasidagi karusel banner va promo-kartochkalar uchun umumiy. Tartibni shu yerda belgilang; ularni «Kontent» boʻlimida yozing va chop eting. U barcha mijozlar uchun bir xil — bitta mehmonga shaxsiy taklif esa boshqa narsa.',
   'marketing.storefront.carousel.link': '«Kontent»ni ochish',
-  'marketing.storefront.switcher.title':
-    'Brend almashtirgich va marketpleys joylashuvi — yaratilmagan',
-  'marketing.storefront.switcher.body':
-    'Ular ijarachi bitta vitrinada ikki brend yuritib, ularni soʻramaguncha kutadi (ADR 0157, 4-reliz). Shu paytgacha sozlanadigan narsa yoʻq va buning uchun hech qanday sozlama zaxiralanmagan.',
+  'marketing.storefront.layout.title': 'Toifalar joylashuvi',
+  'marketing.storefront.layout.hint':
+    'Standart — mijozlarda hozirgi toifalar navigatsiyasi. «Marketpleys» toifalarning ixcham lentasini va «barcha toifalar» oynasini koʻrsatadi — toifalari koʻp vitrina uchun. Tanlov saqlangach, shu brend uchun darhol kuchga kiradi.',
+  'marketing.storefront.layout.standard': 'Standart',
+  'marketing.storefront.layout.marketplace': 'Marketpleys',
+  'marketing.storefront.layout.saved': 'Joylashuv saqlandi.',
+  'marketing.storefront.switcher.title': 'Shu vitrinadagi boshqa brendlar',
+  'marketing.storefront.switcher.hint':
+    'Vitrina tepasida boshqa brendlaringiz lentasi; har biri brendning oʻz saytiga olib boradi. Manzil — saytning tasdiqlangan manzili, har safar oʻqiladi: bu yerda hech narsa kiritilmaydi va hech narsa eskirmaydi.',
+  'marketing.storefront.switcher.empty':
+    'Bu yerda hech qanday brend taklif etilmaydi. Vitrina avvalgidek koʻrinadi.',
+  'marketing.storefront.switcher.status.shown': 'Mijozlarga koʻrsatiladi',
+  'marketing.storefront.switcher.status.hidden': 'Yashirilgan',
+  'marketing.storefront.switcher.status.noHostname':
+    'Koʻrsatilmaydi: bu saytning tasdiqlangan manzili hali yoʻq',
+  'marketing.storefront.switcher.status.inactive': 'Koʻrsatilmaydi: brend faol emas',
+  'marketing.storefront.switcher.up': 'Yuqoriga',
+  'marketing.storefront.switcher.down': 'Pastga',
+  'marketing.storefront.switcher.hide': 'Yashirish',
+  'marketing.storefront.switcher.show': 'Koʻrsatish',
+  'marketing.storefront.switcher.remove': 'Olib tashlash',
+  'marketing.storefront.switcher.add.title': 'Boshqa brendni taklif qilish',
+  'marketing.storefront.switcher.add.target': 'Brend va sayt',
+  'marketing.storefront.switcher.add.choose': 'Brendni tanlang…',
+  'marketing.storefront.switcher.add.noAddress': 'tasdiqlangan manzil hali yoʻq',
+  'marketing.storefront.switcher.add.none':
+    'Taklif qilish mumkin boʻlgan sayti bor boshqa brend yoʻq. Boshqa brendning kamida bitta filialida sotadigan faol sayt kanali kerak.',
+  'marketing.storefront.switcher.add.submit': 'Lentaga qoʻshish',
+  'marketing.storefront.switcher.added': 'Brend qoʻshildi.',
+  'marketing.storefront.switcher.updated': 'Saqlandi.',
+  'marketing.storefront.switcher.removed': 'Brend olib tashlandi.',
+  'marketing.storefront.switcher.reordered': 'Tartib saqlandi.',
+  'marketing.storefront.branches.title': 'Filiallar tartibi',
+  'marketing.storefront.branches.hint':
+    'Joylashuvini ulashgan mijoz avval eng yaqin filialni koʻradi; bu tartib faqat teng masofada hal qiladi. Joylashuv ulashmagan mijoz filiallarni aynan shu tartibda koʻradi. Tartibga kiritmagan filialingiz oxirida, nomi boʻyicha turadi.',
+  'marketing.storefront.branches.placed': 'Sizning tartibingizda',
+  'marketing.storefront.branches.nonePlaced':
+    'Hech bir filial joylashtirilmagan. Vitrina filiallarni nomi boʻyicha koʻrsatadi.',
+  'marketing.storefront.branches.unplaced': 'Joylashtirilmagan (oxirida, nomi boʻyicha)',
+  'marketing.storefront.branches.noneUnplaced': 'Barcha filiallar joylashtirilgan.',
+  'marketing.storefront.branches.place': 'Joylashtirish',
+  'marketing.storefront.branches.unplace': 'Tartibdan chiqarish',
+  'marketing.storefront.branches.inactive': 'faol emas, mijozlar uni koʻrmaydi',
+  'marketing.storefront.branches.save': 'Tartibni saqlash',
+  'marketing.storefront.branches.reset': 'Oʻzgarishlarni bekor qilish',
+  'marketing.storefront.branches.saved': 'Tartib saqlandi.',
+  'marketing.storefront.branches.stale':
+    'Siz tahrirlayotganingizda kimdir filiallar tartibini oʻzgartirdi. Quyida hozirgi tartib; oʻzgartirishingizni qaytadan kiriting.',
 };

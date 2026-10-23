@@ -1,5 +1,7 @@
 package uz.horecaos.platform.pricing.api;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -20,6 +22,31 @@ import org.jspecify.annotations.Nullable;
 public interface BenefitGrantDirectory {
 
     Optional<GrantSummary> summary(UUID tenantId, UUID grantId);
+
+    /**
+     * Every grant minted for this customer at this brand, newest first, for the case drawer's picker (ADR 0159,
+     * Decision 9). It names what each grant is worth (its shape and value), when it lapses and the last
+     * characters of its code, so an operator can tell two apart, and never the code itself.
+     */
+    List<GrantListing> forCustomer(UUID tenantId, UUID brandId, UUID customerAccountId);
+
+    /**
+     * @param benefitType {@code PERCENTAGE_OFF_ORDER}, {@code FIXED_AMOUNT_OFF_ORDER} or {@code FREE_DELIVERY}
+     * @param value       basis points for a percentage, minor units for a fixed amount, zero for free delivery
+     * @param currency    null for free delivery
+     * @param codeHint    the last characters of the code, never the code
+     */
+    record GrantListing(
+            UUID grantId,
+            String benefitType,
+            long value,
+            @Nullable String currency,
+            String status,
+            String sourceType,
+            @Nullable UUID sourceId,
+            String codeHint,
+            Instant createdAt,
+            @Nullable Instant expiresAt) {}
 
     /**
      * @param status       {@code ACTIVE}, {@code REDEEMED}, {@code EXPIRED} or {@code REVOKED}

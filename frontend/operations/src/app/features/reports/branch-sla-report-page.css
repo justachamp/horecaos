@@ -33,7 +33,7 @@
 }
 
 .table thead th {
-  text-align: left;
+  text-align: start;
   color: var(--q-ink-muted);
   padding: 8px 12px;
   border-bottom: 1px solid var(--q-hairline);
@@ -45,7 +45,7 @@
 }
 
 .num {
-  text-align: right;
+  text-align: end;
 }
 
 .sla-title {
@@ -110,7 +110,7 @@
 .segment {
   padding: 4px 10px;
   border: none;
-  border-right: 1px solid var(--q-hairline);
+  border-inline-end: 1px solid var(--q-hairline);
   background: var(--q-canvas);
   color: var(--q-ink-muted);
   font-size: var(--q-type-body-xs);
@@ -118,7 +118,7 @@
 }
 
 .segment:last-child {
-  border-right: none;
+  border-inline-end: none;
 }
 
 .segment--active {

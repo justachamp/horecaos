@@ -87,8 +87,17 @@ public class ReportQueryService {
                 // reasoning MEDIAN's own case above already gives.
                 case AVERAGE ->
                     throw new ReportingRefusals.NonScalarMetricException(
-                            metric.id().code(), "GET .../reporting/delivery-distance");
+                            metric.id().code(),
+                            Optional.ofNullable(answeringEndpoint(metric.id().code()))
+                                    .orElse("GET .../reporting/delivery-distance"));
                 default -> {}
+            }
+            // ADR 0043: every other built metric is either one of the figures agg_branch_day holds, or is refused
+            // here by name. revenue.new_vs_returning.v1 is the one exception, read from fact_order below.
+            if (metric.grain() != Grain.DAY_LOCATION_LEGAL_ENTITY_CUSTOMER_TYPE
+                    && !Bucket.computes(metric.id().code())) {
+                throw new ReportingRefusals.MetricNotQueryableException(
+                        metric.id().code(), answeringEndpoint(metric.id().code()));
             }
         }
 
@@ -138,6 +147,48 @@ public class ReportQueryService {
 
         return new ReportResult(resultRows, provenance(query.tenantId(), metrics, boundary));
     }
+
+    /**
+     * Which report answers a built metric that {@code /queries} does not compute, or null when the metric has no
+     * report of its own (the refusal then points at the metric dictionary).
+     *
+     * <p>Each of these is a family the registry already documents as answered by its own endpoint ("not by
+     * /queries"); this is the one place the refusal reads that from.
+     */
+    @Nullable
+    private static String answeringEndpoint(String metricCode) {
+        if (metricCode.startsWith("promo.")) {
+            return "GET .../reporting/promotions/summary";
+        }
+        if (metricCode.startsWith("reviews.")) {
+            return "GET .../reporting/reviews/summary";
+        }
+        if (metricCode.startsWith("recovery.")) {
+            return "GET .../reporting/reviews/recovery";
+        }
+        if (metricCode.startsWith("receipt_depth")) {
+            return "GET .../reporting/operator-leaderboard";
+        }
+        if (metricCode.startsWith("delivery_distance")) {
+            return "GET .../reporting/delivery-distance";
+        }
+        if (metricCode.startsWith("delivery_transit_time")) {
+            return "GET .../reporting/delivery-transit-time-by-location";
+        }
+        if (CUSTOMER_KPI_METRICS.contains(metricCode)) {
+            return "GET .../reporting/customer-kpis";
+        }
+        return null;
+    }
+
+    /** The customer metrics {@code GET .../reporting/customer-kpis} folds over the range. */
+    private static final Set<String> CUSTOMER_KPI_METRICS = Set.of(
+            "customers.new.v1",
+            "customers.distinct.v1",
+            "customers.repeat_share.v1",
+            "customers.order_frequency.v1",
+            "customers.value.v1",
+            "customers.basket_depth.v1");
 
     /** Which endpoint answers a DISTRIBUTION metric, since {@code /queries} cannot. */
     private static String distributionEndpoint(String metricCode) {
@@ -556,11 +607,37 @@ public class ReportQueryService {
     @Transactional(readOnly = true)
     public PromotionSummaryResult promotionSummary(
             UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId) {
+        return promotionSummary(tenantId, from, to, brandId, null, null);
+    }
+
+    /**
+     * The same, at the grain the {@code promo.*} metrics are registered at (ADR 0038, ADR 0140): per promotion and
+     * legal entity, optionally narrowed to one branch or one legal entity, with the metric ids it answers named in
+     * the provenance so a figure on a screen can be traced to its definition.
+     */
+    @Transactional(readOnly = true)
+    public PromotionSummaryResult promotionSummary(
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId,
+            @Nullable UUID legalEntityId) {
         validateRange(from, to);
         refuseMixedBoundaryRegime(tenantId, from, to);
         return new PromotionSummaryResult(
-                store.readPromotionSummary(tenantId, from, to, brandId),
-                provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+                store.readPromotionSummary(tenantId, from, to, brandId, locationId, legalEntityId),
+                provenance(
+                        tenantId,
+                        List.of(
+                                MetricRegistry.require("promo.redemptions.v1"),
+                                MetricRegistry.require("promo.unique_customers.v1"),
+                                MetricRegistry.require("promo.discount_som.v1"),
+                                MetricRegistry.require("promo.markup_som.v1"),
+                                MetricRegistry.require("promo.revenue_with.v1"),
+                                MetricRegistry.require("promo.avg_check_with.v1"),
+                                MetricRegistry.require("promo.avg_check_without.v1")),
+                        businessDays.boundaryFor(tenantId)));
     }
 
     /** ADR 0140 (7.9): the redemption log behind {@link #promotionSummary}, pseudonymised, newest first, bounded. */
@@ -1854,6 +1931,25 @@ public class ReportQueryService {
             late += row.lateCount();
             promised += row.promisedCount();
             deliveryFee += row.deliveryFeeSom();
+        }
+
+        /**
+         * The metrics this bucket can fold from {@code agg_branch_day}. {@link #run} refuses every other built
+         * metric by name before it reads a row, so {@link #valueOf} is never asked for one.
+         */
+        private static final Set<String> COMPUTED = Set.of(
+                "revenue.gross.v1",
+                "revenue.net.v1",
+                "average_check.v1",
+                "orders.count.v1",
+                "channel_mix.count.v1",
+                "orders.cancelled.v1",
+                "orders.late.v1",
+                "orders.promised.v1",
+                "delivery_fee.v1");
+
+        static boolean computes(String metricCode) {
+            return COMPUTED.contains(metricCode);
         }
 
         @Nullable

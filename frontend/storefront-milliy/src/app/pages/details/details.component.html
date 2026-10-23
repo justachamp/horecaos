@@ -102,7 +102,11 @@
         }
 
         @if (selectedVariant(); as portion) {
-          <app-physical-facts [physical]="portion.physical ?? null" [priceMinor]="portion.price" />
+          <app-physical-facts
+            [physical]="portion.physical ?? null"
+            [priceMinor]="portion.price"
+            [accuracyNotice]="nutritionAccuracyNotice()"
+          />
         }
 
         @for (group of modifierGroups(); track group.id) {

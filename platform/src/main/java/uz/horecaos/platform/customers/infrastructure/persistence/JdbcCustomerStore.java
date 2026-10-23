@@ -527,6 +527,21 @@ public class JdbcCustomerStore {
     }
 
     /**
+     * The name the customer gave themselves, for the one message that greets them (ADR 0184, D21).
+     * Null for an account that gave none; an anonymised account has had it cleared.
+     */
+    public Optional<String> displayName(UUID tenantId, UUID accountId) {
+        return jdbc.sql("""
+                SELECT display_name FROM customer.customer_accounts
+                WHERE tenant_id = :tenantId AND id = :accountId AND display_name IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .query(String.class)
+                .optional();
+    }
+
+    /**
      * The account row itself, for the customer reading their own profile.
      *
      * <p>{@code identity_partition_brand_id} comes back with it because it is the
@@ -1052,6 +1067,47 @@ public class JdbcCustomerStore {
                 .update();
     }
 
+    /**
+     * Moves only the point of one address, and says where it came from, under an expected version.
+     *
+     * <p>The row's encrypted lines are not touched, which is the whole of why a role that may not
+     * read them (ADR 0177) can still be asked to place a pin: the point and its source are two
+     * clear columns, and V0021's equivalence between them is kept because the source written here
+     * is {@code OPERATOR_PIN}, which requires a point.
+     *
+     * @return rows written: 1, or 0 when the address is not this account's active address or has
+     *         moved on from {@code expectedVersion}
+     */
+    public int updateAddressPoint(
+            UUID tenantId,
+            UUID accountId,
+            UUID addressId,
+            int expectedVersion,
+            double latitude,
+            double longitude,
+            String coordinateSource,
+            Instant now) {
+        return jdbc.sql("""
+                UPDATE customer.addresses
+                SET latitude = :latitude,
+                    longitude = :longitude,
+                    coordinate_source = :coordinateSource,
+                    version = version + 1,
+                    updated_at = :now
+                WHERE tenant_id = :tenantId AND customer_account_id = :accountId
+                  AND id = :addressId AND status = 'ACTIVE' AND version = :expectedVersion
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("addressId", addressId)
+                .param("expectedVersion", expectedVersion)
+                .param("latitude", latitude)
+                .param("longitude", longitude)
+                .param("coordinateSource", coordinateSource)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .update();
+    }
+
     private static final String SELECT_ADDRESS = """
             SELECT id, label, encrypted_fields, delivery_instructions_encrypted,
                    latitude, longitude, coordinate_source, version
@@ -1235,6 +1291,28 @@ public class JdbcCustomerStore {
                 > 0;
     }
 
+    /**
+     * Whether an active account of this tenant may be served from this brand: a tenant-shared
+     * account (no identity partition) is every brand's, a brand-isolated one belongs to its own
+     * brand only (ADR 0002, {@code tenant.customer_identity_policies}).
+     *
+     * <p>A predicate and never a comparison after a load, so an account of another brand is
+     * indistinguishable from one that does not exist.
+     */
+    public boolean accountVisibleToBrand(UUID tenantId, UUID brandId, UUID accountId) {
+        return jdbc.sql("""
+                SELECT count(*) FROM customer.customer_accounts
+                WHERE id = :id AND tenant_id = :tenantId AND status = 'ACTIVE'
+                  AND (identity_partition_brand_id IS NULL OR identity_partition_brand_id = :brandId)
+                """)
+                        .param("id", accountId)
+                        .param("tenantId", tenantId)
+                        .param("brandId", brandId)
+                        .query(Long.class)
+                        .single()
+                > 0;
+    }
+
     // -------------------------------------------------------------------- erasure
 
     /**
@@ -1319,7 +1397,18 @@ public class JdbcCustomerStore {
 
     /**
      * Overwrites one address's protected fields and label in place, whatever its
-     * {@code status}.
+     * {@code status}, and takes the pin off it.
+     *
+     * <p>The coordinates are the one part of an address kept in the clear (V0017: "a delivery
+     * cannot be routed without them"), and a pin is the building a person lives in, which is what
+     * the ciphertext beside it no longer says. They are cleared with it: {@code latitude} and
+     * {@code longitude} to NULL, which {@code ck_address_coordinates} allows as a pair, and {@code
+     * coordinate_source} to {@code LANDMARK_ONLY}, because {@code ck_address_coordinate_source_agrees}
+     * (V0021) allows a null point only with {@code NOT_GEOCODED} or {@code LANDMARK_ONLY}, and the
+     * first is the geocoding backfill's work list ({@code ix_addresses_awaiting_geocoding}): an
+     * erased tombstone must never be offered to a geocoder. {@code LANDMARK_ONLY} is the finished
+     * state, "no point, never re-queued". The ordering participant does the same to a cart's
+     * destination.
      *
      * <p>An {@code UPDATE}, matching {@link #eraseContactPoint}: nothing points a
      * foreign key at {@code customer.addresses} (a cart and an order each hold
@@ -1337,7 +1426,8 @@ public class JdbcCustomerStore {
         return jdbc.sql("""
                 UPDATE customer.addresses
                 SET label = :label, encrypted_fields = :fields,
-                    delivery_instructions_encrypted = :instructions
+                    delivery_instructions_encrypted = :instructions,
+                    latitude = NULL, longitude = NULL, coordinate_source = 'LANDMARK_ONLY'
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
                 .param("tenantId", tenantId)

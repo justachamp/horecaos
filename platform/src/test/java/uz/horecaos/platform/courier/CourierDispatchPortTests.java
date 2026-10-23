@@ -72,6 +72,7 @@ import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.telemetry.api.CourierProximityPort;
 import uz.horecaos.platform.telemetry.api.CourierShiftPort;
+import uz.horecaos.platform.telemetry.application.DutySessionLifecycle;
 import uz.horecaos.platform.telemetry.application.DutySessionService;
 import uz.horecaos.platform.telemetry.domain.CollectionGate;
 import uz.horecaos.platform.telemetry.domain.LivePositionRules;
@@ -255,6 +256,10 @@ class CourierDispatchPortTests {
         CourierAdjustmentService adjustments =
                 new CourierAdjustmentService(courierStore, ledger, NEVER_REQUIRED, audit, policyResolver, clock);
         AdjustmentRuleEvaluator adjustmentRules = new AdjustmentRuleEvaluator(courierStore, ledgerStore, adjustments);
+        // The real duty sessions behind the real shift service: this suite is about what a shift
+        // does to collection, so ending a shift here ends a session for real (ADR 0045, ADR 0179).
+        shiftPort = new CourierShiftAdapter(shiftStore, courierStore);
+        dutySessions = new DutySessionService(telemetryStore, shiftPort, audit, clock);
         shifts = new CourierShiftService(
                 shiftStore,
                 courierStore,
@@ -265,6 +270,7 @@ class CourierDispatchPortTests {
                 protection,
                 audit,
                 adjustmentRules,
+                new DutySessionLifecycle(dutySessions),
                 clock);
 
         CourierDispatchGate gate = new CourierDispatchGate(courierStore, shiftStore, policyResolver);
@@ -275,9 +281,6 @@ class CourierDispatchPortTests {
         rateCards = rateCardStore;
         fleet = new InternalFleetAdapter(shiftStore, gate, new JdbcActiveAssignments(jdbc), proximity);
         standIn = new InternalFleetConfiguration().unwiredInternalFleetPort();
-
-        shiftPort = new CourierShiftAdapter(shiftStore, courierStore);
-        dutySessions = new DutySessionService(telemetryStore, shiftPort, audit, clock);
 
         seedTenancy();
         scooterTypeId = seedCourierType("SCOOTER", 0, 15_000, 2, 60);
@@ -615,6 +618,101 @@ class CourierDispatchPortTests {
                 .containsEntry("reason", "REGISTRATION_LAPSED")
                 .containsEntry("registrationValidUntil", expiresOn.toString());
         assertThat(openSessionCount()).isZero();
+    }
+
+    // ------------------------------------------------- the shift and its session (ADR 0179)
+
+    @Test
+    @DisplayName(
+            "ending the shift ends the courier's duty session, whoever ends it: collection must not outlive the shift")
+    void endingTheShiftEndsTheSession() {
+        ShiftRow shift = shifts.open(openCommand(alisher, branch));
+        DutySessionRow session = dutySessions.open(openSessionCommand(alisher));
+        assertThat(openSessionCount()).isEqualTo(1);
+
+        shifts.close(new CourierShiftService.CloseShift(
+                TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done for the day", null, UZS));
+
+        assertThat(openSessionCount())
+                .as("before the shift told its session, a courier who closed the shift and whose app never "
+                        + "signed off stayed tracked, and their pin stayed on the dispatcher's map")
+                .isZero();
+        assertThat(telemetryStore.findSession(TENANT, session.id()).orElseThrow())
+                .satisfies(closed -> {
+                    assertThat(closed.status().name()).isEqualTo("CLOSED");
+                    assertThat(closed.endReason()).isEqualTo(DutySessionLifecycle.SHIFT_ENDED);
+                });
+    }
+
+    @Test
+    @DisplayName("a manager ending service ends the session too")
+    void aManagerEndingServiceEndsTheSession() {
+        ShiftRow shift = shifts.open(openCommand(alisher, branch));
+        DutySessionRow session = dutySessions.open(openSessionCommand(alisher));
+
+        shifts.close(new CourierShiftService.CloseShift(
+                TENANT, shift.id(), ShiftActor.MANAGER, manager(), "END_OF_SERVICE", "closing up", null, UZS));
+
+        assertThat(telemetryStore
+                        .findSession(TENANT, session.id())
+                        .orElseThrow()
+                        .status()
+                        .name())
+                .isEqualTo("CLOSED");
+    }
+
+    @Test
+    @DisplayName("a break suspends collection and its end resumes it, because the shift says so, not the app")
+    void aBreakSuspendsAndResumesTheSession() {
+        ShiftRow shift = shifts.open(openCommand(alisher, branch));
+        DutySessionRow session = dutySessions.open(openSessionCommand(alisher));
+
+        shifts.startBreak(TENANT, shift.id(), ShiftActor.COURIER, courier(), "lunch");
+        assertThat(telemetryStore
+                        .findSession(TENANT, session.id())
+                        .orElseThrow()
+                        .status()
+                        .name())
+                .isEqualTo("SUSPENDED");
+
+        shifts.endBreak(TENANT, shift.id(), ShiftActor.COURIER, courier(), "back");
+        assertThat(telemetryStore
+                        .findSession(TENANT, session.id())
+                        .orElseThrow()
+                        .status()
+                        .name())
+                .isEqualTo("OPEN");
+    }
+
+    @Test
+    @DisplayName("a courier who never went on duty has a break and a close that touch no session")
+    void aShiftWithNoSessionIsNotAnError() {
+        ShiftRow shift = shifts.open(openCommand(alisher, branch));
+
+        shifts.startBreak(TENANT, shift.id(), ShiftActor.COURIER, courier(), "lunch");
+        shifts.endBreak(TENANT, shift.id(), ShiftActor.COURIER, courier(), "back");
+        shifts.close(new CourierShiftService.CloseShift(
+                TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
+
+        assertThat(openSessionCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("a session already closed by the courier is left as it is when the shift ends")
+    void aSessionAlreadyClosedIsLeftAlone() {
+        ShiftRow shift = shifts.open(openCommand(alisher, branch));
+        DutySessionRow session = dutySessions.open(openSessionCommand(alisher));
+        dutySessions.close(TENANT, session.id(), "SIGNED_OFF", courier(), "off for a while", "courier.telemetry", "c");
+
+        shifts.close(new CourierShiftService.CloseShift(
+                TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
+
+        assertThat(telemetryStore
+                        .findSession(TENANT, session.id())
+                        .orElseThrow()
+                        .endReason())
+                .as("the end reason the courier gave is not overwritten by the shift's")
+                .isEqualTo("SIGNED_OFF");
     }
 
     // ------------------------------------------------------- what crosses the seam

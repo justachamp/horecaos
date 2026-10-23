@@ -246,6 +246,28 @@ public class JdbcLoyaltyStore {
                 .update();
     }
 
+    /**
+     * ADR 0029 erasure: stops the points accounts of an erased customer from being redeemed.
+     *
+     * <p>{@code SUSPENDED}, not {@code CLOSED}: closure forfeits the remaining balance with a ledger entry, which
+     * is a decision about what happens to the customer's points that erasure does not make. Suspension moves no
+     * points and no money, keeps the ledger whole, and can be undone; it leaves the balance to whoever the tenant
+     * decides it belongs to. An account already {@code CLOSED} is left as it is.
+     *
+     * @return how many accounts were suspended
+     */
+    public int suspendAccountsOfCustomer(UUID tenantId, UUID customerAccountId, Instant now) {
+        return jdbc.sql("""
+                UPDATE loyalty.accounts
+                   SET status = 'SUSPENDED', version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND customer_account_id = :customerAccountId AND status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("customerAccountId", customerAccountId)
+                .param("now", utc(now))
+                .update();
+    }
+
     public void setAccountStatus(UUID tenantId, UUID accountId, AccountStatus status, Instant now) {
         jdbc.sql("""
                 UPDATE loyalty.accounts
@@ -933,21 +955,56 @@ public class JdbcLoyaltyStore {
      * warning configured (the column's own zero default, for a lot older
      * than this column or a rule authored with no warning) -- zero must never
      * be read as "warn immediately".
+     *
+     * <p>Two more rules, both about the customer rather than the lot (ADR 0046's default is "at most one message
+     * per customer per day", ADR 0181):
+     * <ul>
+     *   <li>a lot whose expiry has already passed is not warned about: telling someone their points "expire in
+     *       -1 days" is worse than telling them nothing, and closing the lot is {@code expireLots}' job;
+     *   <li>an account that had any lot warned in the last 24 hours is left alone until that day has passed, so
+     *       a lot that comes into its window in the afternoon waits for tomorrow's message instead of making a
+     *       second one today. The window is rolling, not a calendar day, so there is no midnight at which two
+     *       messages can fall a minute apart.
+     * </ul>
      */
     public List<LotRow> lotsNeedingExpiryWarning(Instant asOf, int limit) {
-        return jdbc.sql("""
-                SELECT * FROM loyalty.lots
-                 WHERE status = 'ACTIVE'
-                   AND expiry_warning_sent_at IS NULL
-                   AND expiry_warning_days > 0
-                   AND expires_at <= :asOf + (expiry_warning_days * INTERVAL '1 day')
-                 ORDER BY expires_at
+        return lotsNeedingExpiryWarning(asOf, limit, null);
+    }
+
+    /**
+     * The same worklist, read from behind {@code after}: the lots that sort after it by expiry, then id.
+     *
+     * <p>A lot nobody could be told about yet (the tenant has not activated the wording) is not marked, so it is
+     * still due and sorts where it always did. A sweep that read only the first {@code limit} lots would read those
+     * again on every pass, and every customer behind them would wait for ever. Walking the list by keyset reaches
+     * them, and does not skip or repeat a lot when one in front of the cursor is marked in between.
+     */
+    public List<LotRow> lotsNeedingExpiryWarning(Instant asOf, int limit, @Nullable LotRow after) {
+        var statement = jdbc.sql("""
+                SELECT * FROM loyalty.lots AS lot
+                 WHERE lot.status = 'ACTIVE'
+                   AND lot.expiry_warning_sent_at IS NULL
+                   AND lot.expiry_warning_days > 0
+                   AND lot.expires_at > :asOf
+                   AND lot.expires_at <= :asOf + (lot.expiry_warning_days * INTERVAL '1 day')
+                   AND NOT EXISTS (
+                       SELECT 1 FROM loyalty.lots AS warned
+                        WHERE warned.tenant_id = lot.tenant_id
+                          AND warned.account_id = lot.account_id
+                          AND warned.expiry_warning_sent_at > :asOf - INTERVAL '1 day')
+                """
+                        + (after == null ? "" : "   AND (lot.expires_at, lot.id) > (:afterExpiresAt, :afterId)\n")
+                        + """
+                 ORDER BY lot.expires_at, lot.id
                  LIMIT :limit
                 """)
                 .param("asOf", utc(asOf))
-                .param("limit", limit)
-                .query(JdbcLoyaltyStore::toLot)
-                .list();
+                .param("limit", limit);
+        if (after != null) {
+            statement =
+                    statement.param("afterExpiresAt", utc(after.expiresAt())).param("afterId", after.id());
+        }
+        return statement.query(JdbcLoyaltyStore::toLot).list();
     }
 
     /** Records that the warning sweep has told {@code LoyaltyExpiryWarningPort} about this lot, once. */

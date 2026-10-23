@@ -6,8 +6,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfigurationResolutionView } from '../../../core/api/configuration';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
+import { Capability, SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { I18n } from '../../../core/i18n/i18n';
 import { ConfigurationApi } from '../configuration-api';
+import { ApprovalPoliciesApi } from './approval-policies-api';
 import { SettingsEditingLevel, SettingsScope } from '../settings-scope';
 import { ApprovalsSettingsPage } from './approvals-settings-page';
 
@@ -54,6 +56,8 @@ class FakeScope {
   readonly level = signal<SettingsEditingLevel>('BRAND');
   readonly brandId = signal<string | null>(BRAND_ID);
   readonly locationId = signal<string | null>(null);
+  readonly brands = signal<readonly { id: string; displayName: string }[]>([]);
+  readonly locations = signal<readonly { id: string; displayName: string }[]>([]);
   readonly denied = signal(false);
 }
 
@@ -127,9 +131,27 @@ describe('ApprovalsSettingsPage', () => {
         { provide: ConfigurationApi, useValue: api },
         { provide: CurrentTenant, useValue: new FakeCurrentTenant() },
         { provide: SettingsScope, useValue: scope },
+        // The "Who signs" section has its own spec; here it only has to be present and not call out.
+        { provide: ApprovalPoliciesApi, useValue: { coverage: vi.fn().mockResolvedValue([]) } },
+        {
+          provide: SessionCapabilities,
+          useValue: { has: (c: Capability) => c === 'APPROVAL_POLICY_MANAGE' },
+        },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
+  });
+
+  it('carries the Who signs section under the limits, where the owner publishes the policies', async () => {
+    await create();
+
+    expect(el().querySelector('[data-testid="approvals-who-signs"]')).not.toBeNull();
+    const order = [...el().querySelectorAll('[data-testid]')].map((node) =>
+      node.getAttribute('data-testid'),
+    );
+    expect(order.indexOf('approvals-policy-note')).toBeLessThan(
+      order.indexOf('approvals-who-signs'),
+    );
   });
 
   it('reads the three promotion limits at the brand and the export limit at the tenant', async () => {

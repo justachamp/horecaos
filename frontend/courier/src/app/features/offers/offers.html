@@ -1,0 +1,134 @@
+<section class="page">
+  <h1 class="q-title">{{ 'offers.title' | t }}</h1>
+
+  @if (profile.shiftBranch() === null) {
+    @if (profile.state() === 'ready') {
+      <div class="card">
+        <h2 class="q-emphasis">{{ 'offers.noShift.title' | t }}</h2>
+        <p class="q-body">{{ 'offers.noShift.body' | t }}</p>
+        <a class="btn" routerLink="/shift">{{ 'offers.noShift.link' | t }}</a>
+      </div>
+    } @else if (profile.state() === 'loading') {
+      <p class="q-body muted" role="status">{{ 'common.loading' | t }}</p>
+    }
+  } @else {
+    <p class="q-caption muted">
+      {{ 'offers.polling' | t: { seconds: pollSeconds, time: updated() } }}
+    </p>
+    <app-step-notice [message]="pageMessage()" />
+
+    @for (offer of store.offers(); track offer.offerId) {
+      <article
+        class="card"
+        [attr.aria-label]="'work.order' | t: { reference: offer.orderReference }"
+      >
+        <header class="head">
+          <h2 class="q-emphasis">{{ 'work.order' | t: { reference: offer.orderReference } }}</h2>
+          <span class="badge q-caption q-tnum">
+            @if (secondsLeft(offer) > 0) {
+              {{ 'offers.lapses' | t: { seconds: secondsLeft(offer) } }}
+            } @else {
+              {{ 'offers.lapsed' | t }}
+            }
+          </span>
+        </header>
+
+        @if (offer.quotedEarningMinor !== null) {
+          <p class="q-subhead">
+            {{
+              'offers.earning'
+                | t
+                  : {
+                      amount: money(
+                        offer.quotedEarningMinor,
+                        offer.quoteCurrency ?? offer.currency
+                      ),
+                    }
+            }}
+          </p>
+          @if (offer.payBasis === 'RUN_INCREMENT') {
+            <p class="q-body-sm muted">{{ 'offers.earning.increment' | t }}</p>
+          }
+        } @else {
+          <p class="q-body-sm muted">{{ 'offers.earning.none' | t }}</p>
+        }
+
+        <p class="q-body">
+          @if (offer.prepaid) {
+            {{ 'work.cash.prepaid' | t }}
+          } @else {
+            {{ 'work.cash.collect' | t: { amount: money(offer.orderTotalMinor, offer.currency) } }}
+          }
+        </p>
+        <p class="q-body-sm">
+          {{ (offer.kitchenReady ? 'work.kitchen.ready' : 'work.kitchen.preparing') | t }}
+        </p>
+
+        <div class="where">
+          <p class="q-emphasis">{{ 'work.pickup.title' | t }}</p>
+          <p class="q-body">{{ offer.pickup.name }}</p>
+          <p class="q-body-sm">{{ offer.pickup.addressLine }}</p>
+          @if (offer.pickup.landmark; as landmark) {
+            <p class="q-body-sm">{{ 'work.landmark' | t: { value: landmark } }}</p>
+          }
+          @if (pickupLink(offer); as href) {
+            <a class="textlink q-body-sm" [href]="href">{{ 'work.customer.navigate' | t }}</a>
+          }
+          <p class="q-body-sm muted">
+            {{
+              'work.window'
+                | t: { start: time(offer.pickupWindowStart), end: time(offer.pickupWindowEnd) }
+            }}
+          </p>
+          @if (offer.destinationLabel; as label) {
+            <p class="q-body-sm">{{ 'work.destination' | t: { label: label } }}</p>
+          }
+          @if (offer.distanceMeters !== null) {
+            <p class="q-body-sm">
+              {{ 'work.route' | t: { distance: distance(offer.distanceMeters) } }}
+            </p>
+          }
+          @if (offer.promisedDeliveryEnd; as promised) {
+            <p class="q-body-sm muted">{{ 'work.promised' | t: { time: time(promised) } }}</p>
+          }
+        </div>
+
+        @if (store.revealedFor(offer.offerId); as door) {
+          <app-customer-location [location]="door" (hidden)="hide(offer)" />
+        } @else if (offer.customerLocationRevealable) {
+          <button
+            type="button"
+            class="btn secondary"
+            [disabled]="store.busy() !== null"
+            (click)="reveal(offer)"
+          >
+            {{ 'work.customer.show' | t }}
+          </button>
+        }
+
+        <app-step-notice [message]="messageFor(offer)" />
+
+        <div class="actions">
+          <button
+            type="button"
+            class="btn"
+            [disabled]="store.busy() !== null"
+            (click)="accept(offer)"
+          >
+            {{ 'offers.accept' | t }}
+          </button>
+          <button
+            type="button"
+            class="btn secondary"
+            [disabled]="store.busy() !== null"
+            (click)="decline(offer)"
+          >
+            {{ 'offers.decline' | t }}
+          </button>
+        </div>
+      </article>
+    } @empty {
+      <p class="q-body">{{ 'offers.empty' | t }}</p>
+    }
+  }
+</section>

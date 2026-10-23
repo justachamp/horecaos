@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Navigation, Router, provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '../../core/api/problem-details';
@@ -61,6 +61,30 @@ describe('ForgotPasswordPage', () => {
     return fixture.nativeElement.textContent as string;
   }
 
+  it('opens with the sign-in name a signed-in person was handed over from «Мой профиль»', async () => {
+    fixture.destroy();
+    TestBed.inject(Router).getCurrentNavigation = () =>
+      ({ extras: { state: { login: '+998901234567' } } }) as unknown as Navigation;
+
+    fixture = TestBed.createComponent(ForgotPasswordPage);
+    fixture.detectChanges();
+
+    const input = fixture.nativeElement.querySelector('#login') as HTMLInputElement;
+    expect(input.value).toBe('+998901234567');
+    expect(submitButton().disabled).toBe(false);
+  });
+
+  it('ignores a state that is not a sign-in name', () => {
+    fixture.destroy();
+    TestBed.inject(Router).getCurrentNavigation = () =>
+      ({ extras: { state: { login: 42, other: 'x' } } }) as unknown as Navigation;
+
+    fixture = TestBed.createComponent(ForgotPasswordPage);
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement.querySelector('#login') as HTMLInputElement).value).toBe('');
+  });
+
   it('will not submit an empty login', () => {
     expect(submitButton().disabled).toBe(true);
     type('  ');
@@ -77,6 +101,22 @@ describe('ForgotPasswordPage', () => {
 
     expect(resets.request).toHaveBeenCalledWith('aziza', 'en');
   });
+
+  // ADR 0149, Decision 5: the console used to turn `uz-Latn` into a bare `uz` and every other tag into
+  // `ru` before asking for the email, so a reader of a language the platform sends in would have got
+  // Russian. It sends the tag it reads; the API reads an alias and decides what the platform sends in.
+  it.each(['uz-Latn', 'ru', 'en'] as const)(
+    'sends the tag %s as it is, not a three-value code',
+    async (tag) => {
+      resets.request.mockResolvedValue(undefined);
+      TestBed.inject(I18n).setLocale(tag);
+
+      type('aziza');
+      await submit();
+
+      expect(resets.request).toHaveBeenCalledWith('aziza', tag);
+    },
+  );
 
   /**
    * The property ADR 0098 exists to protect, asserted where it can actually be

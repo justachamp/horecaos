@@ -52,8 +52,8 @@
 .q-combobox__listbox {
   position: absolute;
   top: 100%;
-  left: 0;
-  right: 0;
+  inset-inline-start: 0;
+  inset-inline-end: 0;
   z-index: 10;
   margin: 2px 0 0;
   padding: 4px 0;
@@ -84,6 +84,20 @@
 
 .q-combobox__sublabel {
   color: var(--q-ink-subtle);
+}
+
+.q-combobox__detail {
+  color: var(--q-ink);
+}
+
+/* Name, place and fact side by side when the list is wide enough, stacked when it is not. */
+@media (min-width: 40rem) {
+  .q-combobox__option--columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.5fr);
+    align-items: baseline;
+    column-gap: 16px;
+  }
 }
 
 .q-combobox__option--create {

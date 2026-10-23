@@ -14,7 +14,7 @@
 }
 
 .live-map__branch {
-  margin-right: auto;
+  margin-inline-end: auto;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -38,6 +38,34 @@
   font-size: var(--q-type-caption);
 }
 
+.live-map__states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 16px 0;
+}
+
+.live-map__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.live-map__state--on {
+  border-color: var(--q-primary);
+  color: var(--q-primary);
+}
+
+.live-map__stateCount {
+  color: var(--q-ink-subtle);
+}
+
 .live-map__error-band {
   padding: 8px 16px;
   background: var(--q-error-tint);
@@ -50,7 +78,7 @@
 }
 
 .live-map__table th {
-  text-align: left;
+  text-align: start;
   padding: 8px 16px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
@@ -66,7 +94,7 @@
 }
 
 .live-map__num-col {
-  text-align: right;
+  text-align: end;
 }
 
 .live-map__coarse {
@@ -137,7 +165,7 @@
 }
 
 .live-map__revealTable th {
-  text-align: left;
+  text-align: start;
   padding: 4px 8px;
   color: var(--q-ink-subtle);
 }

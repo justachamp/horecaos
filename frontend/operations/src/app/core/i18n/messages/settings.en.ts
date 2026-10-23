@@ -383,6 +383,37 @@ export const settingsEn = {
   'settings.channelSetup.status.notConfigured': 'Not configured',
   'settings.channelSetup.noFacets': 'No setup for this type yet.',
   'settings.channelSetup.telegram.title': 'Telegram bot',
+  'settings.telegram.title': 'Menu button, Mini App and welcome',
+  'settings.telegram.loading': 'Loading the Telegram settings…',
+  'settings.telegram.denied': 'You do not have access to this channel’s Telegram settings.',
+  'settings.telegram.error': 'The Telegram settings could not be loaded.',
+  'settings.telegram.lead':
+    'These settings belong to this Telegram channel. The Mini App opens your storefront, so you never type its address: it is the verified address of the working brand’s storefront.',
+  'settings.telegram.miniApp.enabled': 'The menu button opens the Mini App',
+  'settings.telegram.miniApp.address': 'Mini App address',
+  'settings.telegram.miniApp.unavailable.BRAND_NOT_CHOSEN':
+    'Save with the Mini App switched on to choose the working brand’s storefront.',
+  'settings.telegram.miniApp.unavailable.HOSTNAME_NOT_CLAIMED':
+    'This brand’s branches do not sell on any website channel with an address yet. Claim one in the website channel’s setup.',
+  'settings.telegram.miniApp.unavailable.HOSTNAME_NOT_VERIFIED':
+    'The website channel’s address is not verified yet, so it cannot be used. Publish its DNS record and verify the address.',
+  'settings.telegram.miniApp.unavailable.HOSTNAME_AMBIGUOUS':
+    'Two verified website addresses sell at this brand’s branches, and the platform will not guess which is the storefront. Keep one.',
+  'settings.telegram.shortName': 'Mini App short name',
+  'settings.telegram.shortName.hint':
+    'The short name BotFather gave your Mini App (/newapp): letters, digits and underscores. Needed for Mini App links.',
+  'settings.telegram.menuButton.title': 'Menu button label',
+  'settings.telegram.menuButton.hint':
+    'Up to 64 characters per language. Telegram keeps one label per bot: the guided setup applies the one in the brand’s default language, and a customer sees their own language’s label once they start the bot.',
+  'settings.telegram.welcome.title': 'Welcome message',
+  'settings.telegram.welcome.hint':
+    'What the bot answers when a customer starts it. Empty means the platform’s own greeting.',
+  'settings.telegram.offer': 'Offer my terms of service as the public offer in the welcome message',
+  'settings.telegram.save': 'Save',
+  'settings.telegram.saved': 'Saved.',
+  'settings.telegram.stale':
+    'The channel was changed in another window and has been loaded again. Make your change again.',
+  'settings.telegram.guided': 'Guided Mini App setup',
   'settings.channelSetup.hostname.title': 'Web address',
   'settings.channelSetup.hostname.verified': 'verified',
   'settings.channelSetup.hostname.unverified': 'not verified',
@@ -416,6 +447,28 @@ export const settingsEn = {
   'settings.channelSetup.pages.slug.privacyOffer': 'Privacy / offer',
   'settings.channelSetup.dineIn.title': 'QR dine-in mode',
   'settings.channelSetup.dineIn.edit': 'Open branch →',
+  // ------------------------------------------------------------------- the rest of the hub (ADR 0187, D28; settings.md §10.5)
+  'settings.channelSetup.installationFailed.title': 'The connection for this channel failed',
+  'settings.channelSetup.installationFailed.body':
+    'The last connection check of {name} failed, so orders or messages through this channel may not be arriving. Open Integrations to reconnect it.',
+  'settings.channelSetup.integrations': 'Open Integrations',
+  'settings.channelSetup.preview': 'Preview',
+  'settings.channelSetup.aggregator.title': 'Aggregator',
+  'settings.channelSetup.aggregator.body':
+    'An aggregator channel is an installation with mappings, not a storefront. It is set up in Integrations; here it is read-only.',
+  'settings.channelSetup.aggregator.installation': 'Installation: {name} ({status})',
+  'settings.channelSetup.aggregator.noInstallation':
+    'No installation is linked to this channel yet.',
+  'settings.channelSetup.callCentre.title': 'Call centre',
+  'settings.channelSetup.callCentre.body':
+    'Read-only here. The rules for orders an operator enters are set on the Order policy screen, card 5.',
+  'settings.channelSetup.callCentre.unreadable': 'The current value could not be read.',
+  'settings.channelSetup.callCentre.yes': 'yes',
+  'settings.channelSetup.callCentre.no': 'no',
+  'settings.channelSetup.callCentre.link': 'Open Order policy',
+  'settings.channelSetup.mobile.title': 'Mobile app setup is not available yet',
+  'settings.channelSetup.mobile.body':
+    'The customer mobile app is on hold, so its store links, version gate and push credentials have nothing to configure. This form arrives with the work that brings the app back. Languages offered stay a brand setting.',
   'settings.channelSetup.kiosk.title': 'Kiosk pairing',
   'settings.channelSetup.kiosk.locked': 'Not built yet.',
 
@@ -462,7 +515,7 @@ export const settingsEn = {
   'settings.orderPolicy.field.notifyCustomer': 'Tell the customer while it waits',
   'settings.orderPolicy.mode.AUTO_CONFIRM': 'Auto-confirm',
   'settings.orderPolicy.mode.RESTAURANT_APPROVAL': 'Restaurant approval',
-  'settings.orderPolicy.approvalChannel.NONE': 'Nobody (unused when auto-confirming)',
+  'settings.orderPolicy.approvalChannel.NONE': 'Nobody (every order is confirmed automatically)',
   'settings.orderPolicy.approvalChannel.HORECAOS_OPERATIONS': 'HorecaOS operations',
   'settings.orderPolicy.approvalChannel.POS': 'POS',
   'settings.orderPolicy.approvalChannel.EITHER': 'Either',
@@ -481,11 +534,6 @@ export const settingsEn = {
   'settings.orderPolicy.dispatchSummary.link': 'Open the dispatch rules',
   'settings.orderPolicy.card4.title': 'Conditions',
   'settings.orderPolicy.card5.title': 'Operator order entry',
-  'settings.orderPolicy.field.businessDayStartHour': 'Business day starts at (hour)',
-  'settings.orderPolicy.field.averageOrderMinutes': 'Average order time (minutes)',
-  'settings.orderPolicy.field.maximumOrderMinutes': 'Maximum order time (minutes)',
-  'settings.orderPolicy.notApplied.hint':
-    'Not applied yet: nothing reads this number, so changing it changes nothing.',
   'settings.orderPolicy.field.lateOrderThresholdMinutes':
     'An order with no promised time is late after (minutes)',
   'settings.orderPolicy.lateOrderThresholdMinutes.hint':
@@ -503,17 +551,72 @@ export const settingsEn = {
   'settings.orderPolicy.field.minimumOrderAmount': 'Minimum order sum',
   'settings.orderPolicy.minimumOrderAmount.hint':
     'Pickup and dine-in only — delivery keeps its own minimum, set on the service zone.',
-  'settings.orderPolicy.field.vatRatePercent': 'VAT rate (%)',
-  'settings.orderPolicy.field.routingPollIntervalMinutes': 'Routing poll interval (minutes)',
   'settings.orderPolicy.field.autoAcceptEligibleChannels': 'Auto-accept eligible channels',
   'settings.orderPolicy.autoAcceptEligibleChannels.hint':
-    '"ALL", or a comma-separated list of sales channel codes. Not yet enforced.',
+    '"ALL", or sales channel codes separated by commas. An order on any other channel is not confirmed by itself: it waits on the path set in Order acceptance above.',
   'settings.orderPolicy.field.autoAcceptMinPriorOrders': 'Minimum prior successful orders',
   'settings.orderPolicy.field.preorderBranchResolution': 'Pre-order branch selection',
   'settings.orderPolicy.preorderBranchResolution.BY_DISTANCE': 'Nearest branch',
   'settings.orderPolicy.preorderBranchResolution.BY_OPENING_TIME': 'Soonest to open',
   'settings.orderPolicy.field.operatorPromoCodeAllowed': 'Operator may apply a promo code',
   'settings.orderPolicy.revertReason': 'Reverted to the inherited value',
+  'settings.orderPolicy.holdBack.title': 'Orders an auto-accept gate holds back',
+  'settings.orderPolicy.holdBack.hint':
+    'Under auto-confirm, an order that a gate in Automation below holds back (a channel not on its list, or a customer with too few completed orders) waits for this person, for this long, and then the timeout action happens. Leave “Who confirms” as Nobody and the gates can hold nothing.',
+  'settings.orderPolicy.holdBack.none':
+    'No path for held-back orders: the gates in Automation below cannot hold an order.',
+  'settings.orderPolicy.autoAcceptMinPriorOrders.hint':
+    'A customer with fewer completed orders at this brand than this waits for a decision; a guest counts as having none. 0 means no gate.',
+  'settings.orderPolicy.gates.noPath':
+    'Order acceptance above has nobody to hold an order for, so these gates cannot hold anything: such an order is confirmed anyway. Choose who confirms there first.',
+  'settings.orderPolicy.preorderBranchResolution.hint':
+    'Used when a pre-order is placed for a time when no candidate branch is open. A pickup order has no customer address to measure from, so “nearest” falls back to “soonest to open” for it. The rule is set for the whole brand: a single branch does not have a value of its own.',
+  'settings.orderPolicy.field.operatorCallbackFlagAllowed':
+    'Operator may flag an order “call the customer back”',
+  'settings.orderPolicy.field.operatorChangeDueAllowed':
+    'Operator may record the cash the customer will hand over',
+  'settings.orderPolicy.operatorPromoCodeAllowed.hint':
+    'When off, a promo code on an operator order is refused, both when it is priced and when it is placed.',
+  'settings.orderPolicy.operatorCallbackFlagAllowed.hint':
+    'When off, the New order screen hides the checkbox and the server refuses the flag.',
+  'settings.orderPolicy.operatorChangeDueAllowed.hint':
+    'When off, the New order screen hides the change calculation and the server refuses a cash amount.',
+  'settings.orderPolicy.neighbours.title': 'Settings that live elsewhere',
+  'settings.orderPolicy.neighbours.lead':
+    'These shape an order too, but each is set on its own screen. What is shown is what is in force; open the screen to change it.',
+  'settings.orderPolicy.neighbours.open': 'Open',
+  'settings.orderPolicy.neighbours.loading': 'Loading…',
+  'settings.orderPolicy.neighbours.unreadable': 'Not shown: your role cannot read it',
+  'settings.orderPolicy.neighbours.distanceMode.label': 'How a delivery is measured',
+  'settings.orderPolicy.neighbours.distanceMode.RADIUS': 'In a straight line (the standard tariff)',
+  'settings.orderPolicy.neighbours.distanceMode.ROAD': 'By road (the standard tariff)',
+  'settings.orderPolicy.neighbours.distanceMode.none': 'No standard tariff in force for this brand',
+  'settings.orderPolicy.neighbours.branchLimit.label': 'Most orders a branch takes at once',
+  'settings.orderPolicy.neighbours.branchLimit.value': '{count}',
+  'settings.orderPolicy.neighbours.branchLimit.none': 'No limit',
+  'settings.orderPolicy.neighbours.branchLimit.perBranch':
+    'Set for each branch separately — choose a branch in the bar above to see its limit.',
+  'settings.orderPolicy.neighbours.outOfZone.label': 'An address outside every delivery zone',
+  'settings.orderPolicy.neighbours.outOfZone.REJECT': 'Reject',
+  'settings.orderPolicy.neighbours.outOfZone.OFFER_PICKUP': 'Offer pickup instead',
+  'settings.orderPolicy.neighbours.outOfZone.MANUAL_REVIEW': 'Hold for manual review',
+  'settings.orderPolicy.neighbours.outOfZone.notApplied':
+    'Not applied yet: the delivery fee calculation still refuses such an address whatever this says.',
+  'settings.orderPolicy.neighbours.courierVisibility.label': 'What a courier sees',
+  'settings.orderPolicy.neighbours.courierVisibility.READY_ONLY':
+    'Only orders the kitchen has finished',
+  'settings.orderPolicy.neighbours.courierVisibility.ANY': 'Also orders still being cooked',
+  'settings.orderPolicy.neighbours.paidHold.label': 'Kitchen waits for payment',
+  'settings.orderPolicy.neighbours.paidHold.SHADOW': 'Trial: only counts what it would hold',
+  'settings.orderPolicy.neighbours.paidHold.HOLD_UNTIL_PAID': 'Holds an unpaid order',
+  'settings.orderPolicy.neighbours.paidHold.OFF': 'Off',
+  'settings.orderPolicy.neighbours.callCentre.label': 'The call-centre channel',
+  'settings.orderPolicy.neighbours.callCentre.none': 'No active call-centre channel',
+  'settings.orderPolicy.neighbours.callCentre.value':
+    '{payments} payment methods · order types: {modes}',
+  'settings.orderPolicy.neighbours.mode.PICKUP': 'Pickup',
+  'settings.orderPolicy.neighbours.mode.DELIVERY': 'Delivery',
+  'settings.orderPolicy.neighbours.mode.DINE_IN': 'Dine-in',
 
   // Rows X.39 / 10.3b — the ordering.lateness document's editor
   'settings.latenessPolicy.title': 'When an order counts as late',
@@ -661,6 +764,8 @@ export const settingsEn = {
   'settings.fiscalization.terminals.retire': 'Retire',
 
   'settings.fiscalization.classification.title': 'Product classification',
+  'settings.fiscalization.classification.receiptLines':
+    'Receipts are built from each order\u2019s own lines: the dish, every priced option and the delivery fee, each under its own classification. An item with no complete classification (ИКПУ, package code, unit code and fiscal name) blocks that order\u2019s receipt; nothing is sent and no placeholder code is ever written.',
   'settings.fiscalization.classification.headline': 'Unclassified: {unclassified} of {total} items',
   'settings.fiscalization.classification.empty': 'Everything is classified.',
   'settings.fiscalization.classification.notAnEditor':
@@ -702,7 +807,7 @@ export const settingsEn = {
   'settings.fiscalization.backfill.lead':
     '{count} items (dishes and modifier options) still lack an ИКПУ or a package code. Type each code, or copy a column from a spreadsheet and paste it into the first cell to fill down. A code an item already holds is shown as it is and cannot be changed here; change it in the product editor.',
   'settings.fiscalization.backfill.referenceNote':
-    'The official ИКПУ list is not imported yet, so a code is checked by format only (17 digits) and cannot be looked up by name. Unit code and fiscal name are set in the catalog’s fiscal workbench.',
+    'The official ИКПУ list is not imported yet, so a code is checked by format only (17 digits) and cannot be looked up by name. Unit code and fiscal name are filled in the section below the table, or in the catalog’s fiscal workbench.',
   'settings.fiscalization.backfill.empty': 'Every item has an ИКПУ and a package code.',
   'settings.fiscalization.backfill.column.mxik': 'ИКПУ (17 digits)',
   'settings.fiscalization.backfill.column.packageCode': 'Package code',
@@ -728,6 +833,38 @@ export const settingsEn = {
   'settings.fiscalization.backfill.status.conflict':
     'This item already holds a code that differs from yours; it was not changed. The list has been refreshed.',
   'settings.fiscalization.backfill.status.failed': 'Not saved. Try again.',
+  'settings.fiscalization.gaps.title': 'Items short of a unit code or a receipt name',
+  'settings.fiscalization.gaps.lead':
+    '{count} items hold an ИКПУ and a package code but still lack a unit code or the name printed on their receipt line. They stay on the coverage count, and no receipt can be built for them. Fill them here, or open the catalog’s fiscal workbench, which edits all four fields.',
+  'settings.fiscalization.gaps.workbench': 'Open the fiscal workbench',
+  'settings.fiscalization.gaps.column.unit': 'Unit code',
+  'settings.fiscalization.gaps.column.fiscalName': 'Name on the receipt',
+  'settings.fiscalization.gaps.useReferenceUnit': 'Unit from the ИКПУ list',
+  'settings.fiscalization.gaps.fillUnits': 'Fill empty units from the ИКПУ list ({count})',
+  'settings.fiscalization.gaps.useItemName': 'Use the item’s name',
+  'settings.fiscalization.gaps.fillNames': 'Use item names for empty receipt names ({count})',
+  'settings.fiscalization.gaps.unitChoices': 'The list gives several units:',
+  'settings.fiscalization.gaps.noReferenceUnit': 'The ИКПУ list gives no unit for this code.',
+  'settings.fiscalization.gaps.referenceUnavailable': 'The ИКПУ list could not be read.',
+  'settings.fiscalization.gaps.fillSummary':
+    'Filled {filled} units from the list; {open} still need one chosen or typed.',
+  'settings.fiscalization.gaps.error.unit': 'A unit code is a positive whole number.',
+  'settings.fiscalization.gaps.error.name': 'The name on the receipt is 1 to 63 characters.',
+  'settings.fiscalization.backfill.bulk.title': 'Bulk assign',
+  'settings.fiscalization.backfill.bulk.lead':
+    'Filter the table, tick the rows, choose one ИКПУ and one package code, and apply. They go into the ticked rows’ empty cells only, as unsaved edits you review below and send with Save. A cell that already holds a code is never replaced.',
+  'settings.fiscalization.backfill.bulk.counts': 'Showing {shown} of {total}; {selected} ticked.',
+  'settings.fiscalization.backfill.bulk.selectAll': 'Tick every row shown',
+  'settings.fiscalization.backfill.bulk.selectRow': 'Tick {name}',
+  'settings.fiscalization.backfill.bulk.apply': 'Apply to {count} ticked rows',
+  'settings.fiscalization.backfill.bulk.applied':
+    'Filled {cells} empty cells in {rows} rows; {kept} cells already held a code and were left alone. Review them below, then save.',
+  'settings.fiscalization.backfill.filter.all': 'All',
+  'settings.fiscalization.backfill.filter.noCategory': 'No category',
+  'settings.fiscalization.backfill.filter.name': 'Name contains',
+  'settings.fiscalization.backfill.filter.locations': 'Offered in at least (branches)',
+  'settings.fiscalization.backfill.filter.clear': 'Clear filters',
+  'settings.fiscalization.backfill.filter.noMatch': 'No item matches the filter.',
 
   // 10.9 Notifications
   'settings.notifications.title': 'Notifications',
@@ -754,7 +891,7 @@ export const settingsEn = {
   'settings.notifications.field.status': 'Active',
   'settings.notifications.field.activeVersion': 'Version',
   'settings.notifications.field.channel.hint':
-    'Only SMS and Telegram actually send today. Email and Push are declared so the schema and template key carry a channel, but no adapter delivers them yet.',
+    'SMS, Telegram, Email and Push send today. Email and Push are for campaigns only. Email needs a subject and Push a title in every language. Push reaches only customers who turned it on in the storefront, and only once the platform’s push key is set.',
   'settings.notifications.field.variant': 'Variant',
   'settings.notifications.field.fulfilmentMode': 'Fulfilment mode',
   'settings.notifications.field.channelSource': 'Channel source',
@@ -781,6 +918,17 @@ export const settingsEn = {
   'settings.notifications.moderation.APPROVED': 'Approved',
   'settings.notifications.moderation.REJECTED': 'Refused by gateway',
   'settings.notifications.editor.subject': 'Subject',
+  'settings.notifications.editor.title': 'Title',
+  'settings.notifications.editor.push.target': 'Opens on tap',
+  'settings.notifications.editor.push.target.hint':
+    'A path on the storefront, for example /menu or /category/pizza. Leave empty to open the front page.',
+  'settings.notifications.editor.push.target.invalid':
+    'Start with a single slash and use no spaces: /menu, not menu or //menu.',
+  'settings.notifications.editor.push.cover': 'Cover picture',
+  'settings.notifications.editor.push.cover.hint':
+    'Optional. A 3:1 picture the customer sees under the text. Crop it to 3:1 before it is saved.',
+  'settings.notifications.editor.push.cover.set': 'A cover is set',
+  'settings.notifications.editor.push.cover.remove': 'Remove the cover',
   'settings.notifications.editor.body': 'Text',
   'settings.notifications.editor.variables': 'Insert a variable',
   'settings.notifications.editor.variables.empty':
@@ -832,6 +980,48 @@ export const settingsEn = {
   'settings.notifications.routing.unbind.confirm.confirm': 'Unbind',
   'settings.notifications.routing.topic.prompt': 'Forum topic id — leave empty for the flat chat',
   'settings.notifications.routing.topic.save': 'Save',
+  'settings.notifications.field.notificationClass.hint':
+    'The one-time-code message is the platform’s and is not authored here; it is shown below, read-only.',
+  'settings.notifications.field.consentPurpose': 'Consent purpose',
+  'settings.notifications.field.consentPurpose.hint':
+    'The purpose the customer’s consent is checked against before this is sent. An optional message that names none is refused. Order progress messages use ORDER_PROGRESS_UPDATES.',
+  'settings.notifications.marketing.notice': 'Sent only to customers who have consented.',
+  'settings.notifications.marketing.evidence':
+    'Unsubscribing changes who is eligible from then on and never erases the evidence of what was already delivered.',
+  'settings.notifications.marketing.link': 'See a customer’s consent on their card',
+  'settings.notifications.marketing.chip': 'consent only',
+  'settings.notifications.column.languages': 'Languages',
+  'settings.notifications.column.moderation': 'Moderation',
+  'settings.notifications.column.origin': 'Origin',
+  'settings.notifications.languages.missing': 'a language is missing',
+  'settings.notifications.origin.BRAND': 'Brand',
+  'settings.notifications.origin.TENANT': 'Tenant',
+  'settings.notifications.origin.PLATFORM': 'Platform',
+  'settings.notifications.defaults.title': 'Platform default wording',
+  'settings.notifications.defaults.lead':
+    'What a customer is sent for these events when neither this brand nor the tenant has written anything. It is the last layer: a template you activate outranks it at once. It cannot be edited; customise copies it into a template of this brand.',
+  'settings.notifications.defaults.customise': 'Customise',
+  'settings.notifications.defaults.editOwn': 'Open your template',
+  'settings.notifications.defaults.overridden': 'overridden',
+  'settings.notifications.otp.title': 'One-time code message',
+  'settings.notifications.otp.lead':
+    'The sentence a customer reads with a sign-in code belongs to the platform: it is short on purpose so it stays one SMS, and it is not a template, so there is nothing to author or activate here.',
+  'settings.notifications.otp.gateway.GATEWAY_MODERATES':
+    'Your SMS gateway approves wordings: the platform’s sentences must be approved by it before codes reach a handset',
+  'settings.notifications.otp.gateway.NOT_MODERATED': 'Your SMS gateway does not moderate wordings',
+  'settings.notifications.otp.characters': '{count} characters',
+  'settings.notifications.testSend.chat': 'Bound chat',
+  'settings.notifications.testSend.chat.choose': 'Choose one of this brand’s chats…',
+  'settings.notifications.testSend.chat.none':
+    'No chat is bound yet — bind one on the Routing tab.',
+  'settings.notifications.editor.copy.label': 'Start another language from this text:',
+  'settings.notifications.editor.copy.into': 'Copy into {locale}',
+  'settings.notifications.editor.copy.replace': 'Replace {locale} with this text',
+  'settings.notifications.editor.personal.note':
+    'The customer’s name and the courier’s first name are looked up when the message is sent and are never stored.',
+  'settings.notifications.editor.showItemPrices': 'Show item prices in the product list',
+  'settings.notifications.editor.showItemPrices.unused':
+    'No language uses {{productList}}, so this switch would change nothing.',
 
   // 10.10 Reference data
   'settings.referenceData.title': 'Reference data',
@@ -852,9 +1042,7 @@ export const settingsEn = {
   'settings.referenceData.empty': 'None yet.',
   'settings.referenceData.field.internalName': 'Internal name',
   'settings.referenceData.field.customerText': 'Customer-facing text',
-  'settings.referenceData.field.customerTextRu': 'Customer text (Russian)',
-  'settings.referenceData.field.customerTextUz': 'Customer text (Uzbek)',
-  'settings.referenceData.field.customerTextEn': 'Customer text (English)',
+  'settings.referenceData.field.customerTextIn': 'Customer text ({language})',
   'settings.referenceData.field.systemCategory': 'Platform category',
   'settings.referenceData.field.stockDisposition': 'Stock disposition',
   'settings.referenceData.field.liabilityParty': 'Who bears the cost',
@@ -1166,7 +1354,7 @@ export const settingsEn = {
     'HorecaOS has no recruitment or candidate data model — there is nothing here to retain.',
   'settings.dataPrivacy.retention.status.notApplicable': 'Not applicable',
   'settings.dataPrivacy.retention.lead':
-    'Set how long each kind of data is kept. Every value below can only ever be raised for the whole platform by a shorter one you set — the sweep never deletes another tenant’s data early.',
+    'Set how long each kind of data is kept. Under each value the card shows what the platform actually does with it for your company: the window the schedule uses now, and the platform floor a value below it is raised to. Abandoned carts and unverified courier applicants are cleared on your own window; courier location history is shared by every company, so it is cleared on the longest window any of them needs.',
   'settings.dataPrivacy.retention.column.value': 'Current value',
   'settings.dataPrivacy.retention.column.enforcedBy': 'Enforced by',
   'settings.dataPrivacy.retention.unit.days': 'days',
@@ -1182,6 +1370,13 @@ export const settingsEn = {
   'settings.dataPrivacy.retention.invalidValue': 'Enter a whole number greater than zero',
   'settings.dataPrivacy.retention.staleVersion':
     'Somebody else changed this value first — the current value is shown; change it again if you still want to.',
+  'settings.dataPrivacy.retention.effective': 'In force for your company: {value} {unit}',
+  'settings.dataPrivacy.retention.floor':
+    'Platform floor: {value} {unit}. A lower value is raised to it.',
+  'settings.dataPrivacy.retention.scope.perTenant': 'Applies to your company only.',
+  'settings.dataPrivacy.retention.scope.allTenants':
+    'Shared with every company: courier history is stored in daily partitions that hold all of them, so a partition is dropped on the longest window any company needs. A shorter value here does not shorten it.',
+  'settings.dataPrivacy.retention.provisional': 'Provisional — awaiting legal confirmation',
   'settings.dataPrivacy.consent.title': 'Consent',
   'settings.dataPrivacy.consent.lead':
     'What a consent decision can record today, on a customer’s own account.',
@@ -1192,20 +1387,32 @@ export const settingsEn = {
   'settings.dataPrivacy.consent.channelSpecific.yes': 'Yes',
   'settings.dataPrivacy.consent.channelSpecific.no': 'No',
   'settings.dataPrivacy.requests.title': 'Data subject requests',
-  'settings.dataPrivacy.erasure.title': 'Erasure requests',
-  'settings.dataPrivacy.erasure.lead':
-    'Every data-subject erasure request across the whole tenant. Raise, execute, or cancel one from the customer’s own record.',
-  'settings.dataPrivacy.erasure.filter.label': 'Status',
-  'settings.dataPrivacy.erasure.filter.all': 'All',
-  'settings.dataPrivacy.erasure.status.pending': 'Pending',
-  'settings.dataPrivacy.erasure.status.completed': 'Completed',
-  'settings.dataPrivacy.erasure.status.cancelled': 'Cancelled',
-  'settings.dataPrivacy.erasure.column.status': 'Status',
-  'settings.dataPrivacy.erasure.column.customer': 'Customer account',
-  'settings.dataPrivacy.erasure.column.requestedVia': 'Requested via',
-  'settings.dataPrivacy.erasure.column.requestedAt': 'Requested at',
-  'settings.dataPrivacy.erasure.column.resolvedAt': 'Resolved at',
-  'settings.dataPrivacy.erasure.empty': 'No erasure request has been raised in this tenant.',
+  'settings.dataPrivacy.requests.lead':
+    'Every data-subject request across the whole tenant, whichever kind: erasure, a copy of her data, and corrections. Raise, produce, correct or execute one from the customer’s own record.',
+  'settings.dataPrivacy.requests.filter.kind': 'Kind',
+  'settings.dataPrivacy.requests.filter.status': 'Status',
+  'settings.dataPrivacy.requests.filter.all': 'All',
+  'settings.dataPrivacy.requests.kind.erasure': 'Erasure',
+  'settings.dataPrivacy.requests.kind.export': 'Copy of her data',
+  'settings.dataPrivacy.requests.kind.correction': 'Correction',
+  'settings.dataPrivacy.requests.status.pending': 'Pending',
+  'settings.dataPrivacy.requests.status.completed': 'Done',
+  'settings.dataPrivacy.requests.status.cancelled': 'Withdrawn',
+  'settings.dataPrivacy.requests.via.storefront': 'By the customer',
+  'settings.dataPrivacy.requests.via.operations': 'By staff',
+  'settings.dataPrivacy.requests.column.kind': 'Kind',
+  'settings.dataPrivacy.requests.column.status': 'Status',
+  'settings.dataPrivacy.requests.column.customer': 'Customer account',
+  'settings.dataPrivacy.requests.column.requestedVia': 'Requested via',
+  'settings.dataPrivacy.requests.column.requestedAt': 'Requested at',
+  'settings.dataPrivacy.requests.column.resolvedAt': 'Resolved at',
+  'settings.dataPrivacy.requests.column.detail': 'Detail',
+  'settings.dataPrivacy.requests.subject.DISPLAY_NAME': 'Name',
+  'settings.dataPrivacy.requests.subject.DATE_OF_BIRTH': 'Date of birth',
+  'settings.dataPrivacy.requests.subject.CONTACT_POINT': 'Contact',
+  'settings.dataPrivacy.requests.subject.ADDRESS': 'Address',
+  'settings.dataPrivacy.requests.dueBy': 'Owed by {date}',
+  'settings.dataPrivacy.requests.empty': 'No data-subject request has been raised in this tenant.',
   'settings.dataPrivacy.egress.title': 'Personal-data export & reveal log',
   'settings.dataPrivacy.egress.lead':
     'Every time someone on staff revealed or exported a customer’s personal data in the last 90 days, from the platform’s own audit trail.',
@@ -1220,6 +1427,9 @@ export const settingsEn = {
   'settings.dataPrivacy.egress.action.dateOfBirthRevealed': 'Revealed date of birth',
   'settings.dataPrivacy.egress.action.blacklistRevealed': 'Revealed a blacklist reason',
   'settings.dataPrivacy.egress.action.listExported': 'Exported a filtered customer list',
+  'settings.dataPrivacy.egress.action.dsarExported':
+    'Gathered a customer’s data into a copy for her',
+  'settings.dataPrivacy.egress.action.dsarBundleRevealed': 'Opened a customer’s data copy',
   'settings.dataPrivacy.egress.action.audienceExported': 'Exported a marketing audience',
   'settings.dataPrivacy.egress.action.lineNoteRevealed': 'Revealed a customer’s order note',
   'settings.dataPrivacy.egress.action.orderPhoneRevealed':
@@ -1288,6 +1498,14 @@ export const settingsEn = {
   'settings.integrations.detail.bindings.suspend.reasonPrompt':
     'Reason for suspending this binding:',
   'settings.integrations.detail.bindings.empty': 'No bindings yet.',
+  'settings.integrations.detail.ruleset.title': 'Marketplace content rules',
+  'settings.integrations.detail.ruleset.lead':
+    'The rules a branch’s menu is checked against before it is offered to this marketplace. “Universal rules only” checks nothing marketplace-specific.',
+  'settings.integrations.detail.ruleset.noneAuthored':
+    'No marketplace ruleset is authored yet, so every binding is checked against the universal rules only. A ruleset is added when a marketplace’s content requirements are agreed.',
+  'settings.integrations.detail.ruleset.label': 'Marketplace ruleset',
+  'settings.integrations.detail.ruleset.universalOnly': 'Universal rules only',
+  'settings.integrations.detail.ruleset.clear': 'Clear',
   'settings.integrations.detail.bindings.wholeTenant': 'Entire company',
   'settings.integrations.detail.cloposSettings.title': 'Order acceptance',
   'settings.integrations.detail.cloposSettings.requireClerkApproval':
@@ -1320,6 +1538,8 @@ export const settingsEn = {
   'settings.integrations.detail.mapping.entityType.DISCOUNT': 'Discounts',
   'settings.integrations.detail.mapping.entityType.COURIER': 'Couriers',
   'settings.integrations.detail.mapping.entityType.OPERATOR': 'Operators',
+  'settings.integrations.detail.mapping.operatorNotReceived':
+    'This till does not receive an operator yet. You can still pair colleagues with the till’s operators and the pairing is kept, but it reaches no order until the till’s order interface can carry one.',
   'settings.integrations.detail.mapping.entityType.CANCELLATION_REASON': 'Cancellation reasons',
   'settings.integrations.detail.mapping.entityType.CHANNEL_POS_CODE': 'Channel → POS code',
 
@@ -1367,6 +1587,27 @@ export const settingsEn = {
     "Move the pin to the branch's door: click the map, drag the pin or type the coordinates. The point is saved only if you moved it, and a branch's pin can be moved but not removed.",
   'settings.dataPrivacy.egress.action.orderMapPointsRevealed':
     "Opened the day's delivery points on a map",
+  'settings.dataPrivacy.egress.action.leadRevealed':
+    'Revealed a caller’s name or number from the call desk',
+  'settings.dataPrivacy.egress.action.redemptionCustomerRevealed':
+    'Revealed who redeemed a promotion',
+  'settings.dataPrivacy.egress.action.dropoffRevealed':
+    'Revealed the drop-off addresses of grouped orders',
+  'settings.dataPrivacy.egress.action.courierCustomerLocationRevealed':
+    'A courier was shown a customer’s location',
+  'settings.dataPrivacy.egress.action.fiscalEvidenceRevealed':
+    'Revealed the stored request or response of a fiscal receipt',
+  'settings.dataPrivacy.egress.action.reservationGuestRevealed':
+    'Revealed a booking guest’s name or number',
+  'settings.dataPrivacy.egress.action.callerNumberRevealed':
+    'Revealed a caller’s number on the call card',
+  'settings.dataPrivacy.egress.action.reportExported': 'Exported a report',
+  'settings.dataPrivacy.egress.action.courierTrackRevealed': 'Revealed a courier’s track',
+  'settings.dataPrivacy.egress.action.courierRegistrationRevealed':
+    'Revealed a courier’s registration reference',
+  'settings.dataPrivacy.egress.action.courierComplianceRevealed': 'Revealed a courier’s documents',
+  'settings.dataPrivacy.egress.action.invitationRecipientRevealed':
+    'Revealed who an invitation was sent to',
 
   // Chat assistant (ADR 0069).
   'settings.nav.assistant': 'Chat assistant',
@@ -1409,9 +1650,7 @@ export const settingsEn = {
     'Before its first answer in a conversation the assistant says this, in the customer’s language. Write it for your own customers. Left blank, HorecaOS’s wording is used; it cannot be switched off.',
   'settings.assistant.disclosure.legal':
     'HorecaOS’s default wording is not legal advice. What you must tell your customers about automated answers and outside processors is your own obligation.',
-  'settings.assistant.disclosure.field.ru': 'Said in Russian',
-  'settings.assistant.disclosure.field.uz': 'Said in Uzbek',
-  'settings.assistant.disclosure.field.en': 'Said in English',
+  'settings.assistant.disclosure.field': 'Said in {language}',
   'settings.assistant.disclosure.blank': 'HorecaOS’s default wording',
   'settings.assistant.disclosure.default': 'Default wording: {text}',
   'settings.assistant.disclosure.counter': '{count} of {max} characters',
@@ -1449,9 +1688,6 @@ export const settingsEn = {
   'settings.assistant.notes.history.reason': 'Why: {reason}',
   'settings.assistant.notes.version': 'version {version}',
   'settings.assistant.notes.by': '{author}, {when}',
-  'settings.assistant.notes.locale.ru': 'Russian',
-  'settings.assistant.notes.locale.uz': 'Uzbek',
-  'settings.assistant.notes.locale.en': 'English',
   'settings.assistant.notes.scope.TENANT': 'Whole company',
   'settings.assistant.notes.scope.BRAND': 'Whole brand',
   'settings.assistant.notes.scope.LOCATION': 'Branch “{name}”',
@@ -1534,6 +1770,50 @@ export const settingsEn = {
   'settings.kiosk.replace.hint':
     'To replace a kiosk, revoke it and then pair the new one. A kiosk shows its own code on its screen, so the console issues none.',
   'settings.kiosk.revoked.title': 'Revoked kiosks',
+  // ------------------------------------------------------------------- kiosk idle media and the hardware block (ADR 0187)
+  'settings.kiosk.idle.title': 'Idle screen pictures',
+  'settings.kiosk.idle.lead':
+    'Pictures a kiosk shows while nobody is ordering. Up to 8, each 9:16 and at most 1 MB, in the order below. Still images only: no video.',
+  'settings.kiosk.idle.shared':
+    'One list for the whole channel: every kiosk that sells through it plays these pictures, at every branch where the channel is sold.',
+  'settings.kiosk.idle.channel': 'Sales channel',
+  'settings.kiosk.idle.noChannels':
+    'This branch has no active kiosk channel, so there is no idle screen to set up.',
+  'settings.kiosk.idle.loading': 'Loading the pictures',
+  'settings.kiosk.idle.denied': 'No access to the pictures of this channel',
+  'settings.kiosk.idle.error': 'Could not load the pictures. Try again in a moment.',
+  'settings.kiosk.idle.preview': 'The first picture on a kiosk screen',
+  'settings.kiosk.idle.previewEmpty': 'No pictures yet. A kiosk shows its status screen.',
+  'settings.kiosk.idle.count': '{count} of {max} pictures',
+  'settings.kiosk.idle.empty': 'No pictures yet.',
+  'settings.kiosk.idle.position': 'Picture {n}',
+  'settings.kiosk.idle.up': 'Move up',
+  'settings.kiosk.idle.down': 'Move down',
+  'settings.kiosk.idle.remove': 'Remove',
+  'settings.kiosk.idle.full': 'The loop holds {max} pictures. Remove one to add another.',
+  'settings.kiosk.idle.hint':
+    'Choose a JPEG, PNG or WebP and fit it to the 9:16 frame. The fitted picture must come to 1 MB or less.',
+  'settings.kiosk.idle.uploading': 'Uploading and checking the picture…',
+  'settings.kiosk.idle.added': 'The picture is on the loop.',
+  'settings.kiosk.idle.tooLarge':
+    'The picture is still over 1 MB after fitting. Choose a simpler or smaller one.',
+  'settings.kiosk.idle.rejected': 'The platform did not accept this picture.',
+  'settings.kiosk.idle.timedOut':
+    'The platform has not finished checking the picture. Try again in a moment.',
+  'settings.kiosk.idle.stale':
+    'Someone else changed this list first. It now shows what is true; make your change again.',
+  'settings.kiosk.idle.refused.WRONG_ASPECT_RATIO': 'The picture is not 9:16.',
+  'settings.kiosk.idle.refused.TOO_LARGE': 'The picture is over 1 MB.',
+  'settings.kiosk.idle.refused.NOT_A_RASTER_IMAGE':
+    'Only JPEG, PNG and WebP pictures can go on a kiosk screen.',
+  'settings.kiosk.idle.refused.NOT_AVAILABLE':
+    'The picture has not been checked yet. Wait a moment and try again.',
+  'settings.kiosk.idle.refused.UNKNOWN_ASSET': 'That picture cannot be used here.',
+  'settings.kiosk.idle.refused.LIMIT': 'The loop already holds 8 pictures.',
+  'settings.kiosk.idle.refused.DUPLICATE': 'That picture is already on the loop.',
+  'settings.kiosk.hardware.title': 'Printer, bank terminal and marking scanner: not built',
+  'settings.kiosk.hardware.body':
+    'HorecaOS does not provision, certify or support kiosk hardware. A receipt printer in a kiosk cabinet is set up like any printer at the branch (Settings, Printing); a bank terminal and a marking scanner are not integrated, and the kiosk takes no orders yet.',
   'settings.kioskPairing.title': 'Pair a kiosk',
   'settings.kioskPairing.lead':
     'Open this page from the QR on the kiosk, or type the code it shows. Nothing is paired until you confirm below.',
@@ -1723,9 +2003,6 @@ export const settingsEn = {
   'settings.printing.profile.logo': 'Print the brand logo at the top',
   'settings.printing.profile.logoNote':
     'It is turned into black and white dots. A simple, high-contrast logo prints best.',
-  'settings.printing.profile.locale.ru': 'Russian',
-  'settings.printing.profile.locale.uzLatn': 'Uzbek (Latin)',
-  'settings.printing.profile.locale.en': 'English',
   'settings.printing.profile.footerLine': 'Footer line {n}',
   'settings.printing.profile.footerNote':
     'Up to three lines per language, {max} characters each, so a line fits an 80 mm roll. A document prints in one language, the branch’s, never the customer’s.',

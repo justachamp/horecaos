@@ -51,6 +51,17 @@
   has not confirmed for longer than its bound. `MarketplaceMenuPublished` and
   `MarketplaceChannelRecovered` stay unpublished and uncatalogued; the menu pull is not built; the
   ADR 0006 failure for a stale channel is not built.
+  Addition, 2026-10-14 ([ADR 0180](../partial/0180-stale-marketplace-channels-weighed-baskets-and-the-marketplace-menu-pull.md)): the "ADR 0006 failure an operator must resolve"
+  this record's liveness section asks for is decided and not built as written. A stale
+  channel is a tenant-queue incident: the ADR 0058 operations alert for
+  `MARKETPLACE_CHANNEL_STALE`, once per episode, with the `stale_alerted_at` mark naming the
+  episode, shown in the propagation read and the stop-list banner, and closed by recovery
+  with no person resolving it. It is not an ADR 0006 record and ADR 0006 is not amended;
+  `MarketplaceChannelRecovered` stays unpublished.
+  The "menu pull is not built" above is no longer true of the read side: `GET /api/v1/partner/tenants/{tenantId}/restaurants`
+  and `.../restaurants/{locationId}/menu` (`marketplace.menu.read`) serve the channel's assembled
+  projection under an `ETag`, each variant by its platform id and, where a `MENU_ITEM` mapping exists, the
+  partner's own item id. The availability push, the menu push and every outbound adapter stay unbuilt.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-23
 - Deciders: Ayubkhon Abbosov (platform architecture), finance (settlement), legal (fiscal liability on aggregator-collected payments), product (partner programme terms)

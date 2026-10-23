@@ -491,10 +491,6 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
   'delivery.regions.field.nameIn': 'Название ({locale})',
   'delivery.regions.field.boxHint':
     'Северо-восточный угол должен быть севернее и восточнее юго-западного, а центр — внутри прямоугольника.',
-  'delivery.regions.field.swLat': 'ЮЗ широта',
-  'delivery.regions.field.swLon': 'ЮЗ долгота',
-  'delivery.regions.field.neLat': 'СВ широта',
-  'delivery.regions.field.neLon': 'СВ долгота',
   'delivery.regions.field.centreLat': 'Широта центра',
   'delivery.regions.field.centreLon': 'Долгота центра',
 
@@ -708,6 +704,11 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
     'Отправлено на вторую подпись (запрос {request}). Пока её нет, ничего не меняется; после одобрения опубликуйте тот же документ ещё раз.',
   'delivery.policy.consequence.runPayMode':
     'Определяет, сколько получает курьер, когда один заезд везёт несколько заказов к соседним адресам. «Первый полностью» платит каждому следующему заказу ставку за заказ и минимум полностью, а за километры — только расстояние сверх предыдущей точки; курьер видит сумму до принятия. Правило диспетчеризации не включит группировку, пока это не решено.',
+  'delivery.policy.pickupHandoverGate': 'Проверка положения при получении и передаче',
+  'delivery.policy.pickupHandoverGate.SOFT': 'Мягко: записать и дать курьеру продолжить',
+  'delivery.policy.pickupHandoverGate.HARD': 'Жёстко: отказать в шаге',
+  'delivery.policy.consequence.pickupHandoverGate':
+    'Относится к шагам «забрал» и «доставил», когда включена проверка GPS. Мягкий режим (по умолчанию) позволяет курьеру, чьё положение не подтвердилось, завершить шаг и записывает положение как непроверенное; именно это считает доля непроверенных положений в правиле бонуса или штрафа. Жёсткий отказывает в шаге и называет непройденные проверки. Принятие предложения и прибытие в филиал всегда жёсткие.',
   'delivery.policy.shiftEnforcement': 'Контроль смены',
   'delivery.policy.shiftEnforcement.ENFORCED': 'Строгий',
   'delivery.policy.shiftEnforcement.ADVISORY': 'Рекомендательный',
@@ -840,6 +841,12 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
   'delivery.liveMap.map.pinLabel': '{courier}: активных заказов — {orders}',
   'delivery.liveMap.map.hint':
     'Каждая точка — курьер, чья последняя позиция достаточно свежая и точная, чтобы её рисовать; контуры — действующие зоны доставки. Курьеры на смене без точки перечислены ниже с причиной и не ставятся на карту наугад.',
+  'delivery.liveMap.state.label': 'Состояние курьера',
+  'delivery.liveMap.state.ON_SHIFT': 'На смене',
+  'delivery.liveMap.state.CARRYING': 'Везёт заказ',
+  'delivery.liveMap.state.IDLE': 'Свободен',
+  'delivery.liveMap.state.NO_SIGNAL': 'Нет сигнала',
+  'delivery.liveMap.state.empty': 'Сейчас нет курьеров в этом состоянии',
   'delivery.orderPoints.show': 'Показать сегодняшние заказы на доставку на карте',
   'delivery.orderPoints.refresh': 'Открыть заново',
   'delivery.orderPoints.openOnly': 'Только заказы в работе',
@@ -860,4 +867,67 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
   'delivery.orderPoints.legend.closed': 'заказ завершён или отменён',
   'delivery.dispatch.map.show': 'Карта',
   'delivery.dispatch.map.hide': 'Скрыть карту',
+  'delivery.dispatch.legs.branchToDoor':
+    'Заказ {number}: от филиала до двери, пока его никто не везёт — прямая линия, не дорога',
+  'delivery.dispatch.legs.branchToCourier':
+    'Заказ {number}: от филиала до курьера {courier} — прямая линия, не дорога',
+  'delivery.dispatch.legs.courierToDoor':
+    'Заказ {number}: от курьера {courier} до двери — прямая линия, не дорога',
+  'delivery.dispatch.legs.road': ' · дорога по плану {km} км',
+  'delivery.dispatch.legs.roadCaption': 'Заказ {number}: дорога по плану {km} км',
+  'delivery.dispatch.legs.note':
+    'Пунктир — прямые линии между двумя точками, а не дорога. Зелёная: от филиала до текущей позиции курьера. Красная: от позиции курьера до двери, а пока заказ никто не везёт — от филиала до двери.',
+  'delivery.rates.reasons.sim.heading': 'Кого бы задело это правило?',
+  'delivery.rates.reasons.sim.hint':
+    'Прогоняет правило по недавним закрытым сменам или расчётным периодам всех филиалов, потому что правило действует во всех. Ничего не записывается и не выплачивается.',
+  'delivery.rates.reasons.sim.lookback': 'За сколько дней',
+  'delivery.rates.reasons.sim.run': 'Проверить правило',
+  'delivery.rates.reasons.sim.nobody':
+    'Никого за последние {days} дн. (просмотрено смен или периодов: {windows}).',
+  'delivery.rates.reasons.sim.hit':
+    'Курьеров: {couriers}, всего {total}, по {windows} сменам или периодам за {days} дн.',
+  'delivery.rates.reasons.sim.openPeriod':
+    'Незакрытый период показан как сейчас и может измениться до закрытия.',
+  'delivery.rates.reasons.sim.truncated':
+    'Проверка неполная: правило заденет больше курьеров, чем показано, или закрыто больше смен, чем удалось проверить. Реальная цифра может быть выше.',
+  'delivery.rates.reasons.sim.courier': 'Курьер',
+  'delivery.rates.reasons.sim.reading': 'Показатель',
+  'delivery.rates.reasons.sim.amount': 'Было бы начислено',
+  'delivery.deliveries.title': 'Доставки',
+  'delivery.deliveries.loading': 'Загружаем доставки',
+  'delivery.deliveries.denied': 'Нет доступа к доставкам.',
+  'delivery.deliveries.empty': 'Нет доставок по этим фильтрам.',
+  'delivery.deliveries.more': 'Показать ещё',
+  'delivery.deliveries.ownBranchOnly':
+    'Показан только ваш филиал: чтобы видеть все филиалы, нужен доступ к доставкам для всей компании.',
+  'delivery.deliveries.filter.branch': 'Филиал',
+  'delivery.deliveries.filter.state': 'Статус',
+  'delivery.deliveries.filter.courier': 'Курьер',
+  'delivery.deliveries.filter.from': 'С',
+  'delivery.deliveries.filter.to': 'По',
+  'delivery.deliveries.filter.all': 'Все',
+  'delivery.deliveries.column.order': 'Заказ',
+  'delivery.deliveries.column.branch': 'Филиал',
+  'delivery.deliveries.column.destination': 'Куда',
+  'delivery.deliveries.column.state': 'Статус',
+  'delivery.deliveries.column.courier': 'Курьер',
+  'delivery.deliveries.column.promised': 'Обещано',
+  'delivery.deliveries.column.delivered': 'Доставлено',
+  'delivery.deliveries.column.cash': 'Взять наличными',
+  'delivery.deliveries.column.cost': 'Стоимость',
+  'delivery.deliveries.basis.ACCRUED': 'начислено',
+  'delivery.deliveries.basis.INVOICED': 'выставлен счёт',
+  'delivery.deliveries.basis.SETTLED': 'рассчитано',
+  'delivery.deliveries.state.PLANNED': 'Запланирована',
+  'delivery.deliveries.state.WAITING_TO_SOURCE': 'Ждёт поиска курьера',
+  'delivery.deliveries.state.SOURCING': 'Ищем курьера',
+  'delivery.deliveries.state.BOOKING': 'Бронируем партнёра',
+  'delivery.deliveries.state.RETRY_PENDING': 'Повторим',
+  'delivery.deliveries.state.SCHEDULED': 'По расписанию',
+  'delivery.deliveries.state.ASSIGNED': 'Назначена',
+  'delivery.deliveries.state.IN_PROGRESS': 'В пути',
+  'delivery.deliveries.state.COMPLETED': 'Доставлена',
+  'delivery.deliveries.state.MANUAL_ACTION_REQUIRED': 'Нужен человек',
+  'delivery.deliveries.state.CANCELLED': 'Отменена',
+  'delivery.nav.deliveries': 'Доставки',
 };

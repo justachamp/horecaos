@@ -78,7 +78,7 @@
 }
 
 .table thead th {
-  text-align: left;
+  text-align: start;
   color: var(--q-ink-muted);
   padding: 10px 16px;
   border-bottom: 1px solid var(--q-hairline);
@@ -103,7 +103,7 @@
 
 .icon-chip {
   display: inline-block;
-  margin-right: 6px;
+  margin-inline-end: 6px;
   padding: 1px 6px;
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);

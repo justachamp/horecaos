@@ -443,6 +443,22 @@ public final class ReviewsWiring {
         public Optional<CompensationSummary> summary(UUID tenantId, UUID refId) {
             return tenantId.equals(tenants.get(refId)) ? Optional.ofNullable(remedies.get(refId)) : Optional.empty();
         }
+
+        @Override
+        public List<CompensationCandidate> candidatesForOrder(UUID tenantId, UUID orderId) {
+            return remedies.values().stream()
+                    .filter(remedy -> remedy.orderId().equals(orderId))
+                    .filter(remedy -> tenantId.equals(tenants.get(remedy.refId())))
+                    .map(remedy -> new CompensationCandidate(
+                            kind(),
+                            remedy.refId(),
+                            "ORDER_REFUND",
+                            "RECORDED",
+                            remedy.amountMinor(),
+                            remedy.currency(),
+                            java.time.Instant.parse("2026-10-14T10:00:00Z")))
+                    .toList();
+        }
     }
 
     /** Grants pricing would describe, registered by a test. */
@@ -459,6 +475,26 @@ public final class ReviewsWiring {
         @Override
         public Optional<GrantSummary> summary(UUID tenantId, UUID grantId) {
             return tenantId.equals(tenants.get(grantId)) ? Optional.ofNullable(grants.get(grantId)) : Optional.empty();
+        }
+
+        @Override
+        public List<GrantListing> forCustomer(UUID tenantId, UUID brandId, UUID customerAccountId) {
+            return grants.values().stream()
+                    .filter(grant -> tenantId.equals(tenants.get(grant.grantId())))
+                    .filter(grant -> grant.brandId().equals(brandId)
+                            && grant.customerAccountId().equals(customerAccountId))
+                    .map(grant -> new GrantListing(
+                            grant.grantId(),
+                            "FIXED_AMOUNT_OFF_ORDER",
+                            20_000L,
+                            "UZS",
+                            grant.status(),
+                            grant.sourceType(),
+                            grant.sourceId(),
+                            "ABCD",
+                            java.time.Instant.parse("2026-10-14T10:00:00Z"),
+                            null))
+                    .toList();
         }
     }
 

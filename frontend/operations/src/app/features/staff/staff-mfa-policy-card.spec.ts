@@ -62,7 +62,9 @@ describe('StaffMfaPolicyCard (ADR 0148)', () => {
     expect(
       (root().querySelector('[data-testid="mfa-policy-save"]') as HTMLButtonElement).disabled,
     ).toBe(true);
-    expect(root().textContent).toContain('Owner, administrator, finance and brand manager');
+    expect(root().textContent).toContain(
+      'Owner, administrator, finance and brand manager, and any job of your own that holds their special powers',
+    );
   });
 
   it('writes the chosen mode at tenant scope with the stored version, and says who is asked at next sign-in', async () => {

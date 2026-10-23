@@ -319,11 +319,23 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
         }
     }
 
+    /**
+     * Whether this message is about a subject whose chat line is edited in place or skipped when it is
+     * already showing the same content (ADR 0058). A template author's test send is about no subject: it
+     * must arrive each time it is pressed, and never be folded into the one before.
+     */
+    private static boolean tracksLiveState(NotificationDispatch dispatch) {
+        return dispatch.subjectType() != null
+                && dispatch.subjectId() != null
+                && dispatch.templateKey() != null
+                && !NotificationDispatch.SUBJECT_TEMPLATE_TEST_SEND.equals(dispatch.subjectType());
+    }
+
     /** One logical send: edit-if-live, else send-new, with one migrate_to_chat_id replay either way. */
     private ProviderOutcome attempt(NotificationDispatch dispatch, ProviderCall call, UUID bindingId, ChatRef chat) {
         String contentHash = TelegramContentHash.of(dispatch.body());
 
-        if (dispatch.subjectType() != null && dispatch.subjectId() != null && dispatch.templateKey() != null) {
+        if (tracksLiveState(dispatch)) {
             Optional<Tracked> tracked = tracker.current(
                     dispatch.tenantId(),
                     bindingId,
@@ -436,7 +448,7 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
                             "MISSING_MESSAGE_ID", "Telegram accepted the message but the response had no message_id");
                 }
                 long messageId = messageIdNumber.longValue();
-                if (dispatch.subjectType() != null && dispatch.subjectId() != null && dispatch.templateKey() != null) {
+                if (tracksLiveState(dispatch)) {
                     tracker.recordSent(
                             dispatch.tenantId(),
                             bindingId,

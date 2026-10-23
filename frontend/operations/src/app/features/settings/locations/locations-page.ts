@@ -11,11 +11,13 @@ import {
   BulkServiceStateItemView,
   ChangeServiceStateRequest,
   LocationLegalEntityView,
-  LocationServiceStateView,
   LocationsApi,
   LocationView,
   ServiceMode,
 } from './locations-api';
+import { registerLocationsListKeys } from './locations-keys';
+import { ClosedBranchStrip } from '../../../shell/branch-state/closed-branch-strip';
+import { BranchStates } from '../../../shell/branch-state/branch-states';
 
 type StateFilter = 'ALL' | ServiceMode;
 const ALL = 'ALL';
@@ -52,13 +54,16 @@ function severityRank(mode: ServiceMode): number {
  */
 @Component({
   selector: 'q-locations-page',
-  imports: [TPipe, RouterOutlet],
+  imports: [TPipe, RouterOutlet, ClosedBranchStrip],
   templateUrl: './locations-page.html',
   styleUrl: './locations-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LocationsPage {
+  /** brands-and-locations.md §1.8: the branch list's keys. */
+  private readonly keys = registerLocationsListKeys();
   private readonly api = inject(LocationsApi);
+  private readonly branchStates = inject(BranchStates);
   private readonly location = inject(CurrentLocation);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -68,9 +73,11 @@ export class LocationsPage {
   protected readonly denied = signal(false);
   protected readonly loadError = signal<string | null>(null);
   protected readonly locations = signal<readonly LocationView[]>([]);
-  protected readonly serviceStates = signal<ReadonlyMap<string, LocationServiceStateView>>(
-    new Map(),
-  );
+  /**
+   * Every branch's manual-override state: the one copy the shell's control and the closed-branch strip also
+   * read, so a branch reopened from a row here is open in the strip at once and not at its next poll.
+   */
+  protected readonly serviceStates = this.branchStates.states;
   protected readonly legalEntities = signal<ReadonlyMap<string, LocationLegalEntityView>>(
     new Map(),
   );
@@ -262,8 +269,7 @@ export class LocationsPage {
     try {
       const response = await this.api.bulkChangeServiceState(base, { ...request, locationIds });
       this.bulkOutcomes.set(response.items);
-      const states = await this.api.serviceStates(base);
-      this.serviceStates.set(new Map(states.map((state) => [state.locationId, state])));
+      await this.rereadStates();
       this.selected.set(new Set());
       return true;
     } catch (error) {
@@ -343,8 +349,7 @@ export class LocationsPage {
     this.stateActionError.set(null);
     try {
       await this.api.changeServiceState(scope, request);
-      const states = await this.api.serviceStates(scope);
-      this.serviceStates.set(new Map(states.map((state) => [state.locationId, state])));
+      await this.rereadStates();
       return true;
     } catch (error) {
       this.stateActionError.set(this.describe(error));
@@ -364,14 +369,14 @@ export class LocationsPage {
       return;
     }
     try {
-      const [locations, states, entities, channels] = await Promise.all([
+      const [locations, , entities, channels] = await Promise.all([
         this.api.list(scope),
-        this.api.serviceStates(scope),
+        this.branchStates.refresh(),
         this.api.legalEntities(scope),
         this.api.channels(scope),
       ]);
+      this.throwIfStatesFailed();
       this.locations.set(locations);
-      this.serviceStates.set(new Map(states.map((state) => [state.locationId, state])));
       this.legalEntities.set(new Map(entities.map((entity) => [entity.locationId, entity])));
       this.channelsByLocation.set(
         new Map(channels.map((entry) => [entry.locationId, entry.channelCodes])),
@@ -386,6 +391,20 @@ export class LocationsPage {
       }
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  /** Reads the states again after a write, failing as the page's own read would have. */
+  private async rereadStates(): Promise<void> {
+    await this.branchStates.reread();
+    this.throwIfStatesFailed();
+  }
+
+  /** The shared read swallows its errors so the shell never breaks; this page reports them, as it always did. */
+  private throwIfStatesFailed(): void {
+    const failure = this.branchStates.lastError();
+    if (failure !== null) {
+      throw failure;
     }
   }
 

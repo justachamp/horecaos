@@ -237,10 +237,12 @@ class ConversationRepository {
                        SELECT 1 FROM conversations.conversation_messages m
                         WHERE m.tenant_id = c.tenant_id AND m.conversation_id = c.id
                    )
+                   AND %s
                  ORDER BY c.updated_at
                  LIMIT :batchSize
                  FOR UPDATE OF c SKIP LOCKED
-                """)
+                """.formatted(uz.horecaos.platform.customers.api.LegalHolds.notHeld(
+                        "c.tenant_id", "c.customer_account_id")))
                 .param("now", utc(now))
                 .param("batchSize", batchSize)
                 .query((row, number) ->

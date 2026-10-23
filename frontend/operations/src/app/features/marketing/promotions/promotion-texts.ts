@@ -30,6 +30,7 @@ const en = {
   'problem.group': 'Name the stacking group.',
   'problem.action': 'Add at least one action.',
   'problem.gift': 'Choose which dish is the gift.',
+  'problem.title': 'A title is at most 120 characters.',
   'problem.condition': 'Finish or remove the condition with no value.',
   title: 'Promotions',
   intro:
@@ -78,6 +79,8 @@ const en = {
   'action.REDUCED_DELIVERY': 'Reduced delivery fee',
   'action.ITEM_PERCENTAGE_MARKUP': 'Percentage markup on matching products',
   'action.ITEM_FIXED_MARKUP': 'Fixed markup on each matching unit',
+  'action.ORDER_PERCENTAGE_MARKUP': 'Service charge, a percentage of the order after discounts',
+  'action.ORDER_FIXED_MARKUP': 'Service charge, a fixed amount on the order',
   'adjustment.BASE_PRICE': 'Price',
   'adjustment.MODIFIER': 'Modifier',
   'adjustment.ITEM_DISCOUNT': 'Product discount',
@@ -89,6 +92,7 @@ const en = {
   'adjustment.DELIVERY_FEE_BENEFIT': 'Delivery benefit',
   'adjustment.DELIVERY_TARIFF_DISCOUNT': 'Tariff delivery discount',
   'adjustment.ITEM_MARKUP': 'Product markup',
+  'adjustment.ORDER_MARKUP': 'Service charge',
   'verdict.COUPON_NOT_PRESENTED': 'Needs a promo code that was not presented',
   'verdict.LIMIT_REACHED': 'Its redemption limit is used up',
   'verdict.NOT_CLAIMED_AT_PLACEMENT':
@@ -200,11 +204,14 @@ const en = {
   'editor.code': 'Handle',
   'editor.code.hint':
     'Unique in this brand: 2 to 64 letters, digits, dashes or underscores. Guests never see it.',
+  'editor.title': 'Title for guests (optional)',
+  'editor.title.hint':
+    'What a guest reads next to the discount on the cart and the receipt, in their language. Leave a language empty and the guest sees the kind of benefit instead.',
   'editor.kind': 'Type',
   'editor.scope': 'Applies to',
   'editor.currency': 'Currency',
   'editor.markupNote':
-    'A markup raises the price of matching products before any discount, and always needs a second person to activate it. A service charge on the whole order is not available yet.',
+    'A markup raises the price of matching products before any discount, and always needs a second person to activate it. A service charge on the whole order is computed on the goods after discounts and is switched off for every company until the platform has the fiscal and tax answer: the rule checker refuses it until then.',
   'editor.group': 'Stacking group',
   'editor.group.hint':
     'Within one group the offer worth most to the guest wins; different groups add up. A product promotion cannot share a group with an order or delivery one.',
@@ -304,6 +311,7 @@ const en = {
     'What each automatic promotion and promo code gave away and earned, from the redemption facts built at day close. The newest business day or two may still be settling.',
   'report.loading': 'Loading…',
   'report.empty': 'No promotion was redeemed in this range.',
+  'report.column.entity': 'Legal entity',
   'report.column.promotion': 'Promotion',
   'report.column.source': 'Source',
   'report.column.redemptions': 'Redemptions',
@@ -349,6 +357,7 @@ const ru: Record<PromotionTextKey, string> = {
   'problem.group': 'Укажите группу совмещения.',
   'problem.action': 'Добавьте хотя бы одно действие.',
   'problem.gift': 'Выберите, какое блюдо идёт в подарок.',
+  'problem.title': 'Заголовок не длиннее 120 символов.',
   'problem.condition': 'Заполните или удалите условие без значения.',
   title: 'Промоакции',
   intro:
@@ -397,6 +406,8 @@ const ru: Record<PromotionTextKey, string> = {
   'action.REDUCED_DELIVERY': 'Сниженная стоимость доставки',
   'action.ITEM_PERCENTAGE_MARKUP': 'Процентная наценка на подходящие позиции',
   'action.ITEM_FIXED_MARKUP': 'Фиксированная наценка на каждую подходящую единицу',
+  'action.ORDER_PERCENTAGE_MARKUP': 'Сервисный сбор, процент от заказа после скидок',
+  'action.ORDER_FIXED_MARKUP': 'Сервисный сбор, фиксированная сумма на заказ',
   'adjustment.BASE_PRICE': 'Цена',
   'adjustment.MODIFIER': 'Модификатор',
   'adjustment.ITEM_DISCOUNT': 'Скидка на позицию',
@@ -408,6 +419,7 @@ const ru: Record<PromotionTextKey, string> = {
   'adjustment.DELIVERY_FEE_BENEFIT': 'Льгота на доставку',
   'adjustment.DELIVERY_TARIFF_DISCOUNT': 'Скидка тарифа доставки',
   'adjustment.ITEM_MARKUP': 'Наценка на позицию',
+  'adjustment.ORDER_MARKUP': 'Сервисный сбор',
   'verdict.COUPON_NOT_PRESENTED': 'Нужен промокод, который не предъявлен',
   'verdict.LIMIT_REACHED': 'Лимит применений исчерпан',
   'verdict.NOT_CLAIMED_AT_PLACEMENT':
@@ -518,11 +530,14 @@ const ru: Record<PromotionTextKey, string> = {
   'editor.code': 'Код акции',
   'editor.code.hint':
     'Уникален в бренде: от 2 до 64 букв, цифр, дефисов или подчёркиваний. Гости его не видят.',
+  'editor.title': 'Заголовок для гостя (необязательно)',
+  'editor.title.hint':
+    'Что гость читает рядом со скидкой в корзине и в чеке, на своём языке. Если язык пуст, гость увидит вид выгоды.',
   'editor.kind': 'Тип',
   'editor.scope': 'Действует на',
   'editor.currency': 'Валюта',
   'editor.markupNote':
-    'Наценка повышает цену подходящих позиций до любых скидок и всегда требует подтверждения второго человека. Сервисный сбор на весь заказ пока недоступен.',
+    'Наценка повышает цену подходящих позиций до любых скидок и всегда требует подтверждения второго человека. Сервисный сбор на весь заказ считается от суммы после скидок и выключен для всех компаний, пока у платформы нет фискального и налогового ответа: до тех пор проверка правил его отклоняет.',
   'editor.group': 'Группа совмещения',
   'editor.group.hint':
     'Внутри группы побеждает предложение, более выгодное гостю; разные группы суммируются. Акция на позиции не может делить группу с акцией на заказ или доставку.',
@@ -622,6 +637,7 @@ const ru: Record<PromotionTextKey, string> = {
     'Сколько отдала и принесла каждая автоматическая акция и промокод — по фактам применений, которые строятся при закрытии дня. Последний-два рабочих дня могут ещё досчитываться.',
   'report.loading': 'Загрузка…',
   'report.empty': 'За этот период ни одна акция не применялась.',
+  'report.column.entity': 'Юрлицо',
   'report.column.promotion': 'Акция',
   'report.column.source': 'Источник',
   'report.column.redemptions': 'Применений',
@@ -665,6 +681,7 @@ const uzLatn: Record<PromotionTextKey, string> = {
   'problem.group': 'Birlashtirish guruhini koʻrsating.',
   'problem.action': 'Kamida bitta amal qoʻshing.',
   'problem.gift': 'Sovgʻa taomni tanlang.',
+  'problem.title': 'Sarlavha 120 belgidan oshmasligi kerak.',
   'problem.condition': 'Qiymatsiz shartni toʻldiring yoki oʻchiring.',
   title: 'Aksiyalar',
   intro:
@@ -713,6 +730,8 @@ const uzLatn: Record<PromotionTextKey, string> = {
   'action.REDUCED_DELIVERY': 'Yetkazib berish narxini kamaytirish',
   'action.ITEM_PERCENTAGE_MARKUP': 'Mos pozitsiyalarga foizli ustama',
   'action.ITEM_FIXED_MARKUP': 'Har bir mos birlikka belgilangan ustama',
+  'action.ORDER_PERCENTAGE_MARKUP': 'Xizmat haqi, chegirmalardan keyingi buyurtmadan foiz',
+  'action.ORDER_FIXED_MARKUP': 'Xizmat haqi, buyurtmaga belgilangan summa',
   'adjustment.BASE_PRICE': 'Narx',
   'adjustment.MODIFIER': 'Modifikator',
   'adjustment.ITEM_DISCOUNT': 'Pozitsiyaga chegirma',
@@ -724,6 +743,7 @@ const uzLatn: Record<PromotionTextKey, string> = {
   'adjustment.DELIVERY_FEE_BENEFIT': 'Yetkazib berish imtiyozi',
   'adjustment.DELIVERY_TARIFF_DISCOUNT': 'Yetkazib berish tarifi chegirmasi',
   'adjustment.ITEM_MARKUP': 'Pozitsiyaga ustama',
+  'adjustment.ORDER_MARKUP': 'Xizmat haqi',
   'verdict.COUPON_NOT_PRESENTED': 'Taqdim etilmagan promokod kerak',
   'verdict.LIMIT_REACHED': 'Qoʻllanish limiti tugagan',
   'verdict.NOT_CLAIMED_AT_PLACEMENT':
@@ -836,11 +856,14 @@ const uzLatn: Record<PromotionTextKey, string> = {
   'editor.code': 'Aksiya kodi',
   'editor.code.hint':
     'Brend ichida noyob: 2 dan 64 gacha harf, raqam, defis yoki pastki chiziq. Mehmonlar uni koʻrmaydi.',
+  'editor.title': 'Mehmon uchun sarlavha (ixtiyoriy)',
+  'editor.title.hint':
+    'Mehmon savatda va chekda chegirma yonida oʻz tilida oʻqiydigan matn. Til boʻsh qolsa, mehmon imtiyoz turini koʻradi.',
   'editor.kind': 'Turi',
   'editor.scope': 'Qoʻllanadi',
   'editor.currency': 'Valyuta',
   'editor.markupNote':
-    'Ustama mos pozitsiyalar narxini har qanday chegirmadan oldin oshiradi va doim ikkinchi odam tasdigʻini talab qiladi. Butun buyurtmaga xizmat haqi hozircha mavjud emas.',
+    'Ustama mos pozitsiyalar narxini har qanday chegirmadan oldin oshiradi va doim ikkinchi odam tasdigʻini talab qiladi. Butun buyurtmaga xizmat haqi chegirmalardan keyingi summadan hisoblanadi va platformada soliq va fiskal javob boʻlmaguncha barcha kompaniyalar uchun oʻchirilgan: shu paytgacha qoida tekshiruvi uni rad etadi.',
   'editor.group': 'Birlashtirish guruhi',
   'editor.group.hint':
     'Guruh ichida mehmon uchun foydaliroq taklif gʻolib boʻladi; turli guruhlar qoʻshiladi. Pozitsiyalar aksiyasi buyurtma yoki yetkazib berish aksiyasi bilan bitta guruhda boʻla olmaydi.',
@@ -940,6 +963,7 @@ const uzLatn: Record<PromotionTextKey, string> = {
     'Har bir avtomatik aksiya va promokod qancha chegirma berdi va qancha daromad keltirdi — kun yopilganda shakllanadigan qoʻllanish faktlari asosida. Oxirgi bir-ikki ish kuni hali hisoblanayotgan boʻlishi mumkin.',
   'report.loading': 'Yuklanmoqda…',
   'report.empty': 'Bu davrda birorta aksiya qoʻllanmagan.',
+  'report.column.entity': 'Yuridik shaxs',
   'report.column.promotion': 'Aksiya',
   'report.column.source': 'Manba',
   'report.column.redemptions': 'Qoʻllanishlar',

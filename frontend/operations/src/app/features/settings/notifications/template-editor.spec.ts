@@ -5,13 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocationScope } from '../../../core/api/operations-paths';
 import { I18n } from '../../../core/i18n/i18n';
 import { LocaleSet } from '../../../core/i18n/locale-set';
-import {
-  AddVersionRequest,
-  NotificationsApi,
-  VariableCatalogueEntry,
-  WordingResponse,
-} from './notifications-api';
-import { TemplateEditor } from './template-editor';
+import { AddVersionRequest, NotificationsApi, VariableCatalogueEntry } from './notifications-api';
+import { PrefillWording, TemplateEditor } from './template-editor';
 
 const SCOPE: LocationScope = { tenantId: 'tenant-1', brandId: 'brand-1', locationId: 'location-1' };
 
@@ -69,7 +64,8 @@ describe('TemplateEditor', () => {
   }
 
   it('offers the variable catalogue for the template’s own class, fixing the empty-schema defect (gap map X.27)', () => {
-    expect(api.variableCatalogue).toHaveBeenCalledWith(SCOPE);
+    // ADR 0184, D21: the key travels, because one variable exists for one key only.
+    expect(api.variableCatalogue).toHaveBeenCalledWith(SCOPE, 'CONFIRMED');
     const chips = fixture.nativeElement.querySelectorAll(
       '[data-testid="variable-chips"] .variable-chip',
     );
@@ -97,6 +93,16 @@ describe('TemplateEditor', () => {
       '[data-testid="preview-body"]',
     ) as HTMLElement;
     expect(preview.textContent).toBe('Order A-1042 is ready');
+  });
+
+  it('previews the loyalty expiry message with sample points, date and days (row 6.3, ADR 0181)', () => {
+    setBody(
+      '{{loyaltyPoints}} points start to lapse on {{loyaltyExpiresOn}} ({{loyaltyDaysRemaining}} days)',
+    );
+    const preview = fixture.nativeElement.querySelector(
+      '[data-testid="preview-body"]',
+    ) as HTMLElement;
+    expect(preview.textContent).toBe('12 000 points start to lapse on 28.10.2026 (14 days)');
   });
 
   it('disables save until all three locales have text', () => {
@@ -172,21 +178,8 @@ describe('TemplateEditor', () => {
   });
 
   it('starts from the active version’s own wording when a prefill is supplied', async () => {
-    const prefill: readonly WordingResponse[] = [
-      {
-        versionNumber: 1,
-        locale: 'ru',
-        subject: null,
-        body: 'Существующий текст',
-        contentHash: 'h',
-        status: 'ACTIVE',
-        approvedBy: 'ops',
-        variablesSchema: {},
-        providerReview: 'NOT_REQUIRED',
-        providerReviewReference: null,
-        providerReviewNote: null,
-        providerReviewUpdatedAt: null,
-      },
+    const prefill: readonly PrefillWording[] = [
+      { locale: 'ru', subject: null, body: 'Существующий текст' },
     ];
     const prefillFixture = TestBed.createComponent(TemplateEditor);
     prefillFixture.componentRef.setInput('scope', SCOPE);
@@ -219,7 +212,7 @@ describe('TemplateEditor for a brand that serves two of the languages', () => {
 
   async function open(
     brandLanguages: readonly string[],
-    prefill: readonly WordingResponse[] | null = null,
+    prefill: readonly PrefillWording[] | null = null,
   ): Promise<void> {
     served = signal(brandLanguages);
     api = {
@@ -314,19 +307,10 @@ describe('TemplateEditor for a brand that serves two of the languages', () => {
   });
 
   it('keeps a wording the version already carries in a language the brand does not serve, instead of dropping it', async () => {
-    const wording = (locale: string, body: string): WordingResponse => ({
-      versionNumber: 1,
+    const wording = (locale: string, body: string): PrefillWording => ({
       locale,
       subject: null,
       body,
-      contentHash: 'h',
-      status: 'ACTIVE',
-      approvedBy: 'ops',
-      variablesSchema: {},
-      providerReview: 'NOT_REQUIRED',
-      providerReviewReference: null,
-      providerReviewNote: null,
-      providerReviewUpdatedAt: null,
     });
     await open(
       ['ru', 'uz-Latn'],
@@ -347,5 +331,175 @@ describe('TemplateEditor for a brand that serves two of the languages', () => {
       AddVersionRequest,
     ];
     expect(Object.keys(request.wordings)).toEqual(['ru', 'uz-Latn', 'en']);
+  });
+});
+
+/**
+ * ADR 0184, row 10.9a: the editor's three additions: the version's «show item prices» switch, copying a
+ * text into another language to start its translation, and the note beside the two personal variables.
+ */
+describe('TemplateEditor as ADR 0184 extends it', () => {
+  const ORDER_CATALOGUE: readonly VariableCatalogueEntry[] = [
+    {
+      notificationClass: 'TRANSACTIONAL_REQUIRED',
+      variables: [
+        { name: 'orderNumber', description: 'Number.' },
+        { name: 'productList', description: 'Items.' },
+        { name: 'customerName', description: 'The customer.' },
+      ],
+    },
+  ];
+
+  let fixture: ComponentFixture<TemplateEditor>;
+  let api: { addVersion: ReturnType<typeof vi.fn>; variableCatalogue: ReturnType<typeof vi.fn> };
+
+  async function open(
+    catalogue: readonly VariableCatalogueEntry[],
+    prefill?: readonly PrefillWording[],
+  ) {
+    api = {
+      addVersion: vi
+        .fn()
+        .mockResolvedValue({ templateId: 't1', versionNumber: 1, awaitsProviderReview: false }),
+      variableCatalogue: vi.fn().mockResolvedValue(catalogue),
+    };
+    await TestBed.configureTestingModule({
+      imports: [TemplateEditor],
+      providers: [{ provide: NotificationsApi, useValue: api }],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(TemplateEditor);
+    fixture.componentRef.setInput('scope', SCOPE);
+    fixture.componentRef.setInput('templateId', 't1');
+    fixture.componentRef.setInput('templateKey', 'ORDER_CONFIRMED');
+    fixture.componentRef.setInput('notificationClass', 'TRANSACTIONAL_REQUIRED');
+    fixture.componentRef.setInput('channel', 'SMS');
+    if (prefill) {
+      fixture.componentRef.setInput('prefill', prefill);
+    }
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  }
+
+  const el = (selector: string): HTMLElement | null =>
+    fixture.nativeElement.querySelector(selector) as HTMLElement | null;
+
+  function typeInto(tabIndex: number, text: string): void {
+    (fixture.nativeElement.querySelectorAll('.locale-tab')[tabIndex] as HTMLButtonElement).click();
+    fixture.detectChanges();
+    const textarea = el('[data-testid="editor-body"]') as HTMLTextAreaElement;
+    textarea.value = text;
+    textarea.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  }
+
+  function fillAll(text: string): void {
+    for (let tab = 0; tab < 3; tab += 1) {
+      typeInto(tab, text);
+    }
+  }
+
+  function setSwitch(on: boolean): void {
+    const box = el('[data-testid="show-item-prices"] input') as HTMLInputElement;
+    box.checked = on;
+    box.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+  }
+
+  it('offers the price switch only to a class that offers the product list', async () => {
+    await open(ORDER_CATALOGUE);
+    expect(el('[data-testid="show-item-prices"]')).toBeTruthy();
+
+    TestBed.resetTestingModule();
+    await open([
+      {
+        notificationClass: 'TRANSACTIONAL_REQUIRED',
+        variables: [{ name: 'orderNumber', description: 'n' }],
+      },
+    ]);
+    expect(el('[data-testid="show-item-prices"]')).toBeNull();
+  });
+
+  it('previews the product list with and without prices as the switch moves', async () => {
+    await open(ORDER_CATALOGUE);
+    typeInto(0, 'You ordered: {{productList}}');
+
+    expect(el('[data-testid="preview-body"]')?.textContent).toBe('You ordered: 2x Lavash, 1x Cola');
+    setSwitch(true);
+    expect(el('[data-testid="preview-body"]')?.textContent).toBe(
+      'You ordered: 2x Lavash (50000 UZS), 1x Cola (8000 UZS)',
+    );
+  });
+
+  it('sends the switch with the version, and does not send it when it is off', async () => {
+    await open(ORDER_CATALOGUE);
+    fillAll('{{productList}}');
+    setSwitch(true);
+    (el('[data-testid="editor-save"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const [, , priced] = api.addVersion.mock.calls[0] as [LocationScope, string, AddVersionRequest];
+    expect(priced.showItemPrices).toBe(true);
+    expect(priced.variablesSchema).toEqual({ productList: 'string' });
+  });
+
+  it('will not save a switch that changes nothing, and says why', async () => {
+    await open(ORDER_CATALOGUE);
+    fillAll('Thanks for your order');
+    setSwitch(true);
+
+    expect(el('[data-testid="show-item-prices-unused"]')).toBeTruthy();
+    expect((el('[data-testid="editor-save"]') as HTMLButtonElement).disabled).toBe(true);
+
+    setSwitch(false);
+    expect((el('[data-testid="editor-save"]') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('starts with the switch on when the version it was opened from has it on', async () => {
+    await open(ORDER_CATALOGUE, [
+      { locale: 'ru', subject: null, body: '{{productList}}', showItemPrices: true },
+    ]);
+
+    expect((el('[data-testid="show-item-prices"] input') as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('copies the active language’s text into another to start its translation, and says when it replaces', async () => {
+    await open(ORDER_CATALOGUE);
+    typeInto(0, 'Заказ {{orderNumber}} принят');
+
+    expect(el('[data-testid="copy-to-uz-Latn"]')?.textContent).toContain('Copy into uz-Latn');
+    (el('[data-testid="copy-to-uz-Latn"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    // It switched to the language it copied into, and the text is there to be translated.
+    expect((el('[data-testid="editor-body"]') as HTMLTextAreaElement).value).toBe(
+      'Заказ {{orderNumber}} принят',
+    );
+
+    typeInto(2, 'Order accepted');
+    (fixture.nativeElement.querySelectorAll('.locale-tab')[0] as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(el('[data-testid="copy-to-en"]')?.textContent).toContain('Replace en with this text');
+  });
+
+  it('will not copy an empty text', async () => {
+    await open(ORDER_CATALOGUE);
+
+    expect((el('[data-testid="copy-to-uz-Latn"]') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('says beside the two personal variables that they are looked up on sending and never stored', async () => {
+    await open(ORDER_CATALOGUE);
+    expect(el('[data-testid="personal-variables-note"]')?.textContent).toContain('never stored');
+
+    TestBed.resetTestingModule();
+    await open([
+      {
+        notificationClass: 'TRANSACTIONAL_REQUIRED',
+        variables: [{ name: 'orderNumber', description: 'n' }],
+      },
+    ]);
+    expect(el('[data-testid="personal-variables-note"]')).toBeNull();
   });
 });

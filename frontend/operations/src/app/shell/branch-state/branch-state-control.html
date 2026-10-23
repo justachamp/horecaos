@@ -1,0 +1,17 @@
+@if (visible()) {
+  <button
+    type="button"
+    class="branch-control q-caption"
+    [class.branch-control--closed]="closed()"
+    [class.branch-control--forced]="forcedOpen()"
+    [attr.aria-label]="ariaLabel()"
+    (click)="open()"
+    data-testid="branch-state-control"
+  >
+    <span class="branch-control__dot" aria-hidden="true"></span>
+    {{ label() }}
+  </button>
+}
+@if (dialogFor(); as id) {
+  <q-branch-state-dialog [locationId]="id" (closed)="dialogFor.set(null)" />
+}

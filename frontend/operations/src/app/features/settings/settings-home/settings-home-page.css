@@ -47,7 +47,7 @@
 }
 
 .readiness__row .readiness__advisory {
-  margin-left: 8px;
+  margin-inline-start: 8px;
   padding: 1px 6px;
   border-radius: var(--q-radius);
   background: var(--q-warning-tint);
@@ -61,7 +61,7 @@
 }
 
 .readiness__row .readiness__expiring {
-  margin-left: 8px;
+  margin-inline-start: 8px;
   padding: 1px 6px;
   border-radius: var(--q-radius);
   border: 1px solid var(--q-warning-text);
@@ -172,7 +172,7 @@
 .tile__badge {
   position: absolute;
   top: 10px;
-  right: 12px;
+  inset-inline-end: 12px;
   color: var(--q-ink-subtle);
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);

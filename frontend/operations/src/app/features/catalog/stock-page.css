@@ -21,7 +21,7 @@
 }
 
 .stock__table th {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   border-bottom: 1px solid var(--q-hairline);
   color: var(--q-ink-muted);
@@ -117,7 +117,7 @@
 }
 
 .stock__threshold-remove {
-  margin-left: 8px;
+  margin-inline-start: 8px;
   border: none;
   background: none;
   color: var(--q-ink-muted);

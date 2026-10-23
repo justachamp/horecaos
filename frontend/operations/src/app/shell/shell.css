@@ -104,7 +104,7 @@
   color: var(--q-inverse-ink-muted);
   /* A transparent 3px border, not a margin, so the active item does not shift
      its neighbours by three pixels when it becomes active. */
-  border-left: 3px solid transparent;
+  border-inline-start: 3px solid transparent;
 }
 
 .rail__item:hover {
@@ -114,11 +114,11 @@
 .rail__item--on {
   background: #262626;
   color: var(--q-inverse-ink);
-  border-left-color: var(--q-primary);
+  border-inline-start-color: var(--q-primary);
 }
 
 .rail__badge {
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--q-inverse-ink-muted);
 }
 
@@ -212,7 +212,7 @@
    picker, hugging the right edge together — see `shell.ts`'s doc comment on
    why the location half of settings.md §1.1's scope bar lives here. */
 .scope {
-  margin-left: auto;
+  margin-inline-start: auto;
   display: flex;
   align-items: center;
   gap: 12px;

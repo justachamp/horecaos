@@ -144,6 +144,49 @@ describe('CourierPolicyPage', () => {
     expect(writePolicy.mock.calls[0][1].onlineWithinMinutes).toBe(3);
   });
 
+  // ADR 0042, ADR 0178: the pickup and the handover are soft until a location hardens them.
+  it('shows the pickup and handover mode as soft until a location hardens it, and publishes the choice', async () => {
+    const writePolicy = vi
+      .fn()
+      .mockResolvedValue({ ...POLICY, pickupHandoverGate: 'HARD', policyVersion: 2 });
+    const host = await render({ policy: () => Promise.resolve(POLICY), writePolicy });
+
+    const row = host.querySelector('[data-testid="policy-row-pickupHandoverGate"]')!;
+    expect(row.textContent).toContain('Soft');
+    expect(row.textContent).toContain('GPS');
+
+    Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.trim() === 'Edit')!
+      .click();
+    fixture.detectChanges();
+    const select = host.querySelector<HTMLSelectElement>(
+      '[data-testid="policy-input-pickupHandoverGate"]',
+    )!;
+    expect(select.value).toBe('SOFT');
+    select.value = 'HARD';
+    select.dispatchEvent(new Event('change'));
+    const reason = host.querySelector<HTMLInputElement>('[data-testid="policy-input-reason"]')!;
+    reason.value = 'harden the pickup at the airport branch';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    host.querySelector<HTMLButtonElement>('[data-testid="policy-publish"]')!.click();
+    await flushMicrotasks();
+
+    expect(writePolicy).toHaveBeenCalledTimes(1);
+    expect(writePolicy.mock.calls[0][1].pickupHandoverGate).toBe('HARD');
+  });
+
+  it('shows a hard location by name', async () => {
+    const host = await render({
+      policy: () => Promise.resolve({ ...POLICY, pickupHandoverGate: 'HARD' }),
+    });
+
+    expect(
+      host.querySelector('[data-testid="policy-row-pickupHandoverGate"]')?.textContent,
+    ).toContain('Hard');
+  });
+
   // Row 3.9: "renders neither policyId nor policyVersion although both are
   // on the wire".
   it('renders the policy identity — policyId and policyVersion', async () => {

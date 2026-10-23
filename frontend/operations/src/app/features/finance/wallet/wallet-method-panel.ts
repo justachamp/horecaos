@@ -14,6 +14,7 @@ import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
+import { CardTokeniser, TokeniseError, TokeniseFailure } from './card-tokeniser';
 import { describeWalletError } from './wallet-errors';
 import { cardExpiry, safeFormUrl, walletDateTime } from './wallet-format';
 import {
@@ -40,7 +41,32 @@ const METHOD_HINT_KEYS: Readonly<Record<PaymentMethod, MessageKey>> = {
 /** The provider's refusals after which the session it opened is no use any more. */
 const SESSION_GONE = new Set(['SESSION_EXPIRED', 'SESSION_UNKNOWN']);
 
-type Busy = 'begin' | 'confirm' | 'remove' | 'method';
+type Busy = 'begin' | 'tokenise' | 'confirm' | 'remove' | 'method';
+
+/** What the provider handed back for a number the cardholder typed: the token, never the number. */
+interface Tokenised {
+  readonly token: string;
+  readonly maskedPhone: string | null;
+}
+
+const TOKENISE_FAILURE_KEYS: Readonly<Record<TokeniseFailure, MessageKey>> = {
+  UNREACHABLE: 'finance.wallet.enrol.browser.unreachable',
+  REFUSED: 'finance.wallet.enrol.browser.refused',
+  UNREADABLE: 'finance.wallet.enrol.browser.unreadable',
+};
+
+/** `MM/YY` or `MMYY` read into the provider's `MMYY`, or null when it is not a real month and year. */
+export function parseExpiry(text: string): string | null {
+  const compact = text.replace(/[\s/.-]/g, '');
+  const match = /^(0[1-9]|1[0-2])(\d{2})$/.exec(compact);
+  return match ? `${match[1]}${match[2]}` : null;
+}
+
+/** Sixteen digits, however they were grouped. Nothing is checked beyond the length: the provider is the judge. */
+export function parseCardNumber(text: string): string | null {
+  const digits = text.replace(/[\s-]/g, '');
+  return /^\d{16}$/.test(digits) ? digits : null;
+}
 
 /**
  * The card HorecaOS may charge, and how what the wallet does not cover is collected (ADR 0095).
@@ -69,6 +95,7 @@ type Busy = 'begin' | 'confirm' | 'remove' | 'method';
 })
 export class WalletMethodPanel {
   private readonly api = inject(WalletApi);
+  private readonly tokeniser = inject(CardTokeniser);
   protected readonly i18n = inject(I18n);
 
   readonly tenantId = input.required<string>();
@@ -81,6 +108,15 @@ export class WalletMethodPanel {
   protected readonly enrolment = signal<EnrolmentStartedView | null>(null);
   protected readonly providerToken = signal('');
   protected readonly verificationCode = signal('');
+  /**
+   * The card as typed, for a provider that takes it from the browser. Held only until the provider has answered
+   * and cleared in every outcome; it is never sent to HorecaOS, never put in a message and never read back.
+   */
+  protected readonly cardNumber = signal('');
+  protected readonly cardExpiry = signal('');
+  /** What the provider handed back, once it has: the token the bank's code is confirmed against. */
+  protected readonly tokenised = signal<Tokenised | null>(null);
+  protected readonly tokeniseError = signal<string | null>(null);
   protected readonly busy = signal<Busy | null>(null);
   protected readonly error = signal<string | null>(null);
   protected readonly notice = signal<string | null>(null);
@@ -101,6 +137,22 @@ export class WalletMethodPanel {
   protected readonly dirty = computed(() => this.selected() !== this.current());
 
   protected readonly formUrl = computed(() => safeFormUrl(this.enrolment()?.hostedFormUrl ?? null));
+  /**
+   * How the provider's form hands a token to this page. A provider that announces `BROWSER_TOKENISE` takes the
+   * number from the browser and answers with a token, so nobody types a token; any other (the built-in test
+   * provider) leaves the cardholder to forward what its own form returned.
+   */
+  protected readonly browserTokenise = computed(
+    () => this.enrolment()?.clientParameters['handoff'] === 'BROWSER_TOKENISE',
+  );
+  protected readonly canTokenise = computed(
+    () =>
+      this.browserTokenise() &&
+      this.tokenised() === null &&
+      this.busy() === null &&
+      parseCardNumber(this.cardNumber()) !== null &&
+      parseExpiry(this.cardExpiry()) !== null,
+  );
   /** The built-in test provider says so in its client parameters; a real one never does. */
   protected readonly testProvider = computed(
     () => this.enrolment()?.clientParameters['provider'] === 'FAKE_CARD',
@@ -108,8 +160,8 @@ export class WalletMethodPanel {
   protected readonly canConfirm = computed(
     () =>
       this.busy() === null &&
-      this.providerToken().trim().length > 0 &&
-      this.verificationCode().trim().length > 0,
+      this.verificationCode().trim().length > 0 &&
+      (this.browserTokenise() ? this.tokenised() !== null : this.providerToken().trim().length > 0),
   );
   protected readonly cardLabel = computed(() => {
     const card = this.wallet().card;
@@ -133,6 +185,13 @@ export class WalletMethodPanel {
     return this.i18n.t(METHOD_HINT_KEYS[method]);
   }
 
+  protected phoneHint(): string {
+    const phone = this.tokenised()?.maskedPhone ?? null;
+    return phone === null
+      ? this.i18n.t('finance.wallet.enrol.browser.sentNoPhone')
+      : this.i18n.t('finance.wallet.enrol.browser.sent', { phone });
+  }
+
   protected time(instant: string): string {
     return walletDateTime(instant);
   }
@@ -154,6 +213,7 @@ export class WalletMethodPanel {
     this.busy.set('begin');
     try {
       this.enrolment.set(await this.api.beginCardEnrolment(this.tenantId()));
+      this.forgetTheCard();
       this.providerToken.set('');
       this.verificationCode.set('');
     } catch (failure) {
@@ -164,13 +224,61 @@ export class WalletMethodPanel {
   }
 
   protected cancelEnrolment(): void {
-    if (this.busy() === 'confirm') {
+    if (this.busy() === 'confirm' || this.busy() === 'tokenise') {
       return;
     }
     this.enrolment.set(null);
     this.providerToken.set('');
     this.verificationCode.set('');
+    this.forgetTheCard();
     this.error.set(null);
+  }
+
+  /** The card as typed, the token it produced and the error about it: gone. */
+  private forgetTheCard(): void {
+    this.cardNumber.set('');
+    this.cardExpiry.set('');
+    this.tokenised.set(null);
+    this.tokeniseError.set(null);
+  }
+
+  /**
+   * Sends the typed card to the provider and keeps what comes back: a token, never the number.
+   *
+   * The number leaves this page for the provider's own address (the approved environment the server named) and
+   * for nowhere else, and is cleared before this method returns whether the provider took it or not, so a
+   * refused card does not sit in a field and a token does not outlive the session it was made in.
+   */
+  protected async tokenise(): Promise<void> {
+    const session = this.enrolment();
+    const number = parseCardNumber(this.cardNumber());
+    const expiry = parseExpiry(this.cardExpiry());
+    if (session === null || !this.canTokenise() || number === null || expiry === null) {
+      return;
+    }
+    const url = session.clientParameters['tokeniseUrl'] ?? '';
+    const serviceId = session.clientParameters['serviceId'] ?? '';
+    this.tokeniseError.set(null);
+    this.error.set(null);
+    this.busy.set('tokenise');
+    try {
+      const result = await this.tokeniser.tokenise({
+        url,
+        serviceId,
+        cardNumber: number,
+        expiry,
+        temporary: session.clientParameters['temporary'] ?? '0',
+      });
+      this.tokenised.set({ token: result.token, maskedPhone: result.maskedPhone });
+    } catch (failure) {
+      const kind: TokeniseFailure =
+        failure instanceof TokeniseError ? failure.failure : 'UNREACHABLE';
+      this.tokeniseError.set(this.i18n.t(TOKENISE_FAILURE_KEYS[kind]));
+    } finally {
+      // The number is cleared in every outcome; the expiry stays, because the confirmation carries it.
+      this.cardNumber.set('');
+      this.busy.set(null);
+    }
   }
 
   protected async confirmEnrolment(): Promise<void> {
@@ -178,10 +286,14 @@ export class WalletMethodPanel {
     if (session === null || !this.canConfirm()) {
       return;
     }
+    const expiry = parseExpiry(this.cardExpiry());
+    const browser = this.browserTokenise();
+    const providerToken = browser ? (this.tokenised()?.token ?? '') : this.providerToken().trim();
     const body: ConfirmCardBody = {
       sessionReference: session.sessionReference,
-      providerToken: this.providerToken().trim(),
+      providerToken,
       verificationCode: this.verificationCode().trim(),
+      ...(browser && expiry !== null ? { cardExpiry: expiry } : {}),
     };
     this.error.set(null);
     this.busy.set('confirm');
@@ -191,6 +303,7 @@ export class WalletMethodPanel {
       this.enrolment.set(null);
       this.providerToken.set('');
       this.verificationCode.set('');
+      this.forgetTheCard();
       this.notice.set(this.i18n.t('finance.wallet.card.added', { last4: card.last4 ?? '' }));
       this.changed.emit();
     } catch (failure) {
@@ -199,6 +312,7 @@ export class WalletMethodPanel {
         // The session the provider opened is spent; only a new one can finish this.
         this.commands.forget('confirm');
         this.enrolment.set(null);
+        this.forgetTheCard();
       }
     } finally {
       this.busy.set(null);

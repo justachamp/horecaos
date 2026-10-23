@@ -1,0 +1,50 @@
+<section class="access" data-testid="courier-access">
+  <h3 class="q-caption access__heading">{{ 'couriers.access.heading' | t }}</h3>
+
+  @if (state(); as current) {
+    <p class="q-body-sm" data-testid="courier-access-state">{{ stateLabel() | t }}</p>
+    @if (errorLabel(); as label) {
+      <p class="q-caption access__warning" data-testid="courier-access-last-error" role="status">
+        {{ label | t }}
+      </p>
+    }
+    @if (!current.smsConnected) {
+      <p class="q-caption access__warning" data-testid="courier-access-sms-off" role="status">
+        {{ 'couriers.access.smsNotConnected' | t }}
+      </p>
+    }
+  }
+
+  @if (eligible()) {
+    <div class="access__actions">
+      <button
+        type="button"
+        data-testid="courier-access-invite"
+        [class.access__primary]="invitePrimary()"
+        [disabled]="busy()"
+        (click)="send('INVITE')"
+      >
+        {{ 'couriers.access.invite' | t }}
+      </button>
+      <button
+        type="button"
+        data-testid="courier-access-reset"
+        [class.access__primary]="!invitePrimary()"
+        [disabled]="busy()"
+        (click)="send('RESET')"
+      >
+        {{ 'couriers.access.reset' | t }}
+      </button>
+    </div>
+    <p class="q-caption access__note">{{ 'couriers.access.note' | t }}</p>
+  }
+
+  @if (notice(); as message) {
+    <p class="q-caption" data-testid="courier-access-notice" role="status">{{ message }}</p>
+  }
+  @if (error(); as message) {
+    <p class="q-caption access__error" data-testid="courier-access-error" role="alert">
+      {{ message }}
+    </p>
+  }
+</section>

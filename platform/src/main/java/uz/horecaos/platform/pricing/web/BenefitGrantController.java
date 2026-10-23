@@ -45,10 +45,13 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * <p>Mints declare {@code PRICING_PROMOTION_MANAGE}, the same capability
  * {@link PromoCodeController} holds its own promo-code authoring behind: both
  * are a tenant deciding what it gives away, not routine pricing work. Reads
- * declare {@code PRICING_READ}. No caller wires this from the console yet —
- * service recovery (operations §5.4) is not built — so this is reachable only
- * through the API, by support tooling or a future automation, until that
- * screen exists.
+ * declare {@code PRICING_READ}. The service-recovery drawer (operations §5.4,
+ * ADR 0159, ADR 0181 D10) is the console's caller: it mints an apology code for
+ * the case's customer, with {@code sourceType RECOVERY_CASE} and the case as the
+ * source, only for an operator who holds {@code PRICING_PROMOTION_MANAGE} — a case
+ * worker without it is told so instead of being handed a control that would be
+ * refused, and a case never delegates the capability. The plaintext code is shown
+ * once and the case is linked in a separate step, through the compensation picker.
  */
 @RestController
 @RequestMapping("/api/v1/operations/tenants/{tenantId}/brands/{brandId}/benefit-grants")

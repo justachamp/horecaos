@@ -96,47 +96,6 @@ export function changedLabels(
   );
 }
 
-/** The platform triple's wording, as the three columns a request must still carry. */
-export interface PlatformColumns {
-  readonly ru: string;
-  readonly 'uz-Latn': string;
-  readonly en: string;
-}
-
-/**
- * The three platform columns a create or a rewrite must carry.
- *
- * The OpenAPI contract keeps `labelRu`/`labelUz`/`labelEn` (and the regions'
- * and zones' `displayName*`) *required* — it refuses to make a published
- * required request field optional — so an editor that offers only some of the
- * platform languages still has to name all three. For each one:
- *
- * 1. an offered language the operator filled in → that wording;
- * 2. else, on an edit, the wording the row already has — a language the
- *    editor does not offer is round-tripped **unchanged**, never blanked or
- *    replaced (this is the client half of row 10.12's never-delete guarantee
- *    for the triple; a language beyond it is simply left out of `labels` and
- *    the server keeps it);
- * 3. else (a create) → the wording in the default language, which the form
- *    has already required — the same fallback the server applies to a service
- *    caller that leaves one out.
- */
-export function platformColumns(
-  offered: readonly string[],
-  drafts: LabelsByLocale,
-  defaultLocale: string,
-  existing?: PlatformColumns | null,
-): PlatformColumns {
-  const typed = (locale: 'ru' | 'uz-Latn' | 'en'): string =>
-    offered.includes(locale) ? (drafts[locale] ?? '').trim() : '';
-  const fallback = (drafts[defaultLocale] ?? '').trim();
-  return {
-    ru: typed('ru') || existing?.ru || fallback,
-    'uz-Latn': typed('uz-Latn') || existing?.['uz-Latn'] || fallback,
-    en: typed('en') || existing?.en || fallback,
-  };
-}
-
 /** The locale's name for an operator: "Russian", "Uzbek (Latin)", "English" — or the bare tag for one this console has no name for. */
 export function localeDisplayName(i18n: I18n, locale: string, registry?: PlatformLocales): string {
   switch (locale) {
@@ -172,37 +131,18 @@ export function pickLabel(
 }
 
 /**
- * The wording of one preset comment as the platform sends it — on an order
- * line (`CommentPresetChip`) and on a menu product (`CommentPresetOption`).
+ * The wording of one preset comment as the platform sends it — on an order line (`CommentPresetChip`)
+ * and on a menu product (`CommentPresetOption`).
  *
- * `labelRu` / `labelUz` / `labelEn` are the platform triple's columns and stay
- * the required floor. `labels` holds every wording the row has, keyed by
- * locale — the triple plus any language a tenant's brands offer beyond it
- * (row 10.12, V0430 for the catalog and V0433 for the order-line snapshot) —
- * and `label` is the wording the platform itself resolved for the language the
- * menu was requested in, then the brand's default. Both are optional so a
- * fixture, or a platform that predates them, still reads.
+ * `labels` holds every wording the preset has, keyed by locale, the platform triple first (row 10.12,
+ * V0430 for the catalog and V0433 for the order-line snapshot; the only shape of it since V0678, which
+ * dropped the `labelRu`/`labelUz`/`labelEn` fields this type used to carry as the floor). `label` is the
+ * wording the platform itself resolved for the language the menu was requested in, then the brand's
+ * default. Both are optional so a fixture, or a platform that predates them, still reads.
  */
 export interface PresetWording {
-  readonly labelRu: string;
-  readonly labelUz: string;
-  readonly labelEn: string;
   readonly labels?: Readonly<Record<string, string>>;
   readonly label?: string;
-}
-
-/** The triple's columns in the order the platform lists them — the walk when the console language has nothing. */
-const PRESET_TRIPLE_ORDER: readonly ('ru' | 'uz-Latn' | 'en')[] = ['ru', 'uz-Latn', 'en'];
-
-function presetColumn(preset: PresetWording, locale: 'ru' | 'uz-Latn' | 'en'): string {
-  switch (locale) {
-    case 'ru':
-      return preset.labelRu;
-    case 'uz-Latn':
-      return preset.labelUz;
-    case 'en':
-      return preset.labelEn;
-  }
 }
 
 function filled(value: string | null | undefined): value is string {
@@ -210,41 +150,18 @@ function filled(value: string | null | undefined): value is string {
 }
 
 /**
- * A preset's wording in the console's own language.
- *
- * The console used to pick one of the three columns by a `ru` / `uz-Latn` /
- * else-`en` switch, so a wording the platform stored and served beyond the
- * triple was shown nowhere. This reads, in order:
- *
- * 1. the `labels` map for the console language — where a language beyond the
- *    triple reaches the screen once a brand offers one;
- * 2. that language's triple column — the floor every preset has;
- * 3. `label`, the wording the platform resolved for the request;
- * 4. the triple in platform order (`ru`, `uz-Latn`, `en`);
- * 5. any wording the map holds;
- *
- * and an empty string only for a preset with no wording at all, which the
- * schema does not allow.
+ * A preset's wording in the console's own language: the `labels` map for that language, else the
+ * wording the platform resolved for the request (`label`), else whatever wording the map holds first
+ * (the platform sends the triple first, in its own order), and an empty string only for a preset with no
+ * wording at all, which the schema does not allow.
  */
 export function presetLabelFor(preset: PresetWording, locale: string): string {
   const own = preset.labels?.[locale];
   if (filled(own)) {
     return own;
   }
-  if (locale === 'ru' || locale === 'uz-Latn' || locale === 'en') {
-    const column = presetColumn(preset, locale);
-    if (filled(column)) {
-      return column;
-    }
-  }
   if (filled(preset.label)) {
     return preset.label;
-  }
-  for (const candidate of PRESET_TRIPLE_ORDER) {
-    const column = presetColumn(preset, candidate);
-    if (filled(column)) {
-      return column;
-    }
   }
   return Object.values(preset.labels ?? {}).find(filled) ?? '';
 }

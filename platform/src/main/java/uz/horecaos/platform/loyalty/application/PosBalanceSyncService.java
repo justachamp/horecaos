@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.AuditClass;
@@ -21,6 +22,7 @@ import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
+import uz.horecaos.platform.customers.api.ConsentDirectory;
 import uz.horecaos.platform.customers.api.CustomerAccountRef;
 import uz.horecaos.platform.customers.api.CustomerPhoneLookup;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -46,6 +48,7 @@ import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcPosBalanceSyn
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcPosBalanceSyncStore.StateRow;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcPosBalanceSyncStore.Subject;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
+import uz.horecaos.platform.tenancy.api.ConfigurationValueAuthor;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -72,7 +75,8 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * counting and listing every difference. A difference is never silently corrected.
  *
  * <p><strong>Not transactional on purpose.</strong> Every call to a till happens outside any database transaction;
- * the writes that must be atomic -- one imported movement -- are in {@link PosSyncMovementImporter}.
+ * the writes that must be atomic -- one imported movement -- are in {@link PosSyncMovementImporter}. The one exception
+ * is {@link #setMode}, which calls no till and so is a single transaction with its audit fact.
  *
  * <p><strong>Staged by binding.</strong> A binding's mode (configuration key {@code loyalty.sync.mode}) is {@code
  * REPORT_ONLY} until somebody sets otherwise: match and compare, apply nothing, push nothing. {@code PULL} adds the
@@ -146,8 +150,17 @@ public class PosBalanceSyncService {
             long openDiscrepancies,
             @Nullable RunRow lastRun) {}
 
+    /**
+     * @param tillKeepsBalanceVersion the {@code If-Match} of a change to the brand's own row of {@code
+     *                                loyalty.pos.till_keeps_balance}: the row's version plus one (the row starts at 0), and 0
+     *                                when the brand has never said
+     */
     public record Overview(
-            boolean tillKeepsBalance, boolean standingNotice, List<BindingView> bindings, long openDiscrepancies) {}
+            boolean tillKeepsBalance,
+            long tillKeepsBalanceVersion,
+            boolean standingNotice,
+            List<BindingView> bindings,
+            long openDiscrepancies) {}
 
     public record RunReport(RunRow run, List<DiscrepancyRow> discrepancies) {}
 
@@ -168,6 +181,8 @@ public class PosBalanceSyncService {
     private final LoyaltyAdjustmentService adjustments;
     private final CustomerPhoneLookup phones;
     private final ConfigurationResolver configuration;
+    private final ConfigurationValueAuthor configurationAuthor;
+    private final ConsentDirectory consents;
     private final AuditRecorder audit;
     private final ApplicationEventPublisher events;
     private final Clock clock;
@@ -180,6 +195,8 @@ public class PosBalanceSyncService {
             LoyaltyAdjustmentService adjustments,
             CustomerPhoneLookup phones,
             ConfigurationResolver configuration,
+            ConfigurationValueAuthor configurationAuthor,
+            ConsentDirectory consents,
             AuditRecorder audit,
             ApplicationEventPublisher events,
             Clock clock) {
@@ -190,6 +207,8 @@ public class PosBalanceSyncService {
         this.adjustments = adjustments;
         this.phones = phones;
         this.configuration = configuration;
+        this.configurationAuthor = configurationAuthor;
+        this.consents = consents;
         this.audit = audit;
         this.events = events;
         this.clock = clock;
@@ -216,7 +235,105 @@ public class PosBalanceSyncService {
         }
         boolean keepsBalance = tillKeepsBalance(tenantId, brandId);
         boolean anySyncing = bindings.stream().anyMatch(SyncBinding::syncing);
-        return new Overview(keepsBalance, keepsBalance && !anySyncing, views, totalOpen);
+        // The row's own version starts at 0, so «never said» needs a number of its own: the If-Match is the row's
+        // version
+        // plus one, and 0 is a brand that has not said.
+        long keepsBalanceVersion = configurationAuthor
+                .currentVersion(LoyaltyConfigurationKeys.POS_TILL_KEEPS_BALANCE, ResourceScope.brand(tenantId, brandId))
+                .map(rowVersion -> rowVersion + 1)
+                .orElse(0L);
+        return new Overview(keepsBalance, keepsBalanceVersion, keepsBalance && !anySyncing, views, totalOpen);
+    }
+
+    // ================================================================ staging the rollout
+
+    /**
+     * Stages a binding's sync mode (ADR 0171 rollout: {@code REPORT_ONLY}, then {@code PULL}, then {@code PULL_AND_PUSH}),
+     * against the version of the binding the caller read.
+     *
+     * <p>Any step down is allowed at once (it is the way to stop writing to a till, and stopping needs no waiting); a step
+     * up is one stage at a time, because the record's rollout is staged so a tenant's finance reads a report before pulls
+     * apply and watches pulls before pushes. Anything above {@code REPORT_ONLY} needs a binding that can sync: capable,
+     * enabled and active, so a mode is never staged for a till the platform cannot reach.
+     *
+     * <p>One transaction, unlike a pass: the change and its ADR 0027 fact commit together, so a fact that cannot be written
+     * leaves the mode where it was and a retry is not a {@code STALE_VERSION}. Nothing in it calls a till.
+     *
+     * @throws ApiException 404 for a binding that is not this brand's, 422 for a binding that cannot sync or a step up that
+     *                      skips a stage, 409 {@code STALE_VERSION} when the binding has moved on
+     */
+    @Transactional
+    public BindingView setMode(
+            UUID tenantId,
+            UUID brandId,
+            UUID bindingId,
+            Mode target,
+            long expectedVersion,
+            String reason,
+            String actorSubject) {
+        SyncBinding binding = requireBinding(tenantId, brandId, bindingId);
+        if (binding.version() != expectedVersion) {
+            throw ApiException.staleVersion(expectedVersion, binding.version());
+        }
+        Mode current = modeOf(binding);
+        if (target == current) {
+            return viewOf(tenantId, brandId, binding);
+        }
+        if (target != Mode.REPORT_ONLY) {
+            requireSyncable(binding);
+        }
+        if (target.ordinal() > current.ordinal() + 1) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "The rollout is staged: %s comes before %s".formatted(Mode.values()[current.ordinal() + 1], target),
+                    Map.of("currentMode", current.name(), "requestedMode", target.name()));
+        }
+        java.util.OptionalLong moved = port.setSyncMode(tenantId, bindingId, target.name(), expectedVersion);
+        if (moved.isEmpty()) {
+            SyncBinding now = port.binding(tenantId, bindingId);
+            throw ApiException.staleVersion(expectedVersion, now == null ? expectedVersion : now.version());
+        }
+        audit.record(AuditFact.of("loyalty.pos_sync.mode.changed", AuditClass.BUSINESS)
+                .by(ActorRef.user(actorSubject, null))
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("PosSyncBinding", bindingId)
+                .targetVersion(moved.getAsLong())
+                .because(reason)
+                .changed(ChangeDocuments.diff(Map.of("mode", current.name()), Map.of("mode", target.name())))
+                .usingCapability("loyalty.sync.manage")
+                .correlatedBy(bindingId.toString())
+                .occurredAt(clock.instant())
+                .build());
+        SyncBinding after = requireBinding(tenantId, brandId, bindingId);
+        return viewOf(tenantId, brandId, after);
+    }
+
+    /**
+     * Says, for this brand, whether its till keeps a bonus balance of its own (ADR 0171 Decision 8): the statement that
+     * turns on the standing notice when no binding mirrors the till. Written through the configuration author, which
+     * keeps the row's own version and writes the audit fact; the brand's {@code If-Match} is {@link
+     * Overview#tillKeepsBalanceVersion}, 0 for a brand that has never said.
+     */
+    public Overview setTillKeepsBalance(
+            UUID tenantId, UUID brandId, boolean value, long expectedVersion, String reason, String actorSubject) {
+        configurationAuthor.set(
+                LoyaltyConfigurationKeys.POS_TILL_KEEPS_BALANCE,
+                ResourceScope.brand(tenantId, brandId),
+                value,
+                false,
+                expectedVersion == 0 ? null : expectedVersion - 1,
+                ActorRef.user(actorSubject, null),
+                reason);
+        return overview(tenantId, brandId);
+    }
+
+    private BindingView viewOf(UUID tenantId, UUID brandId, SyncBinding binding) {
+        return new BindingView(
+                binding,
+                modeOf(binding),
+                store.countMatched(tenantId, binding.bindingId()),
+                store.openCountByBinding(tenantId, brandId).getOrDefault(binding.bindingId(), 0L),
+                store.lastRunByBinding(tenantId, brandId).get(binding.bindingId()));
     }
 
     public boolean tillKeepsBalance(UUID tenantId, UUID brandId) {
@@ -245,6 +362,8 @@ public class PosBalanceSyncService {
         String status = "SUCCEEDED";
         String failure = null;
         try {
+            // Before anything reads or writes the till: a pairing without consent syncs in no mode and no kind of pass.
+            enforceConsent(tenantId, brandId, binding, runId);
             if (kind != RunKind.PUSH) {
                 match(tenantId, brandId, binding, runId, counts);
             }
@@ -363,6 +482,144 @@ public class PosBalanceSyncService {
         }
     }
 
+    /**
+     * The consent gate, applied to the pairings that already exist (ADR 0171, open input 4).
+     *
+     * <p>{@code matchOne} asks for consent only when a till customer is first paired, so on its own the key would stop
+     * nobody who was paired while it was off, nor anybody who withdraws afterwards. Pull, push and compare all read the
+     * matched pairings, so this is the one place the gate is held for them: every pass, of every kind, first moves a
+     * matched pairing without a granted consent to {@code SUSPENDED} -- which every one of those reads already skips --
+     * and opens {@code NOT_CONSENTED} for it, then brings back a pairing <em>this gate</em> suspended once the customer
+     * consents or the key is off again. A pairing a person suspended carries no {@code NOT_CONSENTED} and is left alone.
+     *
+     * <p>The report row is opened before the status moves and closed after it moves back, so a failure between the two
+     * leaves a visible row and a pass that repeats the step, never a silent suspension that nothing would lift.
+     */
+    private void enforceConsent(UUID tenantId, UUID brandId, SyncBinding binding, UUID runId) {
+        UUID bindingId = binding.bindingId();
+        boolean required = requiresConsent(tenantId, brandId);
+        for (StateRow state : store.suspendedStates(tenantId, bindingId)) {
+            if (!suspendedByConsentGate(tenantId, bindingId, state)) {
+                continue;
+            }
+            if (required && !consentedLoyaltyAccount(tenantId, brandId, state.accountId())) {
+                continue;
+            }
+            Instant now = clock.instant();
+            store.setStateStatus(tenantId, state.id(), "MATCHED", now);
+            conditionEnded(
+                    tenantId,
+                    bindingId,
+                    "NOT_CONSENTED",
+                    Subject.TILL_CUSTOMER,
+                    state.accountId(),
+                    state.externalCustomerId(),
+                    required ? "The customer has consented" : "Consent is no longer required for the till sync");
+            recordConsentTransition(
+                    "loyalty.pos_sync.consent_resumed",
+                    tenantId,
+                    brandId,
+                    bindingId,
+                    runId,
+                    state,
+                    "SUSPENDED",
+                    "MATCHED",
+                    "The customer's balance syncs with the till again",
+                    now);
+        }
+        if (!required) {
+            return;
+        }
+        for (StateRow state : store.matchedStates(tenantId, bindingId)) {
+            if (consentedLoyaltyAccount(tenantId, brandId, state.accountId())) {
+                continue;
+            }
+            tillCustomerDifference(
+                    tenantId,
+                    brandId,
+                    bindingId,
+                    runId,
+                    "NOT_CONSENTED",
+                    state.accountId(),
+                    state.externalCustomerId());
+            Instant now = clock.instant();
+            store.setStateStatus(tenantId, state.id(), "SUSPENDED", now);
+            recordConsentTransition(
+                    "loyalty.pos_sync.consent_suspended",
+                    tenantId,
+                    brandId,
+                    bindingId,
+                    runId,
+                    state,
+                    "MATCHED",
+                    "SUSPENDED",
+                    "The customer has no granted consent for the till sync, so their balance is no longer synced",
+                    now);
+        }
+    }
+
+    /** A suspension the consent gate made: its report row (open, or carried by a person) is still there. */
+    private boolean suspendedByConsentGate(UUID tenantId, UUID bindingId, StateRow state) {
+        return store.findOpen(
+                                tenantId,
+                                bindingId,
+                                "NOT_CONSENTED",
+                                Subject.TILL_CUSTOMER,
+                                state.accountId(),
+                                state.externalCustomerId())
+                        .isPresent()
+                || store.findCarried(
+                                tenantId,
+                                bindingId,
+                                "NOT_CONSENTED",
+                                Subject.TILL_CUSTOMER,
+                                state.accountId(),
+                                state.externalCustomerId())
+                        .isPresent();
+    }
+
+    private void recordConsentTransition(
+            String action,
+            UUID tenantId,
+            UUID brandId,
+            UUID bindingId,
+            UUID runId,
+            StateRow state,
+            String from,
+            String to,
+            String because,
+            Instant now) {
+        audit.record(AuditFact.of(action, AuditClass.BUSINESS)
+                .by(ActorRef.service(PosSyncMovementImporter.actorOf(bindingId)))
+                .at(ResourceScope.brand(tenantId, brandId))
+                .target("LoyaltyAccount", state.accountId())
+                .because(because)
+                .changed(ChangeDocuments.diff(Map.of("status", from), Map.of("status", to)))
+                .correlatedBy(runId.toString())
+                .occurredAt(now)
+                .build());
+    }
+
+    /** Whether the customer behind a loyalty account granted the sync's purpose at this brand; no account is no consent. */
+    private boolean consentedLoyaltyAccount(UUID tenantId, UUID brandId, UUID loyaltyAccountId) {
+        return loyalty.findAccountById(tenantId, loyaltyAccountId)
+                .map(account -> consented(tenantId, brandId, account.customerAccountId()))
+                .orElse(false);
+    }
+
+    private boolean requiresConsent(UUID tenantId, UUID brandId) {
+        return Boolean.TRUE.equals(configuration.value(
+                LoyaltyConfigurationKeys.POS_SYNC_REQUIRE_CONSENT, ResourceScope.brand(tenantId, brandId)));
+    }
+
+    /** Whether the customer granted the sync's purpose at this brand; absence is withheld. */
+    private boolean consented(UUID tenantId, UUID brandId, UUID customerAccountId) {
+        return consents.consentFor(
+                        tenantId, customerAccountId, brandId, LoyaltyConfigurationKeys.POS_SYNC_CONSENT_PURPOSE, null)
+                .map(ConsentDirectory.ConsentState::granted)
+                .orElse(false);
+    }
+
     /** A cursor too long to keep is not kept: the next pass starts at the top, and the operator is told once. */
     private static @Nullable String storable(UUID bindingId, @Nullable String cursor) {
         if (cursor != null && cursor.length() > MAX_STORED_CURSOR) {
@@ -409,6 +666,15 @@ public class PosBalanceSyncService {
             counts.tillOnly++;
             return;
         }
+        if (requiresConsent(tenantId, brandId)
+                && !consented(tenantId, brandId, found.getFirst().accountId())) {
+            // ADR 0171, open input 4: built dark. When counsel says a customer's consent is needed, the key is flipped
+            // and an
+            // absent or withheld consent is not a match, whichever the reason: absence is not consent (ADR 0015, ADR
+            // 0039).
+            tillCustomerDifference(tenantId, brandId, bindingId, runId, "NOT_CONSENTED", account.id(), external);
+            return;
+        }
         if (store.findStateByAccount(tenantId, bindingId, account.id()).isPresent()) {
             // The account is already paired with another till customer: two till records for one person.
             tillCustomerDifference(tenantId, brandId, bindingId, runId, "AMBIGUOUS_MATCH", account.id(), external);
@@ -428,6 +694,7 @@ public class PosBalanceSyncService {
         String reason = "The till customer is matched to a points account now";
         conditionEnded(tenantId, bindingId, "TILL_ONLY", Subject.TILL_CUSTOMER, null, external, reason);
         conditionEnded(tenantId, bindingId, "AMBIGUOUS_MATCH", Subject.TILL_CUSTOMER, null, external, reason);
+        conditionEnded(tenantId, bindingId, "NOT_CONSENTED", Subject.TILL_CUSTOMER, account.id(), external, reason);
         audit.record(AuditFact.of("loyalty.pos_sync.matched", AuditClass.BUSINESS)
                 .by(ActorRef.service(PosSyncMovementImporter.actorOf(bindingId)))
                 .at(ResourceScope.brand(tenantId, brandId))
@@ -826,6 +1093,7 @@ public class PosBalanceSyncService {
             throw ApiException.staleVersion(expectedVersion, discrepancy.version());
         }
         requireAllowed(discrepancy, resolution);
+        requireConsentToTouchTill(tenantId, brandId, discrepancy, resolution);
 
         UUID approvalId = null;
         ApprovalOutcome outcome = null;
@@ -878,6 +1146,26 @@ public class PosBalanceSyncService {
         DiscrepancyRow settled = store.findDiscrepancy(tenantId, discrepancyId).orElse(discrepancy);
         return new ResolutionResult(
                 settled, true, outcome == null ? "NOT_REQUIRED" : approvalLabel(outcome), approvalId);
+    }
+
+    /**
+     * Accepting the till's number reads the till for the customer and accepting the platform's writes to it, so with the
+     * consent gate on neither is done for a customer who has not consented: the same rule the passes keep, held for the
+     * one path that does not go through them. The difference stays open; a person can still absorb or suspend it.
+     */
+    private void requireConsentToTouchTill(
+            UUID tenantId, UUID brandId, DiscrepancyRow discrepancy, Resolution resolution) {
+        boolean touchesTill = (resolution == Resolution.ACCEPT_TILL || resolution == Resolution.ACCEPT_PLATFORM)
+                && !"CREDIT_HELD".equals(discrepancy.kind());
+        if (!touchesTill || discrepancy.accountId() == null || !requiresConsent(tenantId, brandId)) {
+            return;
+        }
+        if (!consentedLoyaltyAccount(tenantId, brandId, discrepancy.accountId())) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "This customer has not consented to the till sync, so the till is not read or written for them",
+                    Map.of("reason", "NOT_CONSENTED"));
+        }
     }
 
     private ApprovalOutcome acceptTill(

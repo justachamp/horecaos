@@ -126,6 +126,8 @@ public class CatchweightReconciliationService {
     private final PromotionRedemptionPort promotions;
     private final OrderSettlementPort settlement;
     private final OrderDeliveryPoint deliveryPoint;
+    private final PosExportStatus posExports;
+    private final TillRevisionNoticeService tillNotices;
     private final AuditRecorder audit;
     private final Clock clock;
 
@@ -138,6 +140,8 @@ public class CatchweightReconciliationService {
             PromotionRedemptionPort promotions,
             OrderSettlementPort settlement,
             OrderDeliveryPoint deliveryPoint,
+            PosExportStatus posExports,
+            TillRevisionNoticeService tillNotices,
             AuditRecorder audit,
             Clock clock) {
         this.orders = orders;
@@ -147,6 +151,8 @@ public class CatchweightReconciliationService {
         this.promotions = promotions;
         this.settlement = settlement;
         this.deliveryPoint = deliveryPoint;
+        this.posExports = posExports;
+        this.tillNotices = tillNotices;
         this.audit = audit;
         this.clock = clock;
     }
@@ -340,6 +346,24 @@ public class CatchweightReconciliationService {
         promotions.restateForOrder(
                 tenantId, order.brandId(), orderId, quote.quoteId(), newRevision, order.customerAccountId(), now);
         orders.setLoyaltyFlags(tenantId, orderId, quote.loyaltyAccrualAllowed(), quote.loyaltyRedemptionAllowed());
+
+        // ADR 0137, row 4.2c: if the till already holds this order it still holds the total it had before
+        // the weight, and nothing used to say so. The notice is written in this transaction, so it exists
+        // exactly when the revision does; telling the till, or correcting it by hand, is the pos module's.
+        // An export that has not left yet (PENDING) picks the revised order up when it is built, and an
+        // order with no till has nothing to correct, so neither raises one.
+        if (delta != 0 && !posExports.settledFor(tenantId, orderId)) {
+            tillNotices.orderTotalMoved(
+                    tenantId,
+                    order.brandId(),
+                    order.locationId(),
+                    orderId,
+                    newRevision,
+                    order.currency(),
+                    order.totalMinor(),
+                    totals.totalMinor(),
+                    now);
+        }
 
         audit.record(AuditFact.of("ordering.order.catchweight-reconciled", AuditClass.BUSINESS)
                 .by(actorOf(actorType, actorId))

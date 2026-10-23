@@ -15,6 +15,7 @@ import { GrantRequest, RoleDescriptor, ScopeDirectory, ScopeType } from './staff
 import { Scope, canGrantAt, tenantScope, brandScope, locationScope } from './scope-coverage';
 import { ScopeGrant } from '../../core/auth/session-context';
 import { roleDescription, roleLabel } from './staff-role-labels';
+import { StaffJobNames } from './staff-job-names';
 
 export interface ScopeOption {
   readonly brandId: string | null;
@@ -58,6 +59,8 @@ export class StaffJobDialog {
   readonly dismiss = output<void>();
 
   protected readonly i18n = inject(I18n);
+
+  private readonly jobNames = inject(StaffJobNames);
 
   protected readonly selectedRoleCode = signal<string | null>(null);
   protected readonly selectedBrandId = signal<string | null>(null);
@@ -191,7 +194,7 @@ export class StaffJobDialog {
   }
 
   protected roleLabel(code: string): string {
-    return roleLabel(code, (key) => this.i18n.t(key));
+    return roleLabel(code, (key) => this.i18n.t(key), this.jobNames.nameOf(code));
   }
 
   protected roleDescription(code: string): string | null {

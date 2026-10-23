@@ -2,10 +2,10 @@
  * The promotions behind a priced cart or a placed order, as the platform reports
  * them (ADR 0140).
  *
- * The platform names no promotion: an operator's name for one is internal, and a
- * customer-facing title is not a field of the promotion yet. What it says is whether
- * the customer asked for the benefit by typing a code, what the benefit did to the
- * total, and how much. These helpers turn that into lines a screen can print, and
+ * The platform names no promotion: an operator's name for one is internal. What it says
+ * is whether the customer asked for the benefit by typing a code, what the benefit did
+ * to the total, and how much, and -- when the marketer wrote one -- the title for the
+ * customer, per language. These helpers turn that into lines a screen can print, and
  * compute nothing: every amount is the platform's, shown as it came.
  */
 
@@ -17,19 +17,42 @@ export type PromotionSource = 'AUTOMATIC' | 'PROMO_CODE';
  * `discountMinor` of the priced cart or order; the other two are already inside the
  * figures the platform returns, and are explained rather than added.
  */
-export type PromotionEffect = 'DISCOUNT' | 'DELIVERY_DISCOUNT' | 'SURCHARGE';
+export type PromotionEffect = 'DISCOUNT' | 'DELIVERY_DISCOUNT' | 'SURCHARGE' | 'SERVICE_CHARGE';
 
 export interface AppliedPromotion {
   readonly source: PromotionSource;
   readonly effect: PromotionEffect;
   /** Always positive; the direction is the effect's. */
   readonly amountMinor: number;
+  /** What the marketer wrote for the customer, by platform language tag; absent when nothing was written. */
+  readonly titles?: Readonly<Record<string, string>> | null;
+}
+
+/**
+ * The wording the marketer wrote for this language, or nothing (ADR 0140). `tag` is the platform's tag for the
+ * customer's language (`ru`, `uz-Latn`, `en`); a title written for the bare language is accepted too. A language
+ * with no wording gets no title and the screen says what kind of benefit it was, never another language's
+ * sentence.
+ */
+export function titleFor(
+  titles: Readonly<Record<string, string>> | null | undefined,
+  tag: string | undefined,
+): string | undefined {
+  if (!titles || !tag) {
+    return undefined;
+  }
+  const language = tag.split('-')[0];
+  const wording = titles[tag] ?? titles[language];
+  const trimmed = wording?.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 /** One printable line: the translation key of its label and the platform's amount. */
 export interface PromotionLine {
   readonly labelKey: string;
   readonly amountMinor: number;
+  /** The marketer's wording in the customer's language; when present it is printed instead of the label. */
+  readonly title?: string;
 }
 
 /**
@@ -39,13 +62,34 @@ export interface PromotionLine {
  */
 export function discountLines(
   applied: readonly AppliedPromotion[] | null | undefined,
+  tag?: string,
 ): readonly PromotionLine[] {
   return (applied ?? [])
     .filter((entry) => entry.effect === 'DISCOUNT' && entry.amountMinor > 0)
-    .map((entry) => ({
-      labelKey: entry.source === 'PROMO_CODE' ? 'cart.promoCode' : 'cart.offerDiscount',
-      amountMinor: entry.amountMinor,
-    }));
+    .map((entry) => {
+      const title = titleFor(entry.titles, tag);
+      return {
+        labelKey: entry.source === 'PROMO_CODE' ? 'cart.promoCode' : 'cart.offerDiscount',
+        amountMinor: entry.amountMinor,
+        ...(title ? { title } : {}),
+      };
+    });
+}
+
+/**
+ * The caption key for an effect that is already inside the platform's figures. A service charge is its own
+ * sentence (ADR 0140): it is added to the order after the discounts, and "surcharge" is what a marketer's
+ * product markup says.
+ */
+function noteKeyFor(effect: PromotionEffect): string {
+  switch (effect) {
+    case 'SURCHARGE':
+      return 'cart.surchargeNote';
+    case 'SERVICE_CHARGE':
+      return 'cart.serviceChargeNote';
+    default:
+      return 'cart.deliveryOfferNote';
+  }
 }
 
 /**
@@ -58,7 +102,7 @@ export function noteLines(
   return (applied ?? [])
     .filter((entry) => entry.effect !== 'DISCOUNT' && entry.amountMinor > 0)
     .map((entry) => ({
-      labelKey: entry.effect === 'SURCHARGE' ? 'cart.surchargeNote' : 'cart.deliveryOfferNote',
+      labelKey: noteKeyFor(entry.effect),
       amountMinor: entry.amountMinor,
     }));
 }
@@ -67,6 +111,8 @@ export function noteLines(
 export interface PromotionRow {
   readonly labelKey: string;
   readonly amount: string;
+  /** The marketer's wording in the customer's language, printed instead of the label when present. */
+  readonly title?: string;
 }
 
 /**
@@ -79,12 +125,17 @@ export function discountRowsFor(
   applied: readonly AppliedPromotion[] | null | undefined,
   discountMinor: number,
   format: (minor: number) => string,
+  tag?: string,
 ): readonly PromotionRow[] {
-  const lines = discountLines(applied);
+  const lines = discountLines(applied, tag);
   if (lines.length === 0) {
     return discountMinor > 0 ? [{ labelKey: 'cart.discount', amount: format(discountMinor) }] : [];
   }
-  return lines.map((line) => ({ labelKey: line.labelKey, amount: format(line.amountMinor) }));
+  return lines.map((line) => ({
+    labelKey: line.labelKey,
+    amount: format(line.amountMinor),
+    ...(line.title ? { title: line.title } : {}),
+  }));
 }
 
 /** The captions for benefits already inside the delivery price or the goods. */

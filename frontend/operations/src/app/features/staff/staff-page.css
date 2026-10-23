@@ -114,7 +114,7 @@
 }
 
 .table thead th {
-  text-align: left;
+  text-align: start;
   color: var(--q-ink-muted);
   padding: 10px 14px;
   border-bottom: 1px solid var(--q-hairline);
@@ -128,12 +128,12 @@
 }
 
 .group-header__count {
-  margin-left: 6px;
+  margin-inline-start: 6px;
 }
 
 .row {
   cursor: pointer;
-  border-left: 4px solid transparent;
+  border-inline-start: 4px solid transparent;
 }
 
 .row td {
@@ -148,11 +148,11 @@
 
 .row--revoked {
   background: var(--q-error-tint);
-  border-left-color: var(--q-error);
+  border-inline-start-color: var(--q-error);
 }
 
 .row--expiring {
-  border-left-color: var(--q-warning);
+  border-inline-start-color: var(--q-warning);
 }
 
 .person {
@@ -182,7 +182,7 @@
 
 .person-name {
   display: inline-block;
-  margin-right: 6px;
+  margin-inline-end: 6px;
   font-weight: 600;
   color: var(--q-ink);
 }

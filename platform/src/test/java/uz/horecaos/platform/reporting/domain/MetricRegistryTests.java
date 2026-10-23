@@ -173,6 +173,43 @@ class MetricRegistryTests {
         });
     }
 
+    /**
+     * Wave 21 w6-promotions-reviews-approvals (ADR 0140, ADR 0038): the seven promotion metrics ADR 0140 named
+     * and could not register until the redemption fact carried a legal entity (V0668). The count metrics are
+     * not money, the five that are money name the legal entity, and every one has a built source.
+     */
+    @Test
+    void thePromotionMetricsAreRegisteredAtTheLegalEntityGrain() {
+        List<String> promo = List.of(
+                "promo.redemptions.v1",
+                "promo.unique_customers.v1",
+                "promo.discount_som.v1",
+                "promo.markup_som.v1",
+                "promo.revenue_with.v1",
+                "promo.avg_check_with.v1",
+                "promo.avg_check_without.v1");
+
+        assertThat(promo).allSatisfy(code -> {
+            MetricDefinition metric = MetricRegistry.require(code);
+            assertThat(metric.sourceAvailable()).as(code).isTrue();
+            assertThat(metric.grain()).as(code).isEqualTo(Grain.DAY_LOCATION_LEGAL_ENTITY);
+            assertThat(metric.grain().namesLegalEntity()).as(code).isTrue();
+            assertThat(metric.effectiveFrom()).as(code).isEqualTo(LocalDate.of(2026, 10, 14));
+            assertThat(metric.definition()).as(code).isNotBlank();
+            assertThat(metric.exclusion()).as(code).isNotBlank();
+        });
+        assertThat(promo.stream().filter(code -> MetricRegistry.require(code).isMoney()))
+                .containsExactlyInAnyOrder(
+                        "promo.discount_som.v1",
+                        "promo.markup_som.v1",
+                        "promo.revenue_with.v1",
+                        "promo.avg_check_with.v1",
+                        "promo.avg_check_without.v1");
+        assertThat(MetricRegistry.require("promo.redemptions.v1").isMoney()).isFalse();
+        assertThat(MetricRegistry.require("promo.unique_customers.v1").aggregation())
+                .isEqualTo(MetricDefinition.Aggregation.COUNT_DISTINCT);
+    }
+
     @Test
     void anUnknownMetricIsRejectedRatherThanIgnored() {
         assertThatThrownBy(() -> MetricRegistry.require("revenue.gross.v9"))

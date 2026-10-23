@@ -16,8 +16,11 @@ import {
   type PublicDisplay,
   type ReviewResponse,
 } from '../../services/reviews.service';
+import { type PushState, PushSubscriptionService } from '../../services/push-subscription.service';
 import { TranslateService } from '../../services/translate.service';
+import { type PointsBalance, PointsService } from '../../services/points.service';
 import { HorecaOSApiError } from '../../core/api/problem-details';
+import { Session } from '../../core/auth/session';
 import type { CustomerProfile } from '../../core/api/customer-api';
 
 class FakeTranslateService {
@@ -75,8 +78,28 @@ class FakeCustomerProfileService {
   }
 }
 
+class FakePointsService {
+  balance = vi.fn(async (): Promise<PointsBalance> => ({
+    accountId: null,
+    brandId: 'brand-1',
+    balance: null,
+    spendable: null,
+    held: null,
+    nextExpiryAt: null,
+    nextExpiryAmount: null,
+  }));
+}
+
 class FakeCustomerOtp {
   signOut = vi.fn(async () => {});
+}
+
+/** The opt-in card reads these four members and signing out calls `forget` (ADR 0182, D14). */
+class FakePushSubscriptionService {
+  state = signal<PushState>('off');
+  busy = signal(false);
+  refresh = vi.fn(async (): Promise<PushState> => 'off');
+  forget = vi.fn();
 }
 
 class FakeOrdersService {
@@ -116,12 +139,17 @@ async function setUp(
     orders: FakeOrdersService,
     reviews: FakeReviewsService,
   ) => void = () => {},
+  configurePoints: (points: FakePointsService) => void = () => {},
+  signedIn = false,
 ) {
   const profileService = new FakeCustomerProfileService();
   const orders = new FakeOrdersService();
   const reviews = new FakeReviewsService();
   const customerOtp = new FakeCustomerOtp();
+  const points = new FakePointsService();
+  const push = new FakePushSubscriptionService();
   configure(profileService, orders, reviews);
+  configurePoints(points);
 
   TestBed.configureTestingModule({
     imports: [ProfileComponent],
@@ -132,12 +160,30 @@ async function setUp(
       ]),
       { provide: CustomerProfileService, useValue: profileService },
       { provide: CustomerOtp, useValue: customerOtp },
-      { provide: LangService, useValue: { langId: signal('uz') } },
+      {
+        provide: LangService,
+        useValue: {
+          langId: signal('uz'),
+          // What the language service offers a brand that serves Russian and Uzbek (ADR 0149).
+          offered: signal([
+            { id: 'ru', tag: 'ru', label: 'Русский' },
+            { id: 'uz', tag: 'uz-Latn', label: 'Oʻzbekcha' },
+          ]),
+        },
+      },
       { provide: OrdersService, useValue: orders },
       { provide: ReviewsService, useValue: reviews },
+      { provide: PointsService, useValue: points },
+      { provide: PushSubscriptionService, useValue: push },
       { provide: TranslateService, useClass: FakeTranslateService },
     ],
   });
+  if (signedIn) {
+    TestBed.inject(Session).adopt({
+      accessToken: 'tok',
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+    });
+  }
 
   const fixture = TestBed.createComponent(ProfileComponent);
   fixture.detectChanges();
@@ -150,6 +196,8 @@ async function setUp(
     orders,
     reviews,
     customerOtp,
+    points,
+    push,
     translate: TestBed.inject(TranslateService) as unknown as FakeTranslateService,
     router: TestBed.inject(Router),
   };
@@ -197,6 +245,43 @@ describe('ProfileComponent -- denied/empty states', () => {
   });
 });
 
+describe('ProfileComponent -- the Web Push opt-in (ADR 0182, D14)', () => {
+  // A signed-in case persists its session in the browser's storage; the guest case must start without one.
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+  afterEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  it('mounts the opt-in card for a signed-in customer and asks the platform where they stand', async () => {
+    const { fixture, push } = await setUp(undefined, undefined, true);
+
+    expect(push.refresh).toHaveBeenCalledTimes(1);
+    const card = fixture.nativeElement.querySelector('[data-testid="push-subscribe"]');
+    expect(card).not.toBeNull();
+    expect(card.getAttribute('data-state')).toBe('off');
+  });
+
+  it('offers no opt-in to a visitor who is not signed in', async () => {
+    const { fixture, push } = await setUp();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="push-subscribe"]')).toBeNull();
+    expect(push.refresh).not.toHaveBeenCalled();
+  });
+
+  it('forgets the push state on sign-out, so the next customer on the handset is asked afresh', async () => {
+    const { fixture, push } = await setUp(undefined, undefined, true);
+
+    (fixture.nativeElement.querySelector('.signout') as HTMLButtonElement).click();
+    await fixture.whenStable();
+
+    expect(push.forget).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('ProfileComponent -- sign-out and language', () => {
   it('signs out through the platform, then leaves for /home', async () => {
     const { fixture, customerOtp, router } = await setUp();
@@ -219,6 +304,16 @@ describe('ProfileComponent -- sign-out and language', () => {
     ru.click();
 
     expect(translate.setLang).toHaveBeenCalledWith('ru');
+  });
+
+  it('offers exactly the languages the language service offers, and none it does not', async () => {
+    const { fixture } = await setUp();
+
+    const chips = Array.from(
+      fixture.nativeElement.querySelectorAll('.lang-chip') as NodeListOf<HTMLButtonElement>,
+    );
+    expect(chips.map((chip) => chip.textContent?.trim())).toEqual(['RU', 'UZ']);
+    expect(chips.map((chip) => chip.title)).toEqual(['Русский', 'Oʻzbekcha']);
   });
 });
 
@@ -727,5 +822,60 @@ describe('ProfileComponent -- the prompt, tags and the public-display box (ADR 0
 
       expect(fixture.nativeElement.querySelector('[data-testid="my-reviews"]')).toBeNull();
     });
+  });
+});
+
+describe('ProfileComponent -- the customer’s own points (ADR 0046, ADR 0185)', () => {
+  const balanceOf = (balance: number, spendable: number): PointsBalance => ({
+    accountId: 'pa-1',
+    brandId: 'brand-1',
+    balance: { amountMinor: balance, currency: 'UZS' },
+    spendable: { amountMinor: spendable, currency: 'UZS' },
+    held: { amountMinor: balance - spendable, currency: 'UZS' },
+    nextExpiryAt: null,
+    nextExpiryAmount: null,
+  });
+
+  const textOf = (fixture: { nativeElement: unknown }, id: string) =>
+    (
+      (fixture.nativeElement as HTMLElement).querySelector(`[data-testid="${id}"]`)?.textContent ??
+      ''
+    ).replace(/\s+/g, ' ');
+
+  it('shows what the customer can spend of their own points', async () => {
+    const { fixture, points } = await setUp(undefined, (p) =>
+      p.balance.mockResolvedValue(balanceOf(12_000, 12_000)),
+    );
+
+    expect(points.balance).toHaveBeenCalledTimes(1);
+    expect(textOf(fixture, 'profile-points-spendable')).toContain('12 000');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="profile-points-total"]'),
+      'nothing is held back, so there is only one figure',
+    ).toBeNull();
+  });
+
+  it('shows the total as well when some points are not spendable yet', async () => {
+    const { fixture } = await setUp(undefined, (p) =>
+      p.balance.mockResolvedValue(balanceOf(15_000, 12_000)),
+    );
+
+    expect(textOf(fixture, 'profile-points-spendable')).toContain('12 000');
+    expect(textOf(fixture, 'profile-points-total')).toContain('15 000');
+  });
+
+  it('shows nothing for a customer who has earned no points here', async () => {
+    const { fixture } = await setUp();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="profile-points"]')).toBeNull();
+  });
+
+  it('shows nothing, and does not disturb the screen, when the balance cannot be read', async () => {
+    const { fixture } = await setUp(undefined, (p) =>
+      p.balance.mockRejectedValue(new Error('offline')),
+    );
+
+    expect(fixture.nativeElement.querySelector('[data-testid="profile-points"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Jasur Rahimov');
   });
 });

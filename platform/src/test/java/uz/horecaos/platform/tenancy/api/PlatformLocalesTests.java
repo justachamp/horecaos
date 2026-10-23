@@ -3,10 +3,16 @@ package uz.horecaos.platform.tenancy.api;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.tenancy.api.PlatformLocale.Direction;
 import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
 
@@ -138,5 +144,54 @@ class PlatformLocalesTests {
         assertThat(TenantLocaleSet.platformFallback().locales()).isEqualTo(PlatformLocales.activeTags(Tier.CONTENT));
         assertThat(TenantLocaleSet.platformFallback().defaultLocale())
                 .isEqualTo(PlatformLocales.fallback().tag());
+    }
+
+    /**
+     * The glyph audit's table of alphabets (ADR 0149, Decision 7; gap-map row X.40). The frontend's
+     * audit reads the font files the apps ship and fails when a language's face cannot draw its
+     * letters, but it can only audit the languages it has an alphabet for. So the registry may not
+     * declare a language without saying here, in the audit's own table, what the language is written
+     * in and which face draws it, and a language made live must name a face that is actually shipped.
+     */
+    private static final Path ALPHABETS = Path.of("../frontend/tools/glyph-audit/alphabets.json");
+
+    @Test
+    @DisplayName(
+            "every language the registry declares has a row in the glyph audit's alphabets, with the registry's own face, and a live language's face is shipped")
+    void everyLanguageHasAnAlphabetRow() throws IOException {
+        assertThat(ALPHABETS)
+                .as("the glyph audit's table of alphabets sits beside the apps it audits")
+                .exists();
+        JsonNode table = JsonMapper.builder().build().readTree(Files.readString(ALPHABETS));
+        JsonNode alphabets = table.path("alphabets");
+
+        for (PlatformLocale locale : PlatformLocales.all()) {
+            JsonNode row = alphabets.path(locale.tag());
+            assertThat(row.isMissingNode())
+                    .as("%s has no row in alphabets.json: say what it is written in before declaring it", locale.tag())
+                    .isFalse();
+            assertThat(row.path("face").asText())
+                    .as("%s: the audit must read the face the registry names", locale.tag())
+                    .isEqualTo(locale.face());
+            assertThat(row.path("ranges").size())
+                    .as("%s names the letters it needs", locale.tag())
+                    .isPositive();
+            if (locale.live()) {
+                assertThat(table.path("faces")
+                                .path(locale.face())
+                                .path("shipped")
+                                .asBoolean())
+                        .as(
+                                "%s is live, so its face %s must be one an app ships, or the browser paints it in a system face",
+                                locale.tag(), locale.face())
+                        .isTrue();
+            }
+        }
+
+        List<String> tags =
+                PlatformLocales.all().stream().map(PlatformLocale::tag).toList();
+        assertThat(StreamSupport.stream(alphabets.propertyNames().spliterator(), false))
+                .as("a row for a language the registry does not declare audits nothing")
+                .allMatch(tags::contains);
     }
 }

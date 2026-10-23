@@ -34,9 +34,7 @@ const ZONE: ZoneSummaryResponse = {
   zoneId: 'zone-1',
   role: 'DELIVERY',
   code: 'CITY',
-  displayNameRu: 'Город',
-  displayNameUz: 'Shahar',
-  displayNameEn: 'City',
+  displayNames: { ru: 'Город', 'uz-Latn': 'Shahar', en: 'City' },
   status: 'ACTIVE',
   activeVersion: 1,
   priority: 3,
@@ -184,10 +182,7 @@ describe('DeliveryZonesPage', () => {
   it('shows a zone named only in the per-locale map, falling back through the brand’s languages', async () => {
     const named: ZoneSummaryResponse = {
       ...ZONE,
-      displayNameRu: '',
-      displayNameUz: '',
-      displayNameEn: '',
-      displayNames: { kaa: 'Orayı', en: 'Centre' },
+      displayNames: { ru: '', 'uz-Latn': '', kaa: 'Orayı', en: 'Centre' },
     };
     await render({ list: vi.fn().mockResolvedValue([named]) }, undefined, 'ru');
 
@@ -230,10 +225,7 @@ describe('DeliveryZonesPage', () => {
     expect(create).toHaveBeenCalledWith(BRAND_SCOPE, {
       role: 'DELIVERY',
       code: 'ring',
-      // The contract keeps the platform triple required: ru is not offered, so it takes the default's name.
-      displayNameRu: 'Halqa',
-      displayNameUz: 'Halqa',
-      displayNameEn: 'Ring road',
+      // ru is not offered, so it is simply absent: nothing forces the default's name into it any more.
       displayNames: { 'uz-Latn': 'Halqa', en: 'Ring road' },
     });
   });
@@ -578,9 +570,7 @@ describe('DeliveryZonesPage', () => {
     regionId: 'region-sam',
     platform: false,
     code: 'SAMARKAND',
-    displayNameRu: 'Самарканд',
-    displayNameUz: 'Samarqand',
-    displayNameEn: 'Samarkand',
+    displayNames: { ru: 'Самарканд', 'uz-Latn': 'Samarqand', en: 'Samarkand' },
     centreLat: 39.65,
     centreLon: 66.96,
     bboxSwLat: 39.4,

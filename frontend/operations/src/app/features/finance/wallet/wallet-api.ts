@@ -156,6 +156,11 @@ export interface ConfirmCardBody {
   readonly providerToken: string;
   /** The code the cardholder's bank texted. */
   readonly verificationCode: string;
+  /**
+   * `MMYY` as the cardholder entered it, for a provider whose confirmation does not return the expiry. Month and
+   * year only; the number never travels with it.
+   */
+  readonly cardExpiry?: string;
 }
 
 /**

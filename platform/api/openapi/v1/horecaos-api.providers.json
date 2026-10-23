@@ -67,6 +67,225 @@
         },
         "type" : "object"
       },
+      "PartnerMenuCategoryResponse" : {
+        "properties" : {
+          "categoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "images" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PartnerMenuImageResponse"
+            },
+            "type" : "array"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "parentCategoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "productIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "PartnerMenuImageResponse" : {
+        "properties" : {
+          "assetId" : {
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PartnerMenuItemResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "images" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PartnerMenuImageResponse"
+            },
+            "type" : "array"
+          },
+          "modifierGroupIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "productId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "variants" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PartnerMenuVariantResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "PartnerMenuModifierGroupResponse" : {
+        "properties" : {
+          "allowSameOptionMultipleTimes" : {
+            "type" : "boolean"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "maximumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "minimumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "modifierGroupId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "options" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PartnerMenuModifierOptionResponse"
+            },
+            "type" : "array"
+          },
+          "required" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "PartnerMenuModifierOptionResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "maximumQuantity" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "optionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PartnerMenuResponse" : {
+        "properties" : {
+          "categories" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PartnerMenuCategoryResponse"
+            },
+            "type" : "array"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PartnerMenuItemResponse"
+            },
+            "type" : "array"
+          },
+          "locale" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "modifierGroups" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PartnerMenuModifierGroupResponse"
+            },
+            "type" : "array"
+          },
+          "publicationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PartnerMenuVariantResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "images" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PartnerMenuImageResponse"
+            },
+            "type" : "array"
+          },
+          "isDefault" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "onSaleNow" : {
+            "type" : "boolean"
+          },
+          "orderable" : {
+            "type" : "boolean"
+          },
+          "partnerItemId" : {
+            "type" : "string"
+          },
+          "sku" : {
+            "type" : "string"
+          },
+          "unitCode" : {
+            "type" : "string"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PartnerOrderControllerPushRequest" : {
         "properties" : {
           "discountFunding" : {
@@ -114,6 +333,32 @@
           }
         },
         "required" : [ "externalOrderId", "fulfillmentMode", "lines", "totals", "venueReference" ],
+        "type" : "object"
+      },
+      "PartnerRestaurantResponse" : {
+        "properties" : {
+          "channelConfigured" : {
+            "type" : "boolean"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PartnerRestaurantsResponse" : {
+        "properties" : {
+          "restaurants" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PartnerRestaurantResponse"
+            },
+            "type" : "array"
+          }
+        },
         "type" : "object"
       },
       "PushResponse" : {
@@ -298,6 +543,35 @@
         "tags" : [ "Partner API" ]
       }
     },
+    "/api/v1/partner/tenants/{tenantId}/restaurants" : {
+      "get" : {
+        "description" : "ADR 0040. Each branch the partner's installation is bound to through a live binding, by name, with whether its integration has a single active channel yet (a restaurant whose channelConfigured is false answers 409 CHANNEL_NOT_CONFIGURED on its menu).",
+        "operationId" : "partnerRestaurants",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PartnerRestaurantsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List the restaurants this credential is bound to",
+        "tags" : [ "Partner API" ]
+      }
+    },
     "/api/v1/partner/tenants/{tenantId}/restaurants/{locationId}/availability" : {
       "get" : {
         "description" : "ADR 0141 Phase 4. For each dish this partner has mapped at the restaurant, whether it may be sold on the partner's channel right now, in the partner's own item-id order and in cursor pages (pass nextCursor back as cursor; limit 1 to 200, default 200). Identifiers and a boolean only. Answered from the platform's own resolver on every call, never from a cache. 404 when the restaurant is not one this credential is bound to; 409 CHANNEL_NOT_CONFIGURED when the integration has no single active channel yet.",
@@ -347,6 +621,50 @@
           }
         },
         "summary" : "Read a restaurant's current availability",
+        "tags" : [ "Partner API" ]
+      }
+    },
+    "/api/v1/partner/tenants/{tenantId}/restaurants/{locationId}/menu" : {
+      "get" : {
+        "description" : "ADR 0040 and ADR 0138. The channel's assembled menu at this restaurant: categories, dishes with their sizes (variants), modifier groups, prices in integer minor units, orderability and the pictures the channel shows for each dish, size and category. Every variant carries the platform's variantId and, where the partner has mapped it, its own partnerItemId. The response has an ETag over the whole menu: send it back in If-None-Match to read a 304 while nothing has changed. locale is ru, uz or en; omitted, the brand's own default. 404 when the restaurant is not one this credential is bound to; 409 CHANNEL_NOT_CONFIGURED when the integration has no single active channel yet; 409 MENU_NOT_PUBLISHED when nothing has been published to the channel.",
+        "operationId" : "partnerMenu",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PartnerMenuResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Read a restaurant's menu as its channel serves it",
         "tags" : [ "Partner API" ]
       }
     },

@@ -56,9 +56,11 @@ public class CustomerFunnelController {
             summary = "7.6c: the daily customer funnel, visits to orders, from server-side facts",
             description = "Stages are counts of distinct events on a business day, per brand and sales "
                     + "channel, and not a cohort: a ratio between two of them is a rate of activity and "
-                    + "not the probability that one person converts. The visits stage is always "
-                    + "measured=false (reason NOT_COLLECTED) with no count: nothing is collected from "
-                    + "a browser, an app or a bot for this purpose. A basket or checkout count that is "
+                    + "not the probability that one person converts. The visits stage is "
+                    + "measured=false (reason NOT_COLLECTED) with no count unless the platform owner has "
+                    + "switched the page-load count on (ADR 0183 D18), when it carries a count with "
+                    + "basis=PAGE_LOADS: tab sessions and not people, never a denominator. Nothing else is "
+                    + "collected from a browser, an app or a bot for this purpose. A basket or checkout count that is "
                     + "null on a day means 'not recorded' (its carts were past retention when the "
                     + "capture ran) and is never zero; the stage reports how many days are unrecorded.")
     public ResponseEntity<FunnelResponse> customerFunnel(
@@ -92,11 +94,17 @@ public class CustomerFunnelController {
             boolean measured,
             @Nullable String reason,
             @Nullable Long count,
-            int unrecordedDays) {
+            int unrecordedDays,
+            @Nullable String basis) {
 
         static StageResponse of(Stage stage) {
             return new StageResponse(
-                    stage.stage(), stage.measured(), stage.reason(), stage.count(), stage.unrecordedDays());
+                    stage.stage(),
+                    stage.measured(),
+                    stage.reason(),
+                    stage.count(),
+                    stage.unrecordedDays(),
+                    stage.basis());
         }
     }
 

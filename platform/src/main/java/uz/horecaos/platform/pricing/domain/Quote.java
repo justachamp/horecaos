@@ -358,7 +358,14 @@ public record Quote(
          * customer buys two of, and expressing it as a quantity would make the
          * receipt line arithmetic look like a unit price it is not.
          */
-        DELIVERY_FEE
+        DELIVERY_FEE,
+        /**
+         * ADR 0140 stage 5. The order-level markup, a service charge, computed on the
+         * post-discount goods subtotal. Quantity is always one, its amount is part of the quote's
+         * {@code fees}, and it carries no tax share until finance and counsel answer how a service
+         * line is taxed. Priced only while {@code pricing.order_markup.enabled} is on.
+         */
+        SERVICE_CHARGE
     }
 
     /**
@@ -426,7 +433,13 @@ public record Quote(
              * price, and part of {@code subtotal}: it never touches {@code
              * discount_minor}, which stays non-negative.
              */
-            ITEM_MARKUP
+            ITEM_MARKUP,
+            /**
+             * ADR 0140 stage 5. An order-level markup's service charge, recorded as a positive
+             * adjustment beside the {@code SERVICE_CHARGE} line it produced. Part of {@code fee_minor}
+             * and never of {@code discount_minor}.
+             */
+            ORDER_MARKUP
         }
     }
 }

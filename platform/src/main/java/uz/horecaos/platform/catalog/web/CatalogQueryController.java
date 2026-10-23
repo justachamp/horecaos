@@ -237,6 +237,10 @@ public class CatalogQueryController {
      * @param packageCode what the node already holds for its package code, if anything
      * @param mxikWithdrawnOn the date the official list withdrew the node's code, when it has (ADR 0173)
      * @param mxikReplacedBy  the successor the list names for it, for a person to click
+     * @param fiscalUnitCode  the unit code the node already holds, if anything; a node with both codes and no unit
+     *                        code or no fiscal name is still unclassified (ADR 0038), and this is how a console
+     *                        tells it from one that lacks a code
+     * @param fiscalName      the receipt-line name the node already holds, if anything
      */
     public record FiscalCoverageNodeResponse(
             uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableType nodeType,
@@ -248,7 +252,9 @@ public class CatalogQueryController {
             @Nullable String mxikCode,
             @Nullable String packageCode,
             java.time.@Nullable LocalDate mxikWithdrawnOn,
-            @Nullable String mxikReplacedBy) {
+            @Nullable String mxikReplacedBy,
+            @Nullable Integer fiscalUnitCode,
+            @Nullable String fiscalName) {
         static FiscalCoverageNodeResponse of(CatalogQueryService.FiscalCoverageNode node) {
             return new FiscalCoverageNodeResponse(
                     node.nodeType(),
@@ -260,7 +266,9 @@ public class CatalogQueryController {
                     node.mxikCode(),
                     node.packageCode(),
                     node.mxikWithdrawnOn(),
-                    node.mxikReplacedBy());
+                    node.mxikReplacedBy(),
+                    node.fiscalUnitCode(),
+                    node.fiscalName());
         }
     }
 

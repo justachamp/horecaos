@@ -1,0 +1,37 @@
+@if (closed().length > 0) {
+  <div class="closed-strip" role="status" data-testid="closed-branch-strip">
+    <span class="closed-strip__label q-body-sm">{{ text('strip.label') }}</span>
+    @for (branch of closed(); track branch.locationId) {
+      <span class="closed-strip__item q-body-sm" data-testid="closed-branch-item">
+        <strong class="closed-strip__name">{{ branch.name }}</strong>
+        <span
+          class="closed-strip__until"
+          [class.closed-strip__until--open-ended]="branch.until === null"
+          data-testid="closed-branch-until"
+        >
+          ({{ until(branch) }})</span
+        >
+        @if (canReopen()) {
+          <button
+            type="button"
+            class="closed-strip__reopen q-caption"
+            [disabled]="reopening() !== null"
+            [attr.aria-label]="text('strip.reopenAria', { name: branch.name })"
+            (click)="reopen(branch)"
+            data-testid="closed-branch-reopen"
+          >
+            {{ text('strip.reopen') }}
+          </button>
+        }
+      </span>
+    }
+    @if (failed(); as name) {
+      <span
+        class="closed-strip__failed q-caption"
+        role="alert"
+        data-testid="closed-branch-failed"
+        >{{ text('strip.failed', { name }) }}</span
+      >
+    }
+  </div>
+}

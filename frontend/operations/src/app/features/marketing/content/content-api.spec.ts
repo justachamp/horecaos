@@ -215,4 +215,15 @@ describe('ContentApi (ADR 0157, Staff API: ETag in If-Match, Idempotency-Key on 
     second.flush({});
     await editorial;
   });
+
+  it('chooses the storefront layout with If-Match and the layout as the word the platform reads', async () => {
+    const promise = api.setLayoutPolicy(SCOPE, 4, 'MARKETPLACE');
+    const request = expectOne('PUT', '/policies/layout');
+
+    expect(request.request.headers.get('If-Match')).toBe('W/"4"');
+    expect(request.request.headers.get('Idempotency-Key')).toBeTruthy();
+    expect(request.request.body).toEqual({ layout: 'MARKETPLACE' });
+    request.flush({});
+    await promise;
+  });
 });

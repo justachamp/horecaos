@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
-import { LangService } from '../../services/lang.service';
+import { LangService, platformTag } from '../../services/lang.service';
 import {
   type PublicComment,
   type PublicSummary,
@@ -116,12 +116,8 @@ export class PublicReviewsComponent {
     if (Number.isNaN(parsed.getTime())) {
       return isoDate;
     }
-    return new Intl.DateTimeFormat(platformLocale(this.lang.langId()), {
+    return new Intl.DateTimeFormat(platformTag(this.lang.langId()), {
       dateStyle: 'medium',
     }).format(parsed);
   }
-}
-
-function platformLocale(langId: string): string {
-  return langId === 'uz' ? 'uz-Latn' : langId;
 }

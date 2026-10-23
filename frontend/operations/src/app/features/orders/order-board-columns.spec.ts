@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import { ORDER_BOARD_COLUMN_KEYS } from '../../core/preferences/preference-documents';
 import { ADDABLE_COLUMNS, DEFAULT_SHOWN_COLUMNS } from '../../core/preferences/preference-edits';
-import { ORDER_BOARD_COLUMNS, columnVisibility, offeredColumns } from './order-board-columns';
+import {
+  BOARD_FACT_COLUMNS,
+  ORDER_BOARD_COLUMNS,
+  boardFactParams,
+  columnVisibility,
+  offeredColumns,
+  requestedBoardFacts,
+} from './order-board-columns';
 
 describe('the order board’s column registry (ADR 0160)', () => {
   it('has one definition for every column the platform’s vocabulary names, under its own key', () => {
@@ -21,29 +28,49 @@ describe('the order board’s column registry (ADR 0160)', () => {
     );
   });
 
-  it('offers only the columns whose cell has something to draw: not «Позиции», and «Филиал» only on «Все филиалы»', () => {
+  it('offers every column whose cell has something to draw, «Филиал» only on «Все филиалы»', () => {
     expect(offeredColumns({ allBranches: false, courierRoster: true })).toEqual([
       'channel',
       'customer',
+      'items',
       'payment',
       'courier',
       'createdBy',
       'acceptedBy',
       'courierType',
       'discount',
+      'courierEta',
+      'source',
+      'fiscal',
+      'distance',
+      'externalNumber',
     ]);
     expect(offeredColumns({ allBranches: true, courierRoster: true })).toEqual([
       'branch',
       'channel',
       'customer',
+      'items',
       'payment',
       'courier',
       'createdBy',
       'acceptedBy',
       'courierType',
       'discount',
+      'courierEta',
+      'source',
+      'fiscal',
+      'distance',
+      'externalNumber',
     ]);
-    expect(ORDER_BOARD_COLUMNS.items.reads).toBeNull();
+  });
+
+  it('gives every column a field of the board row to draw from, now that the read carries one for each', () => {
+    for (const key of ORDER_BOARD_COLUMN_KEYS) {
+      expect(ORDER_BOARD_COLUMNS[key].reads, key).not.toBeNull();
+    }
+    expect(ORDER_BOARD_COLUMNS.items.reads).toBe('itemCount');
+    expect(ORDER_BOARD_COLUMNS.courierEta.reads).toBe('courierEtaAt');
+    expect(ORDER_BOARD_COLUMNS.source.reads).toBe('channelSystemType');
   });
 
   it('offers «Тип курьера» only to a person who can read the courier roster that names it', () => {
@@ -53,11 +80,17 @@ describe('the order board’s column registry (ADR 0160)', () => {
     expect(without).toEqual([
       'channel',
       'customer',
+      'items',
       'payment',
       'courier',
       'createdBy',
       'acceptedBy',
       'discount',
+      'courierEta',
+      'source',
+      'fiscal',
+      'distance',
+      'externalNumber',
     ]);
     expect(offeredColumns({ allBranches: false, courierRoster: true })).toContain('courierType');
     expect(ORDER_BOARD_COLUMNS.courierType.needs).toBe('courierRoster');
@@ -81,15 +114,20 @@ describe('the order board’s column registry (ADR 0160)', () => {
       branch: false,
       channel: true,
       customer: true,
+      items: true,
       payment: true,
       courier: true,
       createdBy: false,
       acceptedBy: false,
       courierType: false,
       discount: false,
+      courierEta: false,
+      source: false,
+      fiscal: false,
+      distance: false,
+      externalNumber: false,
     });
     expect(columnVisibility({}, { allBranches: true, courierRoster: true }).branch).toBe(true);
-    expect(plain.items).toBe(false);
   });
 
   it('applies the person’s change from the default, and shows a column added later to a person whose document predates it', () => {
@@ -121,5 +159,28 @@ describe('the order board’s column registry (ADR 0160)', () => {
         { allBranches: true, courierRoster: true },
       ).branch,
     ).toBe(false);
+  });
+
+  it('asks the board for the facts of the optional columns the person has on, and for nothing when none is', () => {
+    const none = columnVisibility({}, { allBranches: false, courierRoster: true });
+    expect(requestedBoardFacts(none)).toEqual([]);
+    expect(boardFactParams(none)).toEqual({});
+
+    const some = columnVisibility(
+      { columns: { show: ['courierEta', 'fiscal', 'discount'] } },
+      { allBranches: false, courierRoster: true },
+    );
+    expect(requestedBoardFacts(some)).toEqual(['courierEta', 'fiscal']);
+    expect(boardFactParams(some)).toEqual({ include: ['courierEta', 'fiscal'] });
+  });
+
+  it('names as facts exactly the five columns the platform reads only when asked', () => {
+    expect([...BOARD_FACT_COLUMNS]).toEqual([
+      'courierEta',
+      'source',
+      'fiscal',
+      'distance',
+      'externalNumber',
+    ]);
   });
 });

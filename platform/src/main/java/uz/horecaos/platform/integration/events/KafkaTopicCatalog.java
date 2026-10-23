@@ -46,6 +46,12 @@ public final class KafkaTopicCatalog {
      */
     public static final String CONTENT_EVENTS = "content.events";
 
+    /**
+     * ADR 0016 and ADR 0138: a brand's draft menu changed -- a product, a variant, a category, a classification,
+     * a channel's images. Ids, entity kinds and change codes only: never a name, a price or a URL.
+     */
+    public static final String CATALOG_EVENTS = "catalog.events";
+
     /** ADR 0111 lead facts: a lead was registered, moved, handed to a branch or converted. */
     public static final String CUSTOMERS_EVENTS = "customers.events";
 
@@ -54,6 +60,12 @@ public final class KafkaTopicCatalog {
      * moved or passed a clock.
      */
     public static final String REVIEWS_EVENTS = "reviews.events";
+
+    /**
+     * ADR 0166 fiscal facts: a correction or a void of an issued receipt was requested, and the agent's
+     * reference attached. Identifiers, the kind and the status only -- never a piece of receipt evidence.
+     */
+    public static final String FISCAL_EVENTS = "fiscal.events";
 
     /** ADR 0040 marketplace facts: a partner confirmed a new availability, a channel went stale. */
     public static final String INTEGRATION_EVENTS = "integration.events";
@@ -95,6 +107,12 @@ public final class KafkaTopicCatalog {
             // business-fact topic there is and shares tenancy's partition count; keyed by item, so
             // one item's facts stay in order. Nothing on it is text.
             new TopicSpecification(CONTENT_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
+            // ADR 0016. One record per distinct entity and change a write touches (identical facts in one
+            // transaction are one; a bulk classification of N dishes is N plus one for the batch, ADR 0180),
+            // keyed by brand so one brand's changes stay in order, and an import is suppressed rather than
+            // announced row by row; an operator editing a menu produces a handful a minute and a bulk write
+            // is a burst on one brand's partition, so this shares tenancy's partition count.
+            new TopicSpecification(CATALOG_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
             // ADR 0040. A confirmed availability push is one record per dish per binding and
             // a brand-wide stop across a pilot's bound venues is hundreds, not thousands a
             // minute, so this shares tenancy's partition count: keyed by binding, so one
@@ -109,6 +127,10 @@ public final class KafkaTopicCatalog {
             // case facts stay in order and a poison record holds back that order alone. Shares tenancy's
             // partition count, seven days, replication one (ADR 0034).
             new TopicSpecification(REVIEWS_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
+            // ADR 0166. A correction request is staff work against an issued receipt, a small fraction of
+            // orders, keyed by the document so a request and its attachment stay in order. Shares
+            // tenancy's partition count, seven days, replication one (ADR 0034).
+            new TopicSpecification(FISCAL_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
             // ADR 0012. One schedule row per binding and a pilot's binding count
             // is small, so this shares fulfillment.commands' shape rather than
             // ordering's: a command topic, not a fact topic, and durable state

@@ -138,6 +138,20 @@ public class JdbcCourierLedgerStore {
                 .list();
     }
 
+    /** Periods that end on or after {@code since}, open ones included, for the rule simulator's replay (ADR 0178). */
+    public List<PeriodRow> periodsEndingSince(UUID tenantId, LocalDate since, int limit) {
+        return jdbc.sql(SELECT_PERIOD + """
+                 WHERE tenant_id = :tenantId AND period_end >= :since
+                 ORDER BY period_end DESC
+                 LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("since", since)
+                .param("limit", limit)
+                .query(JdbcCourierLedgerStore::mapPeriod)
+                .list();
+    }
+
     public List<PeriodRow> periodsOf(UUID tenantId, UUID courierId) {
         return jdbc.sql(SELECT_PERIOD + """
                  WHERE tenant_id = :tenantId AND courier_id = :courierId

@@ -55,9 +55,7 @@ export const catalogUzLatn: AreaMessages<typeof catalogEn> = {
   'catalog.autoAdd.field.mandatory': 'Mijoz rad eta olmaydi',
   'catalog.autoAdd.field.fulfillment': 'Yetkazish usullari',
   'catalog.autoAdd.field.channel': 'Kanal turlari',
-  'catalog.autoAdd.field.textRu': 'Mijoz uchun matn (ruscha)',
-  'catalog.autoAdd.field.textUz': 'Mijoz uchun matn (oʻzbekcha)',
-  'catalog.autoAdd.field.textEn': 'Mijoz uchun matn (inglizcha)',
+  'catalog.autoAdd.field.textIn': 'Mijoz uchun matn ({language})',
   'catalog.autoAdd.channelsNote':
     'Faqat buyurtma savatdan yigʻiladigan kanallar. Agregator yoki kassa buyurtmasi qoidani koʻtara olmaydi.',
   'catalog.autoAdd.pickVariant': 'Qoʻshiladigan pozitsiyani toping',
@@ -385,6 +383,14 @@ export const catalogUzLatn: AreaMessages<typeof catalogEn> = {
   'catalog.editor.physical.portion': 'Ulush hajmi',
   'catalog.editor.physical.portionHint': 'Miqdor oʻzgaradigan qadam, masalan 0,5',
   'catalog.editor.physical.nutrition': 'Ozuqaviy qiymat (KBJU)',
+  'catalog.editor.physical.accuracy.preview':
+    'Mijozlar bu qatorni jadval tagida, menyuni oʻqiyotgan tilida koʻradi:',
+  'catalog.editor.physical.accuracy.ru':
+    'Значения КБЖУ приблизительные и могут отличаться от фактических.',
+  'catalog.editor.physical.accuracy.uz':
+    'KBJU qiymatlari taxminiy va haqiqiyidan farq qilishi mumkin.',
+  'catalog.editor.physical.accuracy.en':
+    'Nutrition values are approximate and may differ from the actual product.',
   'catalog.editor.physical.per100g': '100 g uchun',
   'catalog.editor.physical.per100ml': '100 ml uchun',
   'catalog.editor.physical.calories': 'Kaloriya, kkal',

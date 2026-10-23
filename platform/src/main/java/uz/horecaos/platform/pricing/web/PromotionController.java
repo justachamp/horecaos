@@ -354,7 +354,14 @@ public class PromotionController {
             Promotion.@Nullable LoyaltyAccrual loyaltyAccrual,
             Promotion.@Nullable LoyaltyRedemption loyaltyRedemption,
             @Nullable @Size(max = 20) List<@Valid RuleBody> conditions,
-            @NotEmpty @Size(max = 20) List<@Valid RuleBody> actions) {
+            @NotEmpty @Size(max = 20) List<@Valid RuleBody> actions,
+
+            @Schema(
+                    description = "What a storefront may print for this promotion, per locale (ADR 0140). "
+                            + "Optional; a locale with no title is described by the kind of benefit.")
+            @Nullable
+            @Size(max = 12)
+            Map<String, String> titles) {
 
         PromotionDefinition toDefinition() {
             return new PromotionDefinition(
@@ -387,7 +394,8 @@ public class PromotionController {
                                     rule.sequence(),
                                     actionType(rule.type()),
                                     rule.operands() == null ? Map.of() : rule.operands()))
-                            .toList());
+                            .toList(),
+                    titles == null ? Map.of() : titles);
         }
 
         private static Promotion.Condition.Type conditionType(String type) {
@@ -451,6 +459,7 @@ public class PromotionController {
             String loyaltyRedemption,
             List<RuleResponse> conditions,
             List<RuleResponse> actions,
+            Map<String, String> titles,
             @Nullable Instant validatedAt,
             @Nullable Instant activatedAt,
             @Nullable String activatedBy,
@@ -490,6 +499,7 @@ public class PromotionController {
                             .map(rule -> new RuleResponse(
                                     rule.sequence(), rule.type().name(), rule.operands()))
                             .toList(),
+                    d.titles(),
                     row.validatedAt(),
                     row.activatedAt(),
                     row.activatedBy(),

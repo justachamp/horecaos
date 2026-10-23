@@ -80,6 +80,8 @@ export class MenuService {
   private pending: { key: string; promise: Promise<PublishedMenu> } | null = null;
 
   readonly currency = signal<string | null>(null);
+  /** ADR 0137, row 4.2c: whether the menu last read asks for the КБЖУ accuracy line. Off until it says so. */
+  readonly nutritionAccuracyNotice = signal(false);
 
   /**
    * The whole menu for a location: the already-in-flight read for that key
@@ -116,6 +118,7 @@ export class MenuService {
       )
       .then((menu) => {
         this.currency.set(menu.currency);
+        this.nutritionAccuracyNotice.set(menu.nutritionAccuracyNotice === true);
         return menu;
       })
       .finally(() => {
@@ -398,9 +401,6 @@ function comboGroupsById(menu: PublishedMenu): ReadonlyMap<string, PublishedComb
 function toMenuItemCommentPreset(preset: PublishedCommentPreset): MenuItemCommentPreset {
   return {
     code: preset.code,
-    labelRu: preset.labelRu,
-    labelUz: preset.labelUz,
-    labelEn: preset.labelEn,
     ...(preset.labels ? { labels: preset.labels } : {}),
     ...(preset.label ? { label: preset.label } : {}),
   };
@@ -477,6 +477,11 @@ export interface PublishedMenu {
   readonly modifierGroups: readonly PublishedModifierGroup[];
   /** ADR 0136: the choices every combo on this menu asks for; absent from a platform that sells none. */
   readonly comboGroups?: readonly PublishedComboGroup[];
+  /**
+   * ADR 0137, row 4.2c: whether the code-owned accuracy line is drawn under a nutrition table. Resolved by the
+   * platform when the menu is read (`catalog.nutrition_accuracy_line_enabled`), absent from one that predates it.
+   */
+  readonly nutritionAccuracyNotice?: boolean;
 }
 
 /** `StorefrontCatalogQuery.MenuComboGroup`, transcribed. The container is the combo's own variant: never priced, never sold directly. */
@@ -565,10 +570,7 @@ export interface PublishedIngredient {
 /** `StorefrontCatalogQuery.CommentPresetOption`, transcribed from the controller. */
 export interface PublishedCommentPreset {
   readonly code: string;
-  readonly labelRu: string;
-  readonly labelUz: string;
-  readonly labelEn: string;
-  /** Every wording the preset has, by locale: the triple plus any locale a brand offers beyond it. */
+  /** Every wording the preset has, by locale: the only shape of it since V0678. */
   readonly labels?: Readonly<Record<string, string>>;
   /** The wording resolved for the requested language, then the brand's default. */
   readonly label?: string;

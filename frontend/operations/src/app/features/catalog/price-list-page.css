@@ -15,7 +15,7 @@
 .price-list__links {
   display: flex;
   gap: 12px;
-  margin-right: auto;
+  margin-inline-end: auto;
   font-size: var(--q-type-body-xs);
 }
 
@@ -44,7 +44,7 @@
 }
 
 .price-list__table th {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   font-size: var(--q-type-caption);
   color: var(--q-ink-subtle);
@@ -58,11 +58,11 @@
 }
 
 .price-list__num-col {
-  text-align: right;
+  text-align: end;
 }
 
 .price-list__actions {
-  text-align: right;
+  text-align: end;
   display: flex;
   gap: 6px;
   justify-content: flex-end;

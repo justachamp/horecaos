@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.catalog.api.ItemDisplayLookup;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
@@ -24,6 +26,7 @@ import uz.horecaos.platform.inventory.application.StopMaterialisationService.Run
 import uz.horecaos.platform.inventory.application.StopMaterialisationService.StaleRunException;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcStopMaterialisationStore.LineRow;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcStopMaterialisationStore.RunRow;
+import uz.horecaos.platform.tenancy.api.BranchDirectory;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -42,9 +45,10 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * with {@code 409 RESOURCE_CONFLICT {conflict: MATERIALISATION_REQUIRED}} until a run has been
  * acknowledged and no stop has been made since.
  *
- * <p>The report carries identifiers and stable codes only; the console resolves dish and branch
- * names through the authorized catalog and tenancy APIs, so no name is copied into a table that
- * outlives the dish (ADR 0029).
+ * <p>The report is stored as identifiers and stable codes only. Its names are resolved when it is
+ * read, through the catalog's {@code ItemDisplayLookup} and the tenant's {@code BranchDirectory},
+ * so no name is copied into a table that outlives the dish (ADR 0029) and a renamed dish reads
+ * under its present name.
  */
 @RestController
 @RequestMapping("/api/v1/tenants/{tenantId}/brands/{brandId}/inventory/stop-materialisation-runs")
@@ -55,10 +59,18 @@ public class StopMaterialisationController {
 
     private final StopMaterialisationService runs;
     private final CurrentActor currentActor;
+    private final ItemDisplayLookup itemNames;
+    private final BranchDirectory branches;
 
-    public StopMaterialisationController(StopMaterialisationService runs, CurrentActor currentActor) {
+    public StopMaterialisationController(
+            StopMaterialisationService runs,
+            CurrentActor currentActor,
+            ItemDisplayLookup itemNames,
+            BranchDirectory branches) {
         this.runs = runs;
         this.currentActor = currentActor;
+        this.itemNames = itemNames;
+        this.branches = branches;
     }
 
     @PostMapping
@@ -141,7 +153,9 @@ public class StopMaterialisationController {
     @Operation(
             summary = "What the run could not carry",
             description = "The report the owner acknowledges: one line per stop and location that did not land "
-                    + "on a position, with a stable reason code. Identifiers and codes only. Cursor-paged; "
+                    + "on a position, with a stable reason code. The dish's and the branch's names are resolved "
+                    + "through the catalog and the tenant when the report is read and are absent where the dish or "
+                    + "branch no longer resolves; nothing but identifiers and codes is stored. Cursor-paged; "
                     + "cursor is the id of the last line seen.")
     public Page<ReportLineResponse> report(
             @PathVariable UUID tenantId,
@@ -152,8 +166,19 @@ public class StopMaterialisationController {
         int pageSize = Page.limitOrDefault(limit);
         try {
             List<LineRow> rows = runs.report(tenantId, brandId, runId, cursor, pageSize);
-            List<ReportLineResponse> items =
-                    rows.stream().map(ReportLineResponse::of).toList();
+            Map<UUID, String> dishNames = itemNames.displayNames(
+                    tenantId, rows.stream().map(LineRow::variantId).collect(Collectors.toSet()));
+            Map<UUID, String> branchNames = rows.stream().anyMatch(row -> row.locationId() != null)
+                    ? branches.activeBranches(tenantId, brandId).stream()
+                            .collect(Collectors.toMap(
+                                    BranchDirectory.Branch::locationId, BranchDirectory.Branch::name, (a, b) -> a))
+                    : Map.of();
+            List<ReportLineResponse> items = rows.stream()
+                    .map(row -> ReportLineResponse.of(
+                            row,
+                            dishNames.get(row.variantId()),
+                            row.locationId() == null ? null : branchNames.get(row.locationId())))
+                    .toList();
             String next = rows.size() < pageSize
                     ? null
                     : rows.get(rows.size() - 1).id().toString();
@@ -199,26 +224,36 @@ public class StopMaterialisationController {
         }
     }
 
-    /** One stop (at one location) that did not land on a position, and why. */
+    /**
+     * One stop (at one location) that did not land on a position, and why.
+     *
+     * @param variantName the dish's name, resolved when the report is read; null when it no longer resolves
+     * @param locationName the branch's name, resolved when the report is read; null for a stop that names no
+     *     branch (it reaches every one) or one that is no longer active
+     */
     public record ReportLineResponse(
             UUID id,
             UUID stopId,
             UUID variantId,
+            @Nullable String variantName,
             String scopeType,
             String source,
             @Nullable UUID locationId,
+            @Nullable String locationName,
             @Nullable UUID channelId,
             @Nullable UUID menuId,
             String reasonCode) {
 
-        static ReportLineResponse of(LineRow row) {
+        static ReportLineResponse of(LineRow row, @Nullable String variantName, @Nullable String locationName) {
             return new ReportLineResponse(
                     row.id(),
                     row.stopId(),
                     row.variantId(),
+                    variantName,
                     row.scopeType(),
                     row.source(),
                     row.locationId(),
+                    locationName,
                     row.channelId(),
                     row.menuId(),
                     row.reasonCode());

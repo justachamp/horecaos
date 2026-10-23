@@ -539,6 +539,14 @@ discount or a points award. And a tenant's contact-policy override can only ever
 be stricter than the ADR 0044 platform default, enforced by the database as well
 as the service.
 
+## Status addition (2026-10-14)
+
+The open input «couriers as an audience» is answered by [ADR 0182](../partial/0182-campaign-channels-email-push-couriers-and-delivery-statistics.md) (D15): a courier broadcast is separate
+operational messaging, not a marketing audience, and this record's customer-keyed audience is not widened.
+The broadcast names an ADR 0020 `SMS` template of the class `COURIER_DISPATCH` that the gateway has
+approved and is delivered through the same router as a campaign, with a per-courier ledger. Nothing in this
+record's Decision, Alternatives or Consequences is changed.
+
 ## References
 
 - [ADR 0004](../built/0004-sql-outbox-and-kafka-delivery.md) — the outbox every new event and command writes through

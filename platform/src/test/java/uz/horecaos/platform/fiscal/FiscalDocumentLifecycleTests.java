@@ -456,6 +456,55 @@ class FiscalDocumentLifecycleTests {
     }
 
     @Test
+    @DisplayName(
+            "a retry that cannot rebuild the receipt of a document the provider was asked about does not say nothing was sent")
+    void aDocumentTheProviderWasAskedAboutIsNotRestatedAsNeverSent() {
+        UUID order = seedOrder("R-6", "CLICK");
+        UUID document = submittedDocument(order, "CLICK", NOON);
+        build(NOON.plusSeconds(3601)).sweepOverdueReports(50);
+        assertThat(row(document).reasonCode()).isEqualTo(FiscalReasonCode.PROVIDER_REPORT_OVERDUE);
+        partner.outcome = PartnerFiscalizationPort.Outcome.BLOCKED_RECONCILIATION;
+
+        service.retry(
+                TENANT,
+                document,
+                row(document).version(),
+                "idem-6",
+                ActorRef.user("finance@example.test", "Finance"),
+                "the provider may hold it",
+                null);
+
+        assertThat(row(document).state()).isEqualTo(FiscalDocumentState.BLOCKED);
+        assertThat(row(document).reasonCode())
+                .as("a request left for this document and was never answered; 'the receipt does not reconcile, "
+                        + "nothing was sent' is false about it, and an operator who believes it stops looking "
+                        + "for what the tax authority may already hold")
+                .isEqualTo(FiscalReasonCode.PROVIDER_REPORT_OVERDUE);
+    }
+
+    @Test
+    @DisplayName(
+            "a document blocked for another reason before anything was sent is still restated to what stops it now")
+    void aDocumentNeverSentIsRestatedToTheObstacleOfTheRetry() {
+        UUID order = seedOrder("R-7", "CLICK");
+        UUID document = submittedDocument(order, "CLICK", NOON);
+        store.blockUnsent(
+                TENANT, document, FiscalReasonCode.CLASSIFICATION_MISSING, "a node has no classification", NOON);
+        partner.outcome = PartnerFiscalizationPort.Outcome.BLOCKED_RECONCILIATION;
+
+        service.retry(
+                TENANT,
+                document,
+                row(document).version(),
+                "idem-7",
+                ActorRef.user("finance@example.test", "Finance"),
+                "classified, trying again",
+                null);
+
+        assertThat(row(document).reasonCode()).isEqualTo(FiscalReasonCode.RECEIPT_DOES_NOT_RECONCILE);
+    }
+
+    @Test
     @DisplayName("two operators retrying the same document reach the provider once")
     void concurrentRetriesAskOnce() {
         UUID order = seedOrder("R-5", "PAYME");
@@ -792,11 +841,12 @@ class FiscalDocumentLifecycleTests {
     private static final class StubPartner implements PartnerFiscalizationPort {
 
         private final List<UUID> asks = new ArrayList<>();
+        private Outcome outcome = Outcome.NOT_WIRED;
 
         @Override
         public Outcome retry(UUID tenantId, UUID documentId, String idempotencyKey) {
             asks.add(documentId);
-            return Outcome.NOT_WIRED;
+            return outcome;
         }
 
         @Override

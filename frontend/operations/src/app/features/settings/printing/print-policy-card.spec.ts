@@ -4,9 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { ConfigurationResolutionView } from '../../../core/api/configuration';
 import { LocationScope } from '../../../core/api/operations-paths';
 import { I18n } from '../../../core/i18n/i18n';
+import { LocaleSet } from '../../../core/i18n/locale-set';
 import { ConfigurationApi } from '../configuration-api';
 import { PrintPolicyCard } from './print-policy-card';
 import { all, click, el, flush, pick, type } from './printing-dom';
+import { FakeBrandLocales } from './printing-fixtures';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 
@@ -45,10 +47,16 @@ function fakeConfig(overrides: Record<string, ConfigurationResolutionView> = {})
 
 async function render(
   config: ReturnType<typeof fakeConfig>,
+  brandLocales: readonly string[] = ['ru', 'uz-Latn', 'en'],
 ): Promise<ComponentFixture<PrintPolicyCard>> {
+  const locales = new FakeBrandLocales();
+  locales.locales.set(brandLocales);
   await TestBed.configureTestingModule({
     imports: [PrintPolicyCard],
-    providers: [{ provide: ConfigurationApi, useValue: config }],
+    providers: [
+      { provide: ConfigurationApi, useValue: config },
+      { provide: LocaleSet, useValue: locales },
+    ],
   }).compileComponents();
   TestBed.inject(I18n).setLocale('en');
   const fixture = TestBed.createComponent(PrintPolicyCard);
@@ -129,6 +137,21 @@ describe('PrintPolicyCard', () => {
       false,
     );
     expect(config.setValue).not.toHaveBeenCalled();
+  });
+
+  // Row 10.12 (ADR 0149, Decision 5): the document language is chosen among the languages the platform
+  // prints in that this brand serves.
+  it('offers only the document languages the brand serves, in the brand’s order, and never a language the platform cannot print in', async () => {
+    const fixture = await render(fakeConfig(), ['uz-Latn', 'ru', 'kk']);
+
+    actions(fixture, 'printing.document_locale')[0].click();
+    fixture.detectChanges();
+
+    expect(
+      Array.from(el<HTMLSelectElement>(fixture, '[data-testid="print-policy-locale"]').options).map(
+        (option) => option.value,
+      ),
+    ).toEqual(['uz-Latn', 'ru']);
   });
 
   it('sets the document language as a string among the three languages', async () => {

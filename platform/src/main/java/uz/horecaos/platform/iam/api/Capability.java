@@ -885,6 +885,18 @@ public enum Capability {
     MARKETPLACE_AVAILABILITY_PULL("marketplace.availability.pull", "marketplace", "availability.pull"),
 
     /**
+     * ADR 0040 "Menu is pull-first", ADR 0138: an aggregator reading the restaurants it is bound to and the
+     * menu its channel serves at each ({@code PartnerMenuController}).
+     *
+     * <p>Held by the identical machine principal {@link #MARKETPLACE_AVAILABILITY_PULL} is, and again its own
+     * capability: reading the menu (names, prices, pictures, the partner's own ids) is a wider disclosure than
+     * reading a boolean per dish, and a credential issued only to poll availability should not read it by
+     * default. Nothing in it is personal data, and it is held over the bindings of the caller's installation
+     * only.
+     */
+    MARKETPLACE_MENU_READ("marketplace.menu.read", "marketplace", "menu.read"),
+
+    /**
      * ADR 0040: HorecaOS pushing a menu or an availability change out to a partner
      * that will not pull one.
      *
@@ -982,6 +994,27 @@ public enum Capability {
      * {@link PlatformRole#SUPPORT_AGENT}.
      */
     CUSTOMER_CREATE("customer.create", "customer", "create"),
+    /**
+     * ADR 0177, rows 1.3/1.3b: giving the delivery address of a phone order, without any
+     * customer-PII capability. Split out of {@link #CUSTOMER_MANAGE} and {@link
+     * #CUSTOMER_PII_REVEAL} for the reason {@link #CUSTOMER_CREATE} was: the New order screen's
+     * own persona ({@link PlatformRole#LOCATION_STAFF}, {@link PlatformRole#LOCATION_MANAGER})
+     * must not see "a raw contact value" (ADR 0039), and {@code CUSTOMER_MANAGE} would also
+     * hand over blacklisting, merging and profile edits on every other customer. A delivery
+     * order names a saved address of the resolved customer, and the saved-address routes are
+     * {@code TENANT}-scoped, which a {@code LOCATION} grant never covers -- so this capability
+     * is declared at {@code LOCATION} scope on a second, narrower surface in {@code
+     * OperationsCustomerController}, beside the create-on-miss route.
+     *
+     * <p>It grants exactly three things on the customer the operator has resolved: a
+     * <em>masked</em> list of the customer's saved addresses (label, street without house or
+     * flat, coordinate source, the point; never the encrypted lines), adding one address with its
+     * pin, and setting the pin of one saved address. It reveals no raw address, edits no address
+     * text, archives nothing and touches no other customer data. Every role that holds {@code
+     * CUSTOMER_MANAGE} holds it too, so nothing narrows for {@link PlatformRole#TENANT_OWNER},
+     * {@link PlatformRole#TENANT_ADMIN} or {@link PlatformRole#SUPPORT_AGENT}.
+     */
+    CUSTOMER_ADDRESS_CAPTURE("customer.address.capture", "customer", "address-capture"),
     /**
      * Reveals a customer's decrypted contact details or address (ADR 0029).
      * Separate from CUSTOMER_READ because seeing that a customer exists and
@@ -1200,6 +1233,11 @@ public enum Capability {
      * answer to "did the kitchen get this" is a list of provider order
      * identifiers and match evidence, which is integration diagnostics rather
      * than the branch's order queue.
+     *
+     * <p>Held by the branch's own roles too, for one reason: the till-revision notice (ADR 0137, ADR 0180)
+     * is shown on the pass and the order detail of a branch and its routes are branch routes. The branch
+     * manager and the floor read it; the POS export routes above stay tenant-scope, which a branch grant
+     * does not reach.
      */
     POS_EXPORT_READ("pos.export.read", "pos", "export.read"),
 
@@ -1214,6 +1252,11 @@ public enum Capability {
      * customer who ordered the same thing twice. Resolving it wrongly costs real
      * food in one direction and a hungry customer in the other, and the judgement
      * belongs to somebody who can pick up a telephone and ask the branch.
+     *
+     * <p>The branch manager is that somebody for a till revision (ADR 0137, ADR 0180): saying the till was
+     * changed by hand, or telling a vendor that can take it the weighed total, is the branch's own act on the
+     * branch's own till. The grant is at the branch and reaches the branch's till-revision routes only; the
+     * export push stays an owner's and an administrator's.
      */
     POS_EXPORT_RESOLVE("pos.export.resolve", "pos", "export.resolve"),
 
@@ -1615,6 +1658,17 @@ public enum Capability {
     IAM_GRANT_MANAGE("iam.grant.manage", "iam", "grant.manage"),
 
     /**
+     * ADR 0186: defining, editing and retiring the tenant's own jobs -- named subsets of
+     * this catalogue, never a capability of their own.
+     *
+     * <p>Declared at {@code TENANT} scope and held by {@code tenant-owner} and
+     * {@code tenant-admin} only. Not part of the platform-admin bootstrap, which stays one
+     * capability wide ({@link #IAM_GRANT_MANAGE}). It is also on the deny-list a tenant job
+     * is built under: a job can never carry the power to define jobs, or to give them away.
+     */
+    IAM_ROLE_MANAGE("iam.role.manage", "iam", "role.manage"),
+
+    /**
      * ADR 0148: reading whether a person holds a second factor, how many authenticators
      * and when each was added -- the «Способ входа» field on the person card and the column
      * on the staff list. Never a secret and never a code: the platform holds neither.
@@ -1896,6 +1950,34 @@ public enum Capability {
      * read-only still cannot exercise it, and it is classified accordingly by its action segment.
      */
     COURIER_DELIVERY_LOCATION_REVEAL("courier.delivery.location.reveal", "courier", "delivery.location.reveal"),
+
+    /**
+     * ADR 0179: a courier reading their own record -- who the platform says they are, the branches
+     * they are bound to, the shift they have open. The first call the courier app makes after
+     * signing in, so it can tell a courier from an account that merely signed in.
+     *
+     * <p>Held by the courier over their own record only, like the shift capabilities above: the
+     * handler resolves the courier from the signed token subject and the tenant, and an account
+     * that is nobody's courier is answered as one that does not exist. A manager reads the same
+     * facts, branch by branch, through the roster under {@link #COURIER_READ}. Never granted to a
+     * manager.
+     */
+    COURIER_SELF_READ("courier.self.read", "courier", "self.read"),
+
+    /**
+     * ADR 0045 and ADR 0179: a courier opening and closing their own duty session and sending
+     * their own observations from their own handset, and recording that they were shown the
+     * transparency notice that must precede both.
+     *
+     * <p>Not {@link #COURIER_DUTY_MANAGE}, which is the staff capability to open or close a
+     * session on a courier's behalf at a location scope. ADR 0045 said that when the courier
+     * principal arrived the courier's own path would be a second controller with its own
+     * declaration rather than a widening of the first, and this is that declaration: a manager
+     * who held it could cause a self-employed person to be tracked, which is the arrangement the
+     * whole telemetry design exists to prevent. Held by the courier over their own record only,
+     * and in no role bundle.
+     */
+    COURIER_TELEMETRY("courier.telemetry", "courier", "telemetry"),
 
     /**
      * ADR 0042: approving a shift's hours, and closing somebody else's shift.

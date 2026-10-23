@@ -4,6 +4,7 @@ import { SlaBucketSetApi } from '../../core/api/sla-bucket-set-api';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { ChartCategory } from '../../shared/ui/charts/chart-model';
@@ -12,6 +13,7 @@ import { ConfirmDialog } from '../../shared/ui/confirm-dialog';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
 import { DeliveryTariffsApi } from '../delivery/delivery-tariffs-api';
 import { DeliveryZonesApi } from '../delivery/delivery-zones-api';
+import { localisedName } from '../delivery/localised-name';
 import { ProvenanceBanner } from './provenance-banner';
 import {
   formatCount,
@@ -150,6 +152,7 @@ export class CourierReportPage {
   private readonly slaBucketSets = inject(SlaBucketSetApi);
   private readonly filters = inject(ReportsFilterState);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   protected readonly state = signal<LoadState>('loading');
   protected readonly leaderboardRows = signal<readonly LeaderboardRow[]>([]);
@@ -284,7 +287,10 @@ export class CourierReportPage {
       );
       const nameByTariff = new Map<string, string>(tariffs.map((t) => [t.tariffId, t.name]));
       const nameByZone = new Map<string, string>(
-        zones.map((z) => [z.zoneId, z.displayNameRu || z.displayNameEn || z.code]),
+        zones.map((z) => [
+          z.zoneId,
+          localisedName(this.i18n.locale(), z, this.registry.fallbackOrder()) || z.code,
+        ]),
       );
       const courierName = (id: string): string => nameByCourier.get(id) ?? id.slice(0, 8);
 

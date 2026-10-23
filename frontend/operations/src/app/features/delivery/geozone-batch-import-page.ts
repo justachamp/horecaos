@@ -10,6 +10,7 @@ import {
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { I18n } from '../../core/i18n/i18n';
+import { LocaleSet } from '../../core/i18n/locale-set';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { boundsOf } from '../../shared/ui/map/geometry';
@@ -87,6 +88,7 @@ export class GeozoneBatchImportPage implements OnInit {
   private readonly brand = inject(CurrentBrand);
   private readonly toasts = inject(Toasts);
   private readonly regions = inject(MapRegionService);
+  private readonly localeSet = inject(LocaleSet);
   protected readonly i18n = inject(I18n);
 
   protected readonly loading = signal(true);
@@ -174,7 +176,11 @@ export class GeozoneBatchImportPage implements OnInit {
   async ngOnInit(): Promise<void> {
     // The regions are read beside the brand and never block the page: a tenant that may not read
     // them still imports, and its rows say there was no region to check against.
-    await Promise.all([this.brand.ensureLoaded(), this.regions.ensureLoaded()]);
+    await Promise.all([
+      this.brand.ensureLoaded(),
+      this.regions.ensureLoaded(),
+      this.localeSet.ensureLoaded(),
+    ]);
     this.denied.set(this.brand.denied());
     this.loading.set(false);
   }
@@ -325,7 +331,7 @@ export class GeozoneBatchImportPage implements OnInit {
     try {
       const text = await file.text();
       const parsed = JSON.parse(text) as unknown;
-      this.rows.set(parseRows(parsed));
+      this.rows.set(parseRows(parsed, this.localeSet.defaultLocale()));
       this.parseError.set(null);
     } catch {
       this.rows.set([]);
@@ -398,7 +404,7 @@ export class GeozoneBatchImportPage implements OnInit {
  * fields the batch endpoint requires, defaulting `role` to `DELIVERY` (the
  * shape almost every legacy export is) when the source file omits it.
  */
-function parseRows(parsed: unknown): readonly BatchImportZoneRow[] {
+function parseRows(parsed: unknown, defaultLocale: string): readonly BatchImportZoneRow[] {
   if (!Array.isArray(parsed)) {
     throw new Error('Expected a JSON array of rows');
   }
@@ -415,9 +421,7 @@ function parseRows(parsed: unknown): readonly BatchImportZoneRow[] {
       externalRef,
       role: row['role'] === 'CATCHMENT' ? 'CATCHMENT' : 'DELIVERY',
       code,
-      displayNameRu: optionalString(row, 'displayNameRu') ?? code,
-      displayNameUz: optionalString(row, 'displayNameUz') ?? code,
-      displayNameEn: optionalString(row, 'displayNameEn') ?? code,
+      displayNames: namesOf(row, code, defaultLocale),
       regionId: optionalString(row, 'regionId'),
       priority: typeof row['priority'] === 'number' ? row['priority'] : 0,
       currency,
@@ -427,6 +431,40 @@ function parseRows(parsed: unknown): readonly BatchImportZoneRow[] {
       geoJson,
     } satisfies BatchImportZoneRow;
   });
+}
+
+/**
+ * A legacy row's names per locale. A source export names its zones in whatever columns it has (`displayNameRu`,
+ * `displayNameUz` and `displayNameEn` are the ones the old exporter wrote, kept here as the file's own format,
+ * not the API's) or as a `displayNames` object keyed by locale; a row that names none is named by its code in
+ * the brand's default language, the one name a zone must have.
+ */
+function namesOf(
+  row: Record<string, unknown>,
+  code: string,
+  defaultLocale: string,
+): Record<string, string> {
+  const names: Record<string, string> = {};
+  const legacy: readonly (readonly [string, string])[] = [
+    ['displayNameRu', 'ru'],
+    ['displayNameUz', 'uz-Latn'],
+    ['displayNameEn', 'en'],
+  ];
+  for (const [field, locale] of legacy) {
+    const value = optionalString(row, field)?.trim();
+    if (value) {
+      names[locale] = value;
+    }
+  }
+  const byLocale = row['displayNames'];
+  if (typeof byLocale === 'object' && byLocale !== null && !Array.isArray(byLocale)) {
+    for (const [locale, value] of Object.entries(byLocale)) {
+      if (typeof value === 'string' && value.trim().length > 0) {
+        names[locale] = value.trim();
+      }
+    }
+  }
+  return Object.keys(names).length > 0 ? names : { [defaultLocale]: code };
 }
 
 function requireString(row: Record<string, unknown>, field: string, index: number): string {

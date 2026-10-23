@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
@@ -12,6 +12,7 @@ import { CurrentTenant } from '../../core/auth/current-tenant';
 import { OwnProfile } from '../../core/auth/own-profile';
 import { OwnPreferences } from '../../core/preferences/own-preferences';
 import { ScopeGrant } from '../../core/auth/session-context';
+import { applyRegionalFormats, resetRegionalFormats } from '../../core/format/regional-format';
 import { I18n } from '../../core/i18n/i18n';
 import { MyProfilePage } from './my-profile-page';
 import { StaffApi } from './staff-api';
@@ -110,6 +111,26 @@ async function setUp(
 }
 
 describe('MyProfilePage', () => {
+  it('no longer says the password and the terminal PIN are not built: it carries the password card and the PIN card', async () => {
+    const { fixture } = await setUp([scope()]);
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).not.toContain('пока не построены');
+    expect(fixture.nativeElement.querySelector('q-my-profile-password-card')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('q-my-profile-pin-card')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="password-change"]')).not.toBeNull();
+  });
+
+  it('names a job the company defined by the name the session context carries, not by its code', async () => {
+    const { fixture } = await setUp([
+      scope({ roleCode: 'job-3f9a1c0b2d', roleName: 'Старший кассир' }),
+    ]);
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Старший кассир');
+    expect(text).not.toContain('job-3f9a1c0b2d');
+  });
+
   it('reads Мои должности from CurrentTenant.scopes — GET /api/v1/session/context, already loaded — and nothing else', async () => {
     const { tenant } = await setUp([scope()]);
 
@@ -209,6 +230,19 @@ describe('MyProfilePage: «Личные данные» (ADR 0139, rows 0.2c and 
     expect(personal.textContent).toContain('+998901234542');
     expect(personal.textContent).toContain('S-0001');
     expect(personal.textContent).toContain('Работает');
+  });
+
+  describe('my contact phone follows the brand’s display pattern (row 10.12)', () => {
+    afterEach(() => resetRegionalFormats());
+
+    it('writes my phone in the pattern', async () => {
+      applyRegionalFormats({ phoneDisplayPattern: '+### (##) ###-##-##' });
+      const { fixture } = await setUp([], null, ME);
+
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="my-profile-phone"]').textContent.trim(),
+      ).toBe('+998 (90) 123-45-42');
+    });
   });
 
   it('hands my record to the shell chip as soon as it is read', async () => {

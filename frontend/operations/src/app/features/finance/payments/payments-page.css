@@ -147,7 +147,7 @@
 }
 
 .table thead th {
-  text-align: left;
+  text-align: start;
   color: var(--q-ink-muted);
   padding: 10px 16px;
   border-bottom: 1px solid var(--q-hairline);

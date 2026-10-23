@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
@@ -52,8 +53,8 @@ public class ProductCommentPresetController {
     @Operation(summary = "Every preset attached to this product, unfiltered")
     public ResponseEntity<List<ProductPresetResponse>> list(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID productId) {
-        return ResponseEntity.ok(presets.listForProduct(tenantId, brandId, productId).stream()
-                .map(ProductPresetResponse::of)
+        return ResponseEntity.ok(presets.listForProductWithLabels(tenantId, brandId, productId).stream()
+                .map(view -> ProductPresetResponse.of(view.row(), view.labels()))
                 .toList());
     }
 
@@ -79,11 +80,12 @@ public class ProductCommentPresetController {
         } catch (CommentPresetService.UnknownProductException | CommentPresetService.UnknownPresetException notFound) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, notFound.getMessage());
         }
-        ProductPresetRow attached = presets.listForProduct(tenantId, brandId, productId).stream()
-                .filter(row -> row.presetId().equals(body.presetId()))
-                .findFirst()
-                .orElseThrow();
-        return ResponseEntity.ok(ProductPresetResponse.of(attached));
+        CommentPresetService.ProductPresetView attached =
+                presets.listForProductWithLabels(tenantId, brandId, productId).stream()
+                        .filter(view -> view.row().presetId().equals(body.presetId()))
+                        .findFirst()
+                        .orElseThrow();
+        return ResponseEntity.ok(ProductPresetResponse.of(attached.row(), attached.labels()));
     }
 
     @DeleteMapping("/{presetId}")
@@ -106,23 +108,14 @@ public class ProductCommentPresetController {
     record ProductPresetResponse(
             UUID presetId,
             String code,
-            String labelRu,
-            String labelUz,
-            String labelEn,
             @Nullable String posModifierCode,
             int sortOrder,
-            String status) {
+            String status,
+            Map<String, String> labels) {
 
-        static ProductPresetResponse of(ProductPresetRow row) {
+        static ProductPresetResponse of(ProductPresetRow row, Map<String, String> labels) {
             return new ProductPresetResponse(
-                    row.presetId(),
-                    row.code(),
-                    row.labelRu(),
-                    row.labelUz(),
-                    row.labelEn(),
-                    row.posModifierCode(),
-                    row.sortOrder(),
-                    row.status());
+                    row.presetId(), row.code(), row.posModifierCode(), row.sortOrder(), row.status(), labels);
         }
     }
 }

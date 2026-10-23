@@ -15,14 +15,18 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.payments.application.PaymentAttemptService;
+import uz.horecaos.platform.payments.application.PresentedReceipts;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.domain.FiscalDocumentType;
 import uz.horecaos.platform.payments.domain.FiscalReason;
+import uz.horecaos.platform.payments.domain.FiscalReceiptLine;
 import uz.horecaos.platform.payments.domain.FiscalStatus;
 import uz.horecaos.platform.payments.domain.PaymentAttempt;
 import uz.horecaos.platform.payments.domain.PaymentAttemptStatus;
@@ -84,8 +88,36 @@ public class PaymeMerchantApi {
     private final JdbcPaymeTransactionView view;
     private final PaymentAttemptService attemptService;
     private final OrderDirectory orders;
+    private final PresentedReceipts receipts;
+    private final PaymeReceiptSurface surface;
     private final Clock clock;
 
+    @Autowired
+    public PaymeMerchantApi(
+            JdbcPaymentAttemptStore attempts,
+            JdbcPaymentIntentStore intents,
+            JdbcFiscalDocumentStore fiscalDocuments,
+            JdbcPaymeTransactionView view,
+            PaymentAttemptService attemptService,
+            OrderDirectory orders,
+            PresentedReceipts receipts,
+            @Value("${horecaos.payments.payme.receipt-surface:BOTH}") PaymeReceiptSurface surface,
+            Clock clock) {
+        this.attempts = attempts;
+        this.intents = intents;
+        this.fiscalDocuments = fiscalDocuments;
+        this.view = view;
+        this.attemptService = attemptService;
+        this.orders = orders;
+        this.receipts = receipts;
+        this.surface = surface;
+        this.clock = clock;
+    }
+
+    /**
+     * Without receipt detail on {@code CheckPerformTransaction}: the arrangement before the detail was wired,
+     * for the callers (and tests) of the other methods.
+     */
     public PaymeMerchantApi(
             JdbcPaymentAttemptStore attempts,
             JdbcPaymentIntentStore intents,
@@ -94,13 +126,16 @@ public class PaymeMerchantApi {
             PaymentAttemptService attemptService,
             OrderDirectory orders,
             Clock clock) {
-        this.attempts = attempts;
-        this.intents = intents;
-        this.fiscalDocuments = fiscalDocuments;
-        this.view = view;
-        this.attemptService = attemptService;
-        this.orders = orders;
-        this.clock = clock;
+        this(
+                attempts,
+                intents,
+                fiscalDocuments,
+                view,
+                attemptService,
+                orders,
+                PresentedReceipts.NONE,
+                PaymeReceiptSurface.FORM,
+                clock);
     }
 
     /**
@@ -155,12 +190,14 @@ public class PaymeMerchantApi {
      * entered their card details — so the two must not be allowed to disagree, and
      * the shared helpers below are what keeps them together.
      *
-     * <p>No {@code detail} object is returned. The fiscal lines travel with the
-     * checkout form, where they are fixed before the customer pays, and returning
-     * them a second time here would mean two places that can disagree about what is
-     * on the receipt. The docs mark {@code items} required on this page and
-     * optional on the checkout page (U10); if the sandbox insists on the former,
-     * the same {@link PaymeReceiptDetail} builder feeds both.
+     * <p><strong>The {@code detail} object</strong> (ADR 0166 Decision 9, question U10). On a fiscalised
+     * cashbox the receipt lines are returned here as well as in the checkout form, because the docs mark
+     * {@code items} required on this page and optional on the form's and never say which one Payme reads. It
+     * is the same lines, built once when the checkout was first presented and kept on the attempt, so the two
+     * surfaces cannot disagree about what is on the receipt; {@link PaymeReceiptSurface} says which of them
+     * is switched on. A fiscalised cashbox is <em>never</em> told {@code allow} without lines to register: a
+     * payment taken with no receipt is a tax problem found at an inspection, so an attempt that holds none is
+     * refused here, while nothing has moved.
      */
     private Map<String, Object> checkPerformTransaction(ProviderBinding binding, JsonNode params) {
         String orderReference = PaymeAccount.orderReference(params);
@@ -171,6 +208,30 @@ public class PaymeMerchantApi {
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("allow", true);
+        if (surface.check() && binding.supportsPartnerFiscalization()) {
+            List<FiscalReceiptLine> lines = receipts.lines(attempt.tenantId(), attempt.id())
+                    .orElseThrow(() -> {
+                        log.warn(
+                                "Attempt {} has no receipt lines for a fiscalised Payme cashbox; refusing CheckPerformTransaction",
+                                attempt.id());
+                        return PaymeErrors.operationNotPermitted(new PaymeMessage(
+                                "Чек для этого заказа не сформирован. Попробуйте оформить заказ заново.",
+                                "Ushbu buyurtma uchun chek shakllantirilmagan. Buyurtmani qaytadan rasmiylashtiring.",
+                                "The receipt for this order has not been built. Please place the order again."));
+                    });
+            try {
+                result.put("detail", PaymeReceiptDetail.of(lines, TiyinAmount.of(attempt.amount())));
+            } catch (PaymeReceiptDetail.PaymeReceiptRefused refused) {
+                log.warn(
+                        "Attempt {} receipt lines cannot be expressed as Payme detail: {}",
+                        attempt.id(),
+                        refused.code());
+                throw PaymeErrors.operationNotPermitted(new PaymeMessage(
+                        "Чек не может быть передан в Payme.",
+                        "Chekni Payme ga yuborib bo'lmaydi.",
+                        "The receipt cannot be handed to Payme."));
+            }
+        }
         return result;
     }
 

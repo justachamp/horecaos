@@ -21,8 +21,10 @@ import { TimeZone, formatClock, formatDateTime, formatDuration } from '../../cor
 import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { formatMoney } from '../../core/format/money';
+import { lineQuantityStep } from '../../core/format/quantity';
 import { I18n, Locale } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { PhonePipe } from '../../core/format/phone.pipe';
 import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
@@ -84,6 +86,7 @@ import { OrderDetailActions } from './order-detail-actions';
 import { OrderDetailLines } from './order-detail-lines';
 import { OrderMarkingPanel } from './order-marking-panel';
 import { OrderWeighingPanel } from './order-weighing-panel';
+import { TillRevisionBanner } from './till-revision-banner';
 import { OrderDetailMoney } from './order-detail-money';
 import { OrderHandoverPanel } from './order-handover-panel';
 import { orderLifecycleSteps } from './order-lifecycle-steps';
@@ -103,6 +106,7 @@ import { OrderOutcomeReasonDialog, OutcomeReasonSubmission } from './order-outco
 import { OrderPaymentPanel } from './order-payment-panel';
 import { LabelledAction } from './order-row-actions';
 import { OrderPosExportApi, OrderPosExportView, PosExportPushResult } from './order-pos-export-api';
+import { OrderRequotePanel } from './order-requote-panel';
 import { OrderPosExportPanel } from './order-pos-export-panel';
 import { OrderPrintPanel } from './order-print-panel';
 import { POS_EXPORT_STATE_LABEL_KEYS, posExportReachedTheTill } from './order-pos-export-labels';
@@ -222,9 +226,11 @@ type DialogKind =
     OrderDetailActions,
     OrderDetailLines,
     OrderWeighingPanel,
+    TillRevisionBanner,
     OrderMarkingPanel,
     OrderDetailMoney,
     OrderPosExportPanel,
+    OrderRequotePanel,
     OrderPrintPanel,
     // ---------------------------------------------------- wave 10 financial commands
     OrderAddLinesDialog,
@@ -260,6 +266,7 @@ export class OrderDetailPane {
   private readonly channelsApi = inject(SalesChannelsApi);
   private readonly router = inject(Router);
   private readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
   private readonly toasts = inject(Toasts);
 
   /** Bound from the route parameter by `withComponentInputBinding()`. */
@@ -267,6 +274,11 @@ export class OrderDetailPane {
 
   protected readonly loading = signal(true);
   protected readonly order = signal<Versioned<OrderDetailResponse> | null>(null);
+
+  /** The server put `REPRINT` in this order's actions: the print section is drawn on that, flags or no flags. */
+  protected readonly reprintOffered = computed(() =>
+    (this.order()?.value.summary.actions ?? []).some((action) => action.action === 'REPRINT'),
+  );
   protected readonly notFound = signal(false);
   protected readonly denied = signal(false);
   protected readonly lastError = signal<ApiError | null>(null);
@@ -454,6 +466,9 @@ export class OrderDetailPane {
 
   /** The payment section's panel, for «Выставить счёт» to open its re-issue form (gap map row 1.1e). */
   private readonly paymentPanel = viewChild(OrderPaymentPanel);
+
+  /** The print section, for «Печать» (orders.md §2.12's `p`, ADR 0154) to bring into view. */
+  private readonly printPanel = viewChild(OrderPrintPanel);
   protected readonly amendmentHistoryLoading = signal(false);
   protected readonly amendmentHistoryError = signal(false);
 
@@ -473,6 +488,8 @@ export class OrderDetailPane {
   /** ADR 0136: the combo groups of the menu this order was placed through, and its currency; read when the dialog opens. */
   protected readonly addLinesComboGroups = signal<readonly MenuComboGroup[]>([]);
   protected readonly addLinesCurrency = signal<string | null>(null);
+  /** ADR 0137: the step each splittable dish of the order's channel menu is ordered in, by variant. */
+  protected readonly addLinesPortionSteps = signal<ReadonlyMap<string, number>>(new Map());
   /** The menu could not be read, so the dialog says a combo cannot be added from it. */
   protected readonly addLinesCombosUnavailable = signal(false);
 
@@ -561,6 +578,7 @@ export class OrderDetailPane {
     this.addLinesSearching.set(false);
     this.addLinesComboGroups.set([]);
     this.addLinesCurrency.set(null);
+    this.addLinesPortionSteps.set(new Map());
     this.addLinesCombosUnavailable.set(false);
     this.paymentMethods.set(['CASH']);
     this.pendingAmendment.set(null);
@@ -586,6 +604,7 @@ export class OrderDetailPane {
       void this.loadDelivery(orderId);
       void this.loadKitchenEvents(orderId);
       void this.loadPosExport(orderId);
+      this.revealPrintWhenAsked();
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.code === ApiErrorCode.RESOURCE_NOT_FOUND) {
@@ -599,6 +618,17 @@ export class OrderDetailPane {
       }
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  /**
+   * The board's «Печать» opens the order at `#print`: once the page has drawn, bring the print section into
+   * view. A link with the fragment pasted to a colleague does the same, and costs nothing where printing is off.
+   */
+  private revealPrintWhenAsked(): void {
+    // Read as text: the fragment is all that is wanted, and a router double in a spec need not parse a URL.
+    if ((this.router.url ?? '').split('#')[1] === 'print') {
+      setTimeout(() => this.printPanel()?.reveal());
     }
   }
 
@@ -1050,6 +1080,11 @@ export class OrderDetailPane {
         // than carrying a second one in the header.
         this.paymentPanel()?.openReissue();
         return;
+      case 'REPRINT':
+        // ADR 0154: the print section is the panel's own form (document, printer, reason) -- this brings it
+        // into view and puts the cursor on it, the same arrangement as «Выставить счёт» above.
+        this.printPanel()?.reveal();
+        return;
       case 'RESOLVE':
         // Gap map row 1.1e: the order-level action does not carry the
         // amendment's own id/version the confirm dialog needs, unlike the
@@ -1278,9 +1313,9 @@ export class OrderDetailPane {
 
   // ------------------------------------------------------------ wave 10 financial commands (rows 1.2c/2.1d)
 
-  /** `catalog.md` §4.6's `locale` — the menu endpoint speaks `ru`/`uz`/`en`, `new-order-page.ts`'s own `menuLocale` maps `uz-Latn` the same way. */
+  /** `catalog.md` §4.6's `locale` — the menu endpoint speaks the catalog's code, which the registry names (`uz` for `uz-Latn`, ADR 0149). */
   private menuLocale(): string {
-    return this.i18n.locale() === 'uz-Latn' ? 'uz' : this.i18n.locale();
+    return this.registry.catalogCode(this.i18n.locale());
   }
 
   protected openAddLinesDialog(): void {
@@ -1307,6 +1342,19 @@ export class OrderDetailPane {
       const menu = await this.newOrderApi.menu(scope, channelCode, this.menuLocale());
       this.addLinesComboGroups.set(menu.comboGroups ?? []);
       this.addLinesCurrency.set(menu.currency);
+      // ADR 0137: a splittable dish is added by its portion. The published menu is the only place the step
+      // is read from (the variant search carries none), and the platform refuses an off-step quantity
+      // whatever this dialog offered, so a menu that could not be read costs nothing worse than whole units.
+      const steps = new Map<string, number>();
+      for (const product of menu.products) {
+        for (const variant of product.variants) {
+          const step = lineQuantityStep(variant.physical);
+          if (step !== 1) {
+            steps.set(variant.variantId, step);
+          }
+        }
+      }
+      this.addLinesPortionSteps.set(steps);
     } catch {
       this.addLinesCombosUnavailable.set(true);
     }

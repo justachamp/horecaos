@@ -157,6 +157,11 @@ public class CamelNotificationTransport implements NotificationTransport {
     }
 
     @Override
+    public java.util.Optional<String> boundProviderType(UUID tenantId, UUID brandId, String channel) {
+        return gateway.boundProviderType(tenantId, brandId, channel);
+    }
+
+    @Override
     public boolean supports(String channel) {
         return gateway.supports(channel);
     }
@@ -207,7 +212,13 @@ public class CamelNotificationTransport implements NotificationTransport {
                                         integer(outcome.normalized(), NotificationChannelAdapter.SEGMENTS_KEY),
                                         Boolean.parseBoolean(text(
                                                 outcome.normalized(), NotificationChannelAdapter.HARD_BOUNCE_KEY)));
-                    case REJECTED -> DispatchOutcome.rejected(outcome.errorCode(), outcome.detail());
+                    case REJECTED ->
+                        DispatchOutcome.rejected(outcome.errorCode(), outcome.detail())
+                                .understood(
+                                        null,
+                                        null,
+                                        Boolean.parseBoolean(text(
+                                                outcome.normalized(), NotificationChannelAdapter.HARD_BOUNCE_KEY)));
                     case RETRYABLE ->
                         DispatchOutcome.retryable(
                                 outcome.errorCode(),
@@ -217,10 +228,12 @@ public class CamelNotificationTransport implements NotificationTransport {
                 };
 
         String bindingId = text(outcome.normalized(), NotificationGateway.BINDING_ID_KEY);
-        return bindingId == null
-                ? translated
-                : translated.from(
-                        UUID.fromString(bindingId), text(outcome.normalized(), NotificationGateway.PROVIDER_TYPE_KEY));
+        String providerType = text(outcome.normalized(), NotificationGateway.PROVIDER_TYPE_KEY);
+        if (bindingId == null) {
+            // The platform's own relay has a provider type and no binding (ADR 0182).
+            return providerType == null ? translated : translated.fromProvider(providerType);
+        }
+        return translated.from(UUID.fromString(bindingId), providerType);
     }
 
     private static @Nullable String text(Map<String, Object> normalized, String key) {

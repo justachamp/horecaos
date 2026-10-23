@@ -33,7 +33,7 @@ import {
   type GiftOfferGroup,
   type PromotionRow,
 } from './applied-promotions';
-import { LangService } from './lang.service';
+import { LangService, platformTag } from './lang.service';
 import { DeliverySelectionService } from './delivery-selection.service';
 import { TranslateService } from './translate.service';
 import { lineAmountMinor, portionStep, type PhysicalFacts } from '../utils/physical';
@@ -243,6 +243,7 @@ export class UiCartService {
       this.priced()?.appliedPromotions,
       this.priced()?.discountMinor ?? 0,
       (minor) => this.formatPrice(minor),
+      platformTag(this.lang.langId()),
     );
   });
 
@@ -739,8 +740,8 @@ export class UiCartService {
    */
   private autoAddText(customerText: Readonly<Record<string, string>>): string | null {
     const language = this.lang.langId();
-    const keys = language === 'uz' ? ['uz-Latn', 'uz'] : [language];
-    for (const key of keys) {
+    // Keyed by the platform's tag; a bare catalogue id is the one older spelling (`uz`) still read.
+    for (const key of new Set([platformTag(language), language])) {
       const text = customerText[key];
       if (text && text.trim().length > 0) {
         return text.trim();
@@ -872,6 +873,7 @@ export class UiCartService {
     priced: PricedCart;
     paymentMethodCode: string;
     idempotencyKey: string;
+    redeemFromBalanceMinor?: number;
   }): Promise<CheckoutResult> {
     return this.carts.checkout(input);
   }

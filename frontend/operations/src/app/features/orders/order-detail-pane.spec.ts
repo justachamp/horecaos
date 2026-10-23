@@ -29,6 +29,7 @@ import {
 import { OrderHandoverApi } from './order-handover-api';
 import { NewOrderApi } from './new-order/new-order-api';
 import { OrderPosExportApi, OrderPosExportView, PosExportView } from './order-pos-export-api';
+import { TillRevisionApi } from './till-revision-api';
 import { Toasts } from '../../shared/ui/toast';
 import { RejectReasonOption } from './order-reject-reason-dialog';
 import { RejectReasonsApi } from './order-reject-reasons-api';
@@ -169,6 +170,7 @@ function configure(options: {
   couriersApi?: Partial<CouriersApi>;
   kitchenApi?: Partial<KitchenApi>;
   posExportApi?: Partial<OrderPosExportApi>;
+  tillRevisionApi?: Partial<TillRevisionApi>;
   paymentsApi?: Partial<PaymentsApi>;
   newOrderApi?: Partial<NewOrderApi>;
   channelsApi?: Partial<SalesChannelsApi>;
@@ -240,6 +242,14 @@ function configure(options: {
           forOrder: () => Promise.resolve({ posCapable: false, export: null }),
         },
       },
+      // ADR 0137, row 4.2c: the till-revision banner is drawn for every weighed order; a test not about it
+      // gets "the till and the order agree".
+      {
+        provide: TillRevisionApi,
+        useValue: options.tillRevisionApi ?? {
+          forOrder: () => Promise.resolve({ notice: null, canTell: false }),
+        },
+      },
       // Row 1.1e (wave 16): only a test about «Выставить счёт» supplies the
       // payments seam; every other keeps the real root-provided `PaymentsApi`
       // over the stubbed `ApiClient`, exactly as before this option existed.
@@ -308,15 +318,11 @@ describe('OrderDetailPane: rendering the loaded order', () => {
               commentPresets: [
                 {
                   code: 'NO_ONIONS',
-                  labelRu: 'Без лука',
-                  labelUz: 'Piyozsiz',
-                  labelEn: 'No onions',
+                  labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions' },
                 },
                 {
                   code: 'EXTRA_SPICY',
-                  labelRu: 'Поострее',
-                  labelUz: 'Achchiqroq',
-                  labelEn: 'Extra spicy',
+                  labels: { ru: 'Поострее', 'uz-Latn': 'Achchiqroq', en: 'Extra spicy' },
                 },
               ],
               lineId: 'line-1',
@@ -350,17 +356,11 @@ describe('OrderDetailPane: rendering the loaded order', () => {
               commentPresets: [
                 {
                   code: 'NO_ONIONS',
-                  labelRu: '',
-                  labelUz: '',
-                  labelEn: '',
                   labels: { kaa: 'Piyazsiz' },
                 },
                 {
                   code: 'EXTRA_SPICY',
-                  labelRu: 'Поострее',
-                  labelUz: 'Achchiqroq',
-                  labelEn: 'Extra spicy',
-                  labels: { en: 'Extra spicy, please' },
+                  labels: { ru: 'Поострее', 'uz-Latn': 'Achchiqroq', en: 'Extra spicy, please' },
                 },
               ],
               lineId: 'line-1',
@@ -2387,6 +2387,96 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
       ]);
     });
 
+    // ADR 0137, row 4.2c: ADD_LINES adds a splittable dish by its portion, the step read off the channel menu.
+    it('reads the portion step off the menu and adds a dish by the half portion', async () => {
+      const addLines = vi.fn().mockReturnValue(
+        of(
+          amendmentResult({
+            status: 'PRICED',
+            deltaTotalMinor: 37_500,
+            requiresApproval: false,
+            amendmentVersion: 1,
+          }),
+        ),
+      );
+      const plovMenu = {
+        ...LUNCH_MENU,
+        comboGroups: [],
+        products: [
+          {
+            productId: 'plov',
+            code: 'PLOV',
+            name: 'Plov',
+            description: null,
+            imageUrls: [],
+            modifierGroupIds: [],
+            commentPresets: [],
+            variants: [
+              {
+                variantId: 'plov-v',
+                sku: null,
+                unitCode: 'PORTION',
+                isDefault: true,
+                orderable: true,
+                onSaleNow: true,
+                amountMinor: 75_000,
+                physical: { splittable: true, portionSize: 0.5, catchweight: false },
+              },
+            ],
+          },
+        ],
+      };
+      configure({
+        get: apiGet({
+          value: detail({
+            summary: {
+              ...detail().summary,
+              status: 'CONFIRMED',
+              channelCode: 'CALL_CENTRE',
+              actions: [{ action: 'AMEND' }],
+            },
+          }),
+          version: 3,
+        }),
+        amendmentsApi: { addLines },
+        newOrderApi: {
+          searchItems: vi.fn().mockResolvedValue({
+            items: [
+              {
+                variantId: 'plov-v',
+                productName: 'Plov',
+                category: 'Hot',
+                available: true,
+                trackingMode: null,
+              },
+            ],
+            nextCursor: null,
+          }),
+          menu: vi.fn().mockResolvedValue(plovMenu),
+        },
+      });
+      const fixture = await render();
+      const host: HTMLElement = fixture.nativeElement;
+
+      await openAndSearch(host, fixture);
+
+      const quantity = host.querySelector(
+        '[data-testid="order-add-lines-dialog-quantity-plov-v"]',
+      ) as HTMLInputElement;
+      expect(quantity.step).toBe('0.5');
+      quantity.value = '1.5';
+      quantity.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      (
+        host.querySelector('[data-testid="order-add-lines-dialog-confirm"]') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+
+      expect(addLines).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 3, [
+        { variantId: 'plov-v', quantity: 1.5, modifierOptionIds: [] },
+      ]);
+    });
+
     it('says combos cannot be offered when the menu cannot be read', async () => {
       const menu = vi.fn().mockRejectedValue(new Error('offline'));
       configure({
@@ -2611,6 +2701,53 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
     fixture.detectChanges();
 
     expect(host.querySelector('[data-testid="order-payment-reissue-form"]')).not.toBeNull();
+  });
+
+  /**
+   * ADR 0154: the server offers `REPRINT` to anyone holding `print.reprint` at the branch, a cashier included,
+   * while the tenant's flags are `tenant.read` at TENANT scope and refused to them. The print section the action
+   * opens is drawn from the action, not from a read the person it was offered to cannot make. Here the flags
+   * read is not served at all (`apiGet` answers an unknown path with an error), as it would not be for a cashier.
+   */
+  it('draws the print section from the REPRINT the server offered, with the tenant flags unreadable', async () => {
+    configure({
+      get: apiGet({
+        value: detail({
+          summary: { ...detail().summary, status: 'CONFIRMED', actions: [{ action: 'REPRINT' }] },
+        }),
+        version: 3,
+      }),
+    });
+    const fixture = await render();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelector('[data-testid="order-detail-print"]')).not.toBeNull();
+    host.querySelectorAll('q-order-print-panel').forEach((panel) => {
+      (panel as HTMLElement).scrollIntoView = vi.fn();
+    });
+    (
+      host.querySelector('[data-testid="order-detail-primary-action"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(document.activeElement).toBe(host.querySelector('[data-testid="order-print-document"]'));
+  });
+
+  it('draws no print section when the server offered no REPRINT and the tenant flags are unreadable', async () => {
+    configure({ get: apiGet({ value: detail(), version: 3 }) });
+    const fixture = await render();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('q-order-print-panel'),
+    ).not.toBeNull();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="order-detail-print"]'),
+    ).toBeNull();
   });
 
   it('the header RESOLVE action does nothing if the history no longer names an amendment still carrying RESOLVE', async () => {

@@ -3,9 +3,9 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiClient, QueryParams } from '../../../core/api/api-client';
 import { BrandScope } from '../../../core/api/catalog-paths';
-import { command } from '../../../core/api/idempotency';
+import { IntentCommandRegistry, command } from '../../../core/api/idempotency';
 import { CursorState, Page } from '../../../core/api/page';
-import { reviewPaths } from '../../../core/api/reviews-paths';
+import { benefitGrantPaths, reviewPaths } from '../../../core/api/reviews-paths';
 
 /** `CaseState.java`: the four states, in the order a case moves through them. */
 export type CaseState = 'NEW' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED_UNRESOLVED';
@@ -165,6 +165,81 @@ export interface CaseFilters {
   readonly ownerStaffMemberId?: string;
   readonly locationId?: string;
   readonly slaState?: SlaState;
+  /** The rating of the review the case is about, 1 to 5, inclusive at both ends. */
+  readonly minRating?: number;
+  readonly maxRating?: number;
+}
+
+/** A remedy recorded against the case's order that the case could be linked to. `label` is a remedy type code. */
+export interface RemedyCandidate {
+  readonly refId: string;
+  readonly label: string;
+  /** `RECORDED` while nothing has been given, `EXECUTED` once it has. */
+  readonly state: string;
+  readonly amountMinor: number;
+  readonly currency: string;
+  readonly recordedAt: string;
+  /** Already linked to a case: linking it again would be a conflict. */
+  readonly taken: boolean;
+}
+
+/** A one-off code minted for the case's customer at its brand. The code itself is never listed, only its tail. */
+export interface GrantCandidate {
+  readonly grantId: string;
+  readonly benefitType: 'PERCENTAGE_OFF_ORDER' | 'FIXED_AMOUNT_OFF_ORDER' | 'FREE_DELIVERY';
+  /** Basis points, minor units, or zero for free delivery. */
+  readonly value: number;
+  readonly currency: string | null;
+  readonly status: string;
+  readonly sourceType: string;
+  readonly codeHint: string;
+  readonly createdAt: string;
+  readonly expiresAt: string | null;
+  readonly taken: boolean;
+}
+
+/** Mirrors `OperationsRecoveryCaseController.CompensationCandidatesResponse`: the picker behind the drawer's link. */
+export interface CompensationCandidates {
+  readonly remedies: readonly RemedyCandidate[];
+  readonly grants: readonly GrantCandidate[];
+  readonly orderId: string;
+  readonly customerAccountId: string | null;
+}
+
+export type ApologyShape = GrantCandidate['benefitType'];
+
+/** What the drawer asks the platform to mint for the case's customer. */
+export interface ApologyCodeInput {
+  readonly customerAccountId: string;
+  readonly shape: ApologyShape;
+  readonly value: number;
+  readonly currency: string | null;
+  readonly minBasketMinor: number;
+  readonly sourceId: string;
+  /** ISO instant; null lets the platform default. */
+  readonly expiresAt: string | null;
+}
+
+/** The request body of `POST .../benefit-grants` as the apology-code mint sends it. */
+interface ApologyCodeBody {
+  readonly customerAccountId: string;
+  readonly shape: ApologyShape;
+  readonly value: number;
+  readonly maximumDiscountMinor: null;
+  readonly currency: string | null;
+  readonly minBasketMinor: number;
+  readonly sourceType: 'RECOVERY_CASE';
+  readonly sourceId: string;
+  readonly validFrom: null;
+  readonly expiresAt: string | null;
+}
+
+/** The only time the plaintext code exists outside the customer's hands: shown once, kept nowhere. */
+export interface MintedApologyCode {
+  readonly grantId: string;
+  readonly plaintextCode: string;
+  readonly codeHint: string;
+  readonly validFrom: string;
 }
 
 export interface TransitionInput {
@@ -179,6 +254,8 @@ function toQueryParams(filters: CaseFilters): QueryParams {
     ownerStaffMemberId: filters.ownerStaffMemberId,
     locationId: filters.locationId,
     slaState: filters.slaState,
+    minRating: filters.minRating,
+    maxRating: filters.maxRating,
   };
 }
 
@@ -193,6 +270,9 @@ function toQueryParams(filters: CaseFilters): QueryParams {
 @Injectable({ providedIn: 'root' })
 export class RecoveryApi {
   private readonly api = inject(ApiClient);
+
+  /** The mint in flight per case, so a retry of the same code reuses its key. See {@link mintApologyCode}. */
+  private readonly mintIntents = new IntentCommandRegistry<ApologyCodeBody>();
 
   list(scope: BrandScope, state: CursorState, filters: CaseFilters): Promise<Page<CaseSummary>> {
     return firstValueFrom(
@@ -284,6 +364,53 @@ export class RecoveryApi {
       >(reviewPaths.recoveryNotes(scope, locationId, caseId), command({ note })),
     );
     return result.entryId;
+  }
+
+  /** What this case could be linked to, read under the case's own capability (a branch case worker's). */
+  async candidates(
+    scope: BrandScope,
+    locationId: string,
+    caseId: string,
+  ): Promise<CompensationCandidates> {
+    const result = await firstValueFrom(
+      this.api.get<CompensationCandidates>(
+        reviewPaths.recoveryCompensationCandidates(scope, locationId, caseId),
+      ),
+    );
+    return result.value;
+  }
+
+  /**
+   * Issues a one-off code for the case's customer (`POST .../benefit-grants`, `pricing.promotion.manage`). The
+   * source is the case, so the grant says why it exists. The case is not linked here: the code is shown once and
+   * the operator links the grant like any other candidate.
+   *
+   * <p>One mint is one intent per case (ADR 0031): the same input again after a failure -- a lost response, a
+   * 502 -- goes out under the same `Idempotency-Key`, so a mint that did land is replayed and not issued a second
+   * time. Both codes would be spendable, and the console cannot retract either. An input that differs is a new
+   * intent and takes a new key; an issued code settles the intent.
+   */
+  async mintApologyCode(scope: BrandScope, input: ApologyCodeInput): Promise<MintedApologyCode> {
+    const body: ApologyCodeBody = {
+      customerAccountId: input.customerAccountId,
+      shape: input.shape,
+      value: input.value,
+      maximumDiscountMinor: null,
+      currency: input.currency,
+      minBasketMinor: input.minBasketMinor,
+      sourceType: 'RECOVERY_CASE',
+      sourceId: input.sourceId,
+      validFrom: null,
+      expiresAt: input.expiresAt,
+    };
+    const issued = await firstValueFrom(
+      this.api.post<ApologyCodeBody, MintedApologyCode>(
+        benefitGrantPaths.mint(scope),
+        this.mintIntents.next(input.sourceId, body),
+      ),
+    );
+    this.mintIntents.forget(input.sourceId);
+    return issued;
   }
 
   attach(

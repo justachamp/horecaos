@@ -165,8 +165,6 @@ export const staffUzLatn: AreaMessages<typeof staffEn> = {
   'staff.detail.field.revokedReason': 'Bekor qilish sababi',
   'staff.detail.field.subject': 'Ichki identifikator',
   'staff.detail.field.telegram': 'Telegram',
-  'staff.detail.security.notBuilt':
-    'Kirish usuli, oxirgi kirish va terminal PIN-kodi hali kuzatilmaydi',
   'staff.detail.today.created': 'Bugun yaratilgan: {count}',
   'staff.detail.today.accepted': 'Bugun qabul qilingan: {count}',
   'staff.detail.today.loading': 'Bugungi buyurtmalar yuklanmoqda…',
@@ -233,7 +231,6 @@ export const staffUzLatn: AreaMessages<typeof staffEn> = {
   'staff.myProfile.telegram.issue': 'Kod olish',
   'staff.myProfile.telegram.sendThis': 'Buni botga shaxsiy chatda yuboring:',
   'staff.myProfile.security.title': 'Xavfsizlik',
-  'staff.myProfile.security.notBuilt': 'Parolni almashtirish va terminal PIN-kodi hali qurilmagan',
   'staff.myProfile.sessions.title': 'Seanslar',
   'staff.myProfile.sessions.lead':
     'Bu sizning hisobingizdagi seanslar. Ular siz ishlaydigan barcha kompaniyalar uchun umumiy: birini yakunlash sizni hammasidan chiqaradi.',
@@ -426,6 +423,16 @@ export const staffUzLatn: AreaMessages<typeof staffEn> = {
   // Fiscal receipt correction approval (ADR 0166)
   'staff.approvals.action.fiscalCorrectionRequest': 'Fiskal chekni tuzatish yoki bekor qilish',
   'staff.approvals.action.fiscalCorrectionAttach': 'Fiskal agent maʻlumotlarini chekka biriktirish',
+  'staff.approvals.action.customerLegalHoldPlace': 'Mijozga huquqiy cheklov qoʻyish',
+  'staff.approvals.action.customerLegalHoldLift': 'Mijozdan huquqiy cheklovni olib tashlash',
+  'staff.approvals.action.orderingAmendmentDecrease':
+    'Rasmiylashtirilgan buyurtma qatorlari yoki summasini kamaytirish',
+  'staff.approvals.action.courierRunPayChange':
+    'Bir necha buyurtmali reys uchun kuryer haqini hisoblashni oʻzgartirish',
+  'staff.approvals.action.reportingBusinessDayBoundaryChange':
+    'Ish kuni boshlanish vaqtini koʻchirish',
+  'staff.approvals.action.iamPlatformGrantManage':
+    'Platforma darajasidagi rolni berish yoki bekor qilish',
   // end: Fiscal receipt correction approval (ADR 0166)
   'staff.approvals.tab.pending': 'Kutilmoqda',
   'staff.approvals.tab.decided': 'Hal qilingan',
@@ -518,7 +525,8 @@ export const staffUzLatn: AreaMessages<typeof staffEn> = {
   'staff.mfa.policy.body':
     'Kirishda kimdan autentifikator ilovasidagi kod soʻralsin. Platforma xodimlaridan har doim soʻraladi.',
   'staff.mfa.policy.OFF': 'Hech kimdan',
-  'staff.mfa.policy.SENSITIVE_ROLES': 'Ega, administrator, moliya va brend menejeri',
+  'staff.mfa.policy.SENSITIVE_ROLES':
+    'Ega, administrator, moliya va brend menejeri, shuningdek ularning maxsus huquqlariga ega oʻzingiz yaratgan lavozim',
   'staff.mfa.policy.ALL_STAFF': 'Bu yerda ishlaydigan hammadan',
   'staff.mfa.policy.save': 'Saqlash',
   'staff.mfa.policy.saved': 'Saqlandi. Allaqachon kirganlardan keyingi kirishda soʻraladi.',
@@ -836,4 +844,71 @@ export const staffUzLatn: AreaMessages<typeof staffEn> = {
   'staff.myProfile.interface.reset.confirm':
     'Ustunlar va barcha saqlangan koʻrinishlar oʻchiriladi. Buni qaytarib boʻlmaydi.',
   'staff.myProfile.interface.reset.yes': 'Ha, tiklash',
+
+  // ----------------------------------------- batch 21: jobs a company defines (ADR 0186), password card
+  'staff.roles.create': 'Yangi lavozim',
+  'staff.roles.grid': 'Huquqlar jadvali',
+  'staff.roles.own': 'Oʻzimizniki',
+  'staff.roles.edit': 'Oʻzgartirish',
+  'staff.roles.copy': 'Nusxa olish',
+  'staff.roles.ownNote':
+    'Oʻzimizniki deb belgilangan lavozimlarni kompaniyangiz tizim biladigan amallar roʻyxatidan yaratgan. Bunday lavozim hech qachon muallifi qila olgandan koʻproq narsani qila olmaydi.',
+  'staff.grid.title': 'Huquqlar jadvali',
+  'staff.grid.lead':
+    'Gorizontal boʻylab — lavozimlar, vertikal boʻylab — bajarish mumkin boʻlgan hamma narsa, boʻlimlar boʻyicha. Toʻldirilgan katak: lavozim buni bajara oladi.',
+  'staff.grid.backToJobs': 'Lavozimlar',
+  'staff.grid.loading': 'Jadval oʻqilmoqda…',
+  'staff.grid.search.label': 'Jadvaldan qidirish',
+  'staff.grid.search.placeholder': 'Nima qilish mumkin — “buyurtmani bekor qilish”, “qaytarish”…',
+  'staff.grid.search.empty': '“{query}” boʻyicha hech narsa topilmadi',
+  'staff.grid.canDo': 'Qila oladi',
+  'staff.grid.cannotDo': 'Qila olmaydi',
+  'staff.jobEditor.title.new': 'Yangi lavozim',
+  'staff.jobEditor.title.copy': '“{name}” nusxasi',
+  'staff.jobEditor.title.edit': '“{name}”ni oʻzgartirish',
+  'staff.jobEditor.name.label': 'Nomi',
+  'staff.jobEditor.name.hint': 'Bitta qator, 80 tagacha belgi, istalgan tilda.',
+  'staff.jobEditor.name.required': 'Lavozimga nom bering',
+  'staff.jobEditor.level.label': 'Qayerda beriladi',
+  'staff.jobEditor.level.fixed': 'Lavozim darajasi oʻzgarmaydi. Koʻchirish uchun nusxa oling.',
+  'staff.jobEditor.capabilities.title': 'Nima qilish mumkin',
+  'staff.jobEditor.capabilities.selected': 'Tanlandi: {count}',
+  'staff.jobEditor.capabilities.search': 'Roʻyxatdan qidirish',
+  'staff.jobEditor.capabilities.none': 'Kamida bitta amalni belgilang.',
+  'staff.jobEditor.capabilities.notHeld': 'Oʻzingizda yoʻq narsani bera olmaysiz',
+  'staff.jobEditor.capabilities.never': 'Kompaniya yaratadigan lavozimlarga kirmaydi',
+  'staff.jobEditor.capabilities.trimmed': 'Nusxaga kirmadi, chunki buni bera olmaysiz: {count}',
+  'staff.jobEditor.reason.label': 'Sababi',
+  'staff.jobEditor.reason.placeholder': 'Amallar jurnaliga yoziladi',
+  'staff.jobEditor.reason.required': 'Sababini yozing',
+  'staff.jobEditor.holders.some':
+    'Bu lavozimda: {count} kishi. Oʻzgarish ularga keyingi soʻrovda amal qiladi.',
+  'staff.jobEditor.holders.none': 'Bu lavozimni hali hech kim egallamagan.',
+  'staff.jobEditor.save': 'Saqlash',
+  'staff.jobEditor.saving': 'Saqlanmoqda…',
+  'staff.jobEditor.cancel': 'Bekor qilish',
+  'staff.jobEditor.saved': 'Saqlandi: “{name}”',
+  'staff.jobEditor.retired': 'Yopildi: “{name}”',
+  'staff.jobEditor.capabilities.mustDrop':
+    'Saqlashdan oldin bera olmaydigan narsangizdan belgini oling',
+  'staff.jobEditor.retire.title': 'Lavozimni yopish',
+  'staff.jobEditor.retire.hint':
+    'Yopilgan lavozim roʻyxatdan chiqadi va uni endi tayinlab boʻlmaydi. U qanday lavozim boʻlgani amallar jurnalida qoladi.',
+  'staff.jobEditor.retire.blocked':
+    'U hali ham: {count} kishida. Avval bu lavozimni ulardan oling.',
+  'staff.jobEditor.retire.confirm': 'Lavozimni yopish',
+  'staff.activity.action.roleCreated': 'Lavozim yaratildi',
+  'staff.activity.action.roleChanged': 'Lavozim oʻzgartirildi',
+  'staff.activity.action.roleRetired': 'Lavozim yopildi',
+  'staff.myProfile.password.title': 'Parol',
+  'staff.myProfile.password.lead':
+    'Parolni bu tizim emas, kirish xizmati saqlaydi. Tugma sizni tiklash sahifasiga olib boradi, havola elektron pochtaga keladi.',
+  'staff.myProfile.password.endsAll':
+    'Tiklangandan soʻng hamma joydan, shu jumladan bu konsoldan ham chiqasiz va yangi parol bilan qayta kirasiz.',
+  'staff.myProfile.password.action': 'Parolni almashtirish',
+  'staff.myProfile.password.checking': 'Bu yerda pochta ishlashi tekshirilmoqda…',
+  'staff.myProfile.password.noMail':
+    'Bu oʻrnatish hali elektron pochta yubora olmaydi, shuning uchun havola kelmaydi. Platforma uchun masʻul shaxsdan pochtani sozlashni soʻrang.',
+  'staff.detail.security.declined':
+    'Hamkasbning kirishlari va seanslari bu yerda koʻrsatilmaydi — shunday qilingan: har kim oʻzinikini “Mening profilim”da koʻradi va tugatadi. Ketgan xodimning kirishini yopish uchun uning ishini tugating.',
 };

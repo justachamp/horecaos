@@ -254,6 +254,87 @@ public class PromotionEvaluator {
         return new MarkupOutcome(Map.copyOf(lineMarkups), List.copyOf(applied), new ArrayList<>(trace.values()));
     }
 
+    /**
+     * Stage 5 (ADR 0140): the order-level markups, a service charge computed on the post-discount goods subtotal.
+     *
+     * <p>Within one stacking group the highest priority wins (then the lower id), because "best for the customer"
+     * would make a charge defeat itself; groups add. Never suppressed by exclusivity and never compared with a
+     * discount. The basket handed in carries the goods subtotal <em>after</em> the discounts, which is the
+     * figure ADR 0037 compares delivery thresholds against and the figure a service charge is owed on.
+     */
+    public OrderMarkupOutcome evaluateOrderMarkups(
+            List<Promotion> promotions, Basket basket, PromotionContext context, Instant now) {
+        Instant at = context.serviceInstant() != null ? context.serviceInstant() : now;
+        Map<UUID, TraceEntry> trace = new LinkedHashMap<>();
+        Map<String, Candidate> groupWinners = new LinkedHashMap<>();
+        Map<UUID, Long> charged = new LinkedHashMap<>();
+
+        for (Promotion promotion : sortedById(promotions)) {
+            if (promotion.kind() != Promotion.Kind.MARKUP || promotion.scope() != Promotion.Scope.ORDER) {
+                continue;
+            }
+            TraceEntry refused = gate(promotion, basket, context, at);
+            if (refused != null) {
+                trace.put(promotion.promotionId(), refused);
+                continue;
+            }
+            Set<String> matched = matchingLines(promotion, basket);
+            int failed = firstFailingCondition(promotion, basket, context, matched);
+            if (failed >= 0) {
+                trace.put(promotion.promotionId(), conditionFailed(promotion, failed));
+                continue;
+            }
+            long amount = orderMarkupOf(promotion, basket);
+            if (amount <= 0) {
+                trace.put(
+                        promotion.promotionId(),
+                        new TraceEntry(
+                                promotion.promotionId(), promotion.code(), Verdict.ZERO_BENEFIT, null, List.of(), 0L));
+                continue;
+            }
+            Candidate candidate = new Candidate(promotion, new Benefit(Map.of(), amount, 0, amount));
+            Candidate incumbent = groupWinners.get(promotion.stackingGroup());
+            if (incumbent == null || BY_PRIORITY.compare(candidate, incumbent) > 0) {
+                if (incumbent != null) {
+                    trace.put(
+                            incumbent.promotion().promotionId(),
+                            lostTo(incumbent.promotion(), promotion.promotionId()));
+                    charged.remove(incumbent.promotion().promotionId());
+                }
+                groupWinners.put(promotion.stackingGroup(), candidate);
+                charged.put(promotion.promotionId(), amount);
+            } else {
+                trace.put(
+                        promotion.promotionId(),
+                        lostTo(promotion, incumbent.promotion().promotionId()));
+            }
+        }
+
+        List<AppliedOrderMarkup> applied = new ArrayList<>();
+        long total = 0;
+        for (Candidate winner : groupWinners.values()) {
+            long amount = winner.benefit().orderMinor();
+            total = Math.addExact(total, amount);
+            applied.add(new AppliedOrderMarkup(
+                    winner.promotion().promotionId(),
+                    winner.promotion().code(),
+                    winner.promotion().definitionVersion(),
+                    amount,
+                    winner.promotion().loyaltyAccrual(),
+                    winner.promotion().loyaltyRedemption()));
+            trace.put(
+                    winner.promotion().promotionId(),
+                    new TraceEntry(
+                            winner.promotion().promotionId(),
+                            winner.promotion().code(),
+                            Verdict.APPLIED,
+                            null,
+                            List.of(),
+                            amount));
+        }
+        return new OrderMarkupOutcome(total, List.copyOf(applied), new ArrayList<>(trace.values()));
+    }
+
     // ----------------------------------------------------------------- gates
 
     /**
@@ -825,7 +906,7 @@ public class PromotionEvaluator {
                 case FREE_ITEM ->
                     freeItem(action, basket, matchedLines)
                             .forEach((lineId, amount) -> perLine.merge(lineId, amount, Long::sum));
-                case ITEM_PERCENTAGE_MARKUP, ITEM_FIXED_MARKUP -> {
+                case ITEM_PERCENTAGE_MARKUP, ITEM_FIXED_MARKUP, ORDER_PERCENTAGE_MARKUP, ORDER_FIXED_MARKUP -> {
                     /* A markup action on a discount is refused by the validator. */
                 }
             }
@@ -953,6 +1034,27 @@ public class PromotionEvaluator {
         }
         long total = perLine.values().stream().mapToLong(Long::longValue).sum();
         return new Benefit(Map.copyOf(perLine), 0, 0, total);
+    }
+
+    /**
+     * What an order-level markup charges, on the post-discount goods subtotal of the basket handed in (ADR 0140,
+     * stage 5): a percentage rounded half-up to whole som, or a flat amount. Never more than one figure per
+     * promotion, and never touching a line.
+     */
+    private long orderMarkupOf(Promotion promotion, Basket basket) {
+        long total = 0;
+        for (Action action : promotion.actions()) {
+            switch (action.type()) {
+                case ORDER_PERCENTAGE_MARKUP ->
+                    total += percentageOf(
+                            basket.goodsSubtotalMinor(), action.operands().requireLong("basisPoints"));
+                case ORDER_FIXED_MARKUP -> total += action.operands().requireLong("amountMinor");
+                default -> {
+                    /* Any other action on an order markup is refused by the validator. */
+                }
+            }
+        }
+        return total;
     }
 
     /**
@@ -1368,6 +1470,28 @@ public class PromotionEvaluator {
             return perLineMinor.values().stream().mapToLong(Long::longValue).sum() + orderMinor + deliveryMinor;
         }
     }
+
+    /** What stage 5 decided: the service charge in all, and which order-level markups produced it. */
+    public record OrderMarkupOutcome(long totalMinor, List<AppliedOrderMarkup> applied, List<TraceEntry> trace) {
+
+        public OrderMarkupOutcome {
+            applied = applied == null ? List.of() : List.copyOf(applied);
+            trace = trace == null ? List.of() : List.copyOf(trace);
+        }
+
+        public boolean isEmpty() {
+            return applied.isEmpty();
+        }
+    }
+
+    /** One order-level markup that made it onto the quote, with what it charged. */
+    public record AppliedOrderMarkup(
+            UUID promotionId,
+            String code,
+            int definitionVersion,
+            long amountMinor,
+            Promotion.LoyaltyAccrual loyaltyAccrual,
+            Promotion.LoyaltyRedemption loyaltyRedemption) {}
 
     /** One markup that made it onto the quote. */
     public record AppliedMarkup(

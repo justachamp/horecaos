@@ -38,7 +38,7 @@
 }
 
 .order-reports__export {
-  margin-left: auto;
+  margin-inline-start: auto;
   padding: 6px 12px;
   border: 1px solid var(--q-primary);
   border-radius: var(--q-radius);
@@ -71,7 +71,7 @@
 }
 
 .order-reports__retry {
-  margin-left: auto;
+  margin-inline-start: auto;
   padding: 4px 10px;
   border: 1px solid var(--q-error-text);
   background: transparent;
@@ -101,7 +101,7 @@
 .daily-table th,
 .pivot-table th,
 .report1-table th {
-  text-align: left;
+  text-align: start;
   padding: 8px 10px;
   border-bottom: 1px solid var(--q-hairline);
   color: var(--q-ink-subtle);
@@ -118,7 +118,7 @@
 .daily-table__num,
 .pivot-table__num,
 .report1-table__num {
-  text-align: right;
+  text-align: end;
 }
 
 .daily-table__empty {
@@ -137,7 +137,7 @@
 }
 
 .pivot-table__total-col {
-  border-left: 1px solid var(--q-hairline);
+  border-inline-start: 1px solid var(--q-hairline);
 }
 
 .pivot-table__total-row td {
@@ -160,7 +160,7 @@
 .segment {
   padding: 4px 10px;
   border: none;
-  border-right: 1px solid var(--q-hairline);
+  border-inline-end: 1px solid var(--q-hairline);
   background: var(--q-canvas);
   color: var(--q-ink-muted);
   font-size: var(--q-type-body-xs);
@@ -168,7 +168,7 @@
 }
 
 .segment:last-child {
-  border-right: none;
+  border-inline-end: none;
 }
 
 .segment--active {

@@ -35,7 +35,7 @@ RUN chmod +x /docker-entrypoint.sh
 EXPOSE 80
 
 # APP_API_BASE_URL, APP_TENANT_ID, APP_BRAND_ID, APP_DEFAULT_LOCATION_ID,
-# APP_CHANNEL, APP_YANDEX_MAPS_API_KEY -- see docker-entrypoint.sh for what
+# APP_CHANNEL -- see docker-entrypoint.sh for what
 # each defaults to when unset.
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]

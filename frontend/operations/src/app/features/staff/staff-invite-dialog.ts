@@ -17,6 +17,7 @@ import { Scope, canGrantAt, tenantScope, brandScope, locationScope } from './sco
 import { ScopeGrant } from '../../core/auth/session-context';
 import { roleDescription, roleLabel } from './staff-role-labels';
 import { ScopeOption } from './staff-job-dialog';
+import { StaffJobNames } from './staff-job-names';
 
 /** Digits the mask accepts after the fixed `+998` prefix — nine, matching a UZ mobile number. */
 const PHONE_DIGIT_COUNT = 9;
@@ -62,6 +63,8 @@ export class StaffInviteDialog {
   readonly dismiss = output<void>();
 
   protected readonly i18n = inject(I18n);
+
+  private readonly jobNames = inject(StaffJobNames);
 
   protected readonly fullName = signal('');
   protected readonly phoneDigits = signal('');
@@ -201,7 +204,7 @@ export class StaffInviteDialog {
   }
 
   protected roleLabel(code: string): string {
-    return roleLabel(code, (key) => this.i18n.t(key));
+    return roleLabel(code, (key) => this.i18n.t(key), this.jobNames.nameOf(code));
   }
 
   protected roleDescription(code: string): string | null {
@@ -230,7 +233,8 @@ export class StaffInviteDialog {
       locationId: this.selectedLocationId() ?? undefined,
       reason,
       validUntil: this.validUntil() ? new Date(this.validUntil()).toISOString() : undefined,
-      locale: localeCodeOf(this.i18n.locale()),
+      // The tag as it is; the invitation resolves it against the platform's message tier (ADR 0149).
+      locale: this.i18n.locale(),
     });
   }
 
@@ -306,11 +310,4 @@ export class StaffInviteDialog {
 function formatUzPhone(digits: string): string {
   const groups = [digits.slice(0, 2), digits.slice(2, 5), digits.slice(5, 7), digits.slice(7, 9)];
   return groups.filter((group) => group !== '').join(' ');
-}
-
-function localeCodeOf(locale: string): 'uz' | 'ru' | 'en' {
-  if (locale === 'uz-Latn') {
-    return 'uz';
-  }
-  return locale === 'en' ? 'en' : 'ru';
 }

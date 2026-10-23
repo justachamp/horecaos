@@ -75,7 +75,7 @@
 
 .job-dialog__list {
   margin: 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
 }
 
 .job-dialog__list--muted {

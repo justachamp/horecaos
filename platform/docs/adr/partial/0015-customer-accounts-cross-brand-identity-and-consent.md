@@ -85,6 +85,16 @@
   table; no guest claim or merge operation (only the
   read-side redirect); no PII-free outbox event from this module; and no legacy
   shadow resolution or rollout tooling.
+  **The geocoder and map provider this record left open is decided by ADR 0145
+  (update of 2026-10-14, batch 21):** Yandex is the first adapter and 2GIS the
+  pre-qualified second, the choice to be confirmed by a bake-off that has not been
+  run (it needs a key and a golden set). A customer's typed address and pin now
+  reach the geocoder through the platform and not from their browser
+  (`StorefrontGeocodeController`, `@CustomerOwned`); the storefront's address
+  screen takes a typed address and saves it `NOT_GEOCODED` when there is no
+  provider; the server still refuses `GEOCODER` as a customer-supplied coordinate
+  source; and the geocoder is entered in `docs/processor-register.md` against the
+  classes it may see (`PERSONAL` only), which counsel has not reviewed.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), legal

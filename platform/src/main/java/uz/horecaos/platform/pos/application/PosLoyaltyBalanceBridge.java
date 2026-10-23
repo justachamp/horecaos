@@ -71,6 +71,11 @@ public class PosLoyaltyBalanceBridge implements PosLoyaltyBalancePort {
     }
 
     @Override
+    public java.util.OptionalLong setSyncMode(UUID tenantId, UUID bindingId, String mode, long expectedVersion) {
+        return bindings.setConfigurationValue(tenantId, bindingId, SYNC_MODE_KEY, mode, expectedVersion);
+    }
+
+    @Override
     public List<TenantBinding> syncingBindings() {
         return bindings.enabledBindings().stream()
                 .map(tenantRow -> new TenantBinding(
@@ -216,6 +221,7 @@ public class PosLoyaltyBalanceBridge implements PosLoyaltyBalancePort {
                 row.providerType(),
                 row.locationId(),
                 row.bindingStatus(),
+                row.version(),
                 state,
                 row.enabled(),
                 row.limits(),

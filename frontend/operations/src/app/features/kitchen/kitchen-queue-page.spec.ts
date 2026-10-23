@@ -252,6 +252,43 @@ describe('KitchenQueuePage', () => {
 
       expect(host.querySelector('[data-testid="kitchen-line-weight"]')).toBeNull();
     });
+
+    // ADR 0040 / ADR 0141: an aggregator order is accepted with a stopped dish, and the line says so.
+    it('flags a line that arrived for a stopped dish, with the aggregator’s own item', async () => {
+      const host = await expanded(
+        cakeTicket(1),
+        withIntake({ status: 'STOPPED', externalItemReference: 'ye-4411' }),
+      );
+
+      const flag = host.querySelector('[data-testid="kitchen-line-intake"]');
+      expect(flag?.textContent).toContain('Stopped here');
+      expect(flag?.textContent).toContain('ye-4411');
+    });
+
+    it('flags a line the catalogue does not carry in its own words', async () => {
+      const host = await expanded(
+        cakeTicket(1),
+        withIntake({ status: 'UNMAPPED', externalItemReference: null }),
+      );
+
+      const flag = host.querySelector('[data-testid="kitchen-line-intake"]');
+      expect(flag?.textContent).toContain('Not in the catalogue');
+      expect(flag?.textContent).not.toContain('Stopped here');
+    });
+
+    it('flags nothing on a line that arrived sellable and mapped', async () => {
+      const host = await expanded(cakeTicket(1), withIntake(null));
+
+      expect(host.querySelector('[data-testid="kitchen-line-intake"]')).toBeNull();
+    });
+
+    function withIntake(intake: unknown) {
+      const order = orderWith(null);
+      return {
+        ...order,
+        value: { ...order.value, lines: [{ ...order.value.lines[0], intake }] },
+      };
+    }
   });
 
   it('refreshes at once on a KITCHEN_BOARD frame, the ADR 0045 accelerator (row 2.1)', async () => {
@@ -530,15 +567,11 @@ describe('KitchenQueuePage', () => {
                       commentPresets: [
                         {
                           code: 'NO_ONIONS',
-                          labelRu: 'Без лука',
-                          labelUz: 'Piyozsiz',
-                          labelEn: 'No onions',
+                          labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions' },
                         },
                         {
                           code: 'EXTRA_SPICY',
-                          labelRu: 'Поострее',
-                          labelUz: 'Achchiqroq',
-                          labelEn: 'Extra spicy',
+                          labels: { ru: 'Поострее', 'uz-Latn': 'Achchiqroq', en: 'Extra spicy' },
                         },
                       ],
                       lineId: 'line-1',
@@ -619,17 +652,15 @@ describe('KitchenQueuePage', () => {
                       commentPresets: [
                         {
                           code: 'NO_ONIONS',
-                          labelRu: '',
-                          labelUz: '',
-                          labelEn: '',
                           labels: { kaa: 'Piyazsiz' },
                         },
                         {
                           code: 'EXTRA_SPICY',
-                          labelRu: 'Поострее',
-                          labelUz: 'Achchiqroq',
-                          labelEn: 'Extra spicy',
-                          labels: { en: 'Extra spicy, please' },
+                          labels: {
+                            ru: 'Поострее',
+                            'uz-Latn': 'Achchiqroq',
+                            en: 'Extra spicy, please',
+                          },
                         },
                       ],
                       lineId: 'line-1',

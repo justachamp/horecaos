@@ -360,6 +360,8 @@ public enum PlatformRole {
                     // CUSTOMER_MANAGE) does not silently stop this role from
                     // doing what it could already do.
                     CUSTOMER_CREATE,
+                    // ADR 0177: the delivery address of a phone order, masked (Capability.CUSTOMER_ADDRESS_CAPTURE).
+                    CUSTOMER_ADDRESS_CAPTURE,
                     CUSTOMER_PII_REVEAL,
                     CUSTOMER_ERASURE_EXECUTE,
                     CUSTOMER_ERASURE_RAISE,
@@ -416,6 +418,8 @@ public enum PlatformRole {
                     COMMERCIAL_WALLET_TOPUP,
                     COMMERCIAL_CARD_MANAGE,
                     IAM_GRANT_MANAGE,
+                    // ADR 0186: the tenant's own jobs, composed from this catalogue.
+                    IAM_ROLE_MANAGE,
                     // ADR 0081: who from HorecaOS entered this account, and why.
                     SUPPORT_SESSION_READ,
                     REPORTING_READ,
@@ -625,6 +629,8 @@ public enum PlatformRole {
                     // CUSTOMER_MANAGE) does not silently stop this role from
                     // doing what it could already do.
                     CUSTOMER_CREATE,
+                    // ADR 0177: the delivery address of a phone order, masked (Capability.CUSTOMER_ADDRESS_CAPTURE).
+                    CUSTOMER_ADDRESS_CAPTURE,
                     CUSTOMER_PII_REVEAL,
                     CUSTOMER_ERASURE_EXECUTE,
                     CUSTOMER_ERASURE_RAISE,
@@ -669,6 +675,8 @@ public enum PlatformRole {
                     NOTIFICATION_RETRY,
                     COMMERCIAL_PLAN_READ,
                     IAM_GRANT_MANAGE,
+                    // ADR 0186: same as TENANT_OWNER's own copy.
+                    IAM_ROLE_MANAGE,
                     // ADR 0081: who from HorecaOS entered this account, and why.
                     SUPPORT_SESSION_READ,
                     REPORTING_READ,
@@ -1018,6 +1026,8 @@ public enum PlatformRole {
                     // taking a phone order still needs to open an account for
                     // a caller nobody has seen before.
                     CUSTOMER_CREATE,
+                    // ADR 0177: the delivery address of a phone order, masked (Capability.CUSTOMER_ADDRESS_CAPTURE).
+                    CUSTOMER_ADDRESS_CAPTURE,
                     CUSTOMER_PII_REVEAL,
                     // ADR 0111: the callbacks assigned to her branch -- and the number to ring them on,
                     // which is why this bundle and not the floor's holds the pair.
@@ -1029,6 +1039,13 @@ public enum PlatformRole {
                     // in particular.
                     CONVERSATION_INBOX_MANAGE,
                     INTEGRATION_FAILURE_READ,
+                    // ADR 0137, ADR 0180: the branch's till and the branch's pass. A weighed total that
+                    // moves an order the till already holds is announced to the branch chat and shown on
+                    // the pass, so the person at the branch sees it and closes it. Held at the branch: the
+                    // till-revision routes are branch routes; the tenant-level POS export routes still ask
+                    // for the capability at TENANT scope, which this grant does not reach.
+                    POS_EXPORT_READ,
+                    POS_EXPORT_RESOLVE,
                     REPORTING_READ,
                     // T14/ADR 0134: the branch's own stop-list call (OFFERING_MANAGE
                     // above) is exactly what an AX/CZ classification informs.
@@ -1078,12 +1095,18 @@ public enum PlatformRole {
                     // caller nobody has seen before does not also hand this bundle
                     // PII reveal, blacklisting or merge.
                     CUSTOMER_CREATE,
+                    // ADR 0177: the delivery address of a phone order, masked (Capability.CUSTOMER_ADDRESS_CAPTURE).
+                    CUSTOMER_ADDRESS_CAPTURE,
                     // ADR 0041: the line cook's screen. Reading the board and starting
                     // and readying a line is the whole of it — a recall undoes a
                     // readiness the pass may have acted on, and a release decides when
                     // a kitchen cooks, so neither belongs on this bundle.
                     KITCHEN_TICKET_READ,
                     KITCHEN_DISPLAY_READ,
+                    // ADR 0137, ADR 0180: the pass sees that the till still holds a different total than the
+                    // weighed one, so somebody tells the manager. Reading only: the person who weighs does
+                    // not decide that the till was changed or tell the vendor (POS_EXPORT_RESOLVE).
+                    POS_EXPORT_READ,
                     // ADR 0154: a cashier reprints a receipt, and that is the whole of what the floor does with a
                     // printer.
                     PRINT_REPRINT,
@@ -1330,6 +1353,8 @@ public enum PlatformRole {
                     CUSTOMER_LEAD_READ,
                     // Row 1.3a: see TENANT_OWNER's identical grant above for why.
                     CUSTOMER_CREATE,
+                    // ADR 0177: the delivery address of a phone order, masked (Capability.CUSTOMER_ADDRESS_CAPTURE).
+                    CUSTOMER_ADDRESS_CAPTURE,
                     CUSTOMER_PII_REVEAL));
 
     private static final Map<String, PlatformRole> BY_CODE =
@@ -1392,7 +1417,11 @@ public enum PlatformRole {
         return this == TENANT_OWNER || this == TENANT_ADMIN || this == TENANT_FINANCE || this == BRAND_MANAGER;
     }
 
-    /** Whether the role with this code is {@link #mfaSensitive()}; an unknown code is not. */
+    /**
+     * Whether the role with this code is {@link #mfaSensitive()}; an unknown code is not. A job the
+     * company composed (ADR 0186) is not a role in this enum and is answered from what it carries,
+     * by {@link TenantJobRules#isMfaSensitive}.
+     */
     public static boolean isMfaSensitive(String roleCode) {
         return find(roleCode).map(PlatformRole::mfaSensitive).orElse(false);
     }

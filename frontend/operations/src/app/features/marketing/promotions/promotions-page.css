@@ -208,7 +208,7 @@
 
 .validation__list {
   margin: 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
 }
 
 .validation__list--warn {
@@ -218,7 +218,7 @@
 
 .validation__code {
   font-family: var(--q-font-mono);
-  margin-right: 6px;
+  margin-inline-end: 6px;
 }
 
 .panes {
@@ -253,7 +253,7 @@
 }
 
 .table th {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   color: var(--q-ink-subtle);
   border-bottom: 1px solid var(--q-hairline);
@@ -265,5 +265,5 @@
 }
 
 .table .num {
-  text-align: right;
+  text-align: end;
 }

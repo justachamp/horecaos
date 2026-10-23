@@ -12,15 +12,19 @@
 
 /* ---- error band: keeps rows, never blanks the queue (§2.11) ---------- */
 
-.order-queue__error-band {
+.order-queue__error-band,
+.order-queue__notice-band {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 8px 24px;
-  background: var(--q-error-tint);
-  color: var(--q-error-text);
   border-bottom: 1px solid var(--q-hairline);
   flex-shrink: 0;
+}
+
+.order-queue__error-band {
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
 }
 
 .order-queue__error-ref {
@@ -29,7 +33,7 @@
 }
 
 .order-queue__error-retry {
-  margin-left: auto;
+  margin-inline-start: auto;
   border: 1px solid currentcolor;
   border-radius: var(--q-radius);
   background: transparent;
@@ -42,18 +46,12 @@
 /* ---- notice band: STALE_VERSION / lost race / refused transition ------ */
 
 .order-queue__notice-band {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 24px;
   background: var(--q-info-tint);
   color: var(--q-info-text);
-  border-bottom: 1px solid var(--q-hairline);
-  flex-shrink: 0;
 }
 
 .order-queue__notice-dismiss {
-  margin-left: auto;
+  margin-inline-start: auto;
   border: none;
   background: transparent;
   color: inherit;
@@ -82,7 +80,7 @@
   top: 0;
   background: var(--q-surface-1);
   color: var(--q-ink-subtle);
-  text-align: left;
+  text-align: start;
   font-size: var(--q-type-caption);
   font-weight: 400;
   letter-spacing: 0.32px;
@@ -97,7 +95,7 @@
 }
 
 .order-queue__num-col {
-  text-align: right;
+  text-align: end;
 }
 
 /* Row height 44px, no zebra striping — the severity tint needs the background (§2.2). */
@@ -255,4 +253,40 @@
 /* The «Все филиалы» note (wave 16) sits in this template, so it needs the rule the bulk bar keeps for itself. */
 .order-queue__bulk-unavailable {
   color: var(--q-ink-subtle);
+}
+
+/* The payment method's mark sits before the status word, a hair apart. */
+.order-row__payment-mark {
+  margin-inline-end: 4px;
+  color: var(--q-ink-muted);
+}
+
+/* «4 поз · Лагман…»: one line, cut with an ellipsis; the full first position is the title. */
+.order-row__items {
+  max-inline-size: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The «Ф» chip: a flat square like the table chip, toned by the receipt's state, never by colour alone --
+ * its accessible name and title carry the status in words. */
+.order-row__fiscal-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-surface-1);
+  color: var(--q-ink);
+  font-weight: 600;
+}
+.order-row__fiscal-chip--ok {
+  border-color: var(--q-success);
+}
+.order-row__fiscal-chip--attention {
+  border-color: var(--q-error);
+  color: var(--q-error);
+}
+.order-row__fiscal-chip--none {
+  color: var(--q-ink-muted);
+  font-weight: 400;
 }
