@@ -127,7 +127,7 @@ class LoyaltyLedgerAndSplitTenderTests {
      * #NOTHING_AWAITS}/{@link #SETTLEMENT_STILL_COMING} already use.
      */
     private static final LoyaltyExpiryWarningPort NO_WARNINGS_RECORDED =
-            (tenantId, brandId, customerAccountId, accountId, currency, lots, now) -> {};
+            (tenantId, brandId, customerAccountId, accountId, currency, lots, now) -> true;
 
     /**
      * Past {@code PointsRedemptionService.HOLD_LIFETIME}, which is
@@ -586,6 +586,98 @@ class LoyaltyLedgerAndSplitTenderTests {
         assertThat(warned.calls).hasSize(1);
     }
 
+    /**
+     * The adapter answers false while the customer cannot be sent anything yet (the tenant has not activated the
+     * wording, ADR 0181). The one warning a lot gets must not be spent on that: the lot stays due, and the pass
+     * that follows the activation sends it.
+     */
+    @Test
+    @DisplayName("a warning the adapter could not deliver leaves the lot due, and the pass after it can send it")
+    void aLotIsNotMarkedWarnedWhileNothingCouldBeDelivered() {
+        UUID lotId = earnALot("C-DARK", 100_000L);
+        clock.advance(Duration.ofDays(170));
+        transactions.executeWithoutResult(status -> maintenance.matureLots());
+
+        RecordingWarnings warned = new RecordingWarnings();
+        warned.handsOver = false;
+        LoyaltyMaintenanceService sweep =
+                new LoyaltyMaintenanceService(store, redemption, NOTHING_AWAITS, warned, transactions, clock);
+
+        assertThat(warnedBy(sweep)).as("nothing was handed over").isZero();
+        assertThat(warned.calls).as("the adapter was asked").hasSize(1);
+        assertThat(store.lotsNeedingExpiryWarning(clock.instant(), 10))
+                .as("the lot is still due: its only warning has not been spent")
+                .extracting(LotRow::id)
+                .containsExactly(lotId);
+
+        // A later tick, still dark: asked again, still due, still nothing marked.
+        clock.advance(Duration.ofHours(1));
+        assertThat(warnedBy(sweep)).isZero();
+        assertThat(warned.calls).hasSize(2);
+        assertThat(store.lotsNeedingExpiryWarning(clock.instant(), 10)).hasSize(1);
+
+        // The tenant activates the wording: the next tick sends it, and only then is the lot marked.
+        warned.handsOver = true;
+        clock.advance(Duration.ofHours(1));
+        assertThat(warnedBy(sweep)).isOne();
+        assertThat(warned.calls).hasSize(3);
+        assertThat(store.lotsNeedingExpiryWarning(clock.instant(), 10))
+                .as("handed over, so marked, once")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("one customer with nothing deliverable does not hold back another customer's warning")
+    void aCustomerWhoCannotBeReachedDoesNotBlockTheNext() {
+        UUID darkLot = earnALot("C-A", 100_000L);
+        clock.advance(Duration.ofHours(2));
+        UUID reachableLot = earnALotFor(otherCustomerId, "C-B", 100_000L);
+        clock.advance(Duration.ofDays(170));
+        transactions.executeWithoutResult(status -> maintenance.matureLots());
+
+        List<UUID> asked = new ArrayList<>();
+        LoyaltyExpiryWarningPort onlyTheSecondIsReachable =
+                (tenantId, brandId, customerAccountId, accountId, currency, lots, now) -> {
+                    asked.add(lots.getFirst().lotId());
+                    return !lots.getFirst().lotId().equals(darkLot);
+                };
+        LoyaltyMaintenanceService sweep = new LoyaltyMaintenanceService(
+                store, redemption, NOTHING_AWAITS, onlyTheSecondIsReachable, transactions, clock);
+
+        assertThat(warnedBy(sweep)).as("one message handed over").isOne();
+
+        assertThat(asked).containsExactly(darkLot, reachableLot);
+        assertThat(store.lotsNeedingExpiryWarning(clock.instant(), 10))
+                .extracting(LotRow::id)
+                .as("only the lot nobody could be told about is still due")
+                .containsExactly(darkLot);
+    }
+
+    /**
+     * The worklist is {@code LIMIT 500}: lots nobody could be told about stay at its head, so a pass that always
+     * started from the beginning would never reach the customers behind them. The sweep walks the worklist by
+     * keyset instead, which this proves one lot at a time.
+     */
+    @Test
+    @DisplayName("the warning worklist can be read past the lots at its head")
+    void theWorklistPagesByKeyset() {
+        UUID first = earnALot("C-1", 100_000L);
+        clock.advance(Duration.ofHours(2));
+        UUID second = earnALotFor(otherCustomerId, "C-2", 100_000L);
+        clock.advance(Duration.ofDays(170));
+        transactions.executeWithoutResult(status -> maintenance.matureLots());
+
+        List<LotRow> head = store.lotsNeedingExpiryWarning(clock.instant(), 1);
+        assertThat(head).extracting(LotRow::id).containsExactly(first);
+
+        List<LotRow> behind = store.lotsNeedingExpiryWarning(clock.instant(), 1, head.getFirst());
+        assertThat(behind).extracting(LotRow::id).containsExactly(second);
+
+        assertThat(store.lotsNeedingExpiryWarning(clock.instant(), 1, behind.getFirst()))
+                .as("nothing behind the last lot")
+                .isEmpty();
+    }
+
     /** Three lots in one customer's window are one message, not three (ADR 0046: at most one a day). */
     @Test
     @DisplayName("a customer's due lots are one message carrying all of them, earliest expiry first")
@@ -729,6 +821,7 @@ class LoyaltyLedgerAndSplitTenderTests {
                     if (attempted.size() == 2) {
                         throw new RuntimeException("simulated ADR 0020 adapter failure");
                     }
+                    return true;
                 };
         LoyaltyMaintenanceService sweep = new LoyaltyMaintenanceService(
                 store, redemption, NOTHING_AWAITS, failsOnSecondCustomer, transactions, clock);
@@ -2085,8 +2178,11 @@ class LoyaltyLedgerAndSplitTenderTests {
 
         final List<Warning> calls = new CopyOnWriteArrayList<>();
 
+        /** What the adapter answers: true once a deliverable message exists, false while there is no wording. */
+        volatile boolean handsOver = true;
+
         @Override
-        public void lotsExpiring(
+        public boolean lotsExpiring(
                 UUID tenantId,
                 UUID brandId,
                 UUID customerAccountId,
@@ -2095,6 +2191,7 @@ class LoyaltyLedgerAndSplitTenderTests {
                 List<ExpiringLot> lots,
                 Instant now) {
             calls.add(new Warning(brandId, customerAccountId, accountId, currency, lots, now));
+            return handsOver;
         }
     }
 

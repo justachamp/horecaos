@@ -18,6 +18,10 @@ import java.util.UUID;
  * <p>One call is one customer's warning, not one lot's: ADR 0046's product default is "14 days before, at most one
  * message per customer per day", and a customer whose three lots expire in the same week hears about all three in
  * one message.
+ *
+ * <p>The answer matters because a lot is warned about once, ever. A feature built dark -- no tenant has authored and
+ * activated the wording yet -- must not spend that one warning on a message that is never sent, so the adapter says
+ * whether it handed a message over, and the sweep marks the lots only if it did.
  */
 public interface LoyaltyExpiryWarningPort {
 
@@ -28,6 +32,10 @@ public interface LoyaltyExpiryWarningPort {
      * so the sweep retrying after a crash between the send and the mark does not tell the customer twice. A throw
      * means the message was not handed over and the lots stay due.
      *
+     * <p>A {@code false} is not an error: it says the customer cannot be sent this message yet, because the tenant
+     * has not activated wording the customer could be reached with, or the SMS gateway has not approved it. Nothing
+     * was created, the lots stay due, and the next sweep asks again.
+     *
      * @param brandId the brand the points belong to (a loyalty account is per customer per brand)
      * @param customerAccountId the customer the message is for, so the adapter can choose a channel and resolve the
      *     contact on its own side
@@ -35,8 +43,10 @@ public interface LoyaltyExpiryWarningPort {
      * @param currency the currency the points are denominated in, for rendering the amount
      * @param lots the lots now inside their warning window, earliest expiry first; never empty
      * @param now the instant of the sweep, for the days remaining and the idempotency day
+     * @return true when a message for this customer now exists, whether this call created it or the day's earlier
+     *     call did, so the lots may be marked; false when nothing was handed over and they must not be
      */
-    void lotsExpiring(
+    boolean lotsExpiring(
             UUID tenantId,
             UUID brandId,
             UUID customerAccountId,

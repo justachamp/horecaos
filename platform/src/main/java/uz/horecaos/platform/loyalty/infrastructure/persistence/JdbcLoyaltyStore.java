@@ -968,7 +968,19 @@ public class JdbcLoyaltyStore {
      * </ul>
      */
     public List<LotRow> lotsNeedingExpiryWarning(Instant asOf, int limit) {
-        return jdbc.sql("""
+        return lotsNeedingExpiryWarning(asOf, limit, null);
+    }
+
+    /**
+     * The same worklist, read from behind {@code after}: the lots that sort after it by expiry, then id.
+     *
+     * <p>A lot nobody could be told about yet (the tenant has not activated the wording) is not marked, so it is
+     * still due and sorts where it always did. A sweep that read only the first {@code limit} lots would read those
+     * again on every pass, and every customer behind them would wait for ever. Walking the list by keyset reaches
+     * them, and does not skip or repeat a lot when one in front of the cursor is marked in between.
+     */
+    public List<LotRow> lotsNeedingExpiryWarning(Instant asOf, int limit, @Nullable LotRow after) {
+        var statement = jdbc.sql("""
                 SELECT * FROM loyalty.lots AS lot
                  WHERE lot.status = 'ACTIVE'
                    AND lot.expiry_warning_sent_at IS NULL
@@ -980,13 +992,19 @@ public class JdbcLoyaltyStore {
                         WHERE warned.tenant_id = lot.tenant_id
                           AND warned.account_id = lot.account_id
                           AND warned.expiry_warning_sent_at > :asOf - INTERVAL '1 day')
-                 ORDER BY lot.expires_at
+                """
+                        + (after == null ? "" : "   AND (lot.expires_at, lot.id) > (:afterExpiresAt, :afterId)\n")
+                        + """
+                 ORDER BY lot.expires_at, lot.id
                  LIMIT :limit
                 """)
                 .param("asOf", utc(asOf))
-                .param("limit", limit)
-                .query(JdbcLoyaltyStore::toLot)
-                .list();
+                .param("limit", limit);
+        if (after != null) {
+            statement =
+                    statement.param("afterExpiresAt", utc(after.expiresAt())).param("afterId", after.id());
+        }
+        return statement.query(JdbcLoyaltyStore::toLot).list();
     }
 
     /** Records that the warning sweep has told {@code LoyaltyExpiryWarningPort} about this lot, once. */

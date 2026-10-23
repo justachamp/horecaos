@@ -82,9 +82,15 @@ variables, `loyaltyPoints`, `loyaltyExpiresOn` and `loyaltyDaysRemaining`. A cus
 hours after a warning, so the message is at most one a day (ADR 0046's default). The class is
 `TRANSACTIONAL_REQUIRED`, the precedent ADR 0159's rating prompt takes: the customer's preference cannot switch
 it off. It is a constant, `CustomerAccountAlertFanoutService.NOTIFICATION_CLASS`. **A template nobody has
-authored and activated sends nothing**: the intent is suppressed `NO_ACTIVE_TEMPLATE` and the lot counts as
-warned. Activate the wording before the first lot reaches its window, or accept that warnings in the window
-before activation are not repeated.
+authored and activated sends nothing, and spends nothing.** Before it creates an intent the adapter asks whether a
+message to this customer, on the channel the customer would be reached by, has wording that is active and, for
+SMS, approved by the gateway (`CustomerAccountAlertPort.canDeliver`). If not, no intent is created and
+`warnExpiringLots` does not mark the customer's lots: each lot's one warning is kept for the first sweep after the
+wording becomes deliverable (checked 2026-10-23: `LoyaltyLedgerAndSplitTenderTests` and
+`LoyaltyExpiryWarningNotificationTests`). The cost of being dark is a question per customer per hourly sweep and
+one log line a sweep (`loyalty expiry warning withheld`, a count, naming no customer). The window is the only
+limit: a lot that lapses before the wording is deliverable is closed by the expiry sweep without a warning, so
+activate the wording before the first lot reaches its window.
 
 **Where the value goes.** Counsel decides two things. (1) Whether the message may be `TRANSACTIONAL_REQUIRED`.
 If not, change the constant to `TRANSACTIONAL_OPTIONAL`, give the template a consent purpose, and expect a
@@ -100,9 +106,13 @@ psql "$DATABASE_URL" -c "select status, suppression_reason, count(*) from notifi
   where template_key = 'LOYALTY_POINTS_EXPIRING' group by 1,2 order by 3 desc;"
 ```
 
-`READY`/`SENT` rows are messages; `SUPPRESSED` with `NO_ACTIVE_TEMPLATE` means the wording was not active;
-`TEMPLATE_AWAITING_PROVIDER` is section 4. `LoyaltyExpiryWarningNotificationTests` proves each outcome against a
-real database. To stop the message, deactivate the template: the sweep still marks lots and nothing is sent.
+`READY`/`SENT` rows are messages. While the wording is not deliverable there are no rows at all, because the
+sweep asks first: a sweep that logs `loyalty expiry warning withheld` and leaves this query empty is waiting for
+the wording (inactive, or an SMS wording the gateway has not approved, section 4). A row `SUPPRESSED` with
+`NO_ACTIVE_TEMPLATE` or `TEMPLATE_AWAITING_PROVIDER` can still appear when the wording changed between the question
+and the intent. `LoyaltyExpiryWarningNotificationTests` proves each outcome against a real database. To stop the
+message, deactivate the template: the sweep creates nothing and leaves the lots due, so reactivating the template
+sends the warnings of every lot still inside its window.
 
 ## 4. The SMS gateway's approval of each tenant's wording
 
