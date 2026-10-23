@@ -788,6 +788,7 @@ public final class ConfigurationKeys {
             .defaultValue("BY_DISTANCE")
             .ownedBy("ordering")
             .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
             .describedAs("How a pre-order outside working hours picks its fulfilling branch: "
                     + "BY_DISTANCE or BY_OPENING_TIME.")
             .build();

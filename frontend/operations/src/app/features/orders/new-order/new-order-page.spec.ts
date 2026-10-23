@@ -555,6 +555,114 @@ describe('NewOrderPage', () => {
     expect(host.querySelector('[data-testid="new-order-callback"]')).not.toBeNull();
   });
 
+  // ADR 0177: the server enforces the three toggles at the branch the order is placed at -- `place` and `quote`
+  // both go to `placeAtScope` -- which is the resolver's proposal or the operator's override, not necessarily the
+  // branch the operator is signed in at. What the screen hides has to be what that branch would refuse.
+  describe('the branch the order is placed at decides what the screen offers', () => {
+    const allowed = { promoCodeAllowed: true, callbackFlagAllowed: true, changeDueAllowed: true };
+    const sentElsewhere = {
+      candidates: [
+        branchCandidate({ locationId: 'l1', displayName: 'Chilanzar' }),
+        branchCandidate({ locationId: 'l2', displayName: 'Yunusabad' }),
+      ],
+      proposedLocationId: 'l2',
+    };
+    const promoField = (): Element | null =>
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="new-order-promo-code"]');
+    const promoOff = (): Element | null =>
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="new-order-promo-code-off"]',
+      );
+
+    it('hides the promo code when the order goes to a branch that has turned it off, though the operator’s own allows it', async () => {
+      const entryPolicy = vi
+        .fn()
+        .mockImplementation((scope: LocationScope) =>
+          Promise.resolve(
+            scope.locationId === 'l2' ? { ...allowed, promoCodeAllowed: false } : allowed,
+          ),
+        );
+      await render({ entryPolicy, resolveBranches: vi.fn().mockResolvedValue(sentElsewhere) });
+      await startPolicyBasket();
+
+      expect(entryPolicy).toHaveBeenCalledWith({ ...SCOPE, locationId: 'l2' });
+      expect(promoField(), 'the placement branch refuses a promo code').toBeNull();
+      expect(promoOff()?.textContent).toContain('cannot be applied');
+
+      // The operator moves the order back to her own branch, which allows it.
+      fixture.componentInstance['selectBranch']('l1');
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(promoField(), 'her own branch allows it').not.toBeNull();
+    });
+
+    it('offers the promo code when the order goes to a branch that allows it, though the operator’s own does not', async () => {
+      const entryPolicy = vi
+        .fn()
+        .mockImplementation((scope: LocationScope) =>
+          Promise.resolve(
+            scope.locationId === 'l2' ? allowed : { ...allowed, promoCodeAllowed: false },
+          ),
+        );
+      await render({ entryPolicy, resolveBranches: vi.fn().mockResolvedValue(sentElsewhere) });
+      await startPolicyBasket();
+
+      expect(promoField(), 'the placement branch accepts a promo code').not.toBeNull();
+      fixture.componentInstance['promoCode'].set('TENPERCENT');
+      fixture.detectChanges();
+      await flushMicrotasks();
+
+      fixture.componentInstance['selectBranch']('l1');
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(promoField(), 'her own branch refuses it').toBeNull();
+      expect(
+        fixture.componentInstance['promoCode'](),
+        'a code typed for a branch that took it',
+      ).toBe('');
+    });
+
+    it('shows everything again, and leaves the refusal to the server, when the placement branch’s policy cannot be read', async () => {
+      const entryPolicy = vi
+        .fn()
+        .mockImplementation((scope: LocationScope) =>
+          scope.locationId === 'l2'
+            ? Promise.reject(new Error('403'))
+            : Promise.resolve({ ...allowed, promoCodeAllowed: false }),
+        );
+      await render({ entryPolicy, resolveBranches: vi.fn().mockResolvedValue(sentElsewhere) });
+      await startPolicyBasket();
+
+      expect(
+        promoField(),
+        'the other branch’s answer is not carried over to this one',
+      ).not.toBeNull();
+    });
+
+    it('ignores a slow answer for a branch the order has since left', async () => {
+      let answerForTheFirstBranch: (policy: typeof allowed) => void = () => undefined;
+      const entryPolicy = vi.fn().mockImplementation((scope: LocationScope) =>
+        scope.locationId === 'l1'
+          ? new Promise<typeof allowed>((resolve) => {
+              answerForTheFirstBranch = resolve;
+            })
+          : Promise.resolve(allowed),
+      );
+      await render({ entryPolicy, resolveBranches: vi.fn().mockResolvedValue(sentElsewhere) });
+      await startPolicyBasket();
+
+      answerForTheFirstBranch({ ...allowed, promoCodeAllowed: false });
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(promoField(), 'l1 refused, but the order is at l2').not.toBeNull();
+    });
+  });
+
   // ------------------------------------------------------------------ search
 
   it('searches the location-scoped item read and renders combobox options from the result', async () => {

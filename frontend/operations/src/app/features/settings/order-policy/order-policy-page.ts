@@ -54,6 +54,12 @@ interface OrderPolicyFieldDef {
   readonly min?: number;
   readonly max?: number;
   readonly step?: number;
+  /**
+   * The scope levels the key can be written at, when that is narrower than every level the page edits at
+   * (`OrderingConfigurationKeys` declares it with `settableAt`). A field the server reads at one level and
+   * above says «Set at brand level» on a branch instead of offering a write that nothing would read.
+   */
+  readonly settableScopes?: readonly ConfigurationScopeType[];
 }
 
 /** Card 2 — Тайминги и SLA. */
@@ -130,6 +136,9 @@ const CARD4_FIELDS: readonly OrderPolicyFieldDef[] = [
       },
     ],
     hintKey: 'settings.orderPolicy.preorderBranchResolution.hint',
+    // ADR 0177 decision 5: the branch resolver and the server's own re-derivation read it for the whole brand,
+    // so the key refuses a branch scope (`PREORDER_BRANCH_RESOLUTION`) and the page does not offer one.
+    settableScopes: ['TENANT', 'BRAND'],
   },
 ];
 
@@ -223,11 +232,12 @@ export class OrderPolicyPage {
   protected readonly card5Fields = CARD5_FIELDS;
 
   /**
-   * None of the eleven keys call `.settableAt(...)` (see
+   * Most of the keys on Cards 2 to 5 do not call `.settableAt(...)` (see
    * `OrderingConfigurationKeys`), so their real `settableScopes` is every
    * `ScopeType` — but an operator on this screen never edits at `PLATFORM`,
    * so this only needs to name the three {@link EditableScopeType} levels
    * for `q-inherited-field`'s own "not settable here" check to stay accurate.
+   * A key that does narrow them says so on its own {@link OrderPolicyFieldDef.settableScopes}.
    */
   protected readonly editableScopes: readonly ConfigurationScopeType[] = [
     'TENANT',

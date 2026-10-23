@@ -570,7 +570,7 @@ export const settingsEn = {
   'settings.orderPolicy.gates.noPath':
     'Order acceptance above has nobody to hold an order for, so these gates cannot hold anything: such an order is confirmed anyway. Choose who confirms there first.',
   'settings.orderPolicy.preorderBranchResolution.hint':
-    'Used when a pre-order is placed for a time when no candidate branch is open. A pickup order has no customer address to measure from, so “nearest” falls back to “soonest to open” for it.',
+    'Used when a pre-order is placed for a time when no candidate branch is open. A pickup order has no customer address to measure from, so “nearest” falls back to “soonest to open” for it. The rule is set for the whole brand: a single branch does not have a value of its own.',
   'settings.orderPolicy.field.operatorCallbackFlagAllowed':
     'Operator may flag an order “call the customer back”',
   'settings.orderPolicy.field.operatorChangeDueAllowed':

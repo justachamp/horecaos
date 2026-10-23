@@ -230,12 +230,19 @@ public final class OrderingConfigurationKeys {
      * customer) or {@code BY_OPENING_TIME} (soonest to open). {@code
      * BY_DISTANCE} is the default — a customer waiting for a pre-order cares
      * more about who is closest than about who opens first.
+     *
+     * <p><strong>Settable down to the brand and no further (ADR 0177 decision 5).</strong>
+     * The question is asked of the brand's branches, and both the console's branch
+     * resolver and {@code OperatorOrderingService#place} read it at brand scope. A
+     * value written at a branch would be accepted, traced and shown as set there,
+     * and nothing would read it, so the key refuses a branch scope instead.
      */
     public static final ConfigurationKey<String> PREORDER_BRANCH_RESOLUTION = ConfigurationKey.of(
                     PREORDER_BRANCH_RESOLUTION_CODE, String.class)
             .defaultValue("BY_DISTANCE")
             .ownedBy("ordering")
             .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
             .describedAs("How a pre-order outside working hours picks its fulfilling branch: "
                     + "BY_DISTANCE or BY_OPENING_TIME.")
             .build();

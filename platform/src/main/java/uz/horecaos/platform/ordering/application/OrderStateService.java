@@ -448,7 +448,9 @@ public class OrderStateService {
                 OrderStatus.PAYMENT_AUTHORIZING,
                 target,
                 TransitionTrigger.PAYMENT_RESULT,
-                "PAYMENT_CAPTURED",
+                // ADR 0177: an order an auto-accept gate held back waits for a person because of the gate,
+                // and the payment only decided when. Checkout kept the gate's reason on its own transition.
+                approvalRequired ? heldAtCheckout(tenantId, orderId).orElse("PAYMENT_CAPTURED") : "PAYMENT_CAPTURED",
                 "SYSTEM_JOB",
                 PAYMENT_CAPTURE_ACTOR,
                 null,
@@ -513,6 +515,18 @@ public class OrderStateService {
                 now);
 
         return new DecisionResult(true, target, version, null);
+    }
+
+    /**
+     * The reason an auto-accept gate gave when it held this order at checkout (ADR 0177), kept on the
+     * transition that put the order in {@code PAYMENT_AUTHORIZING}; empty for every other order.
+     */
+    private Optional<String> heldAtCheckout(UUID tenantId, UUID orderId) {
+        return orders.history(tenantId, orderId).stream()
+                .filter(row -> OrderStatus.PAYMENT_AUTHORIZING.name().equals(row.toStatus()))
+                .map(JdbcOrderStore.TransitionRow::reasonCode)
+                .filter(AutoAcceptGate.Reason::isReasonCode)
+                .findFirst();
     }
 
     /**

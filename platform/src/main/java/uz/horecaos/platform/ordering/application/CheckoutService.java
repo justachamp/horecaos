@@ -163,7 +163,7 @@ public class CheckoutService {
         // charge, and a client that calls it twice is re-presented the same attempt.
         OrderStatus finalStatus;
         if (written.paymentFirst()) {
-            finalStatus = progression.awaitPayment(command, orderId, now);
+            finalStatus = progression.awaitPayment(command, orderId, written.holdReasonCode(), now);
         } else if (written.approvalRequired()) {
             // Written's own compact constructor guarantees approvalDeadline is
             // set exactly when approvalRequired is true.
