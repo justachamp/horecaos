@@ -99,6 +99,13 @@ import { registerNewOrderKeys } from './new-order-keys';
  */
 const FALLBACK_OPERATOR_CHANNEL_CODE = 'call-centre';
 
+/** What the screen offers until a branch's policy has been read, and when it cannot be (ADR 0177). */
+const EVERYTHING_ALLOWED: EntryPolicy = {
+  promoCodeAllowed: true,
+  callbackFlagAllowed: true,
+  changeDueAllowed: true,
+};
+
 let lineKeySequence = 0;
 function nextLineKey(): string {
   lineKeySequence += 1;
@@ -349,7 +356,6 @@ export class NewOrderPage implements OnInit {
     // no await ahead of it, while this method is still on its own first
     // await) and this must never stomp a proposal that already landed.
     this.selectedLocationId.update((current) => current ?? scope.locationId);
-    void this.loadEntryPolicy(scope);
     void this.api
       .branchOverrideReasons(scope)
       .then((reasons) => this.overrideReasons.set(reasons))
@@ -1421,35 +1427,47 @@ export class NewOrderPage implements OnInit {
   protected readonly cashTenderedMinor = signal(0);
 
   /**
-   * ADR 0177: what this branch lets an operator do while keying an order in (Settings > Order policy, card
-   * 5). All three default to allowed -- what the screen always did -- until the read says otherwise, and a
-   * failed read leaves them allowed: the server enforces the same three on place and on quote, so this only
-   * decides what the screen shows.
+   * ADR 0177: what the branch an order is placed at lets an operator do while keying it in (Settings >
+   * Order policy, card 5). The server enforces the three at `command.locationId()` -- the branch `place` and
+   * `quote` go to, which is the resolver's proposal or the operator's override and not necessarily the one
+   * she is signed in at -- so this follows that branch (see {@link loadEntryPolicy}). All three default to
+   * allowed -- what the screen always did -- until the read says otherwise, and a failed read leaves them
+   * allowed: the server refuses what the branch has turned off, so this only decides what the screen shows.
    */
-  protected readonly entryPolicy = signal<EntryPolicy>({
-    promoCodeAllowed: true,
-    callbackFlagAllowed: true,
-    changeDueAllowed: true,
-  });
+  protected readonly entryPolicy = signal<EntryPolicy>(EVERYTHING_ALLOWED);
   /** «Перезвонить клиенту», raised while the order is keyed in. */
   protected readonly callbackRequested = signal(false);
 
+  /** The branch whose policy was last asked for, so a signal that settles on the same branch asks nothing. */
+  private entryPolicyLocationId: string | null = null;
+  /** Retires an answer for a branch the order has since left: reads can come back in any order. */
+  private entryPolicySequence = 0;
+
   private async loadEntryPolicy(scope: LocationScope): Promise<void> {
+    this.entryPolicyLocationId = scope.locationId;
+    this.entryPolicySequence += 1;
+    const sequence = this.entryPolicySequence;
+    let policy: EntryPolicy;
     try {
-      const policy = await this.api.entryPolicy(scope);
-      this.entryPolicy.set(policy);
-      if (!policy.promoCodeAllowed) {
-        this.promoCode.set('');
-      }
-      if (!policy.callbackFlagAllowed) {
-        this.callbackRequested.set(false);
-      }
-      if (!policy.changeDueAllowed) {
-        this.cashTenderedMinor.set(0);
-      }
+      policy = await this.api.entryPolicy(scope);
     } catch {
-      // A convenience, not a precondition: the screen keeps showing everything and the server refuses
-      // what the branch has turned off.
+      // A convenience, not a precondition: the screen shows everything -- not the previous branch's
+      // answer, which is no evidence about this one -- and the server refuses what the branch has
+      // turned off.
+      policy = EVERYTHING_ALLOWED;
+    }
+    if (sequence !== this.entryPolicySequence) {
+      return;
+    }
+    this.entryPolicy.set(policy);
+    if (!policy.promoCodeAllowed) {
+      this.promoCode.set('');
+    }
+    if (!policy.callbackFlagAllowed) {
+      this.callbackRequested.set(false);
+    }
+    if (!policy.changeDueAllowed) {
+      this.cashTenderedMinor.set(0);
     }
   }
 
@@ -1535,6 +1553,22 @@ export class NewOrderPage implements OnInit {
   private deliveryFeeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
+    // ADR 0177: the Card 5 toggles of the branch the order is placed at. The operator's own branch is asked
+    // first (`ngOnInit` settles `selectedLocationId` there) and the branch resolver, an override or a table
+    // moves the question wherever the order is going: a brand-level call-centre operator on one branch
+    // keys an order the server places, prices and enforces at another.
+    effect(() => {
+      const scope = this.location.scope();
+      if (!scope) {
+        return;
+      }
+      const placeAtLocationId = this.placeAtLocationId(scope);
+      if (placeAtLocationId === this.entryPolicyLocationId) {
+        return;
+      }
+      untracked(() => void this.loadEntryPolicy({ ...scope, locationId: placeAtLocationId }));
+    });
+
     // Re-quotes on every fulfilment-mode, address or basket-subtotal change
     // while a delivery destination with a real coordinate is selected;
     // debounced the same way `onPhoneInput` already is, so a quantity
