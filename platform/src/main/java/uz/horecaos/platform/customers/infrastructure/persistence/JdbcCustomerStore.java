@@ -1397,7 +1397,18 @@ public class JdbcCustomerStore {
 
     /**
      * Overwrites one address's protected fields and label in place, whatever its
-     * {@code status}.
+     * {@code status}, and takes the pin off it.
+     *
+     * <p>The coordinates are the one part of an address kept in the clear (V0017: "a delivery
+     * cannot be routed without them"), and a pin is the building a person lives in, which is what
+     * the ciphertext beside it no longer says. They are cleared with it: {@code latitude} and
+     * {@code longitude} to NULL, which {@code ck_address_coordinates} allows as a pair, and {@code
+     * coordinate_source} to {@code LANDMARK_ONLY}, because {@code ck_address_coordinate_source_agrees}
+     * (V0021) allows a null point only with {@code NOT_GEOCODED} or {@code LANDMARK_ONLY}, and the
+     * first is the geocoding backfill's work list ({@code ix_addresses_awaiting_geocoding}): an
+     * erased tombstone must never be offered to a geocoder. {@code LANDMARK_ONLY} is the finished
+     * state, "no point, never re-queued". The ordering participant does the same to a cart's
+     * destination.
      *
      * <p>An {@code UPDATE}, matching {@link #eraseContactPoint}: nothing points a
      * foreign key at {@code customer.addresses} (a cart and an order each hold
@@ -1415,7 +1426,8 @@ public class JdbcCustomerStore {
         return jdbc.sql("""
                 UPDATE customer.addresses
                 SET label = :label, encrypted_fields = :fields,
-                    delivery_instructions_encrypted = :instructions
+                    delivery_instructions_encrypted = :instructions,
+                    latitude = NULL, longitude = NULL, coordinate_source = 'LANDMARK_ONLY'
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
                 .param("tenantId", tenantId)
