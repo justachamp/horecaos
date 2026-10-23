@@ -771,7 +771,7 @@ class MediaLifecycleTests {
 
     @Test
     @DisplayName(
-            "a purposed upload is refused before anything is allocated when it is over its cap, private, a video or not the tenant's")
+            "a purposed upload is refused before anything is allocated when it is over its cap, private, a video, an AVIF or not the tenant's")
     void aPurposedUploadIsRefusedUpFront() {
         long overTheCap = MediaPurpose.KIOSK_IDLE.maximumBytes() + 1;
 
@@ -788,10 +788,20 @@ class MediaLifecycleTests {
                         () -> purposedRequest(MediaOwner.tenant(TENANT_A), MediaVisibility.PUBLIC, "video/mp4", 1000))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("still image");
+        // AVIF is a type the platform stores for an ordinary asset and not one a kiosk's browser is promised to decode:
+        // the purpose's own set is JPEG, PNG and WebP, and the same refusal covers a type the platform stores for no
+        // one.
+        assertThatThrownBy(
+                        () -> purposedRequest(MediaOwner.tenant(TENANT_A), MediaVisibility.PUBLIC, "image/avif", 1000))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("JPEG, PNG or WebP");
+        assertThatThrownBy(
+                        () -> purposedRequest(MediaOwner.tenant(TENANT_A), MediaVisibility.PUBLIC, "image/gif", 1000))
+                .isInstanceOf(IllegalArgumentException.class);
         assertThat(jdbc.sql("SELECT count(*) FROM media.assets")
                         .query(Long.class)
                         .single())
-                .as("nothing was allocated by any of the four refusals")
+                .as("nothing was allocated by any of the refusals")
                 .isZero();
     }
 

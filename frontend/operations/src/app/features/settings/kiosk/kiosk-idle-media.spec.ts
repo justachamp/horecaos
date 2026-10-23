@@ -137,8 +137,33 @@ describe('KioskIdleMedia (ADR 0187, D25)', () => {
     expect(component.aspectRatios()).toEqual(['9:16']);
     expect(component.accept()).toBe('image/jpeg,image/png,image/webp');
     expect(component.accept()).not.toContain('video');
-    expect(component.maxSizeBytes()).toBe(1_048_576);
+    // The 1 MB cap is on the cropped picture, checked in onPicture; the uploader sees the original, which is far larger.
+    expect(component.maxSizeBytes()).toBeGreaterThan(1_048_576);
     expect(component.allowVideo()).toBe(false);
+  });
+
+  it('takes an ordinary phone photo of several megabytes into the crop step, because the 1 MB cap is on the cropped picture', async () => {
+    URL.createObjectURL = () => 'blob:fake';
+    const uploadIdlePicture = vi.fn();
+    await render({ idleMedia: () => Promise.resolve(list(1)), uploadIdlePicture });
+    const rejections: string[] = [];
+    uploader().rejected.subscribe((reason) => rejections.push(reason));
+
+    const input = byId('kiosk-idle-uploader')!.querySelector(
+      '[data-testid="uploader-file-input"]',
+    ) as HTMLInputElement;
+    const photo = new File([new Uint8Array(3 * 1_048_576)], 'photo.jpg', { type: 'image/jpeg' });
+    Object.defineProperty(input, 'files', { value: [photo], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(rejections).toEqual([]);
+    expect(byId('kiosk-idle-problem')).toBeNull();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="uploader-crop-box"]'),
+    ).not.toBeNull();
+    // Nothing is uploaded until the crop is confirmed.
+    expect(uploadIdlePicture).not.toHaveBeenCalled();
   });
 
   it('uploads a cropped picture, waits for the platform to verify it, then puts it at the end', async () => {

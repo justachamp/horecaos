@@ -1530,6 +1530,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Правило начисления баллов выведено из действия',
       'uz-Latn': 'Ballar hisoblash qoidasi bekor qilindi',
     },
+    'loyalty.pos_sync.consent_resumed': {
+      en: 'Till balance sync resumed for a customer who consented',
+      ru: 'Синхронизация баланса с кассой возобновлена для клиента, давшего согласие',
+      'uz-Latn': 'Rozilik bergan mijoz uchun kassa balansi sinxronizatsiyasi qayta tiklandi',
+    },
+    'loyalty.pos_sync.consent_suspended': {
+      en: 'Till balance sync stopped for a customer without consent',
+      ru: 'Синхронизация баланса с кассой остановлена для клиента без согласия',
+      'uz-Latn': 'Roziligi yoʻq mijoz uchun kassa balansi sinxronizatsiyasi toʻxtatildi',
+    },
     'loyalty.pos_sync.held': {
       en: 'Loyalty points earned at the till held for review',
       ru: 'Баллы, начисленные на кассе, задержаны до проверки',

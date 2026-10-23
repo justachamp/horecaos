@@ -1814,7 +1814,8 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.kiosk.idle.remove': 'Olib tashlash',
   'settings.kiosk.idle.full':
     'Roʻyxatda allaqachon {max} ta rasm bor. Yangisini qoʻshish uchun birini olib tashlang.',
-  'settings.kiosk.idle.hint': 'Rasmni tanlab, 9:16 kadrga moslang. 1 MB gacha JPEG, PNG yoki WebP.',
+  'settings.kiosk.idle.hint':
+    'JPEG, PNG yoki WebP tanlab, 9:16 kadrga moslang. Moslangan rasm 1 MB dan oshmasligi kerak.',
   'settings.kiosk.idle.uploading': 'Rasm yuklanmoqda va tekshirilmoqda…',
   'settings.kiosk.idle.added': 'Rasm roʻyxatga qoʻshildi.',
   'settings.kiosk.idle.tooLarge':

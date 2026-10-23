@@ -42,6 +42,13 @@ const IDLE_ACCEPT = 'image/jpeg,image/png,image/webp';
  */
 const IDLE_EXPORT_EDGE_PX = 1280;
 
+/**
+ * The largest original the uploader takes in before the crop. The platform's 1 MB cap is on the 720 x 1280 picture the crop
+ * exports, not on the photograph the manager picks (an ordinary phone photo is several megabytes), so the cap is checked
+ * after the crop in {@link KioskIdleMedia.onPicture} and never handed to the uploader, which applies its limit to the original.
+ */
+const IDLE_ORIGINAL_MAX_BYTES = 10 * 1024 * 1024;
+
 /** The platform's `reason` for a refused attach, to the sentence that explains it. */
 const REFUSAL_KEYS: Readonly<Record<string, MessageKey>> = {
   WRONG_ASPECT_RATIO: 'settings.kiosk.idle.refused.WRONG_ASPECT_RATIO',
@@ -82,6 +89,7 @@ export class KioskIdleMedia implements OnInit {
   protected readonly ratios = IDLE_RATIOS;
   protected readonly accept = IDLE_ACCEPT;
   protected readonly exportEdge = IDLE_EXPORT_EDGE_PX;
+  protected readonly originalMaxBytes = IDLE_ORIGINAL_MAX_BYTES;
 
   protected readonly channelId = signal<string>('');
   protected readonly list = signal<IdleMediaList | null>(null);
@@ -93,7 +101,6 @@ export class KioskIdleMedia implements OnInit {
 
   protected readonly items = computed(() => this.list()?.items ?? []);
   protected readonly maximumCount = computed(() => this.list()?.maximumCount ?? 8);
-  protected readonly maximumBytes = computed(() => this.list()?.maximumBytes ?? 1_048_576);
   protected readonly full = computed(() => this.items().length >= this.maximumCount());
   protected readonly first = computed<IdleMediaItem | null>(() => this.items()[0] ?? null);
 

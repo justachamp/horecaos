@@ -2,6 +2,7 @@ package uz.horecaos.platform.media.api;
 
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -19,7 +20,7 @@ public enum MediaPurpose {
      * One picture on a KIOSK channel's idle loop: 9:16, at most 1 MB (1 048 576 bytes), JPEG, PNG or WebP. No video
      * (ADR 0187, D25).
      */
-    KIOSK_IDLE(9, 16, 1_048_576L);
+    KIOSK_IDLE(9, 16, 1_048_576L, Set.of("image/jpeg", "image/png", "image/webp"));
 
     /** One percent: an image cropped to the pixel by a browser is rarely exactly its ratio. */
     private static final double RATIO_TOLERANCE = 0.01;
@@ -27,11 +28,13 @@ public enum MediaPurpose {
     private final int ratioWidth;
     private final int ratioHeight;
     private final long maximumBytes;
+    private final Set<String> contentTypes;
 
-    MediaPurpose(int ratioWidth, int ratioHeight, long maximumBytes) {
+    MediaPurpose(int ratioWidth, int ratioHeight, long maximumBytes, Set<String> contentTypes) {
         this.ratioWidth = ratioWidth;
         this.ratioHeight = ratioHeight;
         this.maximumBytes = maximumBytes;
+        this.contentTypes = contentTypes;
     }
 
     public int ratioWidth() {
@@ -44,6 +47,16 @@ public enum MediaPurpose {
 
     public long maximumBytes() {
         return maximumBytes;
+    }
+
+    /**
+     * Whether a media type is one this purpose takes. Narrower than the types the platform stores: a kiosk's browser is
+     * the audience, and an AVIF it cannot decode is a broken picture in the loop, so the closed set is the purpose's
+     * own and is enforced at the request and again at the attach.
+     */
+    public boolean allowsContentType(@Nullable String contentType) {
+        return contentType != null
+                && contentTypes.contains(contentType.toLowerCase(Locale.ROOT).strip());
     }
 
     /** Whether {@code width x height} is this purpose's ratio, within one percent on the cross product. */

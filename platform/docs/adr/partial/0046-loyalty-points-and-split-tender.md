@@ -56,43 +56,44 @@
   `LOYALTY_POINTS` row exists once a tenant's first points redemption settles —
   created lazily on demand rather than seeded per tenant as the checklist below
   describes, which is a difference worth knowing before anybody writes the
-  seeding step it asks for. Also not built: the campaign-driven accrual rules ADR 0044
-  owns; expiry warning notifications; `fiscal.fiscal_document_lines` (no such table: since batch 21
-  the allocation reaches the receipt through `ReceiptLineAllocator`, which feeds `RedemptionAllocation`
-  to the receipt line builder, so a redeemed order is filed with the redemption as a per-line discount
-  and the goods' VAT extracted again from what they were paid, 7 714 in the worked order; the lines as
-  filed are kept behind the document's protected request, not as rows, and the finance sign-off of
-  that VAT treatment is still open; `RedemptionAllocation` now caps the remainder at what a line can
-  bear, so a near-total redemption over equal small lines cannot make a line negative); the `cash_due_minor` handoff to ADR
-  seeding step it asks for. The pre-expiry warning is built dark (batch 21, [ADR 0181](../built/0181-compensation-from-a-case-promotion-targeting-requote-and-discretionary-discounts.md)):
-  `LoyaltyMaintenanceService.warnExpiringLots` groups a customer's lots inside their window into
-  one call to `LoyaltyExpiryWarningPort`, leaves a customer alone for 24 hours after a warning and never
-  warns about a lot already past its expiry; `LoyaltyExpiryWarningNotifier` (in `notifications`, the
-  direction the module graph allows) creates an ADR 0020 intent for the semantic key `LOYALTY_POINTS_EXPIRING`
-  with three typed variables, `TRANSACTIONAL_REQUIRED` until counsel rules, and a tenant that has not
-  written and activated the wording sends nothing. Corrected 2026-10-23 against the code: "sends nothing"
-  first meant that the sweep still marked every lot as warned and the intent was then suppressed
-  `NO_ACTIVE_TEMPLATE`, which spent each lot's one warning before a tenant could activate wording. Now
-  `LoyaltyExpiryWarningNotifier` asks `CustomerAccountAlertPort.canDeliver` (an active wording on the channel the
-  customer is reached by, approved by the SMS gateway where it moderates) before creating the intent,
-  `LoyaltyExpiryWarningPort.lotsExpiring` answers whether it handed a message over, and
-  `LoyaltyMaintenanceService.warnExpiringLots` marks a lot only when it did; lots nobody could be told about stay
-  due and are offered again on the next sweep. Also not built: the campaign-driven accrual rules ADR 0044
-  owns; counsel's confirmation of the message class and the SMS gateway's approval of each wording
-  (`docs/runbooks/external-connections/w6-promotions-reviews-approvals.md`); `fiscal.fiscal_document_lines`, so the
-  per-line allocation is written nowhere; the `cash_due_minor` handoff to ADR
-  0014's assignment; and the tax effect on the liability report. The storefront
-  balance endpoints exist but require `LOYALTY_READ` at tenant scope, a staff
-  capability no customer principal can hold, so there is still no
-  customer-facing balance surface. Corrected 2026-10-14 against the code: expiry
-  warnings are no longer simply unbuilt — `LoyaltyMaintenanceService.warnExpiringLots`
-  decides to warn before the sweep destroys a lot and `LoggingLoyaltyExpiryWarningPort`
-  logs it, but no customer is told, because the template and channel ADR 0020 would
-  send it through do not exist; and a till's own bonus balance is now handled by
-  [ADR 0171](../partial/0171-who-owns-a-loyalty-balance-when-the-till-also-keeps-one.md) (the
-  ledger stays the one authority, a till's number is a mirror, a movement at the till
-  is an order-free `ADJUSTMENT` with reason `POS_SYNC_EARN` or `POS_SYNC_SPEND`), built
-  against a fake till.
+  seeding step it asks for. **Since batch 21, and what that corrects** (rewritten once on 2026-10-23, after two
+  waves' edits had been spliced into one paragraph that contradicted itself). *The pre-expiry warning is built dark* ([ADR
+  0181](../built/0181-compensation-from-a-case-promotion-targeting-requote-and-discretionary-discounts.md)):
+  `LoyaltyMaintenanceService.warnExpiringLots` groups a customer's lots inside their window into one call to
+  `LoyaltyExpiryWarningPort`, leaves a customer alone for 24 hours after a warning and never warns about a lot
+  already past its expiry; `LoyaltyExpiryWarningNotifier` (in `notifications`, the direction the module graph
+  allows) is the port's one implementation and creates an ADR 0020 intent for the semantic key
+  `LOYALTY_POINTS_EXPIRING` with three typed variables, `TRANSACTIONAL_REQUIRED` until counsel rules, so a
+  tenant that has not written and activated the wording sends nothing. It asks
+  `CustomerAccountAlertPort.canDeliver` (an active wording on the channel the customer is reached by, approved by the SMS
+  gateway where it moderates) before creating the intent, and `LoyaltyExpiryWarningPort.lotsExpiring` answers whether
+  it handed a message over; `warnExpiringLots` marks a lot warned only when it did, so lots nobody could be told about
+  stay due and are offered again on the next sweep (corrected 2026-10-23: the sweep first marked every lot as warned
+  and the intent was then suppressed `NO_ACTIVE_TEMPLATE`, which spent each lot's one warning before a tenant could
+  activate wording). A note added here on 2026-10-14 said the decision was only logged by
+  `LoggingLoyaltyExpiryWarningPort` and no customer could be told; that class no longer exists, and the sentence
+  is superseded by this one. *The per-line allocation reaches the receipt*: `fiscal.fiscal_document_lines` is not
+  a table (V0039 left it a sketch); `ReceiptLineAllocator` feeds `RedemptionAllocation` to the receipt line
+  builder, so a redeemed order is filed with the redemption as a per-line discount and the goods' VAT extracted
+  again from what they were paid (7 714 in the worked order); the lines as filed are kept behind the document's
+  protected request, not as rows; `RedemptionAllocation` caps the remainder at what a line can bear, so a
+  near-total redemption over equal small lines cannot make a line negative. The finance sign-off of that VAT
+  treatment is still open. *A customer reads their own balance*: `LoyaltyCustomerController` (ADR 0185) answers
+  `GET /api/v1/storefront/tenants/{tenantId}/brands/{brandId}/loyalty/balance` by ownership, and both
+  storefronts' `PointsService` call it; the staff balance reads still require `LOYALTY_READ`, a capability no
+  customer principal holds. *The `cash_due_minor` handoff is wired* (corrected against the code on 2026-10-23;
+  the rollout checklist below, written before it, still lists it as outstanding): the courier's cash figure is
+  read from the settlement's own money leg, on demand and not stored on the assignment, through
+  `CashDueLookupPort.cashDueMinorIfSettled` by `CourierDeliveryService` (the courier app), by
+  `DeliveryMoneyAdapter` (the operations delivery list's `cashToCollectMinor`), and by
+  `DeliveryAccrualOrderCompletionTrigger`, which hands it to `CourierAccrualService.recordDelivery`. A till's own
+  bonus balance is handled by [ADR
+  0171](../partial/0171-who-owns-a-loyalty-balance-when-the-till-also-keeps-one.md) (the ledger stays the one
+  authority, a till's number is a mirror, a movement at the till is an order-free `ADJUSTMENT` with reason
+  `POS_SYNC_EARN` or `POS_SYNC_SPEND`), built against a fake till. Also not built: the campaign-driven accrual
+  rules ADR 0044 owns; counsel's confirmation of the message class and the SMS gateway's approval of each
+  expiry-warning wording (`docs/runbooks/external-connections/w6-promotions-reviews-approvals.md`); the finance
+  sign-off named above; and the tax effect on the liability report.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-23
 - Deciders: Ayubkhon Abbosov (platform architecture; loyalty scope and the withdrawal of stored value, 2026-08-23), finance (VAT treatment of a merchant-funded rebate), legal (terms, expiry, offboarding), product (accrual and redemption defaults)

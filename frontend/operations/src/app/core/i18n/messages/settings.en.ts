@@ -1792,7 +1792,7 @@ export const settingsEn = {
   'settings.kiosk.idle.remove': 'Remove',
   'settings.kiosk.idle.full': 'The loop holds {max} pictures. Remove one to add another.',
   'settings.kiosk.idle.hint':
-    'Choose a picture and fit it to the 9:16 frame. A JPEG, PNG or WebP of up to 1 MB.',
+    'Choose a JPEG, PNG or WebP and fit it to the 9:16 frame. The fitted picture must come to 1 MB or less.',
   'settings.kiosk.idle.uploading': 'Uploading and checking the picture…',
   'settings.kiosk.idle.added': 'The picture is on the loop.',
   'settings.kiosk.idle.tooLarge':

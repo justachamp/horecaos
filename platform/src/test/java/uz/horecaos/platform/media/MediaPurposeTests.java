@@ -18,6 +18,25 @@ class MediaPurposeTests {
     }
 
     @Test
+    @DisplayName(
+            "a kiosk's idle picture is a JPEG, PNG or WebP and nothing else, whatever the platform stores for other assets")
+    void theTypesAreAClosedSet() {
+        MediaPurpose purpose = MediaPurpose.KIOSK_IDLE;
+        assertThat(purpose.allowsContentType("image/jpeg")).isTrue();
+        assertThat(purpose.allowsContentType("image/png")).isTrue();
+        assertThat(purpose.allowsContentType("image/webp")).isTrue();
+        assertThat(purpose.allowsContentType(" IMAGE/JPEG "))
+                .as("case and padding")
+                .isTrue();
+        assertThat(purpose.allowsContentType("image/avif")).isFalse();
+        assertThat(purpose.allowsContentType("image/gif")).isFalse();
+        assertThat(purpose.allowsContentType("image/svg+xml")).isFalse();
+        assertThat(purpose.allowsContentType("video/mp4")).isFalse();
+        assertThat(purpose.allowsContentType("")).isFalse();
+        assertThat(purpose.allowsContentType(null)).isFalse();
+    }
+
+    @Test
     @DisplayName("the ratio holds within one percent either way and not beyond")
     void theRatioHasAOnePercentTolerance() {
         MediaPurpose purpose = MediaPurpose.KIOSK_IDLE;

@@ -2,6 +2,7 @@ package uz.horecaos.platform.loyalty.web;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 
 import com.jayway.jsonpath.JsonPath;
@@ -262,6 +263,45 @@ class LoyaltyPosSyncStagingTests {
                         """).query(String.class).list())
                 .hasSize(3)
                 .anyMatch(document -> document.contains("PULL_AND_PUSH") && document.contains("REPORT_ONLY"));
+    }
+
+    @Test
+    @DisplayName(
+            "a staged mode and its ADR 0027 fact are one commit: when the fact cannot be written, the mode does not move")
+    void aModeAndItsFactAreOneCommit() throws Exception {
+        long version = bindingVersion();
+        jdbc.sql("""
+                CREATE OR REPLACE FUNCTION audit.refuse_mode_fact() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN
+                    IF NEW.action_code = 'loyalty.pos_sync.mode.changed' THEN
+                        RAISE EXCEPTION 'the audit write is refused for this test';
+                    END IF;
+                    RETURN NEW;
+                END $$
+                """).update();
+        jdbc.sql("""
+                CREATE TRIGGER refuse_mode_fact BEFORE INSERT ON audit.audit_events
+                    FOR EACH ROW EXECUTE FUNCTION audit.refuse_mode_fact()
+                """).update();
+        try {
+            assertThatThrownBy(() -> sync.setMode(
+                            TENANT, BRAND, FAKE_BINDING, PosBalanceSyncService.Mode.PULL, version, "pilot", FINANCE))
+                    .hasMessageContaining("refused for this test");
+        } finally {
+            jdbc.sql("DROP TRIGGER refuse_mode_fact ON audit.audit_events").update();
+            jdbc.sql("DROP FUNCTION audit.refuse_mode_fact()").update();
+        }
+
+        assertThat(bindingVersion())
+                .as("the binding did not move without its fact")
+                .isEqualTo(version);
+        assertThat(configurationOverride(FAKE_BINDING)).doesNotContain("loyalty.sync.mode");
+        assertThat(count("audit.audit_events WHERE action_code = 'loyalty.pos_sync.mode.changed'"))
+                .isZero();
+        sync.setMode(TENANT, BRAND, FAKE_BINDING, PosBalanceSyncService.Mode.PULL, version, "pilot", FINANCE);
+        assertThat(bindingField("mode"))
+                .as("and the same request retried, the fact writable again, succeeds at the version it read")
+                .isEqualTo("PULL");
     }
 
     @Test
@@ -632,6 +672,138 @@ class LoyaltyPosSyncStagingTests {
         assertThat(till.balanceWriteCount()).isZero();
     }
 
+    @Test
+    @DisplayName(
+            "flipping the key after customers were paired stops their sync: nothing is pulled or pushed for a customer without consent, and it resumes when they consent")
+    void flippingTheKeyStopsWhoWasAlreadyPaired() {
+        pointsAccount(AZIZA, PHONE_AZIZA, 40_000);
+        till.tillCustomer("T-AZIZA", PHONE_AZIZA, 40_000);
+        mode("PULL_AND_PUSH");
+        sync.run(TENANT, BRAND, FAKE_BINDING, PosBalanceSyncService.RunKind.RECONCILE, "test");
+        assertThat(count("loyalty.pos_balance_sync_state WHERE status = 'MATCHED'"))
+                .as("paired while the key was off")
+                .isEqualTo(1);
+        int writes = till.balanceWriteCount();
+
+        requireConsent(true);
+        credit(AZIZA, 5_000, "accrual-after-the-flip");
+        till.tillEarn("T-AZIZA", 3_000);
+        alerts.clear();
+        sync.run(TENANT, BRAND, FAKE_BINDING, PosBalanceSyncService.RunKind.RECONCILE, "test");
+
+        assertThat(till.balanceWriteCount())
+                .as("nothing about the customer is sent to the till once consent is required")
+                .isEqualTo(writes);
+        assertThat(till.tillBalance("T-AZIZA"))
+                .as("the till is as the till had it")
+                .isEqualTo(43_000);
+        assertThat(count("loyalty.pos_sync_movements"))
+                .as("and nothing the till did is imported")
+                .isZero();
+        assertThat(platformBalance(AZIZA)).isEqualTo(45_000);
+        assertThat(stateStatus()).as("the pairing is suspended, not deleted").isEqualTo("SUSPENDED");
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'NOT_CONSENTED' AND status = 'OPEN'"))
+                .as("and the report says why")
+                .isEqualTo(1);
+        assertThat(alerts.calls()).extracting(RecordedAlert::eventClass).containsExactly("LOYALTY_SYNC_DISCREPANCY");
+        assertThat(count("audit.audit_events WHERE action_code = 'loyalty.pos_sync.consent_suspended'"))
+                .isEqualTo(1);
+
+        sync.run(TENANT, BRAND, FAKE_BINDING, PosBalanceSyncService.RunKind.RECONCILE, "test");
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'NOT_CONSENTED' AND status = 'OPEN'"))
+                .as("a second pass tells no one again")
+                .isEqualTo(1);
+        assertThat(till.balanceWriteCount()).isEqualTo(writes);
+
+        consents.grant(AZIZA);
+        sync.run(TENANT, BRAND, FAKE_BINDING, PosBalanceSyncService.RunKind.RECONCILE, "test");
+
+        assertThat(stateStatus()).as("consent given: the pairing is back").isEqualTo("MATCHED");
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'NOT_CONSENTED' AND status = 'OPEN'"))
+                .isZero();
+        assertThat(count("loyalty.pos_sync_movements"))
+                .as("what the till did meanwhile is imported now")
+                .isEqualTo(1);
+        assertThat(platformBalance(AZIZA)).isEqualTo(48_000);
+        assertThat(till.tillBalance("T-AZIZA"))
+                .as("and the platform's number reaches the till")
+                .isEqualTo(48_000);
+    }
+
+    @Test
+    @DisplayName("a customer who withdraws consent after being paired stops being synced on the next pass")
+    void aWithdrawalStopsAPairedCustomer() {
+        pointsAccount(AZIZA, PHONE_AZIZA, 40_000);
+        till.tillCustomer("T-AZIZA", PHONE_AZIZA, 40_000);
+        mode("PULL_AND_PUSH");
+        requireConsent(true);
+        consents.grant(AZIZA);
+        sync.run(TENANT, BRAND, FAKE_BINDING, PosBalanceSyncService.RunKind.RECONCILE, "test");
+        assertThat(stateStatus()).isEqualTo("MATCHED");
+        int writes = till.balanceWriteCount();
+
+        consents.withhold(AZIZA);
+        credit(AZIZA, 2_000, "accrual-after-the-withdrawal");
+        sync.run(TENANT, BRAND, FAKE_BINDING, PosBalanceSyncService.RunKind.PUSH, "test");
+
+        assertThat(till.balanceWriteCount())
+                .as("a push pass sends nothing for them")
+                .isEqualTo(writes);
+        assertThat(stateStatus()).isEqualTo("SUSPENDED");
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'NOT_CONSENTED' AND status = 'OPEN'"))
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName(
+            "a pairing a person suspended is not brought back by the consent gate: only one the gate suspended resumes")
+    void aPersonsSuspensionIsNotUndoneByConsent() {
+        pointsAccount(AZIZA, PHONE_AZIZA, 40_000);
+        till.tillCustomer("T-AZIZA", PHONE_AZIZA, 40_000);
+        mode("PULL_AND_PUSH");
+        sync.run(TENANT, BRAND, FAKE_BINDING, PosBalanceSyncService.RunKind.RECONCILE, "test");
+        jdbc.sql("UPDATE loyalty.pos_balance_sync_state SET status = 'SUSPENDED'")
+                .update();
+        requireConsent(true);
+        consents.grant(AZIZA);
+        int writes = till.balanceWriteCount();
+        credit(AZIZA, 2_000, "accrual-while-suspended");
+
+        sync.run(TENANT, BRAND, FAKE_BINDING, PosBalanceSyncService.RunKind.RECONCILE, "test");
+
+        assertThat(stateStatus()).isEqualTo("SUSPENDED");
+        assertThat(till.balanceWriteCount()).isEqualTo(writes);
+    }
+
+    @Test
+    @DisplayName(
+            "a finance user cannot push the platform's number to a till for a customer who has not consented, whichever way the difference is settled")
+    void aResolutionDoesNotTouchTheTillWithoutConsent() {
+        pointsAccount(AZIZA, PHONE_AZIZA, 40_000);
+        till.tillCustomer("T-AZIZA", PHONE_AZIZA, 40_000);
+        mode("PULL");
+        sync.run(TENANT, BRAND, FAKE_BINDING, PosBalanceSyncService.RunKind.RECONCILE, "test");
+        till.corruptTillBalance("T-AZIZA", 41_000);
+        sync.run(TENANT, BRAND, FAKE_BINDING, PosBalanceSyncService.RunKind.RECONCILE, "test");
+        List<JdbcPosBalanceSyncStore.DiscrepancyRow> open = syncStore.discrepancies(TENANT, BRAND, "OPEN", 10);
+        assertThat(open).hasSize(1);
+        requireConsent(true);
+        int writes = till.balanceWriteCount();
+
+        assertThatThrownBy(() -> sync.resolve(
+                        TENANT,
+                        BRAND,
+                        open.getFirst().id(),
+                        PosBalanceSyncService.Resolution.ACCEPT_PLATFORM,
+                        "put it right",
+                        open.getFirst().version(),
+                        FINANCE))
+                .isInstanceOf(uz.horecaos.platform.web.api.ApiException.class);
+
+        assertThat(till.balanceWriteCount()).isEqualTo(writes);
+        assertThat(syncStore.discrepancies(TENANT, BRAND, "OPEN", 10)).hasSize(1);
+    }
+
     // ------------------------------------------------------------------------ helpers
 
     private PosBalanceSyncScheduler scheduler(Clock clock) {
@@ -748,6 +920,19 @@ class LoyaltyPosSyncStagingTests {
                 ActorRef.user("fixture", null),
                 key,
                 ""));
+    }
+
+    private String stateStatus() {
+        return jdbc.sql("SELECT status FROM loyalty.pos_balance_sync_state")
+                .query(String.class)
+                .single();
+    }
+
+    private long platformBalance(UUID customer) {
+        return jdbc.sql("SELECT balance_minor FROM loyalty.accounts WHERE customer_account_id = :c")
+                .param("c", customer)
+                .query(Long.class)
+                .single();
     }
 
     private long count(String tableAndPredicate) {
