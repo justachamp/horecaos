@@ -25,13 +25,18 @@ public class FiscalAmendmentCorrectionSweeper {
     private static final Logger log = LoggerFactory.getLogger(FiscalAmendmentCorrectionSweeper.class);
 
     private final FiscalAmendmentCorrections corrections;
-    private final int batchSize;
+    private final int pageSize;
 
+    /**
+     * @param pageSize how many flagged revisions are read at a time. A pass pages through the whole window, so this
+     *     bounds one read and not how much of the window is looked at; the property keeps its name, {@code
+     *     batch-size}, from when it was the latter.
+     */
     public FiscalAmendmentCorrectionSweeper(
             FiscalAmendmentCorrections corrections,
-            @Value("${horecaos.fiscal.amendment-corrections.batch-size:500}") int batchSize) {
+            @Value("${horecaos.fiscal.amendment-corrections.batch-size:500}") int pageSize) {
         this.corrections = corrections;
-        this.batchSize = batchSize;
+        this.pageSize = pageSize;
     }
 
     @Scheduled(
@@ -39,7 +44,7 @@ public class FiscalAmendmentCorrectionSweeper {
             fixedDelayString = "${horecaos.fiscal.amendment-corrections.interval:PT5M}")
     public void openRequests() {
         try {
-            int opened = corrections.openRequests(batchSize);
+            int opened = corrections.openRequests(pageSize);
             if (opened > 0) {
                 log.info("Opened {} correction request(s) for orders amended after their receipt was filed.", opened);
             }
