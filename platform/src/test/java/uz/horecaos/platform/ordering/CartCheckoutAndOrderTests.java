@@ -3254,6 +3254,9 @@ class CartCheckoutAndOrderTests {
                 .anyMatch(event -> event instanceof OrderAwaitingApproval awaiting
                         && awaiting.orderId().equals(orderIdOf(placed))
                         && awaiting.approvalDeadlineAt().equals(captureInstant.plus(Duration.ofMinutes(5))));
+        assertThat(heldReason(orderIdOf(placed)))
+                .as("no gate held this order -- the restaurant asks about every order -- so the payment is the reason")
+                .isEqualTo("PAYMENT_CAPTURED");
     }
 
     @Test
@@ -8518,6 +8521,10 @@ class CartCheckoutAndOrderTests {
                         "the money is in, and a person still has to say yes: the pinned policy says AUTO_CONFIRM, the order's own mode does not")
                 .isEqualTo(OrderStatus.AWAITING_APPROVAL);
         assertThat(pendingApprovalTimers(orderIdOf(placed))).isEqualTo(1L);
+        assertThat(heldReason(orderIdOf(placed)))
+                .as("the payment moved the order into AWAITING_APPROVAL, but the gate is why it is held, and "
+                        + "the history that answers 'why is it stuck' has to say so")
+                .isEqualTo("AUTO_ACCEPT_HELD_CHANNEL");
 
         clock.advance(Duration.ofMinutes(6));
         var lapsed = tx(() -> orderState.approvalDeadlineReached(TENANT, orderIdOf(placed)));
@@ -8526,6 +8533,33 @@ class CartCheckoutAndOrderTests {
         assertThat(lapsed.status())
                 .as("the document's timeout action is AUTO_REJECT")
                 .isEqualTo(OrderStatus.EXPIRED);
+    }
+
+    @Test
+    @DisplayName("a held order paid online names the gate that held it, whichever gate it was, from checkout on")
+    void aHeldOrderPaidOnlineKeepsThePriorOrdersReason() {
+        autoConfirmWithAHoldBackPath();
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_MIN_PRIOR_ORDERS_CODE, 1);
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-gate-paid-prior", "CLICK")));
+        assertThat(placed.status()).isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
+
+        assertThat(jdbc.sql("""
+                                SELECT reason_code FROM ordering.order_state_history
+                                WHERE order_id = :id AND to_status = 'PAYMENT_AUTHORIZING'
+                                """)
+                        .param("id", orderIdOf(placed))
+                        .query(String.class)
+                        .single())
+                .as("the gate decided at checkout, so checkout's own transition remembers it until the money lands")
+                .isEqualTo("AUTO_ACCEPT_HELD_PRIOR_ORDERS");
+
+        UUID attempt = reservedAttempt(orderIdOf(placed), PaymentProviderType.CLICK, Duration.ofHours(12));
+        capturePayment(orderIdOf(placed), attempt);
+
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().status())
+                .isEqualTo(OrderStatus.AWAITING_APPROVAL);
+        assertThat(heldReason(orderIdOf(placed))).isEqualTo("AUTO_ACCEPT_HELD_PRIOR_ORDERS");
     }
 
     private String heldReason(UUID orderId) {

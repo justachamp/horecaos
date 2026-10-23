@@ -68,6 +68,11 @@ class AutoAcceptGate {
         String reasonCode() {
             return reasonCode;
         }
+
+        /** Whether a history row's reason code is one a gate gives, as opposed to any other reason. */
+        static boolean isReasonCode(@Nullable String code) {
+            return Arrays.stream(values()).anyMatch(reason -> reason.reasonCode.equals(code));
+        }
     }
 
     /** What the gates say about one order. */
