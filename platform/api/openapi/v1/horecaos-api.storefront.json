@@ -5120,7 +5120,7 @@
         },
         "summary" : "What this cart's customer may spend of their points on it",
         "tags" : [ "Storefront redemption" ],
-        "x-horecaos-surface" : "internal"
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/table" : {
@@ -6646,7 +6646,7 @@
         },
         "summary" : "The caller's own points balance at this brand",
         "tags" : [ "Loyalty" ],
-        "x-horecaos-surface" : "internal"
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/map-config" : {
@@ -7684,7 +7684,7 @@
         },
         "summary" : "How one of the caller's own orders is being paid",
         "tags" : [ "Storefront payments" ],
-        "x-horecaos-surface" : "internal"
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/receipts" : {
@@ -8034,7 +8034,7 @@
         },
         "summary" : "Whether push can be offered, and whether this customer has turned it on",
         "tags" : [ "Web Push" ],
-        "x-horecaos-surface" : "internal"
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/push/subscription" : {
@@ -8065,7 +8065,7 @@
         },
         "summary" : "Turn push off",
         "tags" : [ "Web Push" ],
-        "x-horecaos-surface" : "internal"
+        "x-horecaos-surface" : "published"
       },
       "put" : {
         "description" : "The browser's own `PushSubscription.toJSON()`. Replaces the customer's earlier subscription at this brand, and ends any other customer's subscription for this browser. Records the customer's consent to promotional push in the same step. 400 with a bounded reason (`PUSH_ENDPOINT_NOT_ALLOWED`, `PUSH_KEYS_INVALID`, ...) when the subscription is not one the platform will send to.",
@@ -8104,7 +8104,7 @@
         },
         "summary" : "Turn push on in this browser",
         "tags" : [ "Web Push" ],
-        "x-horecaos-surface" : "internal"
+        "x-horecaos-surface" : "published"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/me" : {

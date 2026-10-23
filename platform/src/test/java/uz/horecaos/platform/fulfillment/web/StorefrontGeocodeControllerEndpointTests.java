@@ -275,10 +275,10 @@ class StorefrontGeocodeControllerEndpointTests {
         UUID platformRegion = UUID.fromString("018fa200-4000-7000-8000-0000000000e9");
         jdbc.sql("""
                 INSERT INTO fulfillment.regions (
-                    id, tenant_id, code, display_name_ru, display_name_uz, display_name_en,
+                    id, tenant_id, code,
                     centre_lat, centre_lon, bbox_sw_lat, bbox_sw_lon, bbox_ne_lat, bbox_ne_lon,
                     status, version)
-                VALUES (:id, NULL, 'PLATFORM-TASHKENT', 'P', 'P', 'P',
+                VALUES (:id, NULL, 'PLATFORM-TASHKENT',
                     41.3, 69.2, 41.0, 69.0, 41.6, 69.6, 'ACTIVE', 1)
                 """).param("id", platformRegion).update();
 
@@ -482,10 +482,10 @@ class StorefrontGeocodeControllerEndpointTests {
             UUID tenantId, UUID regionId, String code, double swLat, double swLon, double neLat, double neLon) {
         jdbc.sql("""
                 INSERT INTO fulfillment.regions (
-                    id, tenant_id, code, display_name_ru, display_name_uz, display_name_en,
+                    id, tenant_id, code,
                     centre_lat, centre_lon, bbox_sw_lat, bbox_sw_lon, bbox_ne_lat, bbox_ne_lon,
                     status, version)
-                VALUES (:id, :tenantId, :code, :code, :code, :code,
+                VALUES (:id, :tenantId, :code,
                     :centreLat, :centreLon, :swLat, :swLon, :neLat, :neLon, 'ACTIVE', 1)
                 """)
                 .param("id", regionId)
