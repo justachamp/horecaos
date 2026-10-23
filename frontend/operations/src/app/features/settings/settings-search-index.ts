@@ -102,11 +102,14 @@ export const CONFIGURATION_KEY_ROUTES: Readonly<Record<string, string>> = Object
  * shrinks as screens land (a key with a screen moves to {@link SETTING_ENTRIES}).
  *
  * `ordering.amendment_cut_point_status` and `ordering.amendment_decrease_approval_threshold_minor` (row 1.2c) are
- * declared in `ConfigurationKeys` but not listed in its registry, so they are neither in `GET .../keys` nor
- * settable through this surface; they appear here only once row 1.2c registers them.
+ * registered (they were declared in `ConfigurationKeys` but left out of its list until the batch-21 integration, and
+ * `ConfigurationKeysTests` now holds the class to its own list), so they are in `GET .../keys` and settable through
+ * the API; the screen that sets them is row 1.2c's.
  */
 export const NO_CONSOLE_SCREEN: Readonly<Record<string, string>> = {
   'ordering.cart_expiry_minutes': '1.4',
+  'ordering.amendment_cut_point_status': '1.2c',
+  'ordering.amendment_decrease_approval_threshold_minor': '1.2c',
   'voice.ring_time_ceiling_seconds': '1.6',
   'pricing.promotion.simulate.max_lines': '6.1',
   'marketing.channel.priority.order': '6.4',

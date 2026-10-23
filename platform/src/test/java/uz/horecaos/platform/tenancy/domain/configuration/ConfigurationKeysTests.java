@@ -23,6 +23,31 @@ class ConfigurationKeysTests {
                 .doesNotHaveDuplicates();
     }
 
+    /**
+     * Batch 21 integration (seam d): {@code ordering.amendment_cut_point_status} and {@code
+     * ordering.amendment_decrease_approval_threshold_minor} were declared as constants here but left out of the
+     * registry list, so a write to either was refused as an unknown key and neither showed in {@code GET .../keys}.
+     * A key declared in this class and not listed is a silent drift, so the class is held to its own list.
+     */
+    @Test
+    void everyKeyDeclaredInThisClassIsInTheRegistry() throws IllegalAccessException {
+        java.util.List<String> declared = new java.util.ArrayList<>();
+        for (java.lang.reflect.Field field : ConfigurationKeys.class.getDeclaredFields()) {
+            if (java.lang.reflect.Modifier.isStatic(field.getModifiers())
+                    && ConfigurationKey.class.isAssignableFrom(field.getType())) {
+                field.setAccessible(true);
+                declared.add(((ConfigurationKey<?>) field.get(null)).code());
+            }
+        }
+
+        assertThat(declared).as("the scan must actually find the declared keys").hasSizeGreaterThan(50);
+        assertThat(ConfigurationKeys.all()).extracting(ConfigurationKey::code).containsAll(declared);
+        assertThat(ConfigurationKeys.find("ordering.amendment_cut_point_status"))
+                .isPresent();
+        assertThat(ConfigurationKeys.find("ordering.amendment_decrease_approval_threshold_minor"))
+                .isPresent();
+    }
+
     @Test
     void everyFeatureFlagIsOffByDefaultAndRolledOutFromThePlatformOrPerTenant() {
         assertThat(ConfigurationKeys.featureFlags()).isNotEmpty();
