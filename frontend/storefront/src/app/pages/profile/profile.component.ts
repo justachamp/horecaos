@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
+import { PushSubscribeComponent } from '../../shared/push-subscribe/push-subscribe';
 import { ProfileMenuComponent } from './profile-menu/profile-menu';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { Session } from '../../core/auth/session';
@@ -19,6 +20,7 @@ import { CustomerOtp } from '../../core/session/customer-otp';
 import { FavouritesService } from '../../services/favourites.service';
 import { AvatarService } from '../../services/avatar.service';
 import { TelegramWebappService } from '../../services/telegram-webapp.service';
+import { PushSubscriptionService } from '../../services/push-subscription.service';
 import { TelegramLinkService } from '../../services/telegram-link.service';
 import packageJson from '../../../../package.json';
 
@@ -34,7 +36,7 @@ interface UserProfile {
   selector: 'app-profile',
   templateUrl: './profile.component.html',
   styleUrl: './profile.component.scss',
-  imports: [CommonModule, RouterLink, ProfileMenuComponent, TranslatePipe],
+  imports: [CommonModule, RouterLink, ProfileMenuComponent, PushSubscribeComponent, TranslatePipe],
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -94,6 +96,7 @@ export class ProfileComponent implements OnInit {
   private readonly favourites = inject(FavouritesService);
   private readonly avatars = inject(AvatarService);
   private readonly telegramLink = inject(TelegramLinkService);
+  private readonly pushSubscription = inject(PushSubscriptionService);
   private readonly pointsService = inject(PointsService);
   private readonly translate = inject(TranslateService);
 
@@ -154,6 +157,8 @@ export class ProfileComponent implements OnInit {
     this.favourites.forget();
     this.avatars.forget();
     this.telegramLink.forget();
+    // Nor this one's push state: the next customer on the handset is asked afresh (ADR 0182, D14).
+    this.pushSubscription.forget();
     this.user.set(null);
     this.points.set(null);
     this.isAuthorized.set(false);

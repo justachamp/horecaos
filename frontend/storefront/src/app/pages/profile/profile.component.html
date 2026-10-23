@@ -55,6 +55,10 @@
 
     <app-profile-menu [isAuthorized]="isAuthorized()" (logoutClick)="onLogout()" />
 
+    <!-- ADR 0182, D14: the explicit opt-in to Web Push. It renders nothing for a guest, an unsupported browser
+         or a brand the platform cannot send push for. -->
+    <app-push-subscribe />
+
     <div class="mt-8 flex flex-col items-center gap-3">
       @if (!isAuthorized()) {
         <a

@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
@@ -6,6 +7,7 @@ import { CustomerProfileService } from '../../services/customer-profile.service'
 import { CustomerOtp } from '../../core/session/customer-otp';
 import { FavouritesService } from '../../services/favourites.service';
 import { AvatarService } from '../../services/avatar.service';
+import { type PushState, PushSubscriptionService } from '../../services/push-subscription.service';
 import { TelegramLinkService } from '../../services/telegram-link.service';
 import { TranslateService } from '../../services/translate.service';
 import { type PointsBalance, PointsService } from '../../services/points.service';
@@ -15,6 +17,7 @@ import type { CustomerProfile } from '../../core/api/customer-api';
 
 class FakeCustomerProfileService {
   readonly load = vi.fn(async (): Promise<CustomerProfile | null> => null);
+  readonly forget = vi.fn();
 }
 
 class FakePointsService {
@@ -45,6 +48,14 @@ class FakeTelegramLinkService {
   readonly forget = vi.fn();
 }
 
+/** The opt-in card reads these four members and signing out calls `forget` (ADR 0182, D14). */
+class FakePushSubscriptionService {
+  readonly state = signal<PushState>('off');
+  readonly busy = signal(false);
+  readonly refresh = vi.fn(async (): Promise<PushState> => 'off');
+  readonly forget = vi.fn();
+}
+
 /**
  * `ThemeService`'s real constructor reads `window.matchMedia`, which this
  * suite's environment does not implement -- a gap orthogonal to what this
@@ -70,6 +81,7 @@ class FakeTranslateService {
 
 function setUp(points = new FakePointsService()) {
   const profileService = new FakeCustomerProfileService();
+  const push = new FakePushSubscriptionService();
 
   TestBed.configureTestingModule({
     imports: [ProfileComponent],
@@ -80,6 +92,7 @@ function setUp(points = new FakePointsService()) {
       { provide: FavouritesService, useClass: FakeFavouritesService },
       { provide: AvatarService, useClass: FakeAvatarService },
       { provide: TelegramLinkService, useClass: FakeTelegramLinkService },
+      { provide: PushSubscriptionService, useValue: push },
       { provide: PointsService, useValue: points },
       { provide: TranslateService, useClass: FakeTranslateService },
       { provide: ThemeService, useClass: FakeThemeService },
@@ -89,7 +102,7 @@ function setUp(points = new FakePointsService()) {
   const session = TestBed.inject(Session);
   const fixture = TestBed.createComponent(ProfileComponent);
 
-  return { fixture, comp: fixture.componentInstance, profileService, session, points };
+  return { fixture, comp: fixture.componentInstance, profileService, session, points, push };
 }
 
 function signIn(session: Session): void {
@@ -123,6 +136,21 @@ describe('ProfileComponent: anonymous visitor', () => {
     expect(html).toContain('/auth/login');
     expect(html).toContain('auth.login');
   });
+
+  it('offers no push opt-in to a visitor who is not signed in', async () => {
+    const { fixture, push } = setUp();
+
+    await mount(fixture);
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('app-push-subscribe'),
+    ).not.toBeNull();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="push-subscribe"]'),
+      'the card renders nothing for a guest, however the page mounts it',
+    ).toBeNull();
+    expect(push.refresh).not.toHaveBeenCalled();
+  });
 });
 
 describe('ProfileComponent: signed in', () => {
@@ -136,6 +164,30 @@ describe('ProfileComponent: signed in', () => {
 
     expect(comp.isAuthorized()).toBe(true);
     expect(profileService.load).toHaveBeenCalledTimes(1);
+  });
+
+  it('mounts the Web Push opt-in for a signed-in customer (ADR 0182, D14)', async () => {
+    const { fixture, session, push } = setUp();
+    signIn(session);
+
+    await mount(fixture);
+
+    expect(push.refresh).toHaveBeenCalledTimes(1);
+    const card = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="push-subscribe"]',
+    );
+    expect(card).not.toBeNull();
+    expect(card?.getAttribute('data-state')).toBe('off');
+  });
+
+  it('forgets the push state on sign-out, beside the Telegram link, so the next customer is asked afresh', async () => {
+    const { fixture, comp, session, push } = setUp();
+    signIn(session);
+    await mount(fixture);
+
+    comp.onLogout();
+
+    expect(push.forget).toHaveBeenCalledTimes(1);
   });
 });
 

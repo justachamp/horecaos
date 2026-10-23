@@ -162,6 +162,9 @@
 
     <app-my-reviews [refresh]="reviewsRefresh()" />
 
+    <!-- ADR 0182, D14: the explicit opt-in to Web Push; renders nothing where push cannot be offered. -->
+    <app-push-subscribe />
+
     <button type="button" class="signout" (click)="signOut()">{{ 'profile.logout' | t }}</button>
   }
 }

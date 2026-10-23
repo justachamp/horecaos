@@ -25,6 +25,8 @@ import {
   ReviewsService,
 } from '../../services/reviews.service';
 import { MyReviewsComponent } from './my-reviews/my-reviews.component';
+import { PushSubscribeComponent } from '../../shared/push-subscribe/push-subscribe';
+import { PushSubscriptionService } from '../../services/push-subscription.service';
 import { TagPickerComponent } from '../../shared/tag-picker/tag-picker.component';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { TranslateService } from '../../services/translate.service';
@@ -83,6 +85,7 @@ type LoadState = 'loading' | 'ready' | 'error';
     ConsentBoxComponent,
     IconComponent,
     MyReviewsComponent,
+    PushSubscribeComponent,
     TagPickerComponent,
     TranslatePipe,
   ],
@@ -99,6 +102,7 @@ export class ProfileComponent implements OnInit {
   private readonly reviews = inject(ReviewsService);
   private readonly router = inject(Router);
   private readonly pointsService = inject(PointsService);
+  private readonly pushSubscription = inject(PushSubscriptionService);
 
   protected readonly state = signal<LoadState>('loading');
   /** The languages this brand serves that the platform has live and this build can draw (ADR 0149). */
@@ -272,6 +276,8 @@ export class ProfileComponent implements OnInit {
   }
 
   protected async signOut(): Promise<void> {
+    // The next customer on this handset is asked afresh about push (ADR 0182, D14).
+    this.pushSubscription.forget();
     await this.customerOtp.signOut();
     await this.router.navigate(['/home']);
   }
