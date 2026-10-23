@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.api.OrderingConfigurationKeys;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
@@ -147,6 +149,28 @@ class OrderingConfigurationKeyTests {
                         && (code.contains("business_day")
                                 || code.contains("vat_rate")
                                 || code.contains("poll_interval")));
+    }
+
+    /**
+     * ADR 0177 decision 5: the pre-order branch rule is read at brand scope, because the question is asked of the
+     * brand's branches. A key that took a value at a branch would accept one nothing reads, which is the defect
+     * the record exists to remove, so neither declaration lets a branch set it.
+     */
+    @Test
+    @DisplayName("the pre-order branch rule is settable at platform, tenant and brand and never at a branch")
+    void thePreOrderBranchRuleIsNotSettableAtABranch() {
+        Set<ScopeType> readAt = Set.of(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND);
+
+        assertThat(OrderingConfigurationKeys.PREORDER_BRANCH_RESOLUTION.settableScopes())
+                .as("the ordering module's declaration")
+                .isEqualTo(readAt);
+        assertThat(registered(OrderingConfigurationKeys.PREORDER_BRANCH_RESOLUTION_CODE)
+                        .settableScopes())
+                .as("the tenancy registry's declaration, which the settings writer consults")
+                .isEqualTo(readAt);
+        assertThat(registered(OrderingConfigurationKeys.PREORDER_BRANCH_RESOLUTION_CODE)
+                        .isSettableAt(ScopeType.LOCATION))
+                .isFalse();
     }
 
     private static ConfigurationKey<?> registered(String code) {

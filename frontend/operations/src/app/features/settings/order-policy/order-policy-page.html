@@ -386,7 +386,7 @@
           [resolution]="resolutionFor(field.code)"
           [loading]="fieldsLoading()"
           [currentScopeType]="scope.level()"
-          [settableScopes]="editableScopes"
+          [settableScopes]="field.settableScopes ?? editableScopes"
           [formatValue]="fieldFormatter(field)"
           (override)="startEditingField(field)"
           (setValueRequested)="startEditingField(field)"

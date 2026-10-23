@@ -575,7 +575,7 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.gates.noPath':
     'Yuqoridagi «Buyurtmani qabul qilish»da ushlab qolingan buyurtmani tasdiqlaydigan hech kim yoʻq, shuning uchun bu darvozalar hech narsani ushlab qola olmaydi: bunday buyurtma baribir tasdiqlanadi. Avval u yerda kim tasdiqlashini tanlang.',
   'settings.orderPolicy.preorderBranchResolution.hint':
-    'Oldindan buyurtma birorta ham nomzod filial ochiq boʻlmagan vaqtga berilganda qoʻllanadi. Oʻzi olib ketishda masofa oʻlchanadigan mijoz manzili yoʻq, shuning uchun u uchun «eng yaqin» oʻrniga «tezroq ochiladigan» olinadi.',
+    'Oldindan buyurtma birorta ham nomzod filial ochiq boʻlmagan vaqtga berilganda qoʻllanadi. Oʻzi olib ketishda masofa oʻlchanadigan mijoz manzili yoʻq, shuning uchun u uchun «eng yaqin» oʻrniga «tezroq ochiladigan» olinadi. Qoida butun brend uchun belgilanadi: alohida filialning oʻz qiymati yoʻq.',
   'settings.orderPolicy.field.operatorCallbackFlagAllowed':
     'Operator buyurtmaga «mijozga qayta qoʻngʻiroq qilish» belgisini qoʻya oladi',
   'settings.orderPolicy.field.operatorChangeDueAllowed':

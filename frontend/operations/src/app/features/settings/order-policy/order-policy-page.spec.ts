@@ -307,6 +307,32 @@ describe('OrderPolicyPage', () => {
     }
   });
 
+  // ADR 0177 decision 5: the branch resolver and the server's own re-derivation read the pre-order rule for the
+  // whole brand, so a value written at a branch would be accepted, traced, shown as set there and read by nothing.
+  it('does not offer the pre-order branch rule a value of its own on a branch', async () => {
+    const rowFor = (label: string): HTMLElement =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.field-row'),
+      ).find((row) => row.textContent?.includes(label)) as HTMLElement;
+
+    expect(rowFor('Pre-order branch selection').textContent).not.toContain('Set at brand level');
+    expect(rowFor('Pre-order branch selection').querySelector('.field__action')).not.toBeNull();
+
+    settingsScope.locationId.set('loc-1');
+    settingsScope.level.set('LOCATION');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const preOrder = rowFor('Pre-order branch selection');
+    expect(preOrder.textContent).toContain('Set at brand level');
+    expect(preOrder.querySelector('.field__action'), 'no way to write it at a branch').toBeNull();
+    expect(
+      rowFor('Operator may apply a promo code').querySelector('.field__action'),
+      'a key the server does read at a branch is still offered there',
+    ).not.toBeNull();
+  });
+
   it('publishes Card 1 with a required reason', async () => {
     const editButton = fixture.nativeElement.querySelector('.card .primary') as HTMLButtonElement;
     editButton.click();
