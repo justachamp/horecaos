@@ -793,7 +793,9 @@ public class NotificationTemplateService {
     /**
      * Whether the SMS gateway this tenant sends through refuses wordings it has not approved (ADR 0091).
      * The question behind the one-time-code card of Tab 1: the sentence is the platform's, and a gateway
-     * that moderates must have approved it (ADR 0184, D19).
+     * that moderates must have approved it (ADR 0184, D19). It is also the question eligibility asks
+     * before it sends the platform's order wording over SMS: those sentences are not template versions,
+     * so nothing else says whether the gateway has approved them.
      */
     @Transactional(readOnly = true)
     public boolean smsGatewayModerates(UUID tenantId) {

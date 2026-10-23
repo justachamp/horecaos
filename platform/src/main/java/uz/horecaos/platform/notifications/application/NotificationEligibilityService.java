@@ -305,8 +305,7 @@ public class NotificationEligibilityService {
 
         // ADR 0091: a wording its SMS gateway has not approved, or has refused,
         // is not sent. The gateway would refuse it anyway; withholding it here
-        // records why instead of a provider error per customer. The platform's own wording
-        // carries no moderation state of its own: it is the platform's to get approved.
+        // records why instead of a provider error per customer.
         if (version != null && TemplateProviderReviewService.withheld(version.providerReview())) {
             return suppress(
                     row,
@@ -314,6 +313,17 @@ public class NotificationEligibilityService {
                             ? SuppressionReason.TEMPLATE_REFUSED_BY_PROVIDER
                             : SuppressionReason.TEMPLATE_AWAITING_PROVIDER,
                     now);
+        }
+        // The platform's own wording is not a template version, so it carries no approval state
+        // for the check above to read, and nothing records a gateway's approval of its sentences
+        // (ADR 0184, open inputs). On a gateway that moderates, it is therefore a wording the
+        // gateway has not approved: withheld with the same reason, not sent to be refused once per
+        // customer. A tenant on such a gateway sends its own wording, which starts awaiting approval
+        // and is sent once it is approved. Telegram has no moderation, so it is unaffected.
+        if (platformWording != null
+                && channel == NotificationChannel.SMS
+                && templates.smsGatewayModerates(row.tenantId())) {
+            return suppress(row, SuppressionReason.TEMPLATE_AWAITING_PROVIDER, now);
         }
 
         // Where the wording came from names the purpose, the language it is actually in, and the

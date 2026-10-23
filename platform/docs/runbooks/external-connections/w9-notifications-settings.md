@@ -30,13 +30,44 @@ itself is recorded as a line in ADR 0184's open inputs: who read which language,
 
 1. Open Settings → Notifications → Templates in the operations console. The «Platform default wording» card
    lists the eight sentences in all three languages, with the origin chip «Platform».
-2. With a tenant that has no `ORDER_CONFIRMED` template, confirm an order for a customer whose profile
-   language is Uzbek. The delivery evidence for the message names `platformDefaultVersion: 1` and no
-   template, and the SMS reads the Uzbek sentence.
+2. With a tenant that has no `ORDER_CONFIRMED` template and an SMS gateway that does not moderate wordings
+   (or a Telegram route), confirm an order for a customer whose profile language is Uzbek. The delivery
+   evidence for the message names `platformDefaultVersion: 1` and no template, and the message reads the
+   Uzbek sentence. On a gateway that moderates it does not: see «Default wording on a moderating gateway».
 3. Click «Customise» on one row. The editor opens on the platform's sentences; save a version and activate
    it. The next message reads the brand's words.
 
 **To undo.** Revert the commit that changed a sentence; do not edit a published version in place.
+
+## Default wording on a moderating gateway
+
+**What exists.** A gateway that moderates wordings (`integration.provider_environments.moderates_wordings`;
+the VAS gateway is marked, ADR 0091) refuses a text it has not approved. A tenant's own template version
+starts `PENDING` on such a gateway and is sent once someone records the gateway's approval. The platform's
+24 default sentences (eight keys in Russian, Uzbek and English) are not template versions, so there is
+nowhere to record an approval of them. `NotificationEligibilityService` therefore does not send them over
+SMS to a tenant whose gateway moderates: the notification is suppressed `TEMPLATE_AWAITING_PROVIDER`, which
+the delivery evidence shows in place of a provider error per customer. Telegram has no moderation and sends
+them.
+
+**Where the value goes.** Two ways to get an order message to a customer on a moderating gateway.
+Either the tenant writes its own wording (Settings → Notifications → Templates → «Customise» on the
+platform's row), activates it, and HorecaOS staff submit it to the gateway and record the answer under
+Template moderation (`TemplateProviderReviewController`); it is sent as soon as it is approved. Or the
+platform owner has the 24 sentences approved by the gateway as a set (the exact text of
+`PlatformDefaultTemplates` at version 1, with `{{orderNumber}}`, `{{amount}}` and `{{currency}}` in place of
+sample values), after which the platform needs a place to record that and the gate in
+`NotificationEligibilityService` reads it. That place does not exist: it is a table keyed by gateway
+environment, template key and language, and an endpoint to write it, and it is not decided (ADR 0184, open
+inputs). Until it is, the first way is the only one.
+
+**How to prove it.** On a tenant bound to a moderating SMS gateway with no `ORDER_CONFIRMED` template,
+confirm an order. The notification is `SUPPRESSED` with the reason `TEMPLATE_AWAITING_PROVIDER` and the
+gateway receives nothing. After the tenant's own wording is activated and approved, the next confirmation
+is sent from it.
+
+**To undo.** Nothing to undo in the platform. A gateway that stops moderating
+(`moderates_wordings = false`) is sent the platform's wording again from the next message.
 
 ## Order-progress consent
 
