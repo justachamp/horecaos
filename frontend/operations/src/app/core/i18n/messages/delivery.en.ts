@@ -878,7 +878,7 @@ export const deliveryEn = {
     'Dashed lines are straight lines between two points, not the road. Green: branch to the courier’s position now. Red: the courier’s position to the door, or the branch to the door while nobody is carrying the order.',
   'delivery.rates.reasons.sim.heading': 'Who would this rule have hit?',
   'delivery.rates.reasons.sim.hint':
-    'Replays the rule over recent closed shifts or settlement periods. Nothing is written or paid.',
+    'Replays the rule over the recent closed shifts or settlement periods of every branch, because a rule applies to all of them. Nothing is written or paid.',
   'delivery.rates.reasons.sim.lookback': 'Look back (days)',
   'delivery.rates.reasons.sim.run': 'Preview the rule',
   'delivery.rates.reasons.sim.nobody':

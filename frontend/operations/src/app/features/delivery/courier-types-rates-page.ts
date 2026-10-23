@@ -110,7 +110,10 @@ const PERIOD_ONLY_BASES = new Set(['CASH_VARIANCE']);
  * periods and writes nothing. The verdict is drawn by the shared
  * `q-rule-simulator` in its engine mode (the platform answered, the component
  * does not guess), and the couriers it would have hit are listed beside it by
- * reference, never by name.
+ * reference, never by name. The replay is tenant-wide, never narrowed to the
+ * operator's branch: a reason is a tenant-level registry row that fires at every
+ * branch's shift close, and a preview limited to one branch would read «nobody»
+ * for a rule that hits a dozen couriers elsewhere.
  *
  * **Deliberately not built.** A visual band-gap/overlap ruler
  * (`docs/operations-spec/couriers.md` §10 describes it) —
@@ -860,7 +863,9 @@ export class CourierTypesRatesPage implements OnInit {
           ruleAmountMinor: signedAmount,
           ruleCurrency: this.newReasonCurrency().trim().toUpperCase(),
           lookbackDays: this.simLookbackDays(),
-          locationId: scope.locationId,
+          // No locationId, deliberately: the rule being previewed is a tenant-level registry row and
+          // fires at every branch's shift close, so the preview replays every branch's shifts. Sending
+          // the operator's branch narrows SHIFT windows to it and understates who the saved rule hits.
         }),
       );
     } catch (error) {

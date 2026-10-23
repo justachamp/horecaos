@@ -888,7 +888,7 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
     'Punktir chiziqlar — ikki nuqta orasidagi toʻgʻri chiziqlar, yoʻl emas. Yashil: filialdan kuryerning hozirgi joyigacha. Qizil: kuryerning joyidan eshikkacha, buyurtmani hech kim olib ketmayotgan paytda esa filialdan eshikkacha.',
   'delivery.rates.reasons.sim.heading': 'Bu qoida kimga tegardi?',
   'delivery.rates.reasons.sim.hint':
-    'Qoidani yaqinda yopilgan smenalar yoki hisob davrlari boʻyicha qayta oʻtkazadi. Hech narsa yozilmaydi va toʻlanmaydi.',
+    'Qoidani barcha filiallarning yaqinda yopilgan smenalari yoki hisob davrlari boʻyicha qayta oʻtkazadi, chunki qoida hammasida amal qiladi. Hech narsa yozilmaydi va toʻlanmaydi.',
   'delivery.rates.reasons.sim.lookback': 'Necha kun orqaga',
   'delivery.rates.reasons.sim.run': 'Qoidani koʻrib chiqish',
   'delivery.rates.reasons.sim.nobody':
